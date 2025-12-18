@@ -7,8 +7,10 @@ import { cn } from "@/lib/utils";
 
 const eventCategories = ["All", "Nightlife", "Food", "Culture", "Wellness", "Sports"];
 
+const coastalCities = ["Mombasa", "Diani", "Lamu", "Watamu", "Malindi", "Kilifi", "Nyali", "Bamburi"];
+
 const CityPulse = () => {
-  const [selectedCity, setSelectedCity] = useState("New York");
+  const [selectedCity, setSelectedCity] = useState("Mombasa");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
   return (
