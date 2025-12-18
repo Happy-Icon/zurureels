@@ -9,6 +9,7 @@ import CityPulse from "./pages/CityPulse";
 import Bookings from "./pages/Bookings";
 import Saved from "./pages/Saved";
 import Profile from "./pages/Profile";
+import Host from "./pages/Host";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -23,6 +24,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/discover" element={<Discover />} />
+          <Route path="/host" element={<Host />} />
           <Route path="/city-pulse" element={<CityPulse />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/saved" element={<Saved />} />

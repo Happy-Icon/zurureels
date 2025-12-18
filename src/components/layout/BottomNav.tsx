@@ -1,13 +1,13 @@
-import { Home, Compass, Calendar, Heart, User, Zap } from "lucide-react";
+import { Home, Compass, Calendar, Heart, User, Zap, PlusCircle } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { icon: Home, label: "Home", path: "/" },
   { icon: Compass, label: "Discover", path: "/discover" },
-  { icon: Zap, label: "City Pulse", path: "/city-pulse" },
+  { icon: PlusCircle, label: "Host", path: "/host" },
+  { icon: Zap, label: "Pulse", path: "/city-pulse" },
   { icon: Calendar, label: "Bookings", path: "/bookings" },
-  { icon: Heart, label: "Saved", path: "/saved" },
   { icon: User, label: "Profile", path: "/profile" },
 ];
 
