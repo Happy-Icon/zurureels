@@ -97,7 +97,7 @@ const CityPulse = () => {
           <div className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-display font-semibold">City Pulse</h1>
+                <h1 className="text-2xl font-display font-semibold">Zuru Pulse</h1>
                 <p className="text-sm text-muted-foreground">What's happening today</p>
               </div>
               <Button
