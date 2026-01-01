@@ -1,6 +1,18 @@
 import { cn } from "@/lib/utils";
 
-export type Category = "all" | "hotel" | "villa" | "boat" | "tour" | "event";
+export type Category = 
+  | "all" 
+  | "hotel" 
+  | "villa" 
+  | "boat" 
+  | "tour" 
+  | "event" 
+  | "apartment" 
+  | "food" 
+  | "drinks" 
+  | "rentals" 
+  | "adventure" 
+  | "camps";
 
 interface CategoryFilterProps {
   selected: Category;
@@ -11,7 +23,13 @@ const categories: { value: Category; label: string; emoji: string }[] = [
   { value: "all", label: "All", emoji: "✨" },
   { value: "hotel", label: "Hotels", emoji: "🏨" },
   { value: "villa", label: "Villas", emoji: "🏡" },
+  { value: "apartment", label: "Apartments", emoji: "🏠" },
   { value: "boat", label: "Boats", emoji: "⛵" },
+  { value: "food", label: "Food", emoji: "🍽️" },
+  { value: "drinks", label: "Drinks", emoji: "🍹" },
+  { value: "rentals", label: "Rentals", emoji: "🛵" },
+  { value: "adventure", label: "Adventure", emoji: "🧭" },
+  { value: "camps", label: "Parks & Camps", emoji: "⛺" },
   { value: "tour", label: "Tours", emoji: "🎒" },
   { value: "event", label: "Events", emoji: "🎉" },
 ];
