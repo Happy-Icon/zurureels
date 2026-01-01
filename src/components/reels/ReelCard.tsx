@@ -1,8 +1,9 @@
-import { Heart, Share2, Bookmark, MessageCircle, Play, Pause, Volume2, VolumeX } from "lucide-react";
+import { Heart, Share2, Bookmark, MessageCircle, Play, Pause, Volume2, VolumeX, Clock } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { getReelExpiryDisplay, isReelExpiringSoon } from "@/utils/reelExpiry";
 
 export interface ReelData {
   id: string;
@@ -18,6 +19,7 @@ export interface ReelData {
   saved: boolean;
   hostName: string;
   hostAvatar: string;
+  postedAt?: string;
 }
 
 interface ReelCardProps {
@@ -151,10 +153,24 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
 
       {/* Bottom Content */}
       <div className="absolute bottom-20 md:bottom-8 left-0 right-16 p-4 space-y-3">
-        {/* Category Badge */}
-        <Badge className={cn("text-xs capitalize", categoryColors[reel.category])}>
-          {reel.category}
-        </Badge>
+        {/* Category & Expiry Badges */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className={cn("text-xs capitalize", categoryColors[reel.category])}>
+            {reel.category}
+          </Badge>
+          {reel.postedAt && (
+            <Badge 
+              variant="outline" 
+              className={cn(
+                "text-xs border-primary-foreground/30 text-primary-foreground/90 gap-1",
+                isReelExpiringSoon(new Date(reel.postedAt)) && "border-orange-400/50 text-orange-200"
+              )}
+            >
+              <Clock className="h-3 w-3" />
+              {getReelExpiryDisplay(new Date(reel.postedAt))}
+            </Badge>
+          )}
+        </div>
 
         {/* Title & Location */}
         <div className="space-y-1">
