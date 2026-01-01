@@ -10,7 +10,7 @@ export interface ReelData {
   thumbnailUrl: string;
   title: string;
   location: string;
-  category: "hotel" | "villa" | "boat" | "tour" | "event";
+  category: "hotel" | "villa" | "boat" | "tour" | "event" | "apartment" | "food" | "drinks" | "rentals" | "adventure" | "camps";
   price: number;
   priceUnit: string;
   rating: number;
@@ -44,12 +44,18 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
     onSave?.(reel.id);
   };
 
-  const categoryColors = {
+  const categoryColors: Record<string, string> = {
     hotel: "bg-blue-500/90",
     villa: "bg-emerald-500/90",
     boat: "bg-cyan-500/90",
     tour: "bg-amber-500/90",
     event: "bg-purple-500/90",
+    apartment: "bg-indigo-500/90",
+    food: "bg-orange-500/90",
+    drinks: "bg-pink-500/90",
+    rentals: "bg-teal-500/90",
+    adventure: "bg-red-500/90",
+    camps: "bg-green-600/90",
   };
 
   return (

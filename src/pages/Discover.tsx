@@ -25,6 +25,12 @@ const Discover = () => {
     boat: "bg-cyan-500/90",
     tour: "bg-amber-500/90",
     event: "bg-purple-500/90",
+    apartment: "bg-indigo-500/90",
+    food: "bg-orange-500/90",
+    drinks: "bg-pink-500/90",
+    rentals: "bg-teal-500/90",
+    adventure: "bg-red-500/90",
+    camps: "bg-green-600/90",
   };
 
   return (
