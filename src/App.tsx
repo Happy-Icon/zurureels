@@ -22,10 +22,10 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<CityPulse />} />
           <Route path="/discover" element={<Discover />} />
           <Route path="/host" element={<Host />} />
-          <Route path="/city-pulse" element={<CityPulse />} />
+          <Route path="/home" element={<Home />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/saved" element={<Saved />} />
           <Route path="/profile" element={<Profile />} />
