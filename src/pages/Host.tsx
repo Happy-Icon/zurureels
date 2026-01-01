@@ -10,11 +10,17 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 const categories = [
-  { value: "hotel", label: "Hotel" },
-  { value: "villa", label: "Villa" },
-  { value: "boat", label: "Boat" },
-  { value: "tour", label: "Tour" },
-  { value: "event", label: "Event" },
+  { value: "hotel", label: "Hotels" },
+  { value: "villa", label: "Villas" },
+  { value: "apartment", label: "Apartments" },
+  { value: "boat", label: "Boats" },
+  { value: "food", label: "Food" },
+  { value: "drinks", label: "Drinks" },
+  { value: "rentals", label: "Rentals" },
+  { value: "adventure", label: "Adventure" },
+  { value: "camps", label: "Parks & Camps" },
+  { value: "tour", label: "Tours" },
+  { value: "event", label: "Events" },
 ];
 
 const locations = [

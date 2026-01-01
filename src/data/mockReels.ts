@@ -1,4 +1,8 @@
 import { ReelData } from "@/components/reels/ReelCard";
+import { subDays } from "date-fns";
+
+// Helper to create dates relative to now
+const daysAgo = (days: number) => subDays(new Date(), days).toISOString();
 
 export const mockReels: ReelData[] = [
   {
@@ -15,6 +19,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Diani Reef Resort",
     hostAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop",
+    postedAt: daysAgo(3),
   },
   {
     id: "2",
@@ -30,6 +35,7 @@ export const mockReels: ReelData[] = [
     saved: true,
     hostName: "Lamu Villas",
     hostAvatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop",
+    postedAt: daysAgo(15),
   },
   {
     id: "3",
@@ -45,6 +51,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Watamu Marine",
     hostAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
+    postedAt: daysAgo(50),
   },
   {
     id: "4",
@@ -60,6 +67,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Malindi Tours",
     hostAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop",
+    postedAt: daysAgo(60),
   },
   {
     id: "5",
@@ -75,6 +83,7 @@ export const mockReels: ReelData[] = [
     saved: true,
     hostName: "Coast Events",
     hostAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop",
+    postedAt: daysAgo(0),
   },
   {
     id: "6",
@@ -90,6 +99,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Kilifi Bay",
     hostAvatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
+    postedAt: daysAgo(80),
   },
   // Apartments
   {
@@ -106,6 +116,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Nyali Homes",
     hostAvatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=100&h=100&fit=crop",
+    postedAt: daysAgo(7),
   },
   {
     id: "8",
@@ -121,6 +132,7 @@ export const mockReels: ReelData[] = [
     saved: true,
     hostName: "Coast Apartments",
     hostAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
+    postedAt: daysAgo(25),
   },
   // Food
   {
@@ -137,6 +149,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Tamarind Restaurant",
     hostAvatar: "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=100&h=100&fit=crop",
+    postedAt: daysAgo(12),
   },
   {
     id: "10",
@@ -152,6 +165,7 @@ export const mockReels: ReelData[] = [
     saved: true,
     hostName: "Ali Barbour's Cave",
     hostAvatar: "https://images.unsplash.com/photo-1581349485608-9469926a8e5e?w=100&h=100&fit=crop",
+    postedAt: daysAgo(38),
   },
   // Drinks
   {
@@ -168,6 +182,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Forty Thieves",
     hostAvatar: "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?w=100&h=100&fit=crop",
+    postedAt: daysAgo(55),
   },
   {
     id: "12",
@@ -183,6 +198,7 @@ export const mockReels: ReelData[] = [
     saved: true,
     hostName: "SkyLounge Mombasa",
     hostAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop",
+    postedAt: daysAgo(22),
   },
   // Rentals
   {
@@ -199,6 +215,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Diani Wheels",
     hostAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop",
+    postedAt: daysAgo(5),
   },
   {
     id: "14",
@@ -214,6 +231,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Watamu Bikes",
     hostAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
+    postedAt: daysAgo(70),
   },
   // Adventure
   {
@@ -230,6 +248,7 @@ export const mockReels: ReelData[] = [
     saved: true,
     hostName: "Safari Kings",
     hostAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop",
+    postedAt: daysAgo(30),
   },
   {
     id: "16",
@@ -245,6 +264,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Skydive Kenya",
     hostAvatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop",
+    postedAt: daysAgo(1),
   },
   {
     id: "17",
@@ -260,6 +280,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Watamu Divers",
     hostAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
+    postedAt: daysAgo(45),
   },
   // Camps & Parks
   {
@@ -276,6 +297,7 @@ export const mockReels: ReelData[] = [
     saved: true,
     hostName: "Shimba Lodge",
     hostAvatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop",
+    postedAt: daysAgo(18),
   },
   {
     id: "19",
@@ -291,6 +313,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "KWS Tours",
     hostAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop",
+    postedAt: daysAgo(85),
   },
   {
     id: "20",
@@ -306,6 +329,7 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Forest Guides",
     hostAvatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=100&h=100&fit=crop",
+    postedAt: daysAgo(42),
   },
 ];
 
