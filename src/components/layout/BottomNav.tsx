@@ -3,10 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { icon: Home, label: "Home", path: "/" },
+  { icon: Zap, label: "Pulse", path: "/" },
   { icon: Compass, label: "Discover", path: "/discover" },
   { icon: PlusCircle, label: "Host", path: "/host" },
-  { icon: Zap, label: "Pulse", path: "/city-pulse" },
   { icon: Calendar, label: "Bookings", path: "/bookings" },
   { icon: User, label: "Profile", path: "/profile" },
 ];
