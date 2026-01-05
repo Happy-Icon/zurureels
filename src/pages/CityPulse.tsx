@@ -2,6 +2,7 @@ import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { WeatherWidget } from "@/components/city-pulse/WeatherWidget";
 import { AIChatBox } from "@/components/city-pulse/AIChatBox";
+import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
 import { QuickListingCard } from "@/components/city-pulse/QuickListingCard";
 import { useWeather } from "@/hooks/useWeather";
 import { useCityPulseAI } from "@/hooks/useCityPulseAI";
@@ -19,7 +20,6 @@ import { mockEvents } from "@/data/mockReels";
 import {
   MapPin,
   ChevronDown,
-  Sparkles,
   Ship,
   UtensilsCrossed,
   Music,
@@ -100,14 +100,6 @@ const CityPulse = () => {
                 <h1 className="text-2xl font-display font-semibold">Zuru Pulse</h1>
                 <p className="text-sm text-muted-foreground">What's happening today</p>
               </div>
-              <Button
-                onClick={() => setShowAI(true)}
-                className="gap-2"
-                variant={showAI ? "secondary" : "default"}
-              >
-                <Sparkles className="h-4 w-4" />
-                Ask AI
-              </Button>
             </div>
 
             {/* City Selector */}
@@ -158,19 +150,20 @@ const CityPulse = () => {
           </div>
         </div>
 
+        {/* Floating Ask Zuru Button & Chat */}
+        <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
+        {showAI && (
+          <AIChatBox
+            messages={messages}
+            isLoading={aiLoading}
+            onSendMessage={handleSendMessage}
+            onClose={handleCloseAI}
+            placeholder={`What should I do in ${selectedCity} today?`}
+          />
+        )}
+
         {/* Content */}
         <div className="p-4 space-y-6">
-          {/* AI Chat Box */}
-          {showAI && (
-            <AIChatBox
-              messages={messages}
-              isLoading={aiLoading}
-              onSendMessage={handleSendMessage}
-              onClose={handleCloseAI}
-              placeholder={`What should I do in ${selectedCity} today?`}
-            />
-          )}
-
           {/* Weather Widget */}
           <WeatherWidget weather={weather} loading={weatherLoading} city={selectedCity} />
 
