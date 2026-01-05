@@ -39,14 +39,14 @@ export function AIChatBox({
   }, [messages]);
 
   return (
-    <div className="bg-card border border-border rounded-2xl shadow-lg overflow-hidden">
+    <div className="fixed bottom-20 right-4 left-4 md:left-auto md:right-6 md:w-96 z-50 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-border bg-primary/5">
+      <div className="flex items-center justify-between p-3 border-b border-border bg-primary/10">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-full bg-primary/10">
+          <div className="p-1.5 rounded-full bg-primary/20">
             <Sparkles className="h-4 w-4 text-primary" />
           </div>
-          <span className="font-medium text-sm">Local Guide AI</span>
+          <span className="font-semibold text-sm">Ask Zuru</span>
         </div>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
           <X className="h-4 w-4" />
@@ -54,12 +54,12 @@ export function AIChatBox({
       </div>
 
       {/* Messages */}
-      <div className="h-64 overflow-y-auto p-3 space-y-3">
+      <div className="h-72 overflow-y-auto p-3 space-y-3 bg-background/50">
         {messages.length === 0 && (
           <div className="text-center text-muted-foreground text-sm py-8">
             <Sparkles className="h-8 w-8 mx-auto mb-2 text-primary/50" />
-            <p>Ask me anything about what to do today!</p>
-            <p className="text-xs mt-1">I know about boats, restaurants, events & more</p>
+            <p className="font-medium">Hey! I'm Zuru</p>
+            <p className="text-xs mt-1">Ask me about boats, restaurants, events & more</p>
           </div>
         )}
         {messages.map((msg, i) => (
@@ -88,7 +88,7 @@ export function AIChatBox({
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="p-3 border-t border-border">
+      <form onSubmit={handleSubmit} className="p-3 border-t border-border bg-card">
         <div className="flex gap-2">
           <Input
             value={input}
