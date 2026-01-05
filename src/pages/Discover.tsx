@@ -7,10 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
+import { AIChatBox } from "@/components/city-pulse/AIChatBox";
+import { useCityPulseAI } from "@/hooks/useCityPulseAI";
 
 const Discover = () => {
   const [selectedCategory, setSelectedCategory] = useState<Category>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showAI, setShowAI] = useState(false);
+  const { messages, isLoading: aiLoading, sendMessage } = useCityPulseAI();
 
   const filteredReels = mockReels.filter((reel) => {
     const matchesCategory = selectedCategory === "all" || reel.category === selectedCategory;
@@ -121,6 +126,18 @@ const Discover = () => {
           </div>
         </div>
       </div>
+
+      {/* Ask Zuru AI */}
+      <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
+      {showAI && (
+        <AIChatBox
+          messages={messages}
+          isLoading={aiLoading}
+          onSendMessage={(msg) => sendMessage(msg, "Zanzibar", { category: selectedCategory })}
+          onClose={() => setShowAI(false)}
+          placeholder="Find the perfect experience..."
+        />
+      )}
     </MainLayout>
   );
 };
