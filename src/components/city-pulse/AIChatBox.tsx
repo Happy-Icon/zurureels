@@ -15,7 +15,15 @@ interface AIChatBoxProps {
   onSendMessage: (message: string) => void;
   onClose: () => void;
   placeholder?: string;
+  quickPrompts?: string[];
 }
+
+const defaultQuickPrompts = [
+  "Best restaurants nearby",
+  "Boat rentals today",
+  "Tonight's events",
+  "Top-rated villas",
+];
 
 export function AIChatBox({
   messages,
@@ -23,6 +31,7 @@ export function AIChatBox({
   onSendMessage,
   onClose,
   placeholder = "What should I do today?",
+  quickPrompts = defaultQuickPrompts,
 }: AIChatBoxProps) {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -56,10 +65,24 @@ export function AIChatBox({
       {/* Messages */}
       <div className="h-72 overflow-y-auto p-3 space-y-3 bg-background/50">
         {messages.length === 0 && (
-          <div className="text-center text-muted-foreground text-sm py-8">
+          <div className="text-center text-muted-foreground text-sm py-4">
             <Sparkles className="h-8 w-8 mx-auto mb-2 text-primary/50" />
             <p className="font-medium">Hey! I'm Zuru</p>
-            <p className="text-xs mt-1">Ask me about boats, restaurants, events & more</p>
+            <p className="text-xs mt-1 mb-4">Ask me about boats, restaurants, events & more</p>
+            
+            {/* Quick Prompts */}
+            <div className="flex flex-wrap gap-2 justify-center">
+              {quickPrompts.map((prompt, i) => (
+                <button
+                  key={i}
+                  onClick={() => onSendMessage(prompt)}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-full transition-colors disabled:opacity-50"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((msg, i) => (
