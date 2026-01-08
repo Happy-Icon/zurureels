@@ -16,26 +16,38 @@ interface Recommendation {
   tags: string[];
 }
 
+interface MoodDiscoveryResponse {
+  type: "mood_discovery";
+  mood: string;
+  suggested_tags: string[];
+  description: string;
+}
+
 interface ConciergeResponse {
   type: "city_concierge";
   city: string;
   recommendations: Recommendation[];
 }
 
-// Try to parse JSON from content, return null if not valid concierge response
-function parseConciergeResponse(content: string): ConciergeResponse | null {
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse;
+
+// Try to parse JSON from content
+function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"city_concierge"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
     if (parsed.type === "city_concierge" && Array.isArray(parsed.recommendations)) {
       return parsed as ConciergeResponse;
     }
+    if (parsed.type === "mood_discovery" && Array.isArray(parsed.suggested_tags)) {
+      return parsed as MoodDiscoveryResponse;
+    }
   } catch {
-    // Not JSON or not a concierge response
+    // Not JSON or not a structured response
   }
   return null;
 }
@@ -68,20 +80,46 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
   );
 }
 
+function MoodDiscoveryCard({ data }: { data: MoodDiscoveryResponse }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">✨</span>
+        <span className="font-medium text-sm capitalize">Feeling {data.mood}</span>
+      </div>
+      <p className="text-xs text-muted-foreground">{data.description}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {data.suggested_tags.map((tag, i) => (
+          <span
+            key={i}
+            className="px-3 py-1.5 bg-primary/15 text-primary text-xs font-medium rounded-full"
+          >
+            {tag}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MessageContent({ content }: { content: string }) {
-  const concierge = parseConciergeResponse(content);
+  const parsed = parseAIResponse(content);
   
-  if (concierge) {
+  if (parsed?.type === "city_concierge") {
     return (
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground mb-2">
-          Here are some recommendations for {concierge.city}:
+          Here are some recommendations for {parsed.city}:
         </p>
-        {concierge.recommendations.map((rec, i) => (
+        {parsed.recommendations.map((rec, i) => (
           <RecommendationCard key={i} rec={rec} />
         ))}
       </div>
     );
+  }
+  
+  if (parsed?.type === "mood_discovery") {
+    return <MoodDiscoveryCard data={parsed} />;
   }
   
   return <>{content}</>;
