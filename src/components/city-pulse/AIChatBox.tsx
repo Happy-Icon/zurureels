@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Sparkles, X } from "lucide-react";
+import { Send, Sparkles, X, MapPin, Clock, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,84 @@ import { cn } from "@/lib/utils";
 interface Message {
   role: "user" | "assistant";
   content: string;
+}
+
+interface Recommendation {
+  activity: string;
+  why_it_fits: string;
+  best_time: string;
+  tags: string[];
+}
+
+interface ConciergeResponse {
+  type: "city_concierge";
+  city: string;
+  recommendations: Recommendation[];
+}
+
+// Try to parse JSON from content, return null if not valid concierge response
+function parseConciergeResponse(content: string): ConciergeResponse | null {
+  try {
+    // Try to find JSON in the content (might be wrapped in markdown code blocks)
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"city_concierge"[\s\S]*\})/);
+    const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
+    const parsed = JSON.parse(jsonStr);
+    
+    if (parsed.type === "city_concierge" && Array.isArray(parsed.recommendations)) {
+      return parsed as ConciergeResponse;
+    }
+  } catch {
+    // Not JSON or not a concierge response
+  }
+  return null;
+}
+
+function RecommendationCard({ rec }: { rec: Recommendation }) {
+  return (
+    <div className="bg-background border border-border rounded-lg p-3 space-y-2">
+      <h4 className="font-semibold text-sm text-foreground">{rec.activity}</h4>
+      <p className="text-xs text-muted-foreground">{rec.why_it_fits}</p>
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          {rec.best_time}
+        </span>
+      </div>
+      {rec.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {rec.tags.map((tag, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-primary/10 text-primary text-[10px] rounded-full"
+            >
+              <Tag className="h-2.5 w-2.5" />
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MessageContent({ content }: { content: string }) {
+  const concierge = parseConciergeResponse(content);
+  
+  if (concierge) {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-muted-foreground mb-2">
+          Here are some recommendations for {concierge.city}:
+        </p>
+        {concierge.recommendations.map((rec, i) => (
+          <RecommendationCard key={i} rec={rec} />
+        ))}
+      </div>
+    );
+  }
+  
+  return <>{content}</>;
 }
 
 interface AIChatBoxProps {
@@ -95,7 +173,7 @@ export function AIChatBox({
                 : "bg-secondary text-secondary-foreground"
             )}
           >
-            {msg.content}
+            <MessageContent content={msg.content} />
           </div>
         ))}
         {isLoading && (
