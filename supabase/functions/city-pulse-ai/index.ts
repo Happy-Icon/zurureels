@@ -53,6 +53,14 @@ When asked about mood-based suggestions or "I'm feeling..." type questions, resp
   "description": "brief friendly explanation of why these categories match"
 }
 
+When asked to generate a reel caption, CTA, or content for an activity/listing, respond with this JSON schema:
+{
+  "type": "reel_caption",
+  "caption": "engaging short caption for the reel",
+  "cta": "call-to-action text",
+  "hashtags": ["hashtag1", "hashtag2", "hashtag3"]
+}
+
 Prioritize experiences suitable for reels content (photogenic, unique, shareable).
 If asked about something not in the data, suggest similar alternatives from what's available.`;
 

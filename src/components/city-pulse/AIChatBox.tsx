@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Sparkles, X, MapPin, Clock, Tag } from "lucide-react";
+import { Send, Sparkles, X, MapPin, Clock, Tag, Copy, Hash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface Message {
   role: "user" | "assistant";
@@ -29,14 +30,21 @@ interface ConciergeResponse {
   recommendations: Recommendation[];
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse;
+interface ReelCaptionResponse {
+  type: "reel_caption";
+  caption: string;
+  cta: string;
+  hashtags: string[];
+}
+
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery)"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
@@ -45,6 +53,9 @@ function parseAIResponse(content: string): ParsedResponse | null {
     }
     if (parsed.type === "mood_discovery" && Array.isArray(parsed.suggested_tags)) {
       return parsed as MoodDiscoveryResponse;
+    }
+    if (parsed.type === "reel_caption" && parsed.caption && parsed.cta) {
+      return parsed as ReelCaptionResponse;
     }
   } catch {
     // Not JSON or not a structured response
@@ -102,6 +113,85 @@ function MoodDiscoveryCard({ data }: { data: MoodDiscoveryResponse }) {
   );
 }
 
+function ReelCaptionCard({ data }: { data: ReelCaptionResponse }) {
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copied!`);
+  };
+
+  const allHashtags = data.hashtags.map(h => h.startsWith('#') ? h : `#${h}`).join(' ');
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🎬</span>
+        <span className="font-medium text-sm">Reel Content Ready</span>
+      </div>
+      
+      {/* Caption */}
+      <div className="bg-background border border-border rounded-lg p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Caption</span>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-6 w-6"
+            onClick={() => copyToClipboard(data.caption, "Caption")}
+          >
+            <Copy className="h-3 w-3" />
+          </Button>
+        </div>
+        <p className="text-sm">{data.caption}</p>
+      </div>
+      
+      {/* CTA */}
+      <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-wide text-primary font-medium">Call to Action</span>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-6 w-6"
+            onClick={() => copyToClipboard(data.cta, "CTA")}
+          >
+            <Copy className="h-3 w-3" />
+          </Button>
+        </div>
+        <p className="text-sm font-medium text-primary">{data.cta}</p>
+      </div>
+      
+      {/* Hashtags */}
+      {data.hashtags.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium flex items-center gap-1">
+              <Hash className="h-3 w-3" /> Hashtags
+            </span>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-6 w-6"
+              onClick={() => copyToClipboard(allHashtags, "Hashtags")}
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {data.hashtags.map((tag, i) => (
+              <span
+                key={i}
+                className="px-2 py-1 bg-secondary text-secondary-foreground text-[10px] rounded-full"
+              >
+                #{tag.replace(/^#/, '')}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MessageContent({ content }: { content: string }) {
   const parsed = parseAIResponse(content);
   
@@ -120,6 +210,10 @@ function MessageContent({ content }: { content: string }) {
   
   if (parsed?.type === "mood_discovery") {
     return <MoodDiscoveryCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "reel_caption") {
+    return <ReelCaptionCard data={parsed} />;
   }
   
   return <>{content}</>;
