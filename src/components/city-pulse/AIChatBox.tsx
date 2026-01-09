@@ -37,14 +37,20 @@ interface ReelCaptionResponse {
   hashtags: string[];
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse;
+interface ReviewSummaryResponse {
+  type: "review_summary";
+  summary: string;
+  highlight: string;
+}
+
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption)"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
@@ -56,6 +62,9 @@ function parseAIResponse(content: string): ParsedResponse | null {
     }
     if (parsed.type === "reel_caption" && parsed.caption && parsed.cta) {
       return parsed as ReelCaptionResponse;
+    }
+    if (parsed.type === "review_summary" && parsed.summary) {
+      return parsed as ReviewSummaryResponse;
     }
   } catch {
     // Not JSON or not a structured response
@@ -192,6 +201,28 @@ function ReelCaptionCard({ data }: { data: ReelCaptionResponse }) {
   );
 }
 
+function ReviewSummaryCard({ data }: { data: ReviewSummaryResponse }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">⭐</span>
+        <span className="font-medium text-sm">Review Summary</span>
+      </div>
+      <div className="bg-background border border-border rounded-lg p-3 space-y-2">
+        <p className="text-sm italic">"{data.summary}"</p>
+        {data.highlight && (
+          <div className="flex items-center gap-2 pt-2 border-t border-border">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Highlight:</span>
+            <span className="px-2 py-1 bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-medium rounded-full">
+              {data.highlight}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MessageContent({ content }: { content: string }) {
   const parsed = parseAIResponse(content);
   
@@ -214,6 +245,10 @@ function MessageContent({ content }: { content: string }) {
   
   if (parsed?.type === "reel_caption") {
     return <ReelCaptionCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "review_summary") {
+    return <ReviewSummaryCard data={parsed} />;
   }
   
   return <>{content}</>;

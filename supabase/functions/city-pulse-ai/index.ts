@@ -61,6 +61,13 @@ When asked to generate a reel caption, CTA, or content for an activity/listing, 
   "hashtags": ["hashtag1", "hashtag2", "hashtag3"]
 }
 
+When asked to summarize customer reviews, respond with this JSON schema:
+{
+  "type": "review_summary",
+  "summary": "one trust-building sentence summarizing the reviews",
+  "highlight": "a single standout phrase or keyword from the reviews"
+}
+
 Prioritize experiences suitable for reels content (photogenic, unique, shareable).
 If asked about something not in the data, suggest similar alternatives from what's available.`;
 
