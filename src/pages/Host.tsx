@@ -146,7 +146,13 @@ const Host = () => {
                           <SelectTrigger>
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent 
+                            position="popper" 
+                            side="bottom" 
+                            align="center"
+                            sideOffset={4}
+                            className="max-h-60 overflow-y-auto"
+                          >
                             {categories.map((cat) => (
                               <SelectItem key={cat.value} value={cat.value}>
                                 {cat.label}
