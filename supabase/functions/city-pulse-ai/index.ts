@@ -68,6 +68,18 @@ When asked to summarize customer reviews, respond with this JSON schema:
   "highlight": "a single standout phrase or keyword from the reviews"
 }
 
+When asked to create an itinerary or plan a schedule from activities, respond with this JSON schema:
+{
+  "type": "micro_itinerary",
+  "schedule": [
+    {
+      "time": "suggested time (e.g., 9:00 AM)",
+      "activity": "activity name",
+      "note": "brief tip or context"
+    }
+  ]
+}
+
 Prioritize experiences suitable for reels content (photogenic, unique, shareable).
 If asked about something not in the data, suggest similar alternatives from what's available.`;
 
