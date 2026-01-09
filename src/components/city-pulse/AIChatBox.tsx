@@ -43,14 +43,25 @@ interface ReviewSummaryResponse {
   highlight: string;
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse;
+interface ScheduleItem {
+  time: string;
+  activity: string;
+  note: string;
+}
+
+interface MicroItineraryResponse {
+  type: "micro_itinerary";
+  schedule: ScheduleItem[];
+}
+
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary)"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
@@ -65,6 +76,9 @@ function parseAIResponse(content: string): ParsedResponse | null {
     }
     if (parsed.type === "review_summary" && parsed.summary) {
       return parsed as ReviewSummaryResponse;
+    }
+    if (parsed.type === "micro_itinerary" && Array.isArray(parsed.schedule)) {
+      return parsed as MicroItineraryResponse;
     }
   } catch {
     // Not JSON or not a structured response
@@ -223,6 +237,35 @@ function ReviewSummaryCard({ data }: { data: ReviewSummaryResponse }) {
   );
 }
 
+function MicroItineraryCard({ data }: { data: MicroItineraryResponse }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">📅</span>
+        <span className="font-medium text-sm">Your Itinerary</span>
+      </div>
+      <div className="space-y-1">
+        {data.schedule.map((item, i) => (
+          <div 
+            key={i} 
+            className="flex gap-3 bg-background border border-border rounded-lg p-3"
+          >
+            <div className="flex-shrink-0 w-16">
+              <span className="text-xs font-semibold text-primary">{item.time}</span>
+            </div>
+            <div className="flex-1 space-y-1">
+              <p className="text-sm font-medium">{item.activity}</p>
+              {item.note && (
+                <p className="text-[11px] text-muted-foreground">{item.note}</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MessageContent({ content }: { content: string }) {
   const parsed = parseAIResponse(content);
   
@@ -249,6 +292,10 @@ function MessageContent({ content }: { content: string }) {
   
   if (parsed?.type === "review_summary") {
     return <ReviewSummaryCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "micro_itinerary") {
+    return <MicroItineraryCard data={parsed} />;
   }
   
   return <>{content}</>;
