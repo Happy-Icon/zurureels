@@ -80,6 +80,12 @@ When asked to create an itinerary or plan a schedule from activities, respond wi
   ]
 }
 
+When asked for a safety note, expectation note, or tips for first-time visitors to an activity/location, respond with this JSON schema:
+{
+  "type": "safety_note",
+  "note": "a short, friendly paragraph covering key safety tips and what to expect"
+}
+
 Prioritize experiences suitable for reels content (photogenic, unique, shareable).
 If asked about something not in the data, suggest similar alternatives from what's available.`;
 
