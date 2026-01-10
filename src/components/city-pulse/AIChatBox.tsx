@@ -54,14 +54,19 @@ interface MicroItineraryResponse {
   schedule: ScheduleItem[];
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse;
+interface SafetyNoteResponse {
+  type: "safety_note";
+  note: string;
+}
+
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary)"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
@@ -79,6 +84,9 @@ function parseAIResponse(content: string): ParsedResponse | null {
     }
     if (parsed.type === "micro_itinerary" && Array.isArray(parsed.schedule)) {
       return parsed as MicroItineraryResponse;
+    }
+    if (parsed.type === "safety_note" && parsed.note) {
+      return parsed as SafetyNoteResponse;
     }
   } catch {
     // Not JSON or not a structured response
@@ -237,6 +245,20 @@ function ReviewSummaryCard({ data }: { data: ReviewSummaryResponse }) {
   );
 }
 
+function SafetyNoteCard({ data }: { data: SafetyNoteResponse }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🛡️</span>
+        <span className="font-medium text-sm">Safety & Expectations</span>
+      </div>
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+        <p className="text-sm text-foreground">{data.note}</p>
+      </div>
+    </div>
+  );
+}
+
 function MicroItineraryCard({ data }: { data: MicroItineraryResponse }) {
   return (
     <div className="space-y-3">
@@ -296,6 +318,10 @@ function MessageContent({ content }: { content: string }) {
   
   if (parsed?.type === "micro_itinerary") {
     return <MicroItineraryCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "safety_note") {
+    return <SafetyNoteCard data={parsed} />;
   }
   
   return <>{content}</>;
