@@ -67,14 +67,22 @@ interface UserContextResponse {
   content_goal: string;
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse;
+interface ActivityScoreResponse {
+  type: "activity_score";
+  activity: string;
+  reel_score: number;
+  effort_level: string;
+  crowd_level: string;
+}
+
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse | ActivityScoreResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context)"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
@@ -98,6 +106,9 @@ function parseAIResponse(content: string): ParsedResponse | null {
     }
     if (parsed.type === "user_context" && parsed.travel_style) {
       return parsed as UserContextResponse;
+    }
+    if (parsed.type === "activity_score" && parsed.activity && typeof parsed.reel_score === "number") {
+      return parsed as ActivityScoreResponse;
     }
   } catch {
     // Not JSON or not a structured response
@@ -339,6 +350,64 @@ function UserContextCard({ data }: { data: UserContextResponse }) {
   );
 }
 
+function ActivityScoreCard({ data }: { data: ActivityScoreResponse }) {
+  const getScoreColor = (score: number) => {
+    if (score >= 8) return "text-green-500";
+    if (score >= 5) return "text-yellow-500";
+    return "text-red-500";
+  };
+
+  const getEffortIcon = (level: string) => {
+    const normalized = level.toLowerCase();
+    if (normalized === "low") return { icon: "🟢", label: "Easy" };
+    if (normalized === "medium") return { icon: "🟡", label: "Moderate" };
+    return { icon: "🔴", label: "Challenging" };
+  };
+
+  const getCrowdIcon = (level: string) => {
+    const normalized = level.toLowerCase();
+    if (normalized === "quiet") return { icon: "🧘", label: "Quiet" };
+    if (normalized === "moderate") return { icon: "👥", label: "Moderate" };
+    return { icon: "🎉", label: "Busy" };
+  };
+
+  const effort = getEffortIcon(data.effort_level);
+  const crowd = getCrowdIcon(data.crowd_level);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🎬</span>
+        <span className="font-medium text-sm">Reel Score</span>
+      </div>
+      <div className="bg-background border border-border rounded-lg p-3 space-y-3">
+        <div className="text-center">
+          <p className="text-sm font-medium mb-1">{data.activity}</p>
+          <div className="flex items-center justify-center gap-1">
+            <span className={`text-3xl font-bold ${getScoreColor(data.reel_score)}`}>
+              {data.reel_score}
+            </span>
+            <span className="text-muted-foreground text-sm">/10</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1">Reel-Worthiness</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+          <div className="text-center">
+            <span className="text-lg">{effort.icon}</span>
+            <p className="text-[10px] text-muted-foreground">Effort</p>
+            <p className="text-xs font-medium">{effort.label}</p>
+          </div>
+          <div className="text-center">
+            <span className="text-lg">{crowd.icon}</span>
+            <p className="text-[10px] text-muted-foreground">Crowds</p>
+            <p className="text-xs font-medium">{crowd.label}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MicroItineraryCard({ data }: { data: MicroItineraryResponse }) {
   return (
     <div className="space-y-3">
@@ -406,6 +475,10 @@ function MessageContent({ content }: { content: string }) {
   
   if (parsed?.type === "user_context") {
     return <UserContextCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "activity_score") {
+    return <ActivityScoreCard data={parsed} />;
   }
   
   return <>{content}</>;

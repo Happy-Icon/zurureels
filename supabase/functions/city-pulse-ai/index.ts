@@ -95,6 +95,16 @@ When asked about user preferences, travel style, or when the user describes them
   "content_goal": "photos | reels | memories | relaxation"
 }
 
+When asked to score, rate, or rank an activity for reels/content creation potential, respond with this JSON schema:
+{
+  "type": "activity_score",
+  "activity": "activity name",
+  "reel_score": 8,
+  "effort_level": "low | medium | high",
+  "crowd_level": "quiet | moderate | busy"
+}
+The reel_score is 1-10 based on how reel-worthy/photogenic the activity is. Consider lighting, uniqueness, shareability, and visual appeal.
+
 Prioritize experiences suitable for reels content (photogenic, unique, shareable).
 If asked about something not in the data, suggest similar alternatives from what's available.`;
 
