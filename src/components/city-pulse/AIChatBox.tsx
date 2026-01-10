@@ -59,14 +59,22 @@ interface SafetyNoteResponse {
   note: string;
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse;
+interface UserContextResponse {
+  type: "user_context";
+  travel_style: string;
+  group_type: string;
+  energy_level: string;
+  content_goal: string;
+}
+
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note)"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
@@ -87,6 +95,9 @@ function parseAIResponse(content: string): ParsedResponse | null {
     }
     if (parsed.type === "safety_note" && parsed.note) {
       return parsed as SafetyNoteResponse;
+    }
+    if (parsed.type === "user_context" && parsed.travel_style) {
+      return parsed as UserContextResponse;
     }
   } catch {
     // Not JSON or not a structured response
@@ -259,6 +270,75 @@ function SafetyNoteCard({ data }: { data: SafetyNoteResponse }) {
   );
 }
 
+const contextLabels: Record<string, Record<string, { icon: string; label: string }>> = {
+  travel_style: {
+    adventurous: { icon: "🏔️", label: "Adventurous" },
+    relaxed: { icon: "🌴", label: "Relaxed" },
+    cultural: { icon: "🏛️", label: "Cultural" },
+    luxury: { icon: "✨", label: "Luxury" },
+    budget: { icon: "💰", label: "Budget-Friendly" },
+  },
+  group_type: {
+    solo: { icon: "🚶", label: "Solo" },
+    couple: { icon: "💑", label: "Couple" },
+    family: { icon: "👨‍👩‍👧‍👦", label: "Family" },
+    friends: { icon: "👯", label: "Friends" },
+    business: { icon: "💼", label: "Business" },
+  },
+  energy_level: {
+    high: { icon: "⚡", label: "High Energy" },
+    medium: { icon: "🔋", label: "Moderate" },
+    low: { icon: "😌", label: "Easy-Going" },
+  },
+  content_goal: {
+    photos: { icon: "📸", label: "Photo Spots" },
+    reels: { icon: "🎬", label: "Reel-Worthy" },
+    memories: { icon: "💭", label: "Memory Making" },
+    relaxation: { icon: "🧘", label: "Relaxation" },
+  },
+};
+
+function UserContextCard({ data }: { data: UserContextResponse }) {
+  const getLabel = (category: string, value: string) => {
+    const normalized = value.toLowerCase().trim();
+    return contextLabels[category]?.[normalized] || { icon: "•", label: value };
+  };
+
+  const items = [
+    { category: "travel_style", value: data.travel_style, title: "Style" },
+    { category: "group_type", value: data.group_type, title: "Group" },
+    { category: "energy_level", value: data.energy_level, title: "Energy" },
+    { category: "content_goal", value: data.content_goal, title: "Goal" },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">👤</span>
+        <span className="font-medium text-sm">Your Travel Profile</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {items.map((item) => {
+          const { icon, label } = getLabel(item.category, item.value);
+          return (
+            <div
+              key={item.category}
+              className="bg-primary/10 border border-primary/20 rounded-lg p-2 text-center"
+            >
+              <span className="text-lg">{icon}</span>
+              <p className="text-[10px] text-muted-foreground mt-1">{item.title}</p>
+              <p className="text-xs font-medium">{label}</p>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        I'll tailor my recommendations based on your profile!
+      </p>
+    </div>
+  );
+}
+
 function MicroItineraryCard({ data }: { data: MicroItineraryResponse }) {
   return (
     <div className="space-y-3">
@@ -322,6 +402,10 @@ function MessageContent({ content }: { content: string }) {
   
   if (parsed?.type === "safety_note") {
     return <SafetyNoteCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "user_context") {
+    return <UserContextCard data={parsed} />;
   }
   
   return <>{content}</>;
