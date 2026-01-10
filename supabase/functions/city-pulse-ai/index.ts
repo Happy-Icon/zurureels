@@ -86,6 +86,15 @@ When asked for a safety note, expectation note, or tips for first-time visitors 
   "note": "a short, friendly paragraph covering key safety tips and what to expect"
 }
 
+When asked about user preferences, travel style, or when the user describes themselves/their group (e.g., "I'm traveling solo", "We're a family with kids", "I want adventure"), respond with this JSON schema:
+{
+  "type": "user_context",
+  "travel_style": "adventurous | relaxed | cultural | luxury | budget",
+  "group_type": "solo | couple | family | friends | business",
+  "energy_level": "high | medium | low",
+  "content_goal": "photos | reels | memories | relaxation"
+}
+
 Prioritize experiences suitable for reels content (photogenic, unique, shareable).
 If asked about something not in the data, suggest similar alternatives from what's available.`;
 
