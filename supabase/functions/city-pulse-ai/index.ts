@@ -113,8 +113,16 @@ When asked about budget, pricing, affordability, or whether an activity/experien
 }
 Use "within_budget" if the activity clearly fits, "stretch" if it's possible but tight, and "over_budget" if it exceeds the stated budget. Always provide helpful alternatives or tips in the note.
 
+When you cannot find matching activities, when data is limited, or when you need to provide alternatives to what the user asked for, respond with this JSON schema:
+{
+  "type": "fallback_suggestion",
+  "message": "friendly explanation of why you couldn't find an exact match and what you're suggesting instead",
+  "alternative_tags": ["tag1", "tag2", "tag3"]
+}
+Use this when the user's request doesn't match available data, when there are no results for a specific query, or when you want to redirect them to similar experiences.
+
 Prioritize experiences suitable for reels content (photogenic, unique, shareable).
-If asked about something not in the data, suggest similar alternatives from what's available.`;
+If asked about something not in the data, use the fallback_suggestion schema to suggest similar alternatives from what's available.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
