@@ -75,14 +75,20 @@ interface ActivityScoreResponse {
   crowd_level: string;
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse | ActivityScoreResponse;
+interface BudgetCheckResponse {
+  type: "budget_check";
+  budget_fit: string;
+  note: string;
+}
+
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse | ActivityScoreResponse | BudgetCheckResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score)"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score|budget_check)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
@@ -109,6 +115,9 @@ function parseAIResponse(content: string): ParsedResponse | null {
     }
     if (parsed.type === "activity_score" && parsed.activity && typeof parsed.reel_score === "number") {
       return parsed as ActivityScoreResponse;
+    }
+    if (parsed.type === "budget_check" && parsed.budget_fit && parsed.note) {
+      return parsed as BudgetCheckResponse;
     }
   } catch {
     // Not JSON or not a structured response
@@ -437,6 +446,33 @@ function MicroItineraryCard({ data }: { data: MicroItineraryResponse }) {
   );
 }
 
+function BudgetCheckCard({ data }: { data: BudgetCheckResponse }) {
+  const getBudgetStatus = (fit: string) => {
+    const normalized = fit.toLowerCase().replace(/_/g, "");
+    if (normalized === "withinbudget") return { icon: "✅", label: "Within Budget", color: "bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400" };
+    if (normalized === "stretch") return { icon: "⚠️", label: "Stretch Budget", color: "bg-yellow-500/10 border-yellow-500/20 text-yellow-600 dark:text-yellow-400" };
+    return { icon: "❌", label: "Over Budget", color: "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400" };
+  };
+
+  const status = getBudgetStatus(data.budget_fit);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">💰</span>
+        <span className="font-medium text-sm">Budget Check</span>
+      </div>
+      <div className={`rounded-lg p-3 border ${status.color}`}>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-lg">{status.icon}</span>
+          <span className="font-medium text-sm">{status.label}</span>
+        </div>
+        <p className="text-sm">{data.note}</p>
+      </div>
+    </div>
+  );
+}
+
 function MessageContent({ content }: { content: string }) {
   const parsed = parseAIResponse(content);
   
@@ -479,6 +515,10 @@ function MessageContent({ content }: { content: string }) {
   
   if (parsed?.type === "activity_score") {
     return <ActivityScoreCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "budget_check") {
+    return <BudgetCheckCard data={parsed} />;
   }
   
   return <>{content}</>;
