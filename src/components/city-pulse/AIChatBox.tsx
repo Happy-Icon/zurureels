@@ -81,14 +81,20 @@ interface BudgetCheckResponse {
   note: string;
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse | ActivityScoreResponse | BudgetCheckResponse;
+interface FallbackSuggestionResponse {
+  type: "fallback_suggestion";
+  message: string;
+  alternative_tags: string[];
+}
+
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse | ActivityScoreResponse | BudgetCheckResponse | FallbackSuggestionResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score|budget_check)"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score|budget_check|fallback_suggestion)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
@@ -118,6 +124,9 @@ function parseAIResponse(content: string): ParsedResponse | null {
     }
     if (parsed.type === "budget_check" && parsed.budget_fit && parsed.note) {
       return parsed as BudgetCheckResponse;
+    }
+    if (parsed.type === "fallback_suggestion" && parsed.message && Array.isArray(parsed.alternative_tags)) {
+      return parsed as FallbackSuggestionResponse;
     }
   } catch {
     // Not JSON or not a structured response
@@ -473,6 +482,35 @@ function BudgetCheckCard({ data }: { data: BudgetCheckResponse }) {
   );
 }
 
+function FallbackSuggestionCard({ data }: { data: FallbackSuggestionResponse }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🔍</span>
+        <span className="font-medium text-sm">Suggestion</span>
+      </div>
+      <div className="bg-muted/50 border border-border rounded-lg p-3 space-y-3">
+        <p className="text-sm text-foreground">{data.message}</p>
+        {data.alternative_tags.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Try exploring:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {data.alternative_tags.map((tag, i) => (
+                <span
+                  key={i}
+                  className="px-3 py-1.5 bg-primary/15 text-primary text-xs font-medium rounded-full"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MessageContent({ content }: { content: string }) {
   const parsed = parseAIResponse(content);
   
@@ -519,6 +557,10 @@ function MessageContent({ content }: { content: string }) {
   
   if (parsed?.type === "budget_check") {
     return <BudgetCheckCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "fallback_suggestion") {
+    return <FallbackSuggestionCard data={parsed} />;
   }
   
   return <>{content}</>;
