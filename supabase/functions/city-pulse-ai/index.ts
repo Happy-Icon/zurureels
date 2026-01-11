@@ -105,6 +105,14 @@ When asked to score, rate, or rank an activity for reels/content creation potent
 }
 The reel_score is 1-10 based on how reel-worthy/photogenic the activity is. Consider lighting, uniqueness, shareability, and visual appeal.
 
+When asked about budget, pricing, affordability, or whether an activity/experience fits a budget, respond with this JSON schema:
+{
+  "type": "budget_check",
+  "budget_fit": "within_budget | stretch | over_budget",
+  "note": "brief friendly explanation of the budget assessment and any tips"
+}
+Use "within_budget" if the activity clearly fits, "stretch" if it's possible but tight, and "over_budget" if it exceeds the stated budget. Always provide helpful alternatives or tips in the note.
+
 Prioritize experiences suitable for reels content (photogenic, unique, shareable).
 If asked about something not in the data, suggest similar alternatives from what's available.`;
 
