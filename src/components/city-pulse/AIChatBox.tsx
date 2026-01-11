@@ -87,14 +87,20 @@ interface FallbackSuggestionResponse {
   alternative_tags: string[];
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse | ActivityScoreResponse | BudgetCheckResponse | FallbackSuggestionResponse;
+interface IntentSignalResponse {
+  type: "intent_signal";
+  readiness_level: string;
+  suggested_next_action: string;
+}
+
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse | ActivityScoreResponse | BudgetCheckResponse | FallbackSuggestionResponse | IntentSignalResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score|budget_check|fallback_suggestion)"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score|budget_check|fallback_suggestion|intent_signal)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
@@ -127,6 +133,9 @@ function parseAIResponse(content: string): ParsedResponse | null {
     }
     if (parsed.type === "fallback_suggestion" && parsed.message && Array.isArray(parsed.alternative_tags)) {
       return parsed as FallbackSuggestionResponse;
+    }
+    if (parsed.type === "intent_signal" && parsed.readiness_level && parsed.suggested_next_action) {
+      return parsed as IntentSignalResponse;
     }
   } catch {
     // Not JSON or not a structured response
@@ -511,6 +520,68 @@ function FallbackSuggestionCard({ data }: { data: FallbackSuggestionResponse }) 
   );
 }
 
+function IntentSignalCard({ data }: { data: IntentSignalResponse }) {
+  const getReadinessInfo = (level: string) => {
+    const normalized = level.toLowerCase().replace(/_/g, "");
+    if (normalized === "readytobook") return { 
+      icon: "🚀", 
+      label: "Ready to Book!", 
+      color: "bg-green-500/10 border-green-500/20",
+      textColor: "text-green-600 dark:text-green-400",
+      progress: 100
+    };
+    if (normalized === "considering") return { 
+      icon: "🤔", 
+      label: "Considering Options", 
+      color: "bg-yellow-500/10 border-yellow-500/20",
+      textColor: "text-yellow-600 dark:text-yellow-400",
+      progress: 60
+    };
+    return { 
+      icon: "👀", 
+      label: "Just Browsing", 
+      color: "bg-blue-500/10 border-blue-500/20",
+      textColor: "text-blue-600 dark:text-blue-400",
+      progress: 30
+    };
+  };
+
+  const info = getReadinessInfo(data.readiness_level);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🎯</span>
+        <span className="font-medium text-sm">Booking Intent</span>
+      </div>
+      <div className={`rounded-lg p-3 border ${info.color}`}>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">{info.icon}</span>
+          <span className={`font-medium text-sm ${info.textColor}`}>{info.label}</span>
+        </div>
+        
+        {/* Progress indicator */}
+        <div className="mb-3">
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div 
+              className={`h-full rounded-full transition-all ${
+                info.progress === 100 ? 'bg-green-500' : 
+                info.progress === 60 ? 'bg-yellow-500' : 'bg-blue-500'
+              }`}
+              style={{ width: `${info.progress}%` }}
+            />
+          </div>
+        </div>
+        
+        <div className="bg-background/50 rounded-md p-2">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium mb-1">Next Step</p>
+          <p className="text-sm font-medium">{data.suggested_next_action}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MessageContent({ content }: { content: string }) {
   const parsed = parseAIResponse(content);
   
@@ -561,6 +632,10 @@ function MessageContent({ content }: { content: string }) {
   
   if (parsed?.type === "fallback_suggestion") {
     return <FallbackSuggestionCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "intent_signal") {
+    return <IntentSignalCard data={parsed} />;
   }
   
   return <>{content}</>;

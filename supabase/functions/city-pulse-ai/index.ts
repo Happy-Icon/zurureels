@@ -121,6 +121,14 @@ When you cannot find matching activities, when data is limited, or when you need
 }
 Use this when the user's request doesn't match available data, when there are no results for a specific query, or when you want to redirect them to similar experiences.
 
+When you detect booking intent, interest in reserving, or readiness to take action (e.g., "I want to book", "How do I reserve", "Let's do it", "I'm ready"), respond with this JSON schema:
+{
+  "type": "intent_signal",
+  "readiness_level": "browsing | considering | ready_to_book",
+  "suggested_next_action": "specific actionable step the user should take next"
+}
+Use "browsing" for casual exploration, "considering" when comparing options or asking detailed questions, and "ready_to_book" when expressing clear booking intent.
+
 Prioritize experiences suitable for reels content (photogenic, unique, shareable).
 If asked about something not in the data, use the fallback_suggestion schema to suggest similar alternatives from what's available.`;
 
