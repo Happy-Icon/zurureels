@@ -1,5 +1,17 @@
 // Experience-Specific Reel Specifications
 
+// Base Reel Spec Schema
+export interface BaseReelSpec {
+  type: "reel_spec";
+  experience_category: string;
+  experience_subtype?: string;
+  duration_seconds: number;
+  required_elements: string[];
+  timeline: ReelSegment[];
+  validation_rules: ReelValidationRules;
+  scoring_weights?: Record<string, number>;
+}
+
 export interface ReelSegment {
   segment: "intro" | "peak" | "close";
   time_range_seconds: string;
