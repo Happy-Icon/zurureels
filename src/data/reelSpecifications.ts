@@ -47,6 +47,26 @@ export interface ReelValidationRules {
   water_visibility_min_seconds?: number;
 }
 
+// Scoring Weights Schema
+export interface ScoringWeights {
+  hook_strength: number;
+  motion_quality: number;
+  human_emotion: number;
+  visual_clarity: number;
+  signature_moment: number;
+  viral_potential: number;
+}
+
+// Generic Scoring Weights (Base Defaults)
+export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
+  hook_strength: 0.25,
+  motion_quality: 0.25,
+  human_emotion: 0.20,
+  visual_clarity: 0.15,
+  signature_moment: 0.10,
+  viral_potential: 0.05
+};
+
 export interface ExperienceReelSpec {
   experience_category: string;
   required_elements: string[];
