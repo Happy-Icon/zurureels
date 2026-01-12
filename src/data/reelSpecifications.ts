@@ -40,7 +40,10 @@ export interface ReelSegment {
 export interface ReelValidationRules {
   must_have_motion: boolean;
   must_have_human_presence: boolean;
+  max_static_segments?: number;
+  hook_within_seconds?: number;
   signature_moment_required: boolean;
+  subtitles_recommended?: boolean;
   water_visibility_min_seconds?: number;
 }
 
