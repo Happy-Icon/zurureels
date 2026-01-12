@@ -1,5 +1,20 @@
 // Experience-Specific Reel Specifications
 
+// Shot Type Enum Reference
+export const SHOT_TYPES = [
+  "pov_entry",
+  "wide_environment",
+  "close_up_detail",
+  "motion_action",
+  "human_reaction",
+  "signature_moment",
+  "calm_contrast",
+  "end_frame",
+  "transition_effect"
+] as const;
+
+export type ShotType = typeof SHOT_TYPES[number];
+
 // Base Reel Spec Schema
 export interface BaseReelSpec {
   type: "reel_spec";
