@@ -17,8 +17,9 @@ export interface ReelSegment {
   time_range_seconds: string;
   purpose: string;
   required_shot_types: string[];
-  motion_required?: boolean;
   human_presence_required?: boolean;
+  motion_required?: boolean;
+  optional_audio_cue?: string;
 }
 
 export interface ReelValidationRules {
