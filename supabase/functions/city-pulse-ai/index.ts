@@ -80,8 +80,57 @@ When asked to create an itinerary or plan a schedule from activities, respond wi
   ]
 }
 
+When asked for a safety note, expectation note, or tips for first-time visitors to an activity/location, respond with this JSON schema:
+{
+  "type": "safety_note",
+  "note": "a short, friendly paragraph covering key safety tips and what to expect"
+}
+
+When asked about user preferences, travel style, or when the user describes themselves/their group (e.g., "I'm traveling solo", "We're a family with kids", "I want adventure"), respond with this JSON schema:
+{
+  "type": "user_context",
+  "travel_style": "adventurous | relaxed | cultural | luxury | budget",
+  "group_type": "solo | couple | family | friends | business",
+  "energy_level": "high | medium | low",
+  "content_goal": "photos | reels | memories | relaxation"
+}
+
+When asked to score, rate, or rank an activity for reels/content creation potential, respond with this JSON schema:
+{
+  "type": "activity_score",
+  "activity": "activity name",
+  "reel_score": 8,
+  "effort_level": "low | medium | high",
+  "crowd_level": "quiet | moderate | busy"
+}
+The reel_score is 1-10 based on how reel-worthy/photogenic the activity is. Consider lighting, uniqueness, shareability, and visual appeal.
+
+When asked about budget, pricing, affordability, or whether an activity/experience fits a budget, respond with this JSON schema:
+{
+  "type": "budget_check",
+  "budget_fit": "within_budget | stretch | over_budget",
+  "note": "brief friendly explanation of the budget assessment and any tips"
+}
+Use "within_budget" if the activity clearly fits, "stretch" if it's possible but tight, and "over_budget" if it exceeds the stated budget. Always provide helpful alternatives or tips in the note.
+
+When you cannot find matching activities, when data is limited, or when you need to provide alternatives to what the user asked for, respond with this JSON schema:
+{
+  "type": "fallback_suggestion",
+  "message": "friendly explanation of why you couldn't find an exact match and what you're suggesting instead",
+  "alternative_tags": ["tag1", "tag2", "tag3"]
+}
+Use this when the user's request doesn't match available data, when there are no results for a specific query, or when you want to redirect them to similar experiences.
+
+When you detect booking intent, interest in reserving, or readiness to take action (e.g., "I want to book", "How do I reserve", "Let's do it", "I'm ready"), respond with this JSON schema:
+{
+  "type": "intent_signal",
+  "readiness_level": "browsing | considering | ready_to_book",
+  "suggested_next_action": "specific actionable step the user should take next"
+}
+Use "browsing" for casual exploration, "considering" when comparing options or asking detailed questions, and "ready_to_book" when expressing clear booking intent.
+
 Prioritize experiences suitable for reels content (photogenic, unique, shareable).
-If asked about something not in the data, suggest similar alternatives from what's available.`;
+If asked about something not in the data, use the fallback_suggestion schema to suggest similar alternatives from what's available.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

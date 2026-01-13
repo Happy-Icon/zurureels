@@ -54,14 +54,53 @@ interface MicroItineraryResponse {
   schedule: ScheduleItem[];
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse;
+interface SafetyNoteResponse {
+  type: "safety_note";
+  note: string;
+}
+
+interface UserContextResponse {
+  type: "user_context";
+  travel_style: string;
+  group_type: string;
+  energy_level: string;
+  content_goal: string;
+}
+
+interface ActivityScoreResponse {
+  type: "activity_score";
+  activity: string;
+  reel_score: number;
+  effort_level: string;
+  crowd_level: string;
+}
+
+interface BudgetCheckResponse {
+  type: "budget_check";
+  budget_fit: string;
+  note: string;
+}
+
+interface FallbackSuggestionResponse {
+  type: "fallback_suggestion";
+  message: string;
+  alternative_tags: string[];
+}
+
+interface IntentSignalResponse {
+  type: "intent_signal";
+  readiness_level: string;
+  suggested_next_action: string;
+}
+
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse | ActivityScoreResponse | BudgetCheckResponse | FallbackSuggestionResponse | IntentSignalResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary)"[\s\S]*\})/);
+                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score|budget_check|fallback_suggestion|intent_signal)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
     
@@ -79,6 +118,24 @@ function parseAIResponse(content: string): ParsedResponse | null {
     }
     if (parsed.type === "micro_itinerary" && Array.isArray(parsed.schedule)) {
       return parsed as MicroItineraryResponse;
+    }
+    if (parsed.type === "safety_note" && parsed.note) {
+      return parsed as SafetyNoteResponse;
+    }
+    if (parsed.type === "user_context" && parsed.travel_style) {
+      return parsed as UserContextResponse;
+    }
+    if (parsed.type === "activity_score" && parsed.activity && typeof parsed.reel_score === "number") {
+      return parsed as ActivityScoreResponse;
+    }
+    if (parsed.type === "budget_check" && parsed.budget_fit && parsed.note) {
+      return parsed as BudgetCheckResponse;
+    }
+    if (parsed.type === "fallback_suggestion" && parsed.message && Array.isArray(parsed.alternative_tags)) {
+      return parsed as FallbackSuggestionResponse;
+    }
+    if (parsed.type === "intent_signal" && parsed.readiness_level && parsed.suggested_next_action) {
+      return parsed as IntentSignalResponse;
     }
   } catch {
     // Not JSON or not a structured response
@@ -237,6 +294,147 @@ function ReviewSummaryCard({ data }: { data: ReviewSummaryResponse }) {
   );
 }
 
+function SafetyNoteCard({ data }: { data: SafetyNoteResponse }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🛡️</span>
+        <span className="font-medium text-sm">Safety & Expectations</span>
+      </div>
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+        <p className="text-sm text-foreground">{data.note}</p>
+      </div>
+    </div>
+  );
+}
+
+const contextLabels: Record<string, Record<string, { icon: string; label: string }>> = {
+  travel_style: {
+    adventurous: { icon: "🏔️", label: "Adventurous" },
+    relaxed: { icon: "🌴", label: "Relaxed" },
+    cultural: { icon: "🏛️", label: "Cultural" },
+    luxury: { icon: "✨", label: "Luxury" },
+    budget: { icon: "💰", label: "Budget-Friendly" },
+  },
+  group_type: {
+    solo: { icon: "🚶", label: "Solo" },
+    couple: { icon: "💑", label: "Couple" },
+    family: { icon: "👨‍👩‍👧‍👦", label: "Family" },
+    friends: { icon: "👯", label: "Friends" },
+    business: { icon: "💼", label: "Business" },
+  },
+  energy_level: {
+    high: { icon: "⚡", label: "High Energy" },
+    medium: { icon: "🔋", label: "Moderate" },
+    low: { icon: "😌", label: "Easy-Going" },
+  },
+  content_goal: {
+    photos: { icon: "📸", label: "Photo Spots" },
+    reels: { icon: "🎬", label: "Reel-Worthy" },
+    memories: { icon: "💭", label: "Memory Making" },
+    relaxation: { icon: "🧘", label: "Relaxation" },
+  },
+};
+
+function UserContextCard({ data }: { data: UserContextResponse }) {
+  const getLabel = (category: string, value: string) => {
+    const normalized = value.toLowerCase().trim();
+    return contextLabels[category]?.[normalized] || { icon: "•", label: value };
+  };
+
+  const items = [
+    { category: "travel_style", value: data.travel_style, title: "Style" },
+    { category: "group_type", value: data.group_type, title: "Group" },
+    { category: "energy_level", value: data.energy_level, title: "Energy" },
+    { category: "content_goal", value: data.content_goal, title: "Goal" },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">👤</span>
+        <span className="font-medium text-sm">Your Travel Profile</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {items.map((item) => {
+          const { icon, label } = getLabel(item.category, item.value);
+          return (
+            <div
+              key={item.category}
+              className="bg-primary/10 border border-primary/20 rounded-lg p-2 text-center"
+            >
+              <span className="text-lg">{icon}</span>
+              <p className="text-[10px] text-muted-foreground mt-1">{item.title}</p>
+              <p className="text-xs font-medium">{label}</p>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        I'll tailor my recommendations based on your profile!
+      </p>
+    </div>
+  );
+}
+
+function ActivityScoreCard({ data }: { data: ActivityScoreResponse }) {
+  const getScoreColor = (score: number) => {
+    if (score >= 8) return "text-green-500";
+    if (score >= 5) return "text-yellow-500";
+    return "text-red-500";
+  };
+
+  const getEffortIcon = (level: string) => {
+    const normalized = level.toLowerCase();
+    if (normalized === "low") return { icon: "🟢", label: "Easy" };
+    if (normalized === "medium") return { icon: "🟡", label: "Moderate" };
+    return { icon: "🔴", label: "Challenging" };
+  };
+
+  const getCrowdIcon = (level: string) => {
+    const normalized = level.toLowerCase();
+    if (normalized === "quiet") return { icon: "🧘", label: "Quiet" };
+    if (normalized === "moderate") return { icon: "👥", label: "Moderate" };
+    return { icon: "🎉", label: "Busy" };
+  };
+
+  const effort = getEffortIcon(data.effort_level);
+  const crowd = getCrowdIcon(data.crowd_level);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🎬</span>
+        <span className="font-medium text-sm">Reel Score</span>
+      </div>
+      <div className="bg-background border border-border rounded-lg p-3 space-y-3">
+        <div className="text-center">
+          <p className="text-sm font-medium mb-1">{data.activity}</p>
+          <div className="flex items-center justify-center gap-1">
+            <span className={`text-3xl font-bold ${getScoreColor(data.reel_score)}`}>
+              {data.reel_score}
+            </span>
+            <span className="text-muted-foreground text-sm">/10</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1">Reel-Worthiness</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+          <div className="text-center">
+            <span className="text-lg">{effort.icon}</span>
+            <p className="text-[10px] text-muted-foreground">Effort</p>
+            <p className="text-xs font-medium">{effort.label}</p>
+          </div>
+          <div className="text-center">
+            <span className="text-lg">{crowd.icon}</span>
+            <p className="text-[10px] text-muted-foreground">Crowds</p>
+            <p className="text-xs font-medium">{crowd.label}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MicroItineraryCard({ data }: { data: MicroItineraryResponse }) {
   return (
     <div className="space-y-3">
@@ -261,6 +459,124 @@ function MicroItineraryCard({ data }: { data: MicroItineraryResponse }) {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function BudgetCheckCard({ data }: { data: BudgetCheckResponse }) {
+  const getBudgetStatus = (fit: string) => {
+    const normalized = fit.toLowerCase().replace(/_/g, "");
+    if (normalized === "withinbudget") return { icon: "✅", label: "Within Budget", color: "bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400" };
+    if (normalized === "stretch") return { icon: "⚠️", label: "Stretch Budget", color: "bg-yellow-500/10 border-yellow-500/20 text-yellow-600 dark:text-yellow-400" };
+    return { icon: "❌", label: "Over Budget", color: "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400" };
+  };
+
+  const status = getBudgetStatus(data.budget_fit);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">💰</span>
+        <span className="font-medium text-sm">Budget Check</span>
+      </div>
+      <div className={`rounded-lg p-3 border ${status.color}`}>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-lg">{status.icon}</span>
+          <span className="font-medium text-sm">{status.label}</span>
+        </div>
+        <p className="text-sm">{data.note}</p>
+      </div>
+    </div>
+  );
+}
+
+function FallbackSuggestionCard({ data }: { data: FallbackSuggestionResponse }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🔍</span>
+        <span className="font-medium text-sm">Suggestion</span>
+      </div>
+      <div className="bg-muted/50 border border-border rounded-lg p-3 space-y-3">
+        <p className="text-sm text-foreground">{data.message}</p>
+        {data.alternative_tags.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Try exploring:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {data.alternative_tags.map((tag, i) => (
+                <span
+                  key={i}
+                  className="px-3 py-1.5 bg-primary/15 text-primary text-xs font-medium rounded-full"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function IntentSignalCard({ data }: { data: IntentSignalResponse }) {
+  const getReadinessInfo = (level: string) => {
+    const normalized = level.toLowerCase().replace(/_/g, "");
+    if (normalized === "readytobook") return { 
+      icon: "🚀", 
+      label: "Ready to Book!", 
+      color: "bg-green-500/10 border-green-500/20",
+      textColor: "text-green-600 dark:text-green-400",
+      progress: 100
+    };
+    if (normalized === "considering") return { 
+      icon: "🤔", 
+      label: "Considering Options", 
+      color: "bg-yellow-500/10 border-yellow-500/20",
+      textColor: "text-yellow-600 dark:text-yellow-400",
+      progress: 60
+    };
+    return { 
+      icon: "👀", 
+      label: "Just Browsing", 
+      color: "bg-blue-500/10 border-blue-500/20",
+      textColor: "text-blue-600 dark:text-blue-400",
+      progress: 30
+    };
+  };
+
+  const info = getReadinessInfo(data.readiness_level);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🎯</span>
+        <span className="font-medium text-sm">Booking Intent</span>
+      </div>
+      <div className={`rounded-lg p-3 border ${info.color}`}>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">{info.icon}</span>
+          <span className={`font-medium text-sm ${info.textColor}`}>{info.label}</span>
+        </div>
+        
+        {/* Progress indicator */}
+        <div className="mb-3">
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div 
+              className={`h-full rounded-full transition-all ${
+                info.progress === 100 ? 'bg-green-500' : 
+                info.progress === 60 ? 'bg-yellow-500' : 'bg-blue-500'
+              }`}
+              style={{ width: `${info.progress}%` }}
+            />
+          </div>
+        </div>
+        
+        <div className="bg-background/50 rounded-md p-2">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium mb-1">Next Step</p>
+          <p className="text-sm font-medium">{data.suggested_next_action}</p>
+        </div>
       </div>
     </div>
   );
@@ -296,6 +612,30 @@ function MessageContent({ content }: { content: string }) {
   
   if (parsed?.type === "micro_itinerary") {
     return <MicroItineraryCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "safety_note") {
+    return <SafetyNoteCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "user_context") {
+    return <UserContextCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "activity_score") {
+    return <ActivityScoreCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "budget_check") {
+    return <BudgetCheckCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "fallback_suggestion") {
+    return <FallbackSuggestionCard data={parsed} />;
+  }
+  
+  if (parsed?.type === "intent_signal") {
+    return <IntentSignalCard data={parsed} />;
   }
   
   return <>{content}</>;
