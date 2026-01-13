@@ -138,10 +138,43 @@ export const foodReelSpec: ExperienceReelSpec = {
   }
 };
 
+export const drinksReelSpec: ExperienceReelSpec = {
+  experience_category: "drinks",
+  required_elements: ["pour", "atmosphere", "social_energy"],
+  timeline: [
+    {
+      segment: "intro",
+      time_range_seconds: "0-5",
+      purpose: "Pour or glass clink hook",
+      required_shot_types: ["close_up_detail", "motion_action"],
+      optional_audio_cue: "ASMR pour or ice clink"
+    },
+    {
+      segment: "peak",
+      time_range_seconds: "6-15",
+      purpose: "Sip / cheers reaction in vibrant setting",
+      required_shot_types: ["human_reaction", "wide_environment"]
+    },
+    {
+      segment: "close",
+      time_range_seconds: "16-20",
+      purpose: "Ambient nightlife vibe or final toast",
+      required_shot_types: ["calm_contrast", "end_frame"]
+    }
+  ],
+  validation_rules: {
+    must_have_motion: true,
+    must_have_human_presence: true,
+    max_static_segments: 1,
+    signature_moment_required: true
+  }
+};
+
 // Export all specifications as a map for easy lookup
 export const reelSpecifications: Record<string, ExperienceReelSpec> = {
   boats: boatsReelSpec,
-  food: foodReelSpec
+  food: foodReelSpec,
+  drinks: drinksReelSpec
 };
 
 // Helper to get spec by category
