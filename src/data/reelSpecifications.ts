@@ -236,13 +236,45 @@ export const adventureReelSpec: ExperienceReelSpec = {
   }
 };
 
+export const parksCampsReelSpec: ExperienceReelSpec = {
+  experience_category: "parks_camps",
+  required_elements: ["nature", "space", "calm_human_presence"],
+  timeline: [
+    {
+      segment: "intro",
+      time_range_seconds: "0-5",
+      purpose: "Wide nature reveal",
+      required_shot_types: ["wide_environment"]
+    },
+    {
+      segment: "peak",
+      time_range_seconds: "6-15",
+      purpose: "Explore / relax moment",
+      required_shot_types: ["motion_action", "human_reaction"]
+    },
+    {
+      segment: "close",
+      time_range_seconds: "16-20",
+      purpose: "Serene end frame",
+      required_shot_types: ["calm_contrast", "end_frame"]
+    }
+  ],
+  validation_rules: {
+    must_have_motion: false,
+    must_have_human_presence: false,
+    max_static_segments: 2,
+    signature_moment_required: true
+  }
+};
+
 // Export all specifications as a map for easy lookup
 export const reelSpecifications: Record<string, ExperienceReelSpec> = {
   boats: boatsReelSpec,
   food: foodReelSpec,
   drinks: drinksReelSpec,
   rentals: rentalsReelSpec,
-  adventure: adventureReelSpec
+  adventure: adventureReelSpec,
+  parks_camps: parksCampsReelSpec
 };
 
 // Helper to get spec by category
