@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Plus, Video, Image, MapPin, DollarSign, Upload, Eye, MoreVertical } from "lucide-react";
+import { Plus, Video, Image, MapPin, DollarSign, Upload, Eye, MoreVertical, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { AccommodationReelFlow, AccommodationData } from "@/components/host/AccommodationReelFlow";
+import { MiniVideoEditor, VideoEditorSubmitData } from "@/components/video-editor";
 
 type AccommodationType = "hotel" | "villa" | "apartment";
 
@@ -68,6 +69,9 @@ const Host = () => {
   const [activeTab, setActiveTab] = useState<"published" | "drafts">("published");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [showAccommodationFlow, setShowAccommodationFlow] = useState(false);
+  const [showVideoEditor, setShowVideoEditor] = useState(false);
+  const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const publishedReels = mockHostReels.filter(r => r.status === "published");
   const draftReels = mockHostReels.filter(r => r.status === "draft");
@@ -87,7 +91,6 @@ const Host = () => {
 
   const handleAccommodationComplete = (data: AccommodationData) => {
     console.log("Accommodation data:", data);
-    // In production, this would save the data and proceed to listing details
     setShowAccommodationFlow(false);
     setIsCreateOpen(false);
   };
@@ -97,8 +100,52 @@ const Host = () => {
     if (!open) {
       setSelectedCategory("");
       setShowAccommodationFlow(false);
+      setSelectedVideoFile(null);
     }
   };
+
+  const handleStartRecording = () => {
+    if (selectedCategory && !isAccommodationCategory(selectedCategory)) {
+      setShowVideoEditor(true);
+    }
+  };
+
+  const handleUploadFromGallery = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith("video/")) {
+      setSelectedVideoFile(file);
+      setShowVideoEditor(true);
+    }
+  };
+
+  const handleEditorSubmit = (data: VideoEditorSubmitData) => {
+    console.log("Video editor submit:", data);
+    setShowVideoEditor(false);
+    setIsCreateOpen(false);
+    setSelectedVideoFile(null);
+    setSelectedCategory("");
+  };
+
+  const handleEditorBack = () => {
+    setShowVideoEditor(false);
+    setSelectedVideoFile(null);
+  };
+
+  // Show video editor fullscreen when active
+  if (showVideoEditor && selectedCategory) {
+    return (
+      <MiniVideoEditor
+        category={selectedCategory}
+        videoFile={selectedVideoFile}
+        onBack={handleEditorBack}
+        onSubmit={handleEditorSubmit}
+      />
+    );
+  }
 
   return (
     <MainLayout>
@@ -167,21 +214,34 @@ const Host = () => {
                         )}
                       </div>
 
-                      {/* Only show rest of form for non-accommodation categories */}
+                        {/* Only show rest of form for non-accommodation categories */}
                       {selectedCategory && !isAccommodationCategory(selectedCategory) && (
                         <>
                           {/* Upload Area */}
-                          <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                            <div className="flex flex-col items-center gap-2">
+                          <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary/50 transition-colors">
+                            <div className="flex flex-col items-center gap-3">
                               <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                                 <Video className="h-6 w-6 text-primary" />
                               </div>
-                              <p className="font-medium">Record your reel</p>
-                              <p className="text-sm text-muted-foreground">Max 20 seconds • Real-time only</p>
-                              <Button type="button" variant="outline" size="sm" className="mt-2">
-                                <Video className="h-4 w-4 mr-2" />
-                                Start Recording
-                              </Button>
+                              <p className="font-medium">Create your reel</p>
+                              <p className="text-sm text-muted-foreground">Max 20 seconds • Get guided editing</p>
+                              <div className="flex gap-2 mt-2">
+                                <Button type="button" variant="default" size="sm" onClick={handleStartRecording}>
+                                  <Video className="h-4 w-4 mr-2" />
+                                  Record
+                                </Button>
+                                <Button type="button" variant="outline" size="sm" onClick={handleUploadFromGallery}>
+                                  <FolderOpen className="h-4 w-4 mr-2" />
+                                  Upload
+                                </Button>
+                              </div>
+                              <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="video/*"
+                                className="hidden"
+                                onChange={handleFileSelect}
+                              />
                             </div>
                           </div>
 
