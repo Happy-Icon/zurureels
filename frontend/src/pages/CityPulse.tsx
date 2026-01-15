@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { CheckOutDialog } from "@/components/booking/CheckOutDialog"; // Import CheckOutDialog
 import { WeatherWidget } from "@/components/city-pulse/WeatherWidget";
 import { AIChatBox } from "@/components/city-pulse/AIChatBox";
 import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
@@ -212,16 +213,24 @@ const CityPulse = () => {
               </div>
               <div className="space-y-2">
                 {mockDailyActivities.slice(0, 3).map((activity) => (
-                  <QuickListingCard
+                  <CheckOutDialog
                     key={activity.id}
-                    title={activity.name}
-                    subtitle={`${activity.time} • ${activity.duration}`}
-                    location={activity.location}
-                    price={activity.price}
-                    priceUnit="person"
-                    imageUrl={activity.imageUrl}
-                    badge={activity.type}
-                    available={activity.spotsLeft}
+                    tripTitle={activity.name}
+                    amount={activity.price}
+                    trigger={
+                      <div className="w-full">
+                        <QuickListingCard
+                          title={activity.name}
+                          subtitle={`${activity.time} • ${activity.duration}`}
+                          location={activity.location}
+                          price={activity.price}
+                          priceUnit="person"
+                          imageUrl={activity.imageUrl}
+                          badge={activity.type}
+                          available={activity.spotsLeft}
+                        />
+                      </div>
+                    }
                   />
                 ))}
               </div>
@@ -237,16 +246,24 @@ const CityPulse = () => {
               </div>
               <div className="space-y-2">
                 {filteredBoats.map((boat) => (
-                  <QuickListingCard
+                  <CheckOutDialog
                     key={boat.id}
-                    title={boat.name}
-                    subtitle={boat.type}
-                    location={boat.location}
-                    price={boat.price}
-                    priceUnit={boat.priceUnit}
-                    imageUrl={boat.imageUrl}
-                    rating={boat.rating}
-                    available={boat.available}
+                    tripTitle={boat.name}
+                    amount={boat.price}
+                    trigger={
+                      <div className="w-full">
+                        <QuickListingCard
+                          title={boat.name}
+                          subtitle={boat.type}
+                          location={boat.location}
+                          price={boat.price}
+                          priceUnit={boat.priceUnit}
+                          imageUrl={boat.imageUrl}
+                          rating={boat.rating}
+                          available={boat.available}
+                        />
+                      </div>
+                    }
                   />
                 ))}
               </div>

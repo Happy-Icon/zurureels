@@ -12,6 +12,7 @@ interface QuickListingCardProps {
   badge?: string;
   rating?: number;
   available?: boolean | number;
+  onClick?: () => void;
 }
 
 export function QuickListingCard({
@@ -25,9 +26,13 @@ export function QuickListingCard({
   badge,
   rating,
   available,
+  onClick
 }: QuickListingCardProps) {
   return (
-    <div className="flex gap-3 p-3 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors cursor-pointer">
+    <div
+      onClick={onClick}
+      className="flex gap-3 p-3 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors cursor-pointer active:scale-95 duration-200"
+    >
       <div className="relative h-20 w-20 flex-shrink-0">
         <img
           src={imageUrl}

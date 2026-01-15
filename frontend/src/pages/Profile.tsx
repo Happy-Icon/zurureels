@@ -1,11 +1,11 @@
 import { MainLayout } from "@/components/layout/MainLayout";
-import { 
-  User, 
-  Settings, 
-  Bell, 
-  CreditCard, 
-  HelpCircle, 
-  Shield, 
+import {
+  User,
+  Settings,
+  Bell,
+  CreditCard,
+  HelpCircle,
+  Shield,
   LogOut,
   ChevronRight,
   Camera
@@ -22,7 +22,11 @@ const menuItems = [
   { icon: Settings, label: "Settings", path: "/profile/settings" },
 ];
 
+import { useAuth } from "@/components/AuthProvider";
+
 const Profile = () => {
+  const { user, signOut } = useAuth();
+
   return (
     <MainLayout>
       <div className="pb-20 md:pb-8">
@@ -38,11 +42,17 @@ const Profile = () => {
                 <Camera className="h-4 w-4" />
               </button>
             </div>
-            <h1 className="mt-4 text-xl font-display font-semibold">Guest User</h1>
-            <p className="text-sm text-muted-foreground">Welcome to ZuruSasa</p>
-            <Link to="/auth">
-              <Button className="mt-4">Sign In / Sign Up</Button>
-            </Link>
+            <h1 className="mt-4 text-xl font-display font-semibold">
+              {user?.user_metadata?.full_name || user?.email || "Guest User"}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {user ? user.email : "Welcome to ZuruSasa"}
+            </p>
+            {!user && (
+              <Link to="/auth">
+                <Button className="mt-4">Sign In / Sign Up</Button>
+              </Link>
+            )}
           </div>
 
           {/* Stats */}
@@ -81,10 +91,15 @@ const Profile = () => {
           </div>
 
           {/* Sign Out */}
-          <button className="flex items-center gap-3 p-4 w-full rounded-xl hover:bg-destructive/10 transition-colors mt-4 text-destructive">
-            <LogOut className="h-5 w-5" />
-            <span className="font-medium">Sign Out</span>
-          </button>
+          {user && (
+            <button
+              onClick={() => signOut()}
+              className="flex items-center gap-3 p-4 w-full rounded-xl hover:bg-destructive/10 transition-colors mt-4 text-destructive"
+            >
+              <LogOut className="h-5 w-5" />
+              <span className="font-medium">Sign Out</span>
+            </button>
+          )}
         </div>
 
         {/* Footer */}
