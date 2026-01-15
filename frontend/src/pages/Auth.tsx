@@ -77,7 +77,8 @@ const Auth = () => {
 
         // Navigation handled by useEffect
       } else {
-        const redirectUrl = `${window.location.origin}/`;
+        const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+        const redirectUrl = `${appUrl}/`;
 
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -157,7 +158,7 @@ const Auth = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/`, // Redirect to Home directly
+          redirectTo: `${import.meta.env.VITE_APP_URL || window.location.origin}/`, // Redirect to Home directly
         },
       });
 

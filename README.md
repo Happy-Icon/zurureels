@@ -1,5 +1,8 @@
 # ZuruReels 🌍
 
+[**Live Demo**](https://zurureels.vercel.app)
+
+
 ZuruReels is a dynamic travel and event discovery platform ("City Pulse") connecting users with local experiences.
 
 ## 📂 Project Structure
