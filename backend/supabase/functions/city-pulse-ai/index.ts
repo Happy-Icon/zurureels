@@ -5,31 +5,46 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Define structure for Gemini Chat Messages
+interface GeminiMessage {
+  role: "user" | "model";
+  parts: { text: string }[];
+}
+
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const { message, city, context } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+
+    // The API key is set by the user in .env (frontend), but for Edge Functions
+    // it typically needs to be in `supabase secrets`.
+    // We check Deno.env first.
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("VITE_GEMINI_API_KEY");
+
+    if (!GEMINI_API_KEY) {
+      console.error("Missing GEMINI_API_KEY");
+      throw new Error("Server configuration error: Missing API Key");
     }
 
     const systemPrompt = `You are Zuru, an AI assistant inside a reels-based travel booking platform for ${city || "the Kenyan coast"}.
-
+    
 You must:
-- Be concise and practical
-- Never hallucinate prices or availability
-- Recommend activities, not exact businesses unless they're in the provided data
-- Output only valid JSON when asked for recommendations or mood-based suggestions
-- Keep responses under 120 words
-- Use local terminology when appropriate (dawa cocktail, dhow, etc.)
+- Be concise and practical.
+- Never hallucinate prices or availability.
+- Recommend activities, not exact businesses unless they're in the provided data.
+- Keep responses under 120 words.
+- Use local terminology when appropriate.
 
-Current available data:
+Current available data context:
 ${JSON.stringify(context, null, 2)}
+
+SCHEMA INSTRUCTIONS:
+If the user explicitly asks for "plain text", "simple list", or "chat" format, IGNORE these schemas and reply with standard text.
+Otherwise, use the following schemas to provide rich UI responses:
 
 When asked for activity recommendations, respond with this exact JSON schema:
 {
@@ -37,10 +52,10 @@ When asked for activity recommendations, respond with this exact JSON schema:
   "city": "${city || "the Kenyan coast"}",
   "recommendations": [
     {
-      "activity": "activity name",
-      "why_it_fits": "brief reason matching user mood/budget",
-      "best_time": "suggested time today",
-      "tags": ["reel-worthy", "scenic", etc]
+      "activity": "Name of the activity or place",
+      "why_it_fits": "Why this matches the user's request (short)",
+      "best_time": "Best time to go (e.g. 'Afternoon')",
+      "tags": ["tag1", "tag2"]
     }
   ]
 }
@@ -103,15 +118,13 @@ When asked to score, rate, or rank an activity for reels/content creation potent
   "effort_level": "low | medium | high",
   "crowd_level": "quiet | moderate | busy"
 }
-The reel_score is 1-10 based on how reel-worthy/photogenic the activity is. Consider lighting, uniqueness, shareability, and visual appeal.
 
 When asked about budget, pricing, affordability, or whether an activity/experience fits a budget, respond with this JSON schema:
 {
   "type": "budget_check",
   "budget_fit": "within_budget | stretch | over_budget",
-  "note": "brief friendly explanation of the budget assessment and any tips"
+  "note": "brief friendly explanation"
 }
-Use "within_budget" if the activity clearly fits, "stretch" if it's possible but tight, and "over_budget" if it exceeds the stated budget. Always provide helpful alternatives or tips in the note.
 
 When you cannot find matching activities, when data is limited, or when you need to provide alternatives to what the user asked for, respond with this JSON schema:
 {
@@ -119,7 +132,6 @@ When you cannot find matching activities, when data is limited, or when you need
   "message": "friendly explanation of why you couldn't find an exact match and what you're suggesting instead",
   "alternative_tags": ["tag1", "tag2", "tag3"]
 }
-Use this when the user's request doesn't match available data, when there are no results for a specific query, or when you want to redirect them to similar experiences.
 
 When you detect booking intent, interest in reserving, or readiness to take action (e.g., "I want to book", "How do I reserve", "Let's do it", "I'm ready"), respond with this JSON schema:
 {
@@ -127,53 +139,95 @@ When you detect booking intent, interest in reserving, or readiness to take acti
   "readiness_level": "browsing | considering | ready_to_book",
   "suggested_next_action": "specific actionable step the user should take next"
 }
-Use "browsing" for casual exploration, "considering" when comparing options or asking detailed questions, and "ready_to_book" when expressing clear booking intent.
 
-Prioritize experiences suitable for reels content (photogenic, unique, shareable).
-If asked about something not in the data, use the fallback_suggestion schema to suggest similar alternatives from what's available.`;
+Ensure your JSON is minified or naturally formatted, but do NOT wrap it in markdown code blocks like \`\`\`json ... \`\`\`. Just return the raw JSON object if a schema matches. Otherwise, return plain text.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const body = {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: systemPrompt + "\n\nUser Question: " + message }]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 4096,
+      }
+    };
+
+    // --- Mapbox Integration Start ---
+    const MAPBOX_ACCESS_TOKEN = Deno.env.get("MAPBOX_ACCESS_TOKEN") || Deno.env.get("VITE_MAPBOX_ACCESS_TOKEN");
+
+    // Simple intent detection for "nearby" or place searches
+    const isSearchRequest = /(find|nearby|where|recommend|looking for|best|top|search)/i.test(message);
+
+    if (MAPBOX_ACCESS_TOKEN && isSearchRequest) {
+      try {
+        console.log("Fetching Mapbox data for:", message);
+        // Extract a simple query (naive approach: use the whole message limited to first 20 chars if too long, or better, just pass the message)
+        // Better: search for the whole message text combined with city
+        const queryTerm = encodeURIComponent(`${message} ${city || ""}`);
+        const mapboxUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${queryTerm}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=5`;
+
+        const mapRes = await fetch(mapboxUrl);
+        if (mapRes.ok) {
+          const mapData = await mapRes.json();
+          const places = mapData.features?.map((f: any) => ({
+            name: f.text,
+            address: f.place_name,
+            category: f.properties?.category,
+            type: f.properties?.maki || "place"
+          })) || [];
+
+          if (places.length > 0) {
+            console.log("Found places:", places.length);
+            // Append real-world data to the user message part
+            body.contents[0].parts[0].text += `\n\n[REAL-TIME LOCATION DATA FROM MAPBOX]\nHere are some real places found matching the request:\n${JSON.stringify(places, null, 2)}\nUse these real details (names, addresses) in your recommendations if they fit.`;
+          }
+        }
+      } catch (err) {
+        console.error("Mapbox fetch error:", err);
+        // Continue without mapbox data
+      }
+    }
+    // --- Mapbox Integration End ---
+
+    // Use non-streaming generateContent for reliability
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+
+    const response = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        stream: true,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limits exceeded, please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Payment required, please add funds." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error("AI gateway error");
+      console.error("Gemini API Error:", response.status, errorText);
+      throw new Error(`Gemini API Error: ${response.statusText} - ${errorText}`);
     }
 
-    return new Response(response.body, {
+    const data = await response.json();
+    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response.";
+
+    // Simulate SSE for the frontend
+    const sseStream = new ReadableStream({
+      start(controller) {
+        const text = JSON.stringify({ choices: [{ delta: { content: answer } }] });
+        controller.enqueue(new TextEncoder().encode(`data: ${text}\n\n`));
+        controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+        controller.close();
+      }
+    });
+
+    return new Response(sseStream, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
+
   } catch (error) {
-    console.error("City Pulse AI error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Error:", error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

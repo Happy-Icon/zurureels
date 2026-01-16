@@ -33,7 +33,9 @@ export function useCityPulseAI() {
           if (resp.status === 402) {
             throw new Error("AI credits exhausted. Please add funds.");
           }
-          throw new Error("Failed to get AI response");
+          const errorText = await resp.text();
+          console.error("AI Error Details:", resp.status, errorText);
+          throw new Error(`Failed to get AI response: ${resp.status} ${errorText}`);
         }
 
         const reader = resp.body.getReader();

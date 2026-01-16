@@ -99,11 +99,11 @@ type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionRes
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || 
-                      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score|budget_check|fallback_suggestion|intent_signal)"[\s\S]*\})/);
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) ||
+      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score|budget_check|fallback_suggestion|intent_signal)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
-    
+
     if (parsed.type === "city_concierge" && Array.isArray(parsed.recommendations)) {
       return parsed as ConciergeResponse;
     }
@@ -154,7 +154,7 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
           {rec.best_time}
         </span>
       </div>
-      {rec.tags.length > 0 && (
+      {rec.tags?.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {rec.tags.map((tag, i) => (
             <span
@@ -207,14 +207,14 @@ function ReelCaptionCard({ data }: { data: ReelCaptionResponse }) {
         <span className="text-lg">🎬</span>
         <span className="font-medium text-sm">Reel Content Ready</span>
       </div>
-      
+
       {/* Caption */}
       <div className="bg-background border border-border rounded-lg p-3 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Caption</span>
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-6 w-6"
             onClick={() => copyToClipboard(data.caption, "Caption")}
           >
@@ -223,14 +223,14 @@ function ReelCaptionCard({ data }: { data: ReelCaptionResponse }) {
         </div>
         <p className="text-sm">{data.caption}</p>
       </div>
-      
+
       {/* CTA */}
       <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-wide text-primary font-medium">Call to Action</span>
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-6 w-6"
             onClick={() => copyToClipboard(data.cta, "CTA")}
           >
@@ -239,7 +239,7 @@ function ReelCaptionCard({ data }: { data: ReelCaptionResponse }) {
         </div>
         <p className="text-sm font-medium text-primary">{data.cta}</p>
       </div>
-      
+
       {/* Hashtags */}
       {data.hashtags.length > 0 && (
         <div className="space-y-2">
@@ -247,9 +247,9 @@ function ReelCaptionCard({ data }: { data: ReelCaptionResponse }) {
             <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium flex items-center gap-1">
               <Hash className="h-3 w-3" /> Hashtags
             </span>
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               className="h-6 w-6"
               onClick={() => copyToClipboard(allHashtags, "Hashtags")}
             >
@@ -444,8 +444,8 @@ function MicroItineraryCard({ data }: { data: MicroItineraryResponse }) {
       </div>
       <div className="space-y-1">
         {data.schedule.map((item, i) => (
-          <div 
-            key={i} 
+          <div
+            key={i}
             className="flex gap-3 bg-background border border-border rounded-lg p-3"
           >
             <div className="flex-shrink-0 w-16">
@@ -523,23 +523,23 @@ function FallbackSuggestionCard({ data }: { data: FallbackSuggestionResponse }) 
 function IntentSignalCard({ data }: { data: IntentSignalResponse }) {
   const getReadinessInfo = (level: string) => {
     const normalized = level.toLowerCase().replace(/_/g, "");
-    if (normalized === "readytobook") return { 
-      icon: "🚀", 
-      label: "Ready to Book!", 
+    if (normalized === "readytobook") return {
+      icon: "🚀",
+      label: "Ready to Book!",
       color: "bg-green-500/10 border-green-500/20",
       textColor: "text-green-600 dark:text-green-400",
       progress: 100
     };
-    if (normalized === "considering") return { 
-      icon: "🤔", 
-      label: "Considering Options", 
+    if (normalized === "considering") return {
+      icon: "🤔",
+      label: "Considering Options",
       color: "bg-yellow-500/10 border-yellow-500/20",
       textColor: "text-yellow-600 dark:text-yellow-400",
       progress: 60
     };
-    return { 
-      icon: "👀", 
-      label: "Just Browsing", 
+    return {
+      icon: "👀",
+      label: "Just Browsing",
       color: "bg-blue-500/10 border-blue-500/20",
       textColor: "text-blue-600 dark:text-blue-400",
       progress: 30
@@ -559,20 +559,19 @@ function IntentSignalCard({ data }: { data: IntentSignalResponse }) {
           <span className="text-lg">{info.icon}</span>
           <span className={`font-medium text-sm ${info.textColor}`}>{info.label}</span>
         </div>
-        
+
         {/* Progress indicator */}
         <div className="mb-3">
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <div 
-              className={`h-full rounded-full transition-all ${
-                info.progress === 100 ? 'bg-green-500' : 
-                info.progress === 60 ? 'bg-yellow-500' : 'bg-blue-500'
-              }`}
+            <div
+              className={`h-full rounded-full transition-all ${info.progress === 100 ? 'bg-green-500' :
+                  info.progress === 60 ? 'bg-yellow-500' : 'bg-blue-500'
+                }`}
               style={{ width: `${info.progress}%` }}
             />
           </div>
         </div>
-        
+
         <div className="bg-background/50 rounded-md p-2">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium mb-1">Next Step</p>
           <p className="text-sm font-medium">{data.suggested_next_action}</p>
@@ -584,7 +583,7 @@ function IntentSignalCard({ data }: { data: IntentSignalResponse }) {
 
 function MessageContent({ content }: { content: string }) {
   const parsed = parseAIResponse(content);
-  
+
   if (parsed?.type === "city_concierge") {
     return (
       <div className="space-y-2">
@@ -597,47 +596,47 @@ function MessageContent({ content }: { content: string }) {
       </div>
     );
   }
-  
+
   if (parsed?.type === "mood_discovery") {
     return <MoodDiscoveryCard data={parsed} />;
   }
-  
+
   if (parsed?.type === "reel_caption") {
     return <ReelCaptionCard data={parsed} />;
   }
-  
+
   if (parsed?.type === "review_summary") {
     return <ReviewSummaryCard data={parsed} />;
   }
-  
+
   if (parsed?.type === "micro_itinerary") {
     return <MicroItineraryCard data={parsed} />;
   }
-  
+
   if (parsed?.type === "safety_note") {
     return <SafetyNoteCard data={parsed} />;
   }
-  
+
   if (parsed?.type === "user_context") {
     return <UserContextCard data={parsed} />;
   }
-  
+
   if (parsed?.type === "activity_score") {
     return <ActivityScoreCard data={parsed} />;
   }
-  
+
   if (parsed?.type === "budget_check") {
     return <BudgetCheckCard data={parsed} />;
   }
-  
+
   if (parsed?.type === "fallback_suggestion") {
     return <FallbackSuggestionCard data={parsed} />;
   }
-  
+
   if (parsed?.type === "intent_signal") {
     return <IntentSignalCard data={parsed} />;
   }
-  
+
   return <>{content}</>;
 }
 
@@ -701,7 +700,7 @@ export function AIChatBox({
             <Sparkles className="h-8 w-8 mx-auto mb-2 text-primary/50" />
             <p className="font-medium">Hey! I'm Zuru</p>
             <p className="text-xs mt-1 mb-4">Ask me about boats, restaurants, events & more</p>
-            
+
             {/* Quick Prompts */}
             <div className="flex flex-wrap gap-2 justify-center">
               {quickPrompts.map((prompt, i) => (

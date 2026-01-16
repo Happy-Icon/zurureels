@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { CheckOutDialog } from "@/components/booking/CheckOutDialog"; // Import CheckOutDialog
 import { WeatherWidget } from "@/components/city-pulse/WeatherWidget";
@@ -28,6 +28,7 @@ import {
   Calendar,
   Wine,
   ChefHat,
+  Navigation,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -36,10 +37,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
+import { Sparkles } from "lucide-react";
 
 const categories = [
-  { id: "all", label: "All", icon: Calendar },
+  { id: "all", label: "All", icon: Sparkles },
   { id: "boats", label: "Boats", icon: Ship },
   { id: "food", label: "Food", icon: UtensilsCrossed },
   { id: "nightlife", label: "Nightlife", icon: Music },
@@ -49,11 +53,49 @@ const categories = [
 
 const CityPulse = () => {
   const [selectedCity, setSelectedCity] = useState("Mombasa");
+  const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showAI, setShowAI] = useState(false);
 
-  const { weather, loading: weatherLoading } = useWeather(selectedCity);
+  // Determine the location to pass to useWeather
+  const weatherLocation = useMemo(() => {
+    if (selectedCity === "Current Location" && coordinates) {
+      return { city: "Current Location", ...coordinates };
+    }
+    return selectedCity;
+  }, [selectedCity, coordinates]);
+
+  const { weather, loading: weatherLoading } = useWeather(weatherLocation);
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
+
+  const handleUseLocation = useCallback(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCoordinates({
+            lat: position.coords.latitude,
+            lon: position.coords.longitude,
+          });
+          setSelectedCity("Current Location");
+          toast.success("Location updated");
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          // Don't toast error on auto-init to avoid spamming the user if they deny
+        }
+      );
+    }
+  }, []);
+
+  // Auto-sync location on mount
+  useEffect(() => {
+    handleUseLocation();
+  }, [handleUseLocation]);
+
+  const handleCitySelect = (city: string) => {
+    setSelectedCity(city);
+    setCoordinates(null); // Reset coordinates when selecting a specific city
+  };
 
   const handleSendMessage = (message: string) => {
     const context = {
@@ -115,10 +157,15 @@ const CityPulse = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-full min-w-[200px]">
+                <DropdownMenuItem onClick={handleUseLocation} className="gap-2 cursor-pointer">
+                  <Navigation className="h-4 w-4 text-primary" />
+                  <span>Use My Location</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 {coastalCities.map((city) => (
                   <DropdownMenuItem
                     key={city}
-                    onClick={() => setSelectedCity(city)}
+                    onClick={() => handleCitySelect(city)}
                     className={cn(selectedCity === city && "bg-primary/10")}
                   >
                     {city}

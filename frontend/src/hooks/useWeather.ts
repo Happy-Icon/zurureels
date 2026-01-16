@@ -30,7 +30,13 @@ interface WeatherData {
   }>;
 }
 
-export function useWeather(city: string) {
+interface WeatherLocation {
+  city?: string;
+  lat?: number;
+  lon?: number;
+}
+
+export function useWeather(location: string | WeatherLocation) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,8 +47,12 @@ export function useWeather(city: string) {
       setError(null);
 
       try {
+        const payload = typeof location === "string"
+          ? { city: location }
+          : { city: location.city, lat: location.lat, lon: location.lon };
+
         const { data, error: fnError } = await supabase.functions.invoke("weather", {
-          body: { city },
+          body: payload,
         });
 
         if (fnError) throw fnError;
@@ -56,7 +66,7 @@ export function useWeather(city: string) {
     };
 
     fetchWeather();
-  }, [city]);
+  }, [JSON.stringify(location)]); // React to location changes
 
   return { weather, loading, error };
 }
