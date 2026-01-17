@@ -7,14 +7,8 @@ import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
 import { QuickListingCard } from "@/components/city-pulse/QuickListingCard";
 import { useWeather } from "@/hooks/useWeather";
 import { useCityPulseAI } from "@/hooks/useCityPulseAI";
+import { useExperiences } from "@/hooks/useExperiences";
 import {
-  mockBoatRentals,
-  mockRestaurantSpecials,
-  mockClubEvents,
-  mockChefSpecials,
-  mockBikeRentals,
-  mockDailyActivities,
-  mockDrinksOfTheDay,
   coastalCities,
 } from "@/data/mockCityPulse";
 import { mockEvents } from "@/data/mockReels";
@@ -67,6 +61,7 @@ const CityPulse = () => {
 
   const { weather, loading: weatherLoading } = useWeather(weatherLocation);
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
+  const { experiences, loading: experiencesLoading } = useExperiences(selectedCategory, selectedCity);
 
   const handleUseLocation = useCallback(() => {
     if ("geolocation" in navigator) {
@@ -99,13 +94,7 @@ const CityPulse = () => {
 
   const handleSendMessage = (message: string) => {
     const context = {
-      boats: mockBoatRentals.filter((b) => b.location.includes(selectedCity) || selectedCity === "Mombasa"),
-      restaurants: mockRestaurantSpecials,
-      clubs: mockClubEvents,
-      chefs: mockChefSpecials,
-      bikes: mockBikeRentals,
-      activities: mockDailyActivities,
-      drinks: mockDrinksOfTheDay,
+      experiences: experiences,
       events: mockEvents,
     };
     sendMessage(message, selectedCity, context);
@@ -116,21 +105,12 @@ const CityPulse = () => {
     clearMessages();
   };
 
-  const filteredBoats = mockBoatRentals.filter(
-    (b) => selectedCategory === "all" || selectedCategory === "boats"
-  );
-  const filteredFood = [...mockRestaurantSpecials, ...mockChefSpecials].filter(
-    () => selectedCategory === "all" || selectedCategory === "food"
-  );
-  const filteredNightlife = mockClubEvents.filter(
-    () => selectedCategory === "all" || selectedCategory === "nightlife"
-  );
-  const filteredBikes = mockBikeRentals.filter(
-    () => selectedCategory === "all" || selectedCategory === "bikes"
-  );
-  const filteredDrinks = mockDrinksOfTheDay.filter(
-    () => selectedCategory === "all" || selectedCategory === "drinks"
-  );
+  const filteredBoats = experiences.filter((e) => e.category === "boats");
+  const filteredFood = experiences.filter((e) => e.category === "food");
+  const filteredNightlife = experiences.filter((e) => e.category === "nightlife");
+  const filteredBikes = experiences.filter((e) => e.category === "bikes");
+  const filteredDrinks = experiences.filter((e) => e.category === "drinks");
+  const filteredActivities = experiences.filter((e) => e.category === "activities" || (selectedCategory === "all" && e.category === "activities"));
 
   return (
     <MainLayout>
@@ -229,19 +209,21 @@ const CityPulse = () => {
                     className="min-w-[160px] bg-card border border-border rounded-xl overflow-hidden"
                   >
                     <img
-                      src={drink.imageUrl}
-                      alt={drink.name}
+                      src={drink.image_url || "/placeholder.svg"}
+                      alt={drink.title}
                       className="h-24 w-full object-cover"
                     />
                     <div className="p-2">
-                      <p className="font-medium text-sm truncate">{drink.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{drink.bar}</p>
+                      <p className="font-medium text-sm truncate">{drink.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{drink.entity_name}</p>
                       <div className="flex items-baseline gap-1 mt-1">
-                        <span className="text-xs line-through text-muted-foreground">
-                          {drink.originalPrice}
-                        </span>
+                        {drink.base_price && (
+                          <span className="text-xs line-through text-muted-foreground">
+                            {drink.base_price}
+                          </span>
+                        )}
                         <span className="text-sm font-semibold text-primary">
-                          KES {drink.specialPrice}
+                          KES {drink.current_price}
                         </span>
                       </div>
                     </div>
@@ -259,22 +241,22 @@ const CityPulse = () => {
                 <h2 className="text-lg font-display font-semibold">Today's Activities</h2>
               </div>
               <div className="space-y-2">
-                {mockDailyActivities.slice(0, 3).map((activity) => (
+                {filteredActivities.slice(0, 3).map((activity) => (
                   <CheckOutDialog
                     key={activity.id}
-                    tripTitle={activity.name}
-                    amount={activity.price}
+                    tripTitle={activity.title}
+                    amount={activity.current_price}
                     trigger={
                       <div className="w-full">
                         <QuickListingCard
-                          title={activity.name}
-                          subtitle={`${activity.time} • ${activity.duration}`}
+                          title={activity.title}
+                          subtitle={`${activity.metadata?.time || ""} • ${activity.metadata?.duration || ""}`}
                           location={activity.location}
-                          price={activity.price}
+                          price={activity.current_price}
                           priceUnit="person"
-                          imageUrl={activity.imageUrl}
-                          badge={activity.type}
-                          available={activity.spotsLeft}
+                          imageUrl={activity.image_url || "/placeholder.svg"}
+                          badge={activity.metadata?.type}
+                          available={activity.metadata?.spots_left}
                         />
                       </div>
                     }
@@ -295,19 +277,19 @@ const CityPulse = () => {
                 {filteredBoats.map((boat) => (
                   <CheckOutDialog
                     key={boat.id}
-                    tripTitle={boat.name}
-                    amount={boat.price}
+                    tripTitle={boat.title}
+                    amount={boat.current_price}
                     trigger={
                       <div className="w-full">
                         <QuickListingCard
-                          title={boat.name}
-                          subtitle={boat.type}
+                          title={boat.title}
+                          subtitle={boat.metadata?.type || boat.entity_name}
                           location={boat.location}
-                          price={boat.price}
-                          priceUnit={boat.priceUnit}
-                          imageUrl={boat.imageUrl}
-                          rating={boat.rating}
-                          available={boat.available}
+                          price={boat.current_price}
+                          priceUnit={boat.price_unit}
+                          imageUrl={boat.image_url || "/placeholder.svg"}
+                          rating={boat.metadata?.rating}
+                          available={boat.availability_status === "available"}
                         />
                       </div>
                     }
@@ -325,16 +307,16 @@ const CityPulse = () => {
                 <h2 className="text-lg font-display font-semibold">Restaurant Specials</h2>
               </div>
               <div className="space-y-2">
-                {mockRestaurantSpecials.map((rest) => (
+                {filteredFood.filter(f => !f.metadata?.chef).map((rest) => (
                   <QuickListingCard
                     key={rest.id}
-                    title={rest.special}
-                    subtitle={rest.restaurant}
+                    title={rest.title}
+                    subtitle={rest.entity_name}
                     location={rest.location}
-                    price={rest.discountPrice}
-                    originalPrice={rest.originalPrice}
-                    imageUrl={rest.imageUrl}
-                    badge={rest.validUntil}
+                    price={rest.current_price}
+                    originalPrice={rest.base_price || undefined}
+                    imageUrl={rest.image_url || "/placeholder.svg"}
+                    badge={rest.metadata?.valid_until}
                   />
                 ))}
               </div>
@@ -349,14 +331,14 @@ const CityPulse = () => {
                 <h2 className="text-lg font-display font-semibold">Chef's Specials</h2>
               </div>
               <div className="space-y-2">
-                {mockChefSpecials.map((chef) => (
+                {filteredFood.filter(f => f.metadata?.chef).map((chef) => (
                   <QuickListingCard
                     key={chef.id}
-                    title={chef.dish}
-                    subtitle={`by ${chef.chef} at ${chef.restaurant}`}
+                    title={chef.title}
+                    subtitle={`by ${chef.metadata?.chef} at ${chef.entity_name}`}
                     location={chef.location}
-                    price={chef.price}
-                    imageUrl={chef.imageUrl}
+                    price={chef.current_price}
+                    imageUrl={chef.image_url || "/placeholder.svg"}
                   />
                 ))}
               </div>
@@ -374,13 +356,13 @@ const CityPulse = () => {
                 {filteredNightlife.map((club) => (
                   <QuickListingCard
                     key={club.id}
-                    title={club.event}
-                    subtitle={`${club.venue} • ${club.time}`}
+                    title={club.title}
+                    subtitle={`${club.entity_name} • ${club.metadata?.time || ""}`}
                     location={club.location}
-                    price={club.entryFee}
+                    price={club.current_price}
                     priceUnit="entry"
-                    imageUrl={club.imageUrl}
-                    badge={club.dj}
+                    imageUrl={club.image_url || "/placeholder.svg"}
+                    badge={club.metadata?.dj}
                   />
                 ))}
               </div>
@@ -398,13 +380,13 @@ const CityPulse = () => {
                 {filteredBikes.map((bike) => (
                   <QuickListingCard
                     key={bike.id}
-                    title={bike.type}
-                    subtitle={bike.provider}
+                    title={bike.metadata?.type || bike.title}
+                    subtitle={bike.entity_name}
                     location={bike.location}
-                    price={bike.pricePerDay}
+                    price={bike.current_price}
                     priceUnit="day"
-                    imageUrl={bike.imageUrl}
-                    available={bike.available}
+                    imageUrl={bike.image_url || "/placeholder.svg"}
+                    available={bike.metadata?.available_count}
                   />
                 ))}
               </div>

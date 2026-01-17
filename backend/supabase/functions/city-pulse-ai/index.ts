@@ -5,12 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Define structure for Gemini Chat Messages
-interface GeminiMessage {
-  role: "user" | "model";
-  parts: { text: string }[];
-}
-
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -20,14 +14,10 @@ serve(async (req) => {
   try {
     const { message, city, context } = await req.json();
 
-    // The API key is set by the user in .env (frontend), but for Edge Functions
-    // it typically needs to be in `supabase secrets`.
-    // We check Deno.env first.
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("VITE_GEMINI_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-    if (!GEMINI_API_KEY) {
-      console.error("Missing GEMINI_API_KEY");
-      throw new Error("Server configuration error: Missing API Key");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const systemPrompt = `You are Zuru, an AI assistant inside a reels-based travel booking platform for ${city || "the Kenyan coast"}.
@@ -41,6 +31,7 @@ You must:
 
 Current available data context:
 ${JSON.stringify(context, null, 2)}
+Note: Experiences are provided as a single list. Each experience has a 'category' and a 'metadata' field containing specific details like DJs, chefs, time, or spots left.
 
 SCHEMA INSTRUCTIONS:
 If the user explicitly asks for "plain text", "simple list", or "chat" format, IGNORE these schemas and reply with standard text.
@@ -105,7 +96,7 @@ When asked about user preferences, travel style, or when the user describes them
 {
   "type": "user_context",
   "travel_style": "adventurous | relaxed | cultural | luxury | budget",
-  "group_type": "solo | couple | family | friends | business",
+  "group_type": "solo | couple | family | friends | budget",
   "energy_level": "high | medium | low",
   "content_goal": "photos | reels | memories | relaxation"
 }
@@ -142,73 +133,30 @@ When you detect booking intent, interest in reserving, or readiness to take acti
 
 Ensure your JSON is minified or naturally formatted, but do NOT wrap it in markdown code blocks like \`\`\`json ... \`\`\`. Just return the raw JSON object if a schema matches. Otherwise, return plain text.`;
 
-    const body = {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: systemPrompt + "\n\nUser Question: " + message }]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4096,
-      }
-    };
-
-    // --- Mapbox Integration Start ---
-    const MAPBOX_ACCESS_TOKEN = Deno.env.get("MAPBOX_ACCESS_TOKEN") || Deno.env.get("VITE_MAPBOX_ACCESS_TOKEN");
-
-    // Simple intent detection for "nearby" or place searches
-    const isSearchRequest = /(find|nearby|where|recommend|looking for|best|top|search)/i.test(message);
-
-    if (MAPBOX_ACCESS_TOKEN && isSearchRequest) {
-      try {
-        console.log("Fetching Mapbox data for:", message);
-        // Extract a simple query (naive approach: use the whole message limited to first 20 chars if too long, or better, just pass the message)
-        // Better: search for the whole message text combined with city
-        const queryTerm = encodeURIComponent(`${message} ${city || ""}`);
-        const mapboxUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${queryTerm}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=5`;
-
-        const mapRes = await fetch(mapboxUrl);
-        if (mapRes.ok) {
-          const mapData = await mapRes.json();
-          const places = mapData.features?.map((f: any) => ({
-            name: f.text,
-            address: f.place_name,
-            category: f.properties?.category,
-            type: f.properties?.maki || "place"
-          })) || [];
-
-          if (places.length > 0) {
-            console.log("Found places:", places.length);
-            // Append real-world data to the user message part
-            body.contents[0].parts[0].text += `\n\n[REAL-TIME LOCATION DATA FROM MAPBOX]\nHere are some real places found matching the request:\n${JSON.stringify(places, null, 2)}\nUse these real details (names, addresses) in your recommendations if they fit.`;
-          }
-        }
-      } catch (err) {
-        console.error("Mapbox fetch error:", err);
-        // Continue without mapbox data
-      }
-    }
-    // --- Mapbox Integration End ---
-
-    // Use non-streaming generateContent for reliability
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
-
-    const response = await fetch(url, {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message },
+        ],
+        stream: false,
+      }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API Error:", response.status, errorText);
-      throw new Error(`Gemini API Error: ${response.statusText} - ${errorText}`);
+      console.error("OpenAI API Error:", response.status, errorText);
+      throw new Error(`OpenAI API Error: ${response.statusText} - ${errorText}`);
     }
 
     const data = await response.json();
-    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response.";
+    const answer = data.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.";
 
     // Simulate SSE for the frontend
     const sseStream = new ReadableStream({
