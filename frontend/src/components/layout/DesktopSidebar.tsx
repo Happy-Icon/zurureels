@@ -1,28 +1,20 @@
-import { Home, Compass, Calendar, Heart, User, Zap, LogOut, PlusCircle } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
-import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
-const navItems = [
-  { icon: Zap, label: "Zuru Pulse", path: "/" },
-  { icon: Compass, label: "Discover", path: "/discover" },
-  { icon: PlusCircle, label: "Host", path: "/host" },
-  { icon: Calendar, label: "Bookings", path: "/bookings" },
-  { icon: Heart, label: "Saved", path: "/saved" },
-  { icon: User, label: "Profile", path: "/profile" },
-];
+// ... (existing imports)
 
 export function DesktopSidebar() {
   const location = useLocation();
 
   return (
     <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 flex-col border-r border-border bg-card z-50">
-      {/* Logo */}
-      <div className="p-6 border-b border-border">
+      {/* Logo & Notifications */}
+      <div className="p-6 border-b border-border flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
           <span className="text-2xl font-display font-semibold text-foreground">
             ZuruSasa
           </span>
         </Link>
+        <NotificationBell />
       </div>
 
       {/* Navigation */}
