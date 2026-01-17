@@ -1,6 +1,15 @@
+import { Link, useLocation } from "react-router-dom";
+import { Zap, Compass, PlusCircle, Calendar, User, LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
-// ... (existing imports)
+const navItems = [
+  { icon: Zap, label: "Pulse", path: "/" },
+  { icon: Compass, label: "Discover", path: "/discover" },
+  { icon: PlusCircle, label: "Host", path: "/host" },
+  { icon: Calendar, label: "Bookings", path: "/bookings" },
+  { icon: User, label: "Profile", path: "/profile" },
+];
 
 export function DesktopSidebar() {
   const location = useLocation();

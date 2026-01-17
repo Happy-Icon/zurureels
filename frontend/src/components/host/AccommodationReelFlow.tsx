@@ -6,27 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
+import { AccommodationData, ReelRequirement } from "@/types/host";
+
 interface AccommodationReelFlowProps {
   category: "hotel" | "villa" | "apartment";
   onComplete: (data: AccommodationData) => void;
   onBack: () => void;
-}
-
-export interface AccommodationData {
-  bedrooms: number;
-  units: number;
-  amenities: string[];
-  reels: ReelRequirement[];
-}
-
-export interface ReelRequirement {
-  id: string;
-  title: string;
-  description: string;
-  maxDuration: number;
-  icon: React.ReactNode;
-  required: boolean;
-  uploaded: boolean;
 }
 
 const amenitiesList = [
@@ -279,7 +264,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
               <div>
                 <p className="font-medium text-amber-700 dark:text-amber-400">Important Guidelines</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Each reel must not exceed <strong>20 seconds</strong>. Focus on capturing clear, 
+                  Each reel must not exceed <strong>20 seconds</strong>. Focus on capturing clear,
                   well-lit footage that showcases the key features.
                 </p>
               </div>

@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
-    DropdownMenuHeader,
     DropdownMenuItem,
+    DropdownMenuLabel,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -26,7 +26,7 @@ export const NotificationBell = () => {
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80 p-0">
-                <DropdownMenuHeader className="p-4 border-b flex items-center justify-between bg-card">
+                <div className="p-4 border-b flex items-center justify-between bg-card">
                     <span className="font-semibold">Notifications</span>
                     {unreadCount > 0 && (
                         <Button
@@ -38,7 +38,7 @@ export const NotificationBell = () => {
                             Mark all read
                         </Button>
                     )}
-                </DropdownMenuHeader>
+                </div>
                 <ScrollArea className="h-[400px]">
                     {notifications.length === 0 ? (
                         <div className="p-8 text-center text-muted-foreground text-sm">

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { 
-  ChevronLeft, Upload, Play, Pause, RotateCcw, 
+import {
+  ChevronLeft, Upload, Play, Pause, RotateCcw,
   Camera, Volume2, Type, Sparkles, Check, Video
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { TextOverlayTemplates } from "./TextOverlayTemplates";
 import { ValidationScorecard, ValidationWarning } from "./ValidationScorecard";
 import { GuidanceTooltip, GuidanceMessage } from "./GuidanceTooltip";
 import { getReelSpecByCategory, ExperienceReelSpec } from "@/data/reelSpecifications";
+import { ScoreBreakdown } from "@/types/host";
 
 interface MiniVideoEditorProps {
   category: string;
@@ -74,7 +75,7 @@ export const MiniVideoEditor = ({
   const [showScorecard, setShowScorecard] = useState(false);
   const [guidanceMessage, setGuidanceMessage] = useState<GuidanceMessage | null>(null);
   const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
-  
+
   // Mock scores - in production, these would be calculated from video analysis
   const [scores, setScores] = useState<ScoreBreakdown>({
     hook_strength: 75,
@@ -91,7 +92,7 @@ export const MiniVideoEditor = ({
   // Generate required elements from spec
   const getRequiredElements = (): RequiredElement[] => {
     if (!spec) return [];
-    
+
     return spec.required_elements.map((element, index) => ({
       id: element,
       icon: ELEMENT_ICONS[element] || "✓",
@@ -124,7 +125,7 @@ export const MiniVideoEditor = ({
     if (videoRef.current) {
       const time = videoRef.current.currentTime;
       setCurrentTime(time);
-      
+
       // Trigger guidance messages based on playback position
       triggerGuidance(time);
     }
