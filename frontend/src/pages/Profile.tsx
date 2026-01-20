@@ -91,26 +91,29 @@ const Profile = () => {
           </div>
 
           {/* Stats */}
-          <div className="flex justify-center gap-8 mt-6 pt-6 border-t border-border">
-            <div className="text-center">
-              <p className="text-2xl font-semibold">0</p>
-              <p className="text-sm text-muted-foreground">Trips</p>
+          {/* Stats */}
+          {user && (
+            <div className="flex justify-center gap-8 mt-6 pt-6 border-t border-border">
+              <div className="text-center">
+                <p className="text-2xl font-semibold">0</p>
+                <p className="text-sm text-muted-foreground">Trips</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-semibold">0</p>
+                <p className="text-sm text-muted-foreground">Reviews</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-semibold">2</p>
+                <p className="text-sm text-muted-foreground">Saved</p>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-semibold">0</p>
-              <p className="text-sm text-muted-foreground">Reviews</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-semibold">2</p>
-              <p className="text-sm text-muted-foreground">Saved</p>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Menu */}
         <div className="p-4">
           <div className="space-y-1">
-            {menuItems.map((item) => (
+            {user && menuItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
