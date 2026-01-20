@@ -11,8 +11,16 @@ const navItems = [
   { icon: User, label: "Profile", path: "/profile" },
 ];
 
+import { useAuth } from "@/components/AuthProvider";
+
 export function DesktopSidebar() {
   const location = useLocation();
+  const { role } = useAuth();
+
+  const filteredNavItems = navItems.filter((item) => {
+    if (item.label === "Host" && role !== "host" && role !== "admin") return false;
+    return true;
+  });
 
   return (
     <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 flex-col border-r border-border bg-card z-50">
@@ -27,7 +35,7 @@ export function DesktopSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => {
+        {filteredNavItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link

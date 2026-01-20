@@ -10,13 +10,21 @@ const navItems = [
   { icon: User, label: "Profile", path: "/profile" },
 ];
 
+import { useAuth } from "@/components/AuthProvider";
+
 export function BottomNav() {
   const location = useLocation();
+  const { role } = useAuth();
+
+  const filteredNavItems = navItems.filter((item) => {
+    if (item.label === "Host" && role !== "host" && role !== "admin") return false;
+    return true;
+  });
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-border/50 md:hidden">
       <div className="flex items-center justify-around py-2 px-2">
-        {navItems.map((item) => {
+        {filteredNavItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link

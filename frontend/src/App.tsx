@@ -10,6 +10,7 @@ import Bookings from "./pages/Bookings";
 import Saved from "./pages/Saved";
 import Profile from "./pages/Profile";
 import Host from "./pages/Host";
+import HostSignup from "./pages/HostSignup";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/" element={<CityPulse />} />
             <Route path="/discover" element={<Discover />} />
             <Route path="/host" element={<Host />} />
+            <Route path="/host/signup" element={<HostSignup />} />
             <Route path="/home" element={<Home />} />
             <Route path="/bookings" element={<Bookings />} />
             <Route path="/saved" element={<Saved />} />
