@@ -3,7 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>ZuruSasa - Travel Reels Booking Platform</title>
+    <title>ZuruReels</title>
+    <!-- OneSignal SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "a06f2bda-049b-48e7-bcb1-023b87a9e9f7",
+          safari_web_id: "web.onesignal.auto.052f5ca9-1683-44c8-8c04-d88e94620413",
+          notifyButton: {
+            enable: true,
+          },
+          allowLocalhostAsSecureOrigin: true,
+        });
+      });
+    </script>
     <meta name="description" content="Discover and book travel experiences through immersive video reels. Hotels, villas, boats, tours, and events - all in one place." />
     <meta name="author" content="ZuruSasa" />
 

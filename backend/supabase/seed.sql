@@ -42,4 +42,3 @@ BEGIN
         (v_user_id, 'activities', 'Dolphin Watch', 'Dolphin Tour', 'See them in the wild.', 'Watamu', 'https://images.unsplash.com/photo-1607153333879-c174d265f1d2?w=400&h=300&fit=crop', null, 4500, 'person', '{"type": "Nature", "time": "7 AM", "duration": "3h", "spots_left": 4}');
     END IF;
 END $$;
-
