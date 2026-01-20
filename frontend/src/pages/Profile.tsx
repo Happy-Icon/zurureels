@@ -8,13 +8,18 @@ import {
   Shield,
   LogOut,
   ChevronRight,
-  Camera
+  Camera,
+  ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { Progress } from "@/components/ui/progress";
+import { useAuth } from "@/components/AuthProvider";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const menuItems = [
-  { icon: User, label: "Personal Info", path: "/profile/info" },
+  { icon: ShieldCheck, label: "Digital Identity Center", path: "/profile/info" },
   { icon: Bell, label: "Notifications", path: "/profile/notifications" },
   { icon: CreditCard, label: "Payment Methods", path: "/profile/payments" },
   { icon: Shield, label: "Privacy & Security", path: "/profile/security" },
@@ -22,10 +27,30 @@ const menuItems = [
   { icon: Settings, label: "Settings", path: "/profile/settings" },
 ];
 
-import { useAuth } from "@/components/AuthProvider";
-
 const Profile = () => {
   const { user, signOut } = useAuth();
+  const [completeness, setCompleteness] = useState(0);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('profile_completeness, role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching profile:", error);
+      }
+
+      if (data) {
+        setCompleteness(data.profile_completeness || 20);
+      }
+    };
+    fetchProfile();
+  }, [user]);
 
   return (
     <MainLayout>
@@ -48,10 +73,20 @@ const Profile = () => {
             <p className="text-sm text-muted-foreground">
               {user ? user.email : "Welcome to ZuruSasa"}
             </p>
-            {!user && (
+
+            {!user ? (
               <Link to="/auth">
                 <Button className="mt-4">Sign In / Sign Up</Button>
               </Link>
+            ) : (
+              /* Progress Bar */
+              <div className="w-full max-w-xs mt-4 space-y-2">
+                <div className="flex justify-between text-xs font-medium">
+                  <span>Profile Completeness</span>
+                  <span>{completeness}%</span>
+                </div>
+                <Progress value={completeness} className="h-2" />
+              </div>
             )}
           </div>
 

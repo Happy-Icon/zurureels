@@ -58,10 +58,7 @@ export function DesktopSidebar() {
 
       {/* Footer */}
       <div className="p-4 border-t border-border">
-        <button className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
-          <LogOut className="h-5 w-5" />
-          <span className="font-medium">Sign Out</span>
-        </button>
+
       </div>
     </aside>
   );

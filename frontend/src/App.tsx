@@ -18,7 +18,11 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PersonalInfo } from "@/pages/profile/PersonalInfo";
 import { PaymentMethods } from "@/pages/profile/PaymentMethods";
+import { Security } from "@/pages/profile/Security";
 import { ComingSoon } from "@/pages/profile/ComingSoon";
+import Support from "@/pages/profile/Support";
+import Settings from "@/pages/profile/Settings";
+import { Notifications } from "@/pages/profile/Notifications";
 
 const queryClient = new QueryClient();
 
@@ -40,10 +44,10 @@ const App = () => (
             <Route path="/profile" element={<Profile />} />
             <Route path="/profile/info" element={<ProtectedRoute><PersonalInfo /></ProtectedRoute>} />
             <Route path="/profile/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
-            <Route path="/profile/notifications" element={<ProtectedRoute><ComingSoon /></ProtectedRoute>} />
-            <Route path="/profile/security" element={<ProtectedRoute><ComingSoon /></ProtectedRoute>} />
-            <Route path="/profile/support" element={<ProtectedRoute><ComingSoon /></ProtectedRoute>} />
-            <Route path="/profile/settings" element={<ProtectedRoute><ComingSoon /></ProtectedRoute>} />
+            <Route path="/profile/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+            <Route path="/profile/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
+            <Route path="/profile/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+            <Route path="/profile/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/auth" element={<Auth />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
