@@ -27,6 +27,7 @@ export type Database = {
           profile_completeness: number | null
           security_settings: Json | null
           notification_settings: Json | null
+          updated_at: string | null
           metadata: Json | null
         }
         Insert: {
@@ -39,6 +40,7 @@ export type Database = {
           profile_completeness?: number | null
           security_settings?: Json | null
           notification_settings?: Json | null
+          updated_at?: string | null
           metadata?: Json | null
         }
         Update: {
@@ -49,6 +51,7 @@ export type Database = {
           verification_badges?: Json | null
           emergency_contact?: Json | null
           profile_completeness?: number | null
+          updated_at?: string | null
           metadata?: Json | null
         }
       }

@@ -30,6 +30,7 @@ const menuItems = [
 const Profile = () => {
   const { user, signOut } = useAuth();
   const [completeness, setCompleteness] = useState(0);
+  const [role, setRole] = useState<string>('guest');
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -46,7 +47,10 @@ const Profile = () => {
       }
 
       if (data) {
-        setCompleteness(data.profile_completeness || 20);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const profileData = data as any;
+        setCompleteness(profileData.profile_completeness || 20);
+        setRole(profileData.role || 'guest');
       }
     };
     fetchProfile();
@@ -92,7 +96,8 @@ const Profile = () => {
 
           {/* Stats */}
           {/* Stats */}
-          {user && (
+          {/* Stats - Only for Hosts */}
+          {user && role === 'host' && (
             <div className="flex justify-center gap-8 mt-6 pt-6 border-t border-border">
               <div className="text-center">
                 <p className="text-2xl font-semibold">0</p>
