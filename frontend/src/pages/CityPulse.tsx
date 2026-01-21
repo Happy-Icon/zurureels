@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useAuth } from "@/components/AuthProvider";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { CheckOutDialog } from "@/components/booking/CheckOutDialog"; // Import CheckOutDialog
 import { WeatherWidget } from "@/components/city-pulse/WeatherWidget";
@@ -50,6 +51,7 @@ const CityPulse = () => {
   const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showAI, setShowAI] = useState(false);
+  const { role } = useAuth();
 
   // Determine the location to pass to useWeather
   const weatherLocation = useMemo(() => {
@@ -179,15 +181,19 @@ const CityPulse = () => {
         </div>
 
         {/* Floating Ask Zuru Button & Chat */}
-        <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
-        {showAI && (
-          <AIChatBox
-            messages={messages}
-            isLoading={aiLoading}
-            onSendMessage={handleSendMessage}
-            onClose={handleCloseAI}
-            placeholder={`What should I do in ${selectedCity} today?`}
-          />
+        {role !== 'host' && (
+          <>
+            <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
+            {showAI && (
+              <AIChatBox
+                messages={messages}
+                isLoading={aiLoading}
+                onSendMessage={handleSendMessage}
+                onClose={handleCloseAI}
+                placeholder={`What should I do in ${selectedCity} today?`}
+              />
+            )}
+          </>
         )}
 
         {/* Content */}

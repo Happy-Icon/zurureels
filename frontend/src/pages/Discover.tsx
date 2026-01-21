@@ -10,8 +10,10 @@ import { cn } from "@/lib/utils";
 import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
 import { AIChatBox } from "@/components/city-pulse/AIChatBox";
 import { useCityPulseAI } from "@/hooks/useCityPulseAI";
+import { useAuth } from "@/components/AuthProvider";
 
 const Discover = () => {
+  const { role } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<Category>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAI, setShowAI] = useState(false);
@@ -127,16 +129,20 @@ const Discover = () => {
         </div>
       </div>
 
-      {/* Ask Zuru AI */}
-      <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
-      {showAI && (
-        <AIChatBox
-          messages={messages}
-          isLoading={aiLoading}
-          onSendMessage={(msg) => sendMessage(msg, "Zanzibar", { category: selectedCategory })}
-          onClose={() => setShowAI(false)}
-          placeholder="Find the perfect experience..."
-        />
+      {/* Ask Zuru AI - Guests Only */}
+      {role !== 'host' && (
+        <>
+          <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
+          {showAI && (
+            <AIChatBox
+              messages={messages}
+              isLoading={aiLoading}
+              onSendMessage={(msg) => sendMessage(msg, "Zanzibar", { category: selectedCategory })}
+              onClose={() => setShowAI(false)}
+              placeholder="Find the perfect experience..."
+            />
+          )}
+        </>
       )}
     </MainLayout>
   );
