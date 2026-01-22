@@ -12,7 +12,8 @@ import { useExperiences } from "@/hooks/useExperiences";
 import {
   coastalCities,
 } from "@/data/mockCityPulse";
-import { mockEvents } from "@/data/mockReels";
+import { mockEvents, mockReels } from "@/data/mockReels";
+import { ReelCard, ReelData } from "@/components/reels/ReelCard";
 import {
   MapPin,
   ChevronDown,
@@ -51,6 +52,7 @@ const CityPulse = () => {
   const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showAI, setShowAI] = useState(false);
+  const [bookingReel, setBookingReel] = useState<ReelData | null>(null);
   const { role } = useAuth();
 
   // Determine the location to pass to useWeather
@@ -200,6 +202,29 @@ const CityPulse = () => {
         <div className="p-4 space-y-6">
           {/* Weather Widget */}
           <WeatherWidget weather={weather} loading={weatherLoading} city={selectedCity} />
+
+          {/* Trending Reels */}
+          {(selectedCategory === "all" || selectedCategory === "boats" || selectedCategory === "adventure") && (
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                </div>
+                <h2 className="text-lg font-display font-semibold">Trending Reels</h2>
+              </div>
+              <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-4 -mx-4 px-4 snap-x">
+                {mockReels.map((reel) => (
+                  <div key={reel.id} className="min-w-[280px] h-[500px] snap-center rounded-2xl overflow-hidden shadow-lg border border-border/50">
+                    <ReelCard
+                      reel={reel}
+                      isActive={false}
+                      onBook={(id) => setBookingReel(mockReels.find(r => r.id === id) || null)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Drinks of the Day */}
           {(selectedCategory === "all" || selectedCategory === "drinks") && (
@@ -400,7 +425,20 @@ const CityPulse = () => {
           )}
         </div>
       </div>
-    </MainLayout>
+
+      {/* Global Booking Dialog for Reels */}
+      {
+        bookingReel && (
+          <CheckOutDialog
+            tripTitle={bookingReel.title}
+            amount={bookingReel.price}
+            open={!!bookingReel}
+            onOpenChange={(open) => !open && setBookingReel(null)}
+            trigger={<></>} // controlled mode doesn't need trigger but prop is required
+          />
+        )
+      }
+    </MainLayout >
   );
 };
 

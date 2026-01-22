@@ -152,25 +152,14 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                         <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                                             <Video className="h-6 w-6 text-primary" />
                                         </div>
-                                        <p className="font-medium">Create your reel</p>
-                                        <p className="text-sm text-muted-foreground">Max 20 seconds • Get guided editing</p>
+                                        <p className="font-medium">Record - Live Only</p>
+                                        <p className="text-sm text-muted-foreground">Max 20 seconds • Live recording required</p>
                                         <div className="flex gap-2 mt-2">
                                             <Button type="button" variant="default" size="sm" onClick={handleStartRecording}>
                                                 <Video className="h-4 w-4 mr-2" />
-                                                Record
-                                            </Button>
-                                            <Button type="button" variant="outline" size="sm" onClick={handleUploadFromGallery}>
-                                                <FolderOpen className="h-4 w-4 mr-2" />
-                                                Upload
+                                                Start Recording
                                             </Button>
                                         </div>
-                                        <input
-                                            ref={fileInputRef}
-                                            type="file"
-                                            accept="video/*"
-                                            className="hidden"
-                                            onChange={handleFileSelect}
-                                        />
                                     </div>
                                 </div>
 

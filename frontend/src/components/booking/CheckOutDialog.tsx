@@ -21,6 +21,8 @@ interface CheckOutDialogProps {
     amount: number;
     trigger?: React.ReactNode;
     onSuccess?: () => void;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 
 interface PaymentMethod {
@@ -30,9 +32,13 @@ interface PaymentMethod {
     authorization_code: string;
 }
 
-export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess }: CheckOutDialogProps) => {
+export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess, open: controlledOpen, onOpenChange: setControlledOpen }: CheckOutDialogProps) => {
     const { user } = useAuth();
-    const [isOpen, setIsOpen] = useState(false);
+    const [internalOpen, setInternalOpen] = useState(false);
+
+    const isControlled = controlledOpen !== undefined;
+    const isOpen = isControlled ? controlledOpen : internalOpen;
+    const setIsOpen = isControlled ? setControlledOpen : setInternalOpen;
     const [loading, setLoading] = useState(false);
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [selectedMethodId, setSelectedMethodId] = useState<string>("new");

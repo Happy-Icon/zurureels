@@ -20,6 +20,7 @@ const mockHostReels: ReelData[] = [
     views: 1234,
     status: "published",
     thumbnail: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=300&fit=crop",
+    expiresAt: "2026-05-01T00:00:00Z", // Future
   },
   {
     id: "h2",
@@ -30,6 +31,7 @@ const mockHostReels: ReelData[] = [
     views: 856,
     status: "published",
     thumbnail: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=300&fit=crop",
+    expiresAt: "2026-01-26T00:00:00Z", // Expiring soon (assuming current date is ~21st Jan 2026)
   },
   {
     id: "h3",
@@ -38,8 +40,9 @@ const mockHostReels: ReelData[] = [
     category: "tour",
     price: 95,
     views: 423,
-    status: "draft",
+    status: "published", // Changed to published to show expired state clearly, usually drafts don't expire? Or they do.
     thumbnail: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=400&h=300&fit=crop",
+    expiresAt: "2026-01-10T00:00:00Z", // Expired
   },
 ];
 

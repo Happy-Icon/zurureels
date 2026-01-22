@@ -14,6 +14,7 @@ import { TextOverlayTemplates } from "./TextOverlayTemplates";
 import { ValidationScorecard, ValidationWarning } from "./ValidationScorecard";
 import { GuidanceTooltip, GuidanceMessage } from "./GuidanceTooltip";
 import { getReelSpecByCategory, ExperienceReelSpec } from "@/data/reelSpecifications";
+import { LiveVideoRecorder } from "./LiveVideoRecorder";
 import { ScoreBreakdown } from "@/types/host";
 
 interface MiniVideoEditorProps {
@@ -130,6 +131,22 @@ export const MiniVideoEditor = ({
       triggerGuidance(time);
     }
   };
+
+  const handleRecordingComplete = (file: File) => {
+    const url = URL.createObjectURL(file);
+    setLocalVideoUrl(url);
+    if (videoRef.current) {
+      videoRef.current.load();
+    }
+    // Note: We might want to persist the file back to the parent if needed, 
+    // but for now we store it locally implicitly via the URL logic or we could update a state.
+    // Ideally we should update a 'videoFile' state if we want to submit it.
+    // Let's assume we pass the file on submit, so we need to track it.
+  };
+
+  // We need to track the file if it comes from recorder
+  const [recordedFile, setRecordedFile] = useState<File | null>(null);
+
 
   // Trigger contextual guidance
   const triggerGuidance = useCallback((time: number) => {
@@ -269,7 +286,7 @@ export const MiniVideoEditor = ({
 
     onSubmit({
       category,
-      videoFile: videoFile || undefined,
+      videoFile: recordedFile || videoFile || undefined,
       videoUrl: videoUrl || undefined,
       duration,
       scores,
@@ -311,14 +328,13 @@ export const MiniVideoEditor = ({
               playsInline
             />
           ) : (
-            <div className="flex flex-col items-center gap-4 text-muted-foreground">
-              <Video className="h-16 w-16" />
-              <p className="text-sm">No video selected</p>
-              <Button variant="outline" size="sm">
-                <Camera className="h-4 w-4 mr-2" />
-                Record Now
-              </Button>
-            </div>
+            <LiveVideoRecorder
+              onRecordingComplete={(file) => {
+                setRecordedFile(file);
+                handleRecordingComplete(file);
+              }}
+              onCancel={onBack}
+            />
           )}
 
           {/* Playback Controls Overlay */}

@@ -49,4 +49,5 @@ export interface ReelData {
     views: number;
     status: "published" | "draft";
     thumbnail: string;
+    expiresAt?: string;
 }
