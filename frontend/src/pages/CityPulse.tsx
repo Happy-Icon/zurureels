@@ -289,6 +289,7 @@ const CityPulse = () => {
                 {filteredActivities.slice(0, 3).map((activity) => (
                   <CheckOutDialog
                     key={activity.id}
+                    experienceId={activity.id}
                     tripTitle={activity.title}
                     amount={activity.current_price}
                     trigger={
@@ -322,6 +323,7 @@ const CityPulse = () => {
                 {filteredBoats.map((boat) => (
                   <CheckOutDialog
                     key={boat.id}
+                    experienceId={boat.id}
                     tripTitle={boat.title}
                     amount={boat.current_price}
                     trigger={
@@ -444,6 +446,7 @@ const CityPulse = () => {
       {
         bookingReel && (
           <CheckOutDialog
+            experienceId={bookingReel.id}
             tripTitle={bookingReel.title}
             amount={bookingReel.price}
             open={!!bookingReel}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ReelData } from "@/components/reels/ReelCard";
+export type { ReelData };
 
 export const useReels = (category?: string, experienceId?: string) => {
     const [reels, setReels] = useState<ReelData[]>([]);

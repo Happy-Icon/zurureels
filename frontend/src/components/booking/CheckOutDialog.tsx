@@ -17,8 +17,12 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Import Shadcn Radio
 
 interface CheckOutDialogProps {
+    experienceId?: string;
     tripTitle: string;
     amount: number;
+    guests?: number;
+    checkIn?: string;
+    checkOut?: string;
     trigger?: React.ReactNode;
     onSuccess?: () => void;
     open?: boolean;
@@ -32,7 +36,18 @@ interface PaymentMethod {
     authorization_code: string;
 }
 
-export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess, open: controlledOpen, onOpenChange: setControlledOpen }: CheckOutDialogProps) => {
+export const CheckOutDialog = ({
+    experienceId,
+    tripTitle,
+    amount,
+    guests = 1,
+    checkIn,
+    checkOut,
+    trigger,
+    onSuccess,
+    open: controlledOpen,
+    onOpenChange: setControlledOpen
+}: CheckOutDialogProps) => {
     const { user } = useAuth();
     const [internalOpen, setInternalOpen] = useState(false);
 
@@ -57,11 +72,14 @@ export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess, open: co
         setLoading(true);
         try {
             // 1. Create Booking
-            // @ts-ignore
             const { error: bookingError } = await supabase.from('bookings').insert({
                 user_id: user?.id,
+                experience_id: experienceId,
                 trip_title: tripTitle,
                 amount: amount,
+                guests: guests,
+                check_in: checkIn || new Date().toISOString(),
+                check_out: checkOut || new Date(Date.now() + 86400000).toISOString(),
                 status: 'paid',
                 payment_reference: reference.reference
             });
