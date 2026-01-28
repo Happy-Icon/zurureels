@@ -8,6 +8,8 @@ import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
 import { QuickListingCard } from "@/components/city-pulse/QuickListingCard";
 import { useWeather } from "@/hooks/useWeather";
 import { useReels } from "@/hooks/useReels";
+import { useCityPulseAI } from "@/hooks/useCityPulseAI";
+import { useExperiences } from "@/hooks/useExperiences";
 import {
   coastalCities,
 } from "@/data/mockCityPulse";
