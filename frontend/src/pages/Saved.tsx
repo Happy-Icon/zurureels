@@ -1,6 +1,6 @@
 import { MainLayout } from "@/components/layout/MainLayout";
-import { mockReels } from "@/data/mockReels";
-import { Bookmark, Grid, List, FolderPlus } from "lucide-react";
+import { useReels } from "@/hooks/useReels";
+import { Bookmark, Grid, List, FolderPlus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -8,7 +8,9 @@ import { useState } from "react";
 
 const Saved = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const savedReels = mockReels.filter((reel) => reel.saved);
+  const { reels: liveReels, loading } = useReels("all");
+  // Filter for saved property (currently not in DB, so will be empty/mocked if added)
+  const savedReels = liveReels.filter((reel) => (reel as any).saved);
 
   const categoryColors: Record<string, string> = {
     hotel: "bg-blue-500/90",
@@ -96,6 +98,20 @@ const Saved = () => {
                     {reel.category}
                   </Badge>
 
+                  {/* Verification Badges */}
+                  {(reel as any).isLive && (
+                    <div className="absolute top-3 right-3 flex gap-1 items-center">
+                      <div className="bg-red-500 text-[10px] font-bold text-white px-1.5 py-0.5 rounded shadow-lg animate-pulse">
+                        LIVE
+                      </div>
+                      {(reel as any).lat && (
+                        <div className="bg-emerald-500 p-0.5 rounded-full shadow-lg">
+                          <ShieldCheck className="h-3 w-3 text-white" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="absolute bottom-0 left-0 right-0 p-3 space-y-1">
                     <h3 className="font-semibold text-primary-foreground text-sm line-clamp-2">
                       {reel.title}
@@ -122,9 +138,19 @@ const Saved = () => {
                     className="h-24 w-24 rounded-lg object-cover"
                   />
                   <div className="flex-1 min-w-0">
-                    <Badge className={cn("text-xs capitalize mb-1", categoryColors[reel.category])}>
-                      {reel.category}
-                    </Badge>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge className={cn("text-xs capitalize", categoryColors[reel.category])}>
+                        {reel.category}
+                      </Badge>
+                      {(reel as any).isLive && (
+                        <Badge variant="outline" className="text-[10px] h-5 border-red-500 text-red-500 py-0 animate-pulse">
+                          LIVE
+                        </Badge>
+                      )}
+                      {(reel as any).lat && (
+                        <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                      )}
+                    </div>
                     <h3 className="font-semibold truncate">{reel.title}</h3>
                     <p className="text-sm text-muted-foreground">{reel.location}</p>
                     <div className="flex items-center justify-between mt-2">

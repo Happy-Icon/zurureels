@@ -1,4 +1,4 @@
-import { Heart, Share2, Bookmark, MessageCircle, Play, Pause, Volume2, VolumeX, Clock } from "lucide-react";
+import { Heart, Share2, Bookmark, MessageCircle, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,9 @@ export interface ReelData {
   hostName: string;
   hostAvatar: string;
   postedAt?: string;
+  isLive?: boolean;
+  lat?: number;
+  lng?: number;
 }
 
 interface ReelCardProps {
@@ -159,8 +162,8 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
             {reel.category}
           </Badge>
           {reel.postedAt && (
-            <Badge 
-              variant="outline" 
+            <Badge
+              variant="outline"
               className={cn(
                 "text-xs border-primary-foreground/30 text-primary-foreground/90 gap-1",
                 isReelExpiringSoon(new Date(reel.postedAt)) && "border-orange-400/50 text-orange-200"
@@ -168,6 +171,18 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
             >
               <Clock className="h-3 w-3" />
               {getReelExpiryDisplay(new Date(reel.postedAt))}
+            </Badge>
+          )}
+          {reel.isLive && (
+            <Badge className="bg-red-500 animate-pulse text-white border-0 gap-1.5 px-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-white" />
+              LIVE
+            </Badge>
+          )}
+          {reel.lat && reel.lng && (
+            <Badge className="bg-emerald-500 text-white border-0 gap-1.5 px-2">
+              <ShieldCheck className="h-3 w-3" />
+              VERIFIED
             </Badge>
           )}
         </div>

@@ -10,6 +10,9 @@ import { AccommodationReelFlow } from "@/components/host/AccommodationReelFlow";
 import { MiniVideoEditor, VideoEditorSubmitData } from "@/components/video-editor";
 import { AccommodationType, AccommodationData } from "@/types/host";
 import { categories, locations } from "@/data/hostConstants";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useAuth } from "@/components/AuthProvider";
 
 
 
@@ -23,6 +26,12 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
     const [showAccommodationFlow, setShowAccommodationFlow] = useState(false);
     const [showVideoEditor, setShowVideoEditor] = useState(false);
     const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [location, setLocation] = useState("");
+    const [price, setPrice] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { user } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isAccommodationCategory = (cat: string): cat is AccommodationType => {
@@ -38,10 +47,58 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         }
     };
 
-    const handleAccommodationComplete = (data: AccommodationData) => {
-        console.log("Accommodation data:", data);
-        setShowAccommodationFlow(false);
-        onOpenChange(false);
+    const handleAccommodationComplete = async (data: any) => {
+        if (!user) return;
+        setIsSubmitting(true);
+        try {
+            // 1. Create Experience
+            const { data: exp, error: expError } = await supabase
+                .from("experiences")
+                .insert({
+                    user_id: user.id,
+                    category: selectedCategory,
+                    entity_name: data.experienceDetails.entityName,
+                    title: data.experienceDetails.title,
+                    location: data.experienceDetails.location,
+                    current_price: data.experienceDetails.price,
+                })
+                .select()
+                .single();
+
+            if (expError) throw expError;
+
+            // 2. Create Reels
+            const reelsToInsert = data.reels
+                .filter((r: any) => r.uploaded && r.videoUrl)
+                .map((r: any) => ({
+                    user_id: user.id,
+                    experience_id: exp.id,
+                    category: selectedCategory,
+                    video_url: r.videoUrl,
+                    thumbnail_url: null,
+                    duration: r.maxDuration || 20,
+                    lat: r.lat,
+                    lng: r.lng,
+                    is_live: true, // Accommodation reels are now forced live
+                    status: 'active'
+                }));
+
+            if (reelsToInsert.length > 0) {
+                const { error: reelsError } = await supabase
+                    .from("reels")
+                    .insert(reelsToInsert);
+                if (reelsError) throw reelsError;
+            }
+
+            toast.success("Accommodation and reels published!");
+            setShowAccommodationFlow(false);
+            onOpenChange(false);
+        } catch (error: any) {
+            console.error("Save error:", error);
+            toast.error(error.message || "Failed to save data");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleDialogClose = (newOpen: boolean) => {
@@ -71,12 +128,76 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         }
     };
 
-    const handleEditorSubmit = (data: VideoEditorSubmitData) => {
-        console.log("Video editor submit:", data);
-        setShowVideoEditor(false);
-        onOpenChange(false);
-        setSelectedVideoFile(null);
-        setSelectedCategory("");
+    const handleEditorSubmit = async (data: VideoEditorSubmitData) => {
+        if (!user) return;
+        setIsSubmitting(true);
+        try {
+            // 1. Create (or find) Experience - for non-accommodations we create a simple one
+            const { data: exp, error: expError } = await supabase
+                .from("experiences")
+                .insert({
+                    user_id: user.id,
+                    category: selectedCategory,
+                    entity_name: "My Experience", // Default or add field
+                    title: title || "New Experience",
+                    location: location || "zanzibar",
+                    current_price: parseFloat(price) || 0,
+                    description: description
+                })
+                .select()
+                .single();
+
+            if (expError) throw expError;
+
+            // 2. Upload video (if editing was done locally, but usually it's already uploaded in editor?)
+            // Assuming data.videoFile is what we upload if it's there
+            let finalVideoUrl = "";
+            if (data.videoFile) {
+                const fileExt = data.videoFile.name.split('.').pop();
+                const fileName = `${crypto.randomUUID()}.${fileExt}`;
+                const filePath = `reels/${fileName}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('reels')
+                    .upload(filePath, data.videoFile);
+
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('reels')
+                    .getPublicUrl(filePath);
+
+                finalVideoUrl = publicUrl;
+            }
+
+            // 3. Create Reel
+            const { error: reelError } = await supabase
+                .from("reels")
+                .insert({
+                    user_id: user.id,
+                    experience_id: exp.id,
+                    category: selectedCategory,
+                    video_url: finalVideoUrl,
+                    duration: data.duration,
+                    lat: data.lat,
+                    lng: data.lng,
+                    is_live: data.isLive,
+                    status: 'active'
+                });
+
+            if (reelError) throw reelError;
+
+            toast.success("Reel published successfully!");
+            setShowVideoEditor(false);
+            onOpenChange(false);
+            setSelectedVideoFile(null);
+            setSelectedCategory("");
+        } catch (error: any) {
+            console.error("Publish error:", error);
+            toast.error(error.message || "Failed to publish reel");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     // Render Video Editor Fullscreen if active
@@ -175,17 +296,28 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
 
                                 <div className="space-y-2">
                                     <Label htmlFor="title">Title</Label>
-                                    <Input id="title" placeholder="e.g., Sunset Dhow Cruise" />
+                                    <Input
+                                        id="title"
+                                        placeholder="e.g., Sunset Dhow Cruise"
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                    />
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label htmlFor="description">Description</Label>
-                                    <Textarea id="description" placeholder="Describe your listing..." rows={3} />
+                                    <Textarea
+                                        id="description"
+                                        placeholder="Describe your listing..."
+                                        rows={3}
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                    />
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label>Location</Label>
-                                    <Select>
+                                    <Select value={location} onValueChange={setLocation}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select location" />
                                         </SelectTrigger>
@@ -203,7 +335,14 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                     <Label htmlFor="price">Price (KES)</Label>
                                     <div className="relative">
                                         <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                        <Input id="price" type="number" placeholder="0" className="pl-10" />
+                                        <Input
+                                            id="price"
+                                            type="number"
+                                            placeholder="0"
+                                            className="pl-10"
+                                            value={price}
+                                            onChange={(e) => setPrice(e.target.value)}
+                                        />
                                     </div>
                                 </div>
 
@@ -211,8 +350,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                     <Button type="button" variant="outline" className="flex-1" onClick={() => handleDialogClose(false)}>
                                         Save as Draft
                                     </Button>
-                                    <Button type="submit" className="flex-1">
-                                        Publish Reel
+                                    <Button type="button" className="flex-1" onClick={handleStartRecording} disabled={isSubmitting}>
+                                        {isSubmitting ? "Publishing..." : "Record & Publish"}
                                     </Button>
                                 </div>
                             </>

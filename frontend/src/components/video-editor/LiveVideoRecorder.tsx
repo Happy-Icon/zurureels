@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, StopCircle, RefreshCw, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Camera, StopCircle, RefreshCw, AlertCircle, MapPin } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { toast } from "sonner";
 
 interface LiveVideoRecorderProps {
-    onRecordingComplete: (file: File) => void;
+    onRecordingComplete: (file: File, location?: { lat: number; lng: number }) => void;
     onCancel?: () => void;
 }
 
@@ -16,10 +18,11 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
 
     const [isRecording, setIsRecording] = useState(false);
     const [permissionError, setPermissionError] = useState(false);
+    const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [recordingTime, setRecordingTime] = useState(0);
     const timerRef = useRef<number | null>(null);
 
-    const MAX_DURATION = 20; // seconds
+    const MAX_DURATION = 20; // seconds - strictly enforced for verified reels
 
     useEffect(() => {
         startCamera();
@@ -52,8 +55,22 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
         }
     };
 
-    const startRecording = () => {
+    const startRecording = async () => {
         if (!streamRef.current) return;
+
+        // Request location when starting recording
+        try {
+            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject);
+            });
+            const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setLocation(coords);
+            console.log("Verified location captured:", coords);
+        } catch (err) {
+            console.error("Location error:", err);
+            toast.error("Location access is required for verified recording");
+            return;
+        }
 
         chunksRef.current = [];
         const mediaRecorder = new MediaRecorder(streamRef.current);
@@ -66,8 +83,8 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
 
         mediaRecorder.onstop = () => {
             const blob = new Blob(chunksRef.current, { type: "video/webm" });
-            const file = new File([blob], "live-recording.webm", { type: "video/webm" });
-            onRecordingComplete(file);
+            const file = new File([blob], "verified-recording.webm", { type: "video/webm" });
+            onRecordingComplete(file, location || undefined);
         };
 
         mediaRecorderRef.current = mediaRecorder;
@@ -129,8 +146,13 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
                 <div className="flex flex-col gap-4">
                     {/* Timer Progress */}
                     <div className="flex items-center gap-2 text-white text-sm font-medium mb-1">
+                        <div className="flex items-center gap-1.5 mr-auto">
+                            <div className={cn("h-2 w-2 rounded-full", isRecording ? "bg-red-500 animate-pulse" : "bg-white/40")} />
+                            {isRecording ? "REC" : "READY"}
+                            {location && <MapPin className="h-3 w-3 text-green-400 ml-2" />}
+                        </div>
                         <span>{recordingTime}s</span>
-                        <Progress value={(recordingTime / MAX_DURATION) * 100} className="h-2 flex-1 bg-white/20" />
+                        <Progress value={(recordingTime / MAX_DURATION) * 100} className="h-2 w-32 bg-white/20" />
                         <span>{MAX_DURATION}s</span>
                     </div>
 

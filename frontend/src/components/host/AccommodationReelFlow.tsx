@@ -2,17 +2,23 @@ import { useState } from "react";
 import { Video, Check, ChevronRight, ChevronLeft, Clock, Home, Bed, Bath, Sofa, Building } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useRef } from "react";
 import { AccommodationData, ReelRequirement } from "@/types/host";
 
 interface AccommodationReelFlowProps {
   category: "hotel" | "villa" | "apartment";
-  onComplete: (data: AccommodationData) => void;
+  onComplete: (data: any) => void;
   onBack: () => void;
 }
+
+import { locations } from "@/data/hostConstants";
+import { LiveVideoRecorder } from "@/components/video-editor/LiveVideoRecorder";
 
 const amenitiesList = [
   { id: "pool", label: "Swimming Pool" },
@@ -37,7 +43,14 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
   const [bedrooms, setBedrooms] = useState<number>(1);
   const [units, setUnits] = useState<number>(1);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
-  const [uploadedReels, setUploadedReels] = useState<Set<string>>(new Set());
+  const [title, setTitle] = useState("");
+  const [locationName, setLocationName] = useState("");
+  const [price, setPrice] = useState<string>("");
+  const [entityName, setEntityName] = useState("");
+  const [uploadedReels, setUploadedReels] = useState<Map<string, { url: string; lat?: number; lng?: number }>>(new Map());
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [showRecorder, setShowRecorder] = useState(false);
+  const currentReelIdRef = useRef<string | null>(null);
 
   const categoryLabel = category === "hotel" ? "Hotel" : category === "villa" ? "Villa" : "Apartment";
 
@@ -51,6 +64,9 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
         icon: <Building className="h-5 w-5" />,
         required: true,
         uploaded: uploadedReels.has("establishment"),
+        videoUrl: uploadedReels.get("establishment")?.url,
+        lat: uploadedReels.get("establishment")?.lat,
+        lng: uploadedReels.get("establishment")?.lng,
       },
       {
         id: "living",
@@ -60,6 +76,9 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
         icon: <Sofa className="h-5 w-5" />,
         required: true,
         uploaded: uploadedReels.has("living"),
+        videoUrl: uploadedReels.get("living")?.url,
+        lat: uploadedReels.get("living")?.lat,
+        lng: uploadedReels.get("living")?.lng,
       },
     ];
 
@@ -73,6 +92,9 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
         icon: <Bed className="h-5 w-5" />,
         required: true,
         uploaded: uploadedReels.has(`bedroom_${i}`),
+        videoUrl: uploadedReels.get(`bedroom_${i}`)?.url,
+        lat: uploadedReels.get(`bedroom_${i}`)?.lat,
+        lng: uploadedReels.get(`bedroom_${i}`)?.lng,
       });
     }
 
@@ -85,6 +107,9 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
       icon: <Bath className="h-5 w-5" />,
       required: true,
       uploaded: uploadedReels.has("bathroom"),
+      videoUrl: uploadedReels.get("bathroom")?.url,
+      lat: uploadedReels.get("bathroom")?.lat,
+      lng: uploadedReels.get("bathroom")?.lng,
     });
 
     return reels;
@@ -104,16 +129,65 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
   };
 
   const handleReelUpload = (reelId: string) => {
-    // Simulate reel upload - in production this would open camera
-    setUploadedReels((prev) => new Set([...prev, reelId]));
+    currentReelIdRef.current = reelId;
+    setShowRecorder(true); // Always force recorder for accommodations
+  };
+
+  const handleRecordingComplete = async (file: File, loc?: { lat: number; lng: number }) => {
+    const reelId = currentReelIdRef.current;
+    if (!file || !reelId) return;
+
+    setUploadingId(reelId);
+    setShowRecorder(false);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `reels/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('reels')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('reels')
+        .getPublicUrl(filePath);
+
+      setUploadedReels((prev) => {
+        const next = new Map(prev);
+        next.set(reelId, { url: publicUrl, lat: loc?.lat, lng: loc?.lng });
+        return next;
+      });
+
+      toast.success("Verified video uploaded!");
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      toast.error("Failed to upload verified video");
+    } finally {
+      setUploadingId(null);
+    }
   };
 
   const handleComplete = () => {
+    if (!title || !location || !price || !entityName) {
+      toast.error("Please fill in all property details");
+      setStep(1);
+      return;
+    }
+
     onComplete({
       bedrooms,
       units,
       amenities: selectedAmenities,
       reels: reelRequirements,
+      experienceDetails: {
+        title,
+        location: locationName,
+        price: parseFloat(price),
+        entityName,
+      }
     });
   };
 
@@ -169,35 +243,81 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
           </div>
 
           <div className="space-y-2">
-            <Label>Number of Bedrooms</Label>
-            <Select value={bedrooms.toString()} onValueChange={(v) => setBedrooms(parseInt(v))}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                  <SelectItem key={num} value={num.toString()}>
-                    {num} {num === 1 ? "Bedroom" : "Bedrooms"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Property / Brand Name</Label>
+            <Input
+              placeholder="e.g., Sails Beach Bar & Restaurant"
+              value={entityName}
+              onChange={(e) => setEntityName(e.target.value)}
+            />
           </div>
 
           <div className="space-y-2">
-            <Label>Number of Units Available</Label>
-            <Select value={units.toString()} onValueChange={(v) => setUnits(parseInt(v))}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 2, 3, 4, 5, 10, 15, 20, 25, 50, 100].map((num) => (
-                  <SelectItem key={num} value={num.toString()}>
-                    {num} {num === 1 ? "Unit" : "Units"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Listing Title</Label>
+            <Input
+              placeholder="e.g., Luxury Oceanfront Suite"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Location</Label>
+              <Select value={locationName} onValueChange={setLocationName}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((loc) => (
+                    <SelectItem key={loc} value={loc.toLowerCase()}>
+                      {loc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Price (KES / night)</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Bedrooms</Label>
+              <Select value={bedrooms.toString()} onValueChange={(v) => setBedrooms(parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5, 8, 10].map((num) => (
+                    <SelectItem key={num} value={num.toString()}>
+                      {num} {num === 1 ? "BR" : "BRs"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Units</Label>
+              <Select value={units.toString()} onValueChange={(v) => setUnits(parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5, 10, 20, 50].map((num) => (
+                    <SelectItem key={num} value={num.toString()}>
+                      {num} {num === 1 ? "Unit" : "Units"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -309,12 +429,17 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
                   size="sm"
                   variant={reel.uploaded ? "outline" : "default"}
                   onClick={() => handleReelUpload(reel.id)}
-                  disabled={reel.uploaded}
+                  disabled={reel.uploaded || (uploadingId !== null && uploadingId !== reel.id)}
                 >
                   {reel.uploaded ? (
                     <>
                       <Check className="h-4 w-4 mr-1" />
                       Done
+                    </>
+                  ) : uploadingId === reel.id ? (
+                    <>
+                      <div className="h-4 w-4 mr-1 border-2 border-white/30 border-t-white animate-spin rounded-full" />
+                      Uploading...
                     </>
                   ) : (
                     <>
@@ -340,6 +465,16 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
               {allReelsUploaded ? "Complete Setup" : `Record All Reels (${uploadedCount}/${totalReels})`}
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Verified Recorder Overlay */}
+      {showRecorder && (
+        <div className="fixed inset-0 z-[60] bg-black">
+          <LiveVideoRecorder
+            onRecordingComplete={handleRecordingComplete}
+            onCancel={() => setShowRecorder(false)}
+          />
         </div>
       )}
     </div>

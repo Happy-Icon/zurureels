@@ -7,12 +7,11 @@ import { AIChatBox } from "@/components/city-pulse/AIChatBox";
 import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
 import { QuickListingCard } from "@/components/city-pulse/QuickListingCard";
 import { useWeather } from "@/hooks/useWeather";
-import { useCityPulseAI } from "@/hooks/useCityPulseAI";
-import { useExperiences } from "@/hooks/useExperiences";
+import { useReels } from "@/hooks/useReels";
 import {
   coastalCities,
 } from "@/data/mockCityPulse";
-import { mockEvents, mockReels } from "@/data/mockReels";
+import { mockEvents } from "@/data/mockReels";
 import { ReelCard, ReelData } from "@/components/reels/ReelCard";
 import {
   MapPin,
@@ -66,6 +65,7 @@ const CityPulse = () => {
   const { weather, loading: weatherLoading } = useWeather(weatherLocation);
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
   const { experiences, loading: experiencesLoading } = useExperiences(selectedCategory, selectedCity);
+  const { reels: liveReels, loading: reelsLoading } = useReels(selectedCategory);
 
   const handleUseLocation = useCallback(() => {
     if ("geolocation" in navigator) {
@@ -99,6 +99,7 @@ const CityPulse = () => {
   const handleSendMessage = (message: string) => {
     const context = {
       experiences: experiences,
+      reels: liveReels,
       events: mockEvents,
     };
     sendMessage(message, selectedCity, context);
@@ -213,15 +214,26 @@ const CityPulse = () => {
                 <h2 className="text-lg font-display font-semibold">Trending Reels</h2>
               </div>
               <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-4 -mx-4 px-4 snap-x">
-                {mockReels.map((reel) => (
-                  <div key={reel.id} className="min-w-[280px] h-[500px] snap-center rounded-2xl overflow-hidden shadow-lg border border-border/50">
-                    <ReelCard
-                      reel={reel}
-                      isActive={false}
-                      onBook={(id) => setBookingReel(mockReels.find(r => r.id === id) || null)}
-                    />
+                {reelsLoading ? (
+                  Array(3).fill(0).map((_, i) => (
+                    <div key={i} className="min-w-[280px] h-[500px] rounded-2xl bg-muted animate-pulse" />
+                  ))
+                ) : liveReels.length > 0 ? (
+                  liveReels.map((reel) => (
+                    <div key={reel.id} className="min-w-[280px] h-[500px] snap-center rounded-2xl overflow-hidden shadow-lg border border-border/50">
+                      <ReelCard
+                        reel={reel}
+                        isActive={false}
+                        onBook={(id) => setBookingReel(liveReels.find(r => r.id === id) || null)}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <div className="w-full py-12 flex flex-col items-center justify-center text-muted-foreground">
+                    <Sparkles className="h-12 w-12 mb-2 opacity-20" />
+                    <p>No live reels for this category yet.</p>
                   </div>
-                ))}
+                )}
               </div>
             </section>
           )}

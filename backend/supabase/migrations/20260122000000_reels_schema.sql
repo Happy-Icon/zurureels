@@ -30,14 +30,17 @@ create index if not exists idx_reels_category on reels(category);
 alter table reels enable row level security;
 
 -- Policies
+drop policy if exists "Public reels are visible if active and not expired" on reels;
 create policy "Public reels are visible if active and not expired" on reels
 for select to anon, authenticated
 using (status = 'active' and expires_at > now());
 
+drop policy if exists "Hosts can view all their own reels" on reels;
 create policy "Hosts can view all their own reels" on reels
 for select to authenticated
 using (auth.uid() = user_id);
 
+drop policy if exists "Hosts can create reels for their experiences" on reels;
 create policy "Hosts can create reels for their experiences" on reels
 for insert to authenticated
 with check (
@@ -49,6 +52,7 @@ with check (
     )
 );
 
+drop policy if exists "Hosts can update their own reels" on reels;
 create policy "Hosts can update their own reels" on reels
 for update to authenticated
 using (auth.uid() = user_id);

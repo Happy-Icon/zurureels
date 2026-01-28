@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   ChevronLeft, Upload, Play, Pause, RotateCcw,
-  Camera, Volume2, Type, Sparkles, Check, Video
+  Camera, Volume2, Type, Sparkles, Check, Video, ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,6 +32,9 @@ export interface VideoEditorSubmitData {
   duration: number;
   scores: ScoreBreakdown;
   elementsSatisfied: string[];
+  lat?: number;
+  lng?: number;
+  isLive?: boolean;
 }
 
 // Category to icon mapping for required elements
@@ -76,6 +79,10 @@ export const MiniVideoEditor = ({
   const [showScorecard, setShowScorecard] = useState(false);
   const [guidanceMessage, setGuidanceMessage] = useState<GuidanceMessage | null>(null);
   const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(!!videoFile || !!videoUrl);
+  const [elementsSatisfied, setElementsSatisfied] = useState<string[]>([]);
+  const [recordedFile, setRecordedFile] = useState<File | null>(null);
+  const [capturedLocation, setCapturedLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // Mock scores - in production, these would be calculated from video analysis
   const [scores, setScores] = useState<ScoreBreakdown>({
@@ -127,26 +134,22 @@ export const MiniVideoEditor = ({
       const time = videoRef.current.currentTime;
       setCurrentTime(time);
 
-      // Trigger guidance messages based on playback position
+      // Trigger guidance messages based on playback progress
       triggerGuidance(time);
     }
   };
 
-  const handleRecordingComplete = (file: File) => {
+  const handleLiveRecordingComplete = (file: File, loc?: { lat: number; lng: number }) => {
+    setRecordedFile(file);
+    if (loc) setCapturedLocation(loc);
     const url = URL.createObjectURL(file);
     setLocalVideoUrl(url);
+    setShowPreview(true);
+    // If videoRef is available, load the new video
     if (videoRef.current) {
       videoRef.current.load();
     }
-    // Note: We might want to persist the file back to the parent if needed, 
-    // but for now we store it locally implicitly via the URL logic or we could update a state.
-    // Ideally we should update a 'videoFile' state if we want to submit it.
-    // Let's assume we pass the file on submit, so we need to track it.
   };
-
-  // We need to track the file if it comes from recorder
-  const [recordedFile, setRecordedFile] = useState<File | null>(null);
-
 
   // Trigger contextual guidance
   const triggerGuidance = useCallback((time: number) => {
@@ -215,12 +218,12 @@ export const MiniVideoEditor = ({
   const getValidationWarnings = (): ValidationWarning[] => {
     const warnings: ValidationWarning[] = [];
 
-    if (duration > 20) {
+    if (duration > 20.5) { // Allow slight buffer for processing
       warnings.push({
         id: "duration",
-        message: `Clip is ${duration.toFixed(1)}s – reels over 20s perform 50% worse.`,
-        severity: "warning",
-        action: "Trim to 20s for optimal performance",
+        message: `Clip is ${duration.toFixed(1)}s – strictly limited to 20s.`,
+        severity: "critical", // Changed from warning to critical
+        action: "Trim to 20s or re-record",
       });
     }
 
@@ -287,10 +290,13 @@ export const MiniVideoEditor = ({
     onSubmit({
       category,
       videoFile: recordedFile || videoFile || undefined,
-      videoUrl: videoUrl || undefined,
+      videoUrl: videoUrl,
       duration,
       scores,
       elementsSatisfied,
+      lat: capturedLocation?.lat,
+      lng: capturedLocation?.lng,
+      isLive: !!recordedFile
     });
   };
 
@@ -316,7 +322,7 @@ export const MiniVideoEditor = ({
       {/* Video Preview - 9:16 aspect ratio */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="relative flex-1 bg-black flex items-center justify-center">
-          {localVideoUrl ? (
+          {localVideoUrl && showPreview ? (
             <video
               ref={videoRef}
               src={localVideoUrl}
@@ -329,16 +335,13 @@ export const MiniVideoEditor = ({
             />
           ) : (
             <LiveVideoRecorder
-              onRecordingComplete={(file) => {
-                setRecordedFile(file);
-                handleRecordingComplete(file);
-              }}
+              onRecordingComplete={handleLiveRecordingComplete}
               onCancel={onBack}
             />
           )}
 
           {/* Playback Controls Overlay */}
-          {localVideoUrl && (
+          {localVideoUrl && showPreview && (
             <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
               <div className="flex items-center gap-4">
                 <Button
@@ -360,6 +363,9 @@ export const MiniVideoEditor = ({
                     <Play className="h-7 w-7 ml-1" />
                   )}
                 </Button>
+                {capturedLocation && (
+                  <ShieldCheck className="h-4 w-4 text-emerald-500 absolute top-4 right-4" />
+                )}
               </div>
             </div>
           )}

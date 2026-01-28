@@ -31,7 +31,12 @@ You must:
 
 Current available data context:
 ${JSON.stringify(context, null, 2)}
-Note: Experiences are provided as a single list. Each experience has a 'category' and a 'metadata' field containing specific details like DJs, chefs, time, or spots left.
+Note: context may contain 'reels' and 'experiences'. 
+- 'reels' are short videos with title, location, price, and coordinates (lat, lng).
+- 'experiences' are detailed listings.
+
+LOCATION AWARENESS:
+If 'reels' have 'lat' and 'lng', and the user asks "what is near me" or similar, use rough distance calculations (Haversine not needed, simple delta is fine) relative to the most recent 'lat'/'lng' in the context or assume a central point.
 
 SCHEMA INSTRUCTIONS:
 If the user explicitly asks for "plain text", "simple list", or "chat" format, IGNORE these schemas and reply with standard text.
