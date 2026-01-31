@@ -69,7 +69,7 @@ const CityPulse = () => {
   const { experiences, loading: experiencesLoading } = useExperiences(selectedCategory, selectedCity);
   const { reels: liveReels, loading: reelsLoading } = useReels(selectedCategory);
 
-  const handleUseLocation = useCallback(() => {
+  const handleUseLocation = useCallback((showToast = true) => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -78,7 +78,9 @@ const CityPulse = () => {
             lon: position.coords.longitude,
           });
           setSelectedCity("Current Location");
-          toast.success("Location updated");
+          if (showToast) {
+            toast.success("Location updated");
+          }
         },
         (error) => {
           console.error("Error getting location:", error);
@@ -90,7 +92,7 @@ const CityPulse = () => {
 
   // Auto-sync location on mount
   useEffect(() => {
-    handleUseLocation();
+    handleUseLocation(false);
   }, [handleUseLocation]);
 
   const handleCitySelect = (city: string) => {
@@ -144,7 +146,7 @@ const CityPulse = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-full min-w-[200px]">
-                <DropdownMenuItem onClick={handleUseLocation} className="gap-2 cursor-pointer">
+                <DropdownMenuItem onClick={() => handleUseLocation(true)} className="gap-2 cursor-pointer">
                   <Navigation className="h-4 w-4 text-primary" />
                   <span>Use My Location</span>
                 </DropdownMenuItem>
