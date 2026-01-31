@@ -12,6 +12,8 @@ import Profile from "./pages/Profile";
 import Host from "./pages/Host";
 import HostSignup from "./pages/HostSignup";
 import Auth from "./pages/Auth";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 import { AuthProvider } from "@/components/AuthProvider";
@@ -49,6 +51,8 @@ const App = () => (
             <Route path="/profile/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
             <Route path="/profile/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

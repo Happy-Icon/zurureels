@@ -3,8 +3,16 @@
 -- 1. PROFILES
 create table profiles (
   id uuid references auth.users not null primary key,
+  email text,
+  role text default 'guest',
   full_name text,
   phone text,
+  languages text[] DEFAULT '{}',
+  verification_badges jsonb DEFAULT '{"email": false, "phone": false, "identity": false}'::jsonb,
+  emergency_contact jsonb DEFAULT '{"name": "", "phone": "", "relationship": ""}'::jsonb,
+  profile_completeness integer DEFAULT 20,
+  security_settings jsonb DEFAULT '{"two_factor": false, "login_alerts": true, "sms_notifications": false}'::jsonb,
+  notification_settings jsonb DEFAULT '{"channels": {"email": true, "sms": true, "push": true, "whatsapp": false}, "trips": {"bookings": true, "checkin": true, "messages": true}, "security": {"login": true, "password": true}, "marketing": {"price_drops": false, "recommendations": true, "newsletter": true, "frequency": "weekly"}}'::jsonb,
   metadata jsonb
 );
 alter table profiles enable row level security;
