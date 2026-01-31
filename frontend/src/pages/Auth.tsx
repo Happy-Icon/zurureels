@@ -26,6 +26,14 @@ const Auth = () => {
 
   // Redirect if already logged in
   useEffect(() => {
+    // Check if we are in a password recovery flow
+    // Supabase appends #access_token=...&type=recovery to the URL
+    const hash = window.location.hash;
+    if (hash && hash.includes("type=recovery")) {
+      navigate("/reset-password");
+      return;
+    }
+
     if (user) {
       navigate("/");
     }

@@ -42,7 +42,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Listen for changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        // Provide a hint to the app that we are in recovery mode
+        // We can't use useNavigate here easily because AuthProvider might be outside Router context or cause circular dependencies
+        // So we just set the session. The redirection should be handled by the component verifying the session/URL.
+      }
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
