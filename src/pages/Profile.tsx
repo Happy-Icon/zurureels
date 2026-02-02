@@ -36,7 +36,7 @@ const Profile = () => {
     const fetchProfile = async () => {
       if (!user) return;
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('profiles')
         .select('profile_completeness, role')
         .eq('id', user.id)

@@ -47,7 +47,7 @@ export const Security = () => {
         const fetchSettings = async () => {
             if (!user) return;
             try {
-                const { data, error } = await supabase
+                const { data, error } = await (supabase as any)
                     .from('profiles')
                     .select('security_settings')
                     .eq('id', user.id)
@@ -97,8 +97,8 @@ export const Security = () => {
 
         try {
             // @ts-ignore - profiles table exists in database
-            const { error } = await (supabase
-                .from('profiles') as any)
+            const { error } = await (supabase as any)
+                .from('profiles')
                 .update({
                     security_settings: {
                         two_factor: twoFactor,

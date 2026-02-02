@@ -38,7 +38,7 @@ export const PaymentMethods = () => {
         if (!user) return;
         const fetchMethods = async () => {
             try {
-                const { data, error } = await supabase
+                const { data, error } = await (supabase as any)
                     .from('payment_methods')
                     .select('*')
                     .eq('user_id', user.id);
@@ -121,7 +121,7 @@ export const PaymentMethods = () => {
 
     const removeMethod = async (id: string) => {
         try {
-            const { error } = await supabase.from('payment_methods').delete().eq('id', id);
+            const { error } = await (supabase as any).from('payment_methods').delete().eq('id', id);
             if (error) throw error;
 
             setMethods(methods.filter(m => m.id !== id));

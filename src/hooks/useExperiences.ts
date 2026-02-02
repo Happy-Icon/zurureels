@@ -27,7 +27,7 @@ export const useExperiences = (category?: string, city?: string) => {
         const fetchExperiences = async () => {
             setLoading(true);
             try {
-                let query = supabase.from("experiences").select("*");
+                let query = (supabase.from as any)("experiences").select("*");
 
                 if (category && category !== "all") {
                     query = query.eq("category", category);

@@ -28,7 +28,7 @@ export const Notifications = () => {
             if (!user) return;
             try {
                 // @ts-ignore - profiles table exists in database
-                const { data } = await supabase
+                const { data } = await (supabase as any)
                     .from('profiles')
                     .select('notification_settings')
                     .eq('id', user.id)
@@ -52,8 +52,8 @@ export const Notifications = () => {
 
         try {
             // @ts-ignore - profiles table exists in database
-            const { error } = await (supabase
-                .from('profiles') as any)
+            const { error } = await (supabase as any)
+                .from('profiles')
                 .update({ notification_settings: settings })
                 .eq('id', user.id);
 

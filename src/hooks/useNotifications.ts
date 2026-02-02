@@ -29,7 +29,7 @@ export const useNotifications = () => {
                 if (!user) return;
 
                 // 1. Fetch initial notifications
-                const { data, error } = await supabase
+                const { data, error } = await (supabase as any)
                     .from("notifications")
                     .select("*")
                     .eq("user_id", user.id)
@@ -100,8 +100,8 @@ export const useNotifications = () => {
             setUnreadCount(prev => Math.max(0, prev - 1));
 
             // @ts-ignore - notifications table exists
-            const { error } = await (supabase
-                .from("notifications") as any)
+            const { error } = await (supabase as any)
+                .from("notifications")
                 .update({ is_read: true })
                 .eq("id", id);
 
@@ -121,8 +121,8 @@ export const useNotifications = () => {
             setUnreadCount(0);
 
             // @ts-ignore - notifications table exists
-            await (supabase
-                .from("notifications") as any)
+            await (supabase as any)
+                .from("notifications")
                 .update({ is_read: true })
                 .eq("user_id", user.id)
                 .eq("is_read", false);

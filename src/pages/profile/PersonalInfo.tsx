@@ -39,7 +39,7 @@ export const PersonalInfo = () => {
                 setVerificationBadges(prev => ({ ...prev, email: !!user.email_confirmed_at }));
 
                 // Fetch from Profiles Table
-                const { data, error } = await supabase
+                const { data, error } = await (supabase as any)
                     .from('profiles')
                     .select('*')
                     .eq('id', user.id)
@@ -109,7 +109,7 @@ export const PersonalInfo = () => {
             };
 
             // @ts-ignore - profiles table exists in database
-            const { error: profileError } = await supabase
+            const { error: profileError } = await (supabase as any)
                 .from('profiles')
                 .upsert(updates as any);
 
