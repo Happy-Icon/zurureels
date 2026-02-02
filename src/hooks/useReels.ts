@@ -12,7 +12,7 @@ export const useReels = (category?: string, experienceId?: string) => {
             setLoading(true);
             try {
                 // Query reels with joins to experiences and profiles
-                let query = supabase
+                let query = (supabase as any)
                     .from("reels")
                     .select(`
             id,

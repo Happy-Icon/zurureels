@@ -53,8 +53,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         try {
             // 1. Create Experience
             // @ts-ignore - experiences table exists
-            const { data: exp, error: expError } = await (supabase
-                .from("experiences") as any)
+            const { data: exp, error: expError } = await (supabase as any)
+                .from("experiences")
                 .insert({
                     user_id: user.id,
                     category: selectedCategory,
@@ -85,7 +85,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                 }));
 
             if (reelsToInsert.length > 0) {
-                const { error: reelsError } = await supabase
+                const { error: reelsError } = await (supabase as any)
                     .from("reels")
                     .insert(reelsToInsert);
                 if (reelsError) throw reelsError;
@@ -135,8 +135,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         try {
             // 1. Create (or find) Experience - for non-accommodations we create a simple one
             // @ts-ignore - experiences table exists
-            const { data: exp, error: expError } = await (supabase
-                .from("experiences") as any)
+            const { data: exp, error: expError } = await (supabase as any)
+                .from("experiences")
                 .insert({
                     user_id: user.id,
                     category: selectedCategory,
@@ -174,8 +174,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
 
             // 3. Create Reel
             // @ts-ignore - reels table exists
-            const { error: reelError } = await (supabase
-                .from("reels") as any)
+            const { error: reelError } = await (supabase as any)
+                .from("reels")
                 .insert({
                     user_id: user.id,
                     experience_id: exp?.id,
