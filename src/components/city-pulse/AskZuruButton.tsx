@@ -1,4 +1,3 @@
-import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +21,7 @@ export function AskZuruButton({ onClick, isOpen }: AskZuruButtonProps) {
         "hover:scale-105 transition-transform"
       )}
     >
-      <Sparkles className="h-5 w-5" />
+      <img src="/favicon.png" alt="Zuru" className="h-6 w-6 rounded-full" />
       <span className="font-semibold">Ask Zuru</span>
     </Button>
   );
