@@ -1,0 +1,3 @@
+ALTER TABLE profiles 
+ADD COLUMN IF NOT EXISTS email text,
+ADD COLUMN IF NOT EXISTS role text DEFAULT 'guest';

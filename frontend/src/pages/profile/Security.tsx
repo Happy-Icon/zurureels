@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Mail } from "lucide-react";
 
 export const Security = () => {
     const { user } = useAuth();
@@ -66,6 +67,29 @@ export const Security = () => {
 
         fetchSettings();
     }, [user]);
+
+    const handleTestEmail = async () => {
+        if (!user?.email) return;
+        try {
+            toast.loading("Sending test email...");
+            const { error } = await supabase.functions.invoke('send-email', {
+                body: {
+                    type: 'security',
+                    email: user.email,
+                    data: {
+                        message: "This is a test security alert triggered from your security settings."
+                    }
+                }
+            });
+
+            if (error) throw error;
+            toast.dismiss();
+            toast.success("Test email sent! Check your inbox.");
+        } catch (error: any) {
+            toast.dismiss();
+            toast.error("Failed to send test email: " + error.message);
+        }
+    };
 
     const handleSave = async () => {
         if (!user) return;
@@ -218,6 +242,13 @@ export const Security = () => {
                             checked={loginAlerts}
                             onCheckedChange={setLoginAlerts}
                         />
+                    </div>
+
+                    <div className="flex justify-end">
+                        <Button variant="outline" size="sm" onClick={handleTestEmail} className="gap-2">
+                            <Mail className="h-4 w-4" />
+                            Send Test Alert
+                        </Button>
                     </div>
 
                     {/* Action Buttons */}

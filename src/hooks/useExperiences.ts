@@ -1,0 +1,57 @@
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
+export interface Experience {
+    id: string;
+    user_id: string;
+    category: string;
+    entity_name: string;
+    title: string;
+    description: string | null;
+    location: string;
+    image_url: string | null;
+    base_price: number | null;
+    current_price: number;
+    price_unit: string;
+    availability_status: string;
+    metadata: any;
+    created_at: string;
+}
+
+export const useExperiences = (category?: string, city?: string) => {
+    const [experiences, setExperiences] = useState<Experience[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<any>(null);
+
+    useEffect(() => {
+        const fetchExperiences = async () => {
+            setLoading(true);
+            try {
+                let query = (supabase.from as any)("experiences").select("*");
+
+                if (category && category !== "all") {
+                    query = query.eq("category", category);
+                }
+
+                if (city) {
+                    query = query.eq("location", city);
+                }
+
+                const { data, error: fetchError } = await query.order("created_at", { ascending: false });
+
+                if (fetchError) throw fetchError;
+
+                setExperiences(data || []);
+            } catch (err) {
+                console.error("Error fetching experiences:", err);
+                setError(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchExperiences();
+    }, [category, city]);
+
+    return { experiences, loading, error };
+};
