@@ -9,49 +9,59 @@ import { HostReelsList } from "@/components/host/dashboard/HostReelsList";
 import { CreateReelDialog } from "@/components/host/dashboard/CreateReelDialog";
 import { HostBookings } from "@/components/host/dashboard/HostBookings";
 import { ReelData } from "@/types/host";
-
-const mockHostReels: ReelData[] = [
-  {
-    id: "h1",
-    title: "Beachfront Paradise Villa",
-    location: "Diani Beach",
-    category: "villa",
-    price: 280,
-    views: 1234,
-    status: "published",
-    thumbnail: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=300&fit=crop",
-    expiresAt: "2026-05-01T00:00:00Z", // Future
-  },
-  {
-    id: "h2",
-    title: "Sunset Dhow Cruise",
-    location: "Lamu Old Town",
-    category: "boat",
-    price: 150,
-    views: 856,
-    status: "published",
-    thumbnail: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=300&fit=crop",
-    expiresAt: "2026-01-26T00:00:00Z", // Expiring soon (assuming current date is ~21st Jan 2026)
-  },
-  {
-    id: "h3",
-    title: "Coral Reef Diving Tour",
-    location: "Watamu",
-    category: "tour",
-    price: 95,
-    views: 423,
-    status: "published", // Changed to published to show expired state clearly, usually drafts don't expire? Or they do.
-    thumbnail: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=400&h=300&fit=crop",
-    expiresAt: "2026-01-10T00:00:00Z", // Expired
-  },
-];
+import { useAuth } from "@/components/AuthProvider";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Host = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"published" | "drafts" | "requests">("published");
+  const { user } = useAuth();
 
-  const publishedReels = mockHostReels.filter(r => r.status === "published");
-  const draftReels = mockHostReels.filter(r => r.status === "draft");
+  // Fetch host's reels from database
+  const { data: hostReels = [], isLoading } = useQuery({
+    queryKey: ['host-reels', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+
+      const { data, error } = await (supabase as any)
+        .from('reels')
+        .select(`
+          *,
+          experiences (
+            id,
+            title,
+            location,
+            current_price,
+            category
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching host reels:', error);
+        return [];
+      }
+
+      // Transform to ReelData format
+      return data.map((reel: any) => ({
+        id: reel.id,
+        title: reel.experiences?.title || 'Untitled',
+        location: reel.experiences?.location || 'Unknown',
+        category: reel.experiences?.category || 'other',
+        price: reel.experiences?.current_price || 0,
+        views: reel.views || 0,
+        status: reel.status,
+        thumbnail: reel.thumbnail_url || reel.video_url,
+        expiresAt: reel.expires_at,
+      }));
+    },
+    enabled: !!user,
+  });
+
+  const publishedReels = hostReels.filter(r => r.status === "active");
+  const draftReels = hostReels.filter(r => r.status === "draft");
 
   return (
     <MainLayout>

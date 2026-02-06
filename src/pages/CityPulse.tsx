@@ -15,6 +15,7 @@ import {
   coastalCities,
 } from "@/data/mockCityPulse";
 import { mockEvents } from "@/data/mockReels";
+import { useEvents } from "@/hooks/useEvents";
 import { ReelCard, ReelData } from "@/components/reels/ReelCard";
 import {
   MapPin,
@@ -69,6 +70,7 @@ const CityPulse = () => {
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
   const { experiences, loading: experiencesLoading } = useExperiences(selectedCategory, selectedCity);
   const { reels: liveReels, loading: reelsLoading } = useReels(selectedCategory);
+  const { data: liveEvents = [], isLoading: eventsLoading } = useEvents(selectedCity, selectedCategory);
 
   const handleUseLocation = useCallback((showToast = true) => {
     if ("geolocation" in navigator) {
@@ -108,7 +110,7 @@ const CityPulse = () => {
       experiences: experiences,
       reels: liveReels,
       user_bookings: bookings,
-      events: mockEvents,
+      events: liveEvents.length > 0 ? liveEvents : mockEvents,
     };
     sendMessage(message, selectedCity, context);
   };
