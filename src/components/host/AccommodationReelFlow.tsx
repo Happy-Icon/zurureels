@@ -260,7 +260,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Location</Label>
               <Select value={locationName} onValueChange={setLocationName}>
@@ -287,7 +287,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Bedrooms</Label>
               <Select value={bedrooms.toString()} onValueChange={(v) => setBedrooms(parseInt(v))}>

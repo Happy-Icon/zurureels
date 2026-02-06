@@ -14,6 +14,7 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
     const videoRef = useRef<HTMLVideoElement>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
+    const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
     const streamRef = useRef<MediaStream | null>(null);
 
     const [isRecording, setIsRecording] = useState(false);
@@ -24,17 +25,25 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
 
     const MAX_DURATION = 20; // seconds - strictly enforced for verified reels
 
+    const toggleCamera = () => {
+        setFacingMode(prev => prev === "user" ? "environment" : "user");
+    };
+
+    // Restart camera when facingMode changes
     useEffect(() => {
         startCamera();
-        return () => {
-            stopCamera();
-        };
-    }, []);
+    }, [facingMode]);
 
     const startCamera = async () => {
+        // Stop any existing stream first
+        stopCamera();
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { aspectRatio: 9 / 16, facingMode: "user" },
+                video: {
+                    aspectRatio: 9 / 16,
+                    facingMode: facingMode
+                },
                 audio: true
             });
             streamRef.current = stream;
@@ -138,8 +147,24 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
                 autoPlay
                 playsInline
                 muted
-                className="absolute inset-0 w-full h-full object-cover"
+                className={cn(
+                    "absolute inset-0 w-full h-full object-cover transform",
+                    facingMode === "user" && "-scale-x-100" // Mirror effect for front camera
+                )}
             />
+
+            {/* Top Controls */}
+            <div className="absolute top-4 right-4 z-20">
+                <Button
+                    variant="secondary"
+                    size="icon"
+                    className="rounded-full bg-black/40 backdrop-blur-md text-white hover:bg-black/60 border-none"
+                    onClick={toggleCamera}
+                    disabled={isRecording}
+                >
+                    <RefreshCw className={cn("h-5 w-5", isRecording && "opacity-50")} />
+                </Button>
+            </div>
 
             {/* Overlays */}
             <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/80 to-transparent">

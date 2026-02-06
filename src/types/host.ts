@@ -31,15 +31,18 @@ export interface ScoreBreakdown {
 
 export interface BookingRequest {
     id: string;
+    guestId: string;
     guestName: string;
     guestImage?: string;
+    experienceId: string;
     experienceTitle: string;
-    date: string;
-    time: string;
+    experienceImage?: string;
+    checkIn: string;
+    checkOut: string;
     guests: number;
     totalPrice: number;
-    status: "pending" | "approved" | "declined";
-    message?: string;
+    status: "pending" | "paid" | "cancelled" | "approved" | "declined";
+    paymentReference?: string;
     createdAt: string;
 }
 

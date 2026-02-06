@@ -19,6 +19,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Imp
 interface CheckOutDialogProps {
     tripTitle: string;
     amount: number;
+    experienceId?: string;
+    checkIn?: string;
+    checkOut?: string;
+    guests?: number;
     trigger?: React.ReactNode;
     onSuccess?: () => void;
     open?: boolean;
@@ -32,7 +36,18 @@ interface PaymentMethod {
     authorization_code: string;
 }
 
-export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess, open: controlledOpen, onOpenChange: setControlledOpen }: CheckOutDialogProps) => {
+export const CheckOutDialog = ({
+    tripTitle,
+    amount,
+    experienceId,
+    checkIn,
+    checkOut,
+    guests = 1,
+    trigger,
+    onSuccess,
+    open: controlledOpen,
+    onOpenChange: setControlledOpen
+}: CheckOutDialogProps) => {
     const { user } = useAuth();
     const [internalOpen, setInternalOpen] = useState(false);
 
@@ -57,13 +72,16 @@ export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess, open: co
         setLoading(true);
         try {
             // 1. Create Booking
-            // @ts-ignore - bookings table exists
-            const { error: bookingError } = await (supabase.from('bookings') as any).insert({
+            const { error: bookingError } = await (supabase as any).from('bookings').insert({
                 user_id: user?.id,
+                experience_id: experienceId,
                 trip_title: tripTitle,
                 amount: amount,
                 status: 'paid',
-                payment_reference: reference.reference
+                payment_reference: reference.reference,
+                check_in: checkIn ? new Date(checkIn).toISOString() : null,
+                check_out: checkOut ? new Date(checkOut).toISOString() : null,
+                guests: guests
             });
 
             if (bookingError) throw bookingError;
@@ -71,8 +89,6 @@ export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess, open: co
             // 2. Save Card (if requested and it's a new card)
             if (selectedMethodId === "new" && saveCard) {
                 console.log("Attempting to save card...");
-                console.log("Auth Data:", reference.authorization);
-
                 const auth = reference.authorization || {};
 
                 try {
@@ -88,20 +104,15 @@ export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess, open: co
 
                     if (saveError) {
                         console.error("Supabase Save Error:", saveError);
-                        toast.error("Booking successful, but failed to save card: " + saveError.message);
                     } else {
-                        console.log("Card saved successfully!");
                         toast.success("Card saved for future use!");
                     }
                 } catch (innerError: any) {
                     console.error("Save Card Exception:", innerError);
-                    toast.error("Failed to save card logic: " + innerError.message);
                 }
-            } else {
-                // Card not saved (either existing card or save card unchecked)
             }
 
-            toast.success("Booking confirmed! enjoy your trip.");
+            toast.success("Booking confirmed! Enjoy your trip.");
             setIsOpen(false);
             onSuccess?.();
 
@@ -138,19 +149,16 @@ export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess, open: co
             initializePayment(onPaystackSuccess, onPaystackClose);
         } else {
             // Charge Saved Card (Backend Logic Simulation)
-            // Since we don't have a backend function to charge auth_code, 
-            // we will just Simulate Success for the demo.
-            // In production, this would call supabase.functions.invoke('charge-card', ...)
-
             setTimeout(async () => {
-                const method = paymentMethods.find(m => m.id === selectedMethodId);
-                // Simulate "Reference" object from Paystack
                 const simulatedRef = {
                     reference: "SIM_" + Date.now(),
-                    // No auth needed to save again
+                    authorization: {
+                        last4: paymentMethods.find(m => m.id === selectedMethodId)?.last4,
+                        brand: paymentMethods.find(m => m.id === selectedMethodId)?.brand
+                    }
                 };
                 await c_onSuccess(simulatedRef);
-            }, 1500);
+            }, 1000);
         }
     };
 
@@ -178,12 +186,32 @@ export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess, open: co
 
                 <div className="space-y-6 py-4">
                     {/* Summary */}
-                    <div className="bg-secondary/20 p-4 rounded-lg flex items-start gap-3">
-                        <Ticket className="h-5 w-5 text-primary mt-0.5" />
-                        <div>
-                            <h3 className="font-medium">{tripTitle}</h3>
-                            <p className="text-2xl font-bold text-primary mt-1">KES {amount.toLocaleString()}</p>
+                    <div className="bg-secondary/20 p-4 rounded-lg space-y-3">
+                        <div className="flex items-start gap-3">
+                            <Ticket className="h-5 w-5 text-primary mt-0.5" />
+                            <div>
+                                <h3 className="font-medium">{tripTitle}</h3>
+                                <p className="text-2xl font-bold text-primary mt-1">KES {amount?.toLocaleString()}</p>
+                            </div>
                         </div>
+                        {checkIn && (
+                            <div className="text-sm text-muted-foreground flex gap-4 pl-8">
+                                <div>
+                                    <span className="block text-xs font-semibold">Check-in</span>
+                                    {new Date(checkIn).toLocaleDateString()}
+                                </div>
+                                {checkOut && (
+                                    <div>
+                                        <span className="block text-xs font-semibold">Check-out</span>
+                                        {new Date(checkOut).toLocaleDateString()}
+                                    </div>
+                                )}
+                                <div>
+                                    <span className="block text-xs font-semibold">Guests</span>
+                                    {guests}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Payment Selection */}
@@ -230,7 +258,7 @@ export const CheckOutDialog = ({ tripTitle, amount, trigger, onSuccess, open: co
 
                     <Button onClick={handlePay} className="w-full h-11 text-lg" disabled={loading}>
                         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {selectedMethodId === "new" ? `Pay KES ${amount.toLocaleString()}` : `Pay with Saved Card`}
+                        {selectedMethodId === "new" ? `Pay KES ${amount?.toLocaleString()}` : `Pay with Saved Card`}
                     </Button>
                 </div>
 

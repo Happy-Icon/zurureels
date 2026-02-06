@@ -10,6 +10,7 @@ import { useWeather } from "@/hooks/useWeather";
 import { useReels } from "@/hooks/useReels";
 import { useCityPulseAI } from "@/hooks/useCityPulseAI";
 import { useExperiences } from "@/hooks/useExperiences";
+import { useBookings } from "@/hooks/useBookings";
 import {
   coastalCities,
 } from "@/data/mockCityPulse";
@@ -100,10 +101,13 @@ const CityPulse = () => {
     setCoordinates(null); // Reset coordinates when selecting a specific city
   };
 
+  const { bookings } = useBookings();
+
   const handleSendMessage = (message: string) => {
     const context = {
       experiences: experiences,
       reels: liveReels,
+      user_bookings: bookings,
       events: mockEvents,
     };
     sendMessage(message, selectedCity, context);
@@ -293,6 +297,7 @@ const CityPulse = () => {
                     key={activity.id}
                     tripTitle={activity.title}
                     amount={activity.current_price}
+                    experienceId={activity.id}
                     trigger={
                       <div className="w-full">
                         <QuickListingCard
@@ -326,6 +331,7 @@ const CityPulse = () => {
                     key={boat.id}
                     tripTitle={boat.title}
                     amount={boat.current_price}
+                    experienceId={boat.id}
                     trigger={
                       <div className="w-full">
                         <QuickListingCard
@@ -448,6 +454,7 @@ const CityPulse = () => {
           <CheckOutDialog
             tripTitle={bookingReel.title}
             amount={bookingReel.price}
+            experienceId={bookingReel.id}
             open={!!bookingReel}
             onOpenChange={(open) => !open && setBookingReel(null)}
             trigger={<></>} // controlled mode doesn't need trigger but prop is required

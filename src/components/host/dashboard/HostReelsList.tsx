@@ -39,7 +39,7 @@ export const HostReelsList = ({ reels, type }: HostReelsListProps) => {
                                 src={reel.thumbnail}
                                 alt={reel.title}
                                 className={cn(
-                                    "h-24 w-32 rounded-lg object-cover",
+                                    "h-20 w-20 md:h-24 md:w-32 rounded-lg object-cover",
                                     isExpired && "opacity-50 grayscale"
                                 )}
                             />

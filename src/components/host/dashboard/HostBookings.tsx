@@ -1,59 +1,94 @@
 import { useState } from "react";
-import { Check, X, Calendar, User, Clock, MessageSquare } from "lucide-react";
+import { Check, X, Calendar, User, Clock, MessageSquare, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/components/ui/use-toast";
-
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
 import { BookingRequest } from "@/types/host";
 
-const mockBookings: BookingRequest[] = [
-    {
-        id: "b1",
-        guestName: "Sarah Johnson",
-        guestImage: "https://i.pravatar.cc/150?u=sarah",
-        experienceTitle: "Sunset Dhow Cruise",
-        date: "2024-03-25",
-        time: "17:00",
-        guests: 2,
-        totalPrice: 16000,
-        status: "pending",
-        message: "Is it okay if we bring a small cake? It's my husband's birthday!",
-        createdAt: "2024-03-20T10:00:00Z"
-    },
-    {
-        id: "b2",
-        guestName: "Michael Chang",
-        guestImage: "https://i.pravatar.cc/150?u=michael",
-        experienceTitle: "Glass Bottom Boat Tour",
-        date: "2024-03-26",
-        time: "09:00",
-        guests: 4,
-        totalPrice: 14000,
-        status: "pending",
-        createdAt: "2024-03-20T14:30:00Z"
-    }
-];
-
 export const HostBookings = () => {
-    const [requests, setRequests] = useState<BookingRequest[]>(mockBookings);
+    const { user } = useAuth();
     const { toast } = useToast();
+    const queryClient = useQueryClient();
 
-    const handleAction = (id: string, action: "approve" | "decline") => {
-        // In a real app, this would call Supabase
-        setRequests(prev => prev.filter(req => req.id !== id));
+    const { data: requests = [], isLoading } = useQuery({
+        queryKey: ['host-bookings', user?.id],
+        queryFn: async () => {
+            if (!user) return [];
+            // We join experiences to filter by host (user.id)
+            // We join profiles to get guest info (requires FK or we assume we can join on user_id)
+            const { data, error } = await (supabase as any)
+                .from('bookings')
+                .select(`
+                    *,
+                    experiences!inner (
+                        title,
+                        user_id
+                    ),
+                    profiles (
+                        full_name,
+                        email
+                    )
+                `)
+                .eq('experiences.user_id', user.id)
+                .order('created_at', { ascending: false });
 
-        // Simulate Notification Trigger
-        const request = requests.find(r => r.id === id);
-        if (!request) return;
+            if (error) {
+                console.error("Error fetching host bookings:", error);
+                return [];
+            }
 
-        toast({
-            title: action === "approve" ? "Booking Accepted! 🎉" : "Booking Declined",
-            description: `You ${action}d ${request.guestName}'s request.`,
-            variant: action === "approve" ? "default" : "destructive",
-        });
-    };
+            // Map DB result to BookingRequest type
+            return data.map((b: any) => ({
+                id: b.id,
+                guestName: b.profiles?.full_name || b.profiles?.email || "Guest",
+                guestImage: "", // Avatar not in profile schema yet?
+                experienceTitle: b.experiences?.title,
+                checkIn: b.check_in,
+                checkOut: b.check_out, // using check_in time for 'time'
+                time: b.check_in ? new Date(b.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD',
+                guests: b.guests || 1,
+                totalPrice: b.amount,
+                status: b.status,
+                message: "", // No message column in bookings yet
+                createdAt: b.created_at
+            }));
+        },
+        enabled: !!user
+    });
+
+    const updateStatus = useMutation({
+        mutationFn: async ({ id, status }: { id: string, status: string }) => {
+            const { error } = await (supabase as any)
+                .from('bookings')
+                .update({ status })
+                .eq('id', id);
+
+            if (error) throw error;
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
+            toast({
+                title: variables.status === "approved" ? "Booking Accepted! 🎉" : "Booking Declined",
+                description: `Request has been updated.`,
+            });
+        },
+        onError: (error) => {
+            toast({
+                title: "Error",
+                description: "Failed to update booking: " + error.message,
+                variant: "destructive"
+            });
+        }
+    });
+
+    if (isLoading) {
+        return <div className="p-8 text-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />Loading requests...</div>;
+    }
 
     if (requests.length === 0) {
         return (
@@ -69,7 +104,7 @@ export const HostBookings = () => {
 
     return (
         <div className="space-y-4">
-            {requests.map((req) => (
+            {requests.map((req: any) => (
                 <Card key={req.id} className="overflow-hidden border-border bg-card">
                     <div className="p-4 space-y-4">
                         {/* Header: Guest Info */}
@@ -77,18 +112,22 @@ export const HostBookings = () => {
                             <div className="flex gap-3">
                                 <Avatar className="h-10 w-10">
                                     <AvatarImage src={req.guestImage} />
-                                    <AvatarFallback>{req.guestName[0]}</AvatarFallback>
+                                    <AvatarFallback>{req.guestName[0]?.toUpperCase()}</AvatarFallback>
                                 </Avatar>
                                 <div>
                                     <h4 className="font-semibold text-sm">{req.guestName}</h4>
                                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                                         <Clock className="h-3 w-3" />
-                                        Requested 2h ago
+                                        Requested {new Date(req.createdAt).toLocaleDateString()}
                                     </p>
                                 </div>
                             </div>
-                            <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">
-                                New Request
+                            <Badge variant="outline" className={
+                                req.status === 'paid' ? "bg-yellow-500/10 text-yellow-600 border-yellow-200" :
+                                    req.status === 'approved' ? "bg-green-500/10 text-green-600 border-green-200" :
+                                        "bg-secondary text-secondary-foreground"
+                            }>
+                                {req.status === 'paid' ? 'New Request' : req.status}
                             </Badge>
                         </div>
 
@@ -98,7 +137,7 @@ export const HostBookings = () => {
                             <div className="flex items-center gap-4 text-muted-foreground">
                                 <div className="flex items-center gap-1">
                                     <Calendar className="h-3 w-3" />
-                                    <span>{new Date(req.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                    <span>{req.checkIn ? new Date(req.checkIn).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'TBD'}</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <Clock className="h-3 w-3" />
@@ -109,7 +148,7 @@ export const HostBookings = () => {
                                     <span>{req.guests} guests</span>
                                 </div>
                             </div>
-                            <p className="font-semibold text-primary">KES {req.totalPrice.toLocaleString()}</p>
+                            <p className="font-semibold text-primary">KES {req.totalPrice?.toLocaleString()}</p>
 
                             {req.message && (
                                 <div className="mt-2 text-xs bg-background p-2 rounded border border-border flex gap-2">
@@ -119,24 +158,28 @@ export const HostBookings = () => {
                             )}
                         </div>
 
-                        {/* Action Buttons (Big Touch Targets) */}
-                        <div className="grid grid-cols-2 gap-3 pt-2">
-                            <Button
-                                variant="outline"
-                                className="h-12 border-red-200 hover:bg-red-50 hover:text-red-600 text-red-600"
-                                onClick={() => handleAction(req.id, "decline")}
-                            >
-                                <X className="h-5 w-5 mr-2" />
-                                Decline
-                            </Button>
-                            <Button
-                                className="h-12 bg-green-600 hover:bg-green-700 text-white"
-                                onClick={() => handleAction(req.id, "approve")}
-                            >
-                                <Check className="h-5 w-5 mr-2" />
-                                Accept
-                            </Button>
-                        </div>
+                        {/* Action Buttons */}
+                        {req.status === 'paid' && (
+                            <div className="grid grid-cols-2 gap-3 pt-2">
+                                <Button
+                                    variant="outline"
+                                    className="h-12 border-red-200 hover:bg-red-50 hover:text-red-600 text-red-600"
+                                    onClick={() => updateStatus.mutate({ id: req.id, status: "declined" })}
+                                    disabled={updateStatus.isPending}
+                                >
+                                    <X className="h-5 w-5 mr-2" />
+                                    Decline
+                                </Button>
+                                <Button
+                                    className="h-12 bg-green-600 hover:bg-green-700 text-white"
+                                    onClick={() => updateStatus.mutate({ id: req.id, status: "approved" })}
+                                    disabled={updateStatus.isPending}
+                                >
+                                    <Check className="h-5 w-5 mr-2" />
+                                    Accept
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </Card>
             ))}
