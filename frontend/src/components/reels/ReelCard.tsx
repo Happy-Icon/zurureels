@@ -38,6 +38,30 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(reel.saved);
   const [likeCount, setLikeCount] = useState(reel.likes);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      if (isActive) {
+        videoRef.current.play().catch(err => console.log("Autoplay blocked:", err));
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
+    }
+  }, [isActive]);
+
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
 
   const handleLike = () => {
     setIsLiked(!isLiked);
@@ -64,22 +88,29 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
   };
 
   return (
-    <div className="relative h-full w-full snap-start">
-      {/* Video/Image Background */}
-      <div className="absolute inset-0 bg-overlay">
-        <img
-          src={reel.thumbnailUrl}
-          alt={reel.title}
+    <div className="relative h-full w-full snap-start overflow-hidden">
+      {/* Video Background */}
+      <div className="absolute inset-0 bg-black">
+        <video
+          ref={videoRef}
+          src={reel.videoUrl}
+          poster={reel.thumbnailUrl}
           className="h-full w-full object-cover"
+          loop
+          playsInline
+          muted={isMuted}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
         />
+
         {/* Play/Pause Overlay */}
         <button
-          onClick={() => setIsPlaying(!isPlaying)}
-          className="absolute inset-0 flex items-center justify-center"
+          onClick={togglePlay}
+          className="absolute inset-0 flex items-center justify-center z-10"
         >
           {!isPlaying && (
-            <div className="rounded-full bg-overlay/30 p-4 backdrop-blur-sm">
-              <Play className="h-12 w-12 text-primary-foreground fill-primary-foreground" />
+            <div className="rounded-full bg-black/30 p-4 backdrop-blur-sm transition-transform active:scale-90">
+              <Play className="h-12 w-12 text-white fill-white" />
             </div>
           )}
         </button>
