@@ -217,7 +217,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
 
     return (
         <Dialog open={open} onOpenChange={handleDialogClose}>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl sm:rounded-3xl">
                 <DialogHeader>
                     <DialogTitle className="font-display">
                         {showAccommodationFlow
@@ -273,13 +273,35 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                         <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                                             <Video className="h-6 w-6 text-primary" />
                                         </div>
-                                        <p className="font-medium">Record - Live Only</p>
-                                        <p className="text-sm text-muted-foreground">Max 20 seconds • Live recording required</p>
-                                        <div className="flex gap-2 mt-2">
+                                        <p className="font-medium">
+                                            {selectedCategory === "rentals" ? "Record - Live Only" : "Add Your Reel"}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {selectedCategory === "rentals"
+                                                ? "Max 20 seconds • Live recording required"
+                                                : "Max 20 seconds • Record live or upload from gallery"}
+                                        </p>
+                                        <div className="flex flex-wrap justify-center gap-2 mt-2">
                                             <Button type="button" variant="default" size="sm" onClick={handleStartRecording}>
                                                 <Video className="h-4 w-4 mr-2" />
                                                 Start Recording
                                             </Button>
+
+                                            {selectedCategory !== "rentals" && (
+                                                <>
+                                                    <input
+                                                        type="file"
+                                                        accept="video/*"
+                                                        className="hidden"
+                                                        ref={fileInputRef}
+                                                        onChange={handleFileSelect}
+                                                    />
+                                                    <Button type="button" variant="outline" size="sm" onClick={handleUploadFromGallery}>
+                                                        <FolderOpen className="h-4 w-4 mr-2" />
+                                                        From Gallery
+                                                    </Button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

@@ -20,6 +20,7 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
     const [permissionError, setPermissionError] = useState(false);
     const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [recordingTime, setRecordingTime] = useState(0);
+    const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
     const timerRef = useRef<number | null>(null);
 
     const MAX_DURATION = 20; // seconds - strictly enforced for verified reels
@@ -29,30 +30,59 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
         return () => {
             stopCamera();
         };
-    }, []);
+    }, [facingMode]);
 
     const startCamera = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { aspectRatio: 9 / 16, facingMode: "user" },
+            stopCamera(); // Ensure old stream is stopped before starting new one
+
+            // Using ideal constraints to be more flexible across devices/browsers
+            const constraints: MediaStreamConstraints = {
+                video: {
+                    aspectRatio: { ideal: 9 / 16 },
+                    facingMode: { ideal: facingMode }
+                },
                 audio: true
-            });
+            };
+
+            let stream: MediaStream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (retryErr) {
+                console.warn("Retrying with simpler constraints:", retryErr);
+                // Fallback to simpler constraints if ideal fails
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: facingMode },
+                    audio: true
+                });
+            }
+
             streamRef.current = stream;
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
             }
             setPermissionError(false);
         } catch (err) {
-            console.error("Camera permission error:", err);
+            console.error("Camera access error:", err);
             setPermissionError(true);
         }
     };
 
     const stopCamera = () => {
         if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current.getTracks().forEach(track => {
+                track.stop();
+                console.log(`Stopped track: ${track.kind}`);
+            });
             streamRef.current = null;
         }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+    };
+
+    const toggleCamera = () => {
+        setFacingMode(prev => prev === "user" ? "environment" : "user");
     };
 
     const startRecording = async () => {
@@ -158,14 +188,25 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
 
                     <div className="flex items-center justify-center gap-6">
                         {!isRecording ? (
-                            <Button
-                                size="icon"
-                                variant="destructive"
-                                className="h-16 w-16 rounded-full border-4 border-white/30 hover:scale-105 transition-transform"
-                                onClick={startRecording}
-                            >
-                                <Camera className="h-8 w-8" />
-                            </Button>
+                            <>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-12 w-12 rounded-full bg-white/10 text-white hover:bg-white/20"
+                                    onClick={toggleCamera}
+                                >
+                                    <RefreshCw className="h-6 w-6" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="destructive"
+                                    className="h-16 w-16 rounded-full border-4 border-white/30 hover:scale-105 transition-transform"
+                                    onClick={startRecording}
+                                >
+                                    <Camera className="h-8 w-8" />
+                                </Button>
+                                <div className="w-12" /> {/* Spacer to center recording button */}
+                            </>
                         ) : (
                             <Button
                                 size="icon"
