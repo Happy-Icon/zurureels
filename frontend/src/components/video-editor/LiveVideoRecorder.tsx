@@ -103,7 +103,19 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
         }
 
         chunksRef.current = [];
-        const mediaRecorder = new MediaRecorder(streamRef.current);
+
+        // Detect supported MIME types
+        const types = [
+            'video/mp4;codecs=h264',
+            'video/webm;codecs=h264',
+            'video/webm;codecs=vp9',
+            'video/webm'
+        ];
+
+        const mimeType = types.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
+        console.log("Using MIME type for recording:", mimeType);
+
+        const mediaRecorder = new MediaRecorder(streamRef.current, { mimeType });
 
         mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) {
@@ -112,8 +124,9 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
         };
 
         mediaRecorder.onstop = () => {
-            const blob = new Blob(chunksRef.current, { type: "video/webm" });
-            const file = new File([blob], "verified-recording.webm", { type: "video/webm" });
+            const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+            const blob = new Blob(chunksRef.current, { type: mimeType });
+            const file = new File([blob], `verified-recording.${extension}`, { type: mimeType });
             onRecordingComplete(file, location || undefined);
         };
 

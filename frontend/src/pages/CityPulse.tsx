@@ -114,6 +114,30 @@ const CityPulse = () => {
     clearMessages();
   };
 
+  const [activeReelId, setActiveReelId] = useState<string | null>(null);
+
+  // Intersection Observer for Trending Reels
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveReelId(entry.target.getAttribute("data-reel-id"));
+          }
+        });
+      },
+      {
+        threshold: 0.6, // Reel must be 60% visible to be considered active
+        rootMargin: "0px",
+      }
+    );
+
+    const reelElements = document.querySelectorAll(".reel-item");
+    reelElements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [liveReels]);
+
   const filteredBoats = experiences.filter((e) => e.category === "boats");
   const filteredFood = experiences.filter((e) => e.category === "food");
   const filteredNightlife = experiences.filter((e) => e.category === "nightlife");
@@ -224,10 +248,14 @@ const CityPulse = () => {
                   ))
                 ) : liveReels.length > 0 ? (
                   liveReels.map((reel) => (
-                    <div key={reel.id} className="min-w-[280px] h-[500px] snap-center rounded-2xl overflow-hidden shadow-lg border border-border/50">
+                    <div
+                      key={reel.id}
+                      data-reel-id={reel.id}
+                      className="reel-item min-w-[280px] h-[500px] snap-center rounded-2xl overflow-hidden shadow-lg border border-border/50"
+                    >
                       <ReelCard
                         reel={reel}
-                        isActive={false}
+                        isActive={activeReelId === reel.id}
                         onBook={(id) => setBookingReel(liveReels.find(r => r.id === id) || null)}
                       />
                     </div>
