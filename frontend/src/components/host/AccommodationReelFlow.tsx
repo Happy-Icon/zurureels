@@ -171,7 +171,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
   };
 
   const handleComplete = () => {
-    if (!title || !location || !price || !entityName) {
+    if (!title || !locationName || !price || !entityName) {
       toast.error("Please fill in all property details");
       setStep(1);
       return;

@@ -8,6 +8,9 @@ export interface ReelRequirement {
     icon: ReactNode;
     required: boolean;
     uploaded: boolean;
+    videoUrl?: string;
+    lat?: number;
+    lng?: number;
 }
 
 export interface AccommodationData {
