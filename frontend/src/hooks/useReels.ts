@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ReelData } from "@/components/reels/ReelCard";
 export type { ReelData };
 
-export const useReels = (category?: string, experienceId?: string) => {
+export const useReels = (category?: string, experienceId?: string, search?: string) => {
     const [reels, setReels] = useState<ReelData[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any>(null);
@@ -47,6 +47,14 @@ export const useReels = (category?: string, experienceId?: string) => {
 
                 if (experienceId) {
                     query = query.eq("experience_id", experienceId);
+                }
+
+                if (search) {
+                    // Use ilike on the joined experience title
+                    // Note: Supabase filtering on joined tables can be tricky, 
+                    // but since we want to search the title, we'll apply it to the main query if possible
+                    // or use a structured search if supported.
+                    query = query.ilike('experience.title', `%${search}%`);
                 }
 
                 const { data, error: fetchError } = await query.order("created_at", {

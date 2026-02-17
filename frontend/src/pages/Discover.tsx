@@ -1,16 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useReels } from "@/hooks/useReels";
 import { Search, MapPin, Sparkles, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
 import { AIChatBox } from "@/components/city-pulse/AIChatBox";
 import { useCityPulseAI } from "@/hooks/useCityPulseAI";
@@ -20,18 +14,22 @@ import { useAuth } from "@/components/AuthProvider";
 
 const Discover = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const { reels: allReels, loading: reelsLoading } = useReels(selectedCategory);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showAI, setShowAI] = useState(false);
+
+  const { reels: allReels, loading: reelsLoading } = useReels(selectedCategory, undefined, debouncedSearch);
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
-  const { experiences } = useExperiences(selectedCategory);
+  const { experiences } = useExperiences(selectedCategory, undefined, debouncedSearch);
   const { role } = useAuth();
 
-  const filteredReels = allReels.filter((reel) => {
-    const matchesSearch = reel.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      reel.location.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const handleSendMessage = (message: string) => {
     const context = {
@@ -50,6 +48,8 @@ const Discover = () => {
     hotel: "bg-blue-500/90",
     villa: "bg-emerald-500/90",
     apartment: "bg-purple-500/90",
+    boats: "bg-cyan-500/90",
+    food: "bg-orange-500/90",
   };
 
   const categories = [
@@ -57,6 +57,8 @@ const Discover = () => {
     { id: "hotel", label: "Hotels" },
     { id: "villa", label: "Villas" },
     { id: "apartment", label: "Apartments" },
+    { id: "boats", label: "Boats" },
+    { id: "food", label: "Food" },
   ];
 
   return (
@@ -85,8 +87,8 @@ const Discover = () => {
                 key={cat.id}
                 variant={selectedCategory === cat.id ? "default" : "secondary"}
                 className={cn(
-                  "px-4 py-2 rounded-full cursor-pointer whitespace-nowrap text-sm font-medium",
-                  selectedCategory === cat.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"
+                  "px-4 py-2 rounded-full cursor-pointer whitespace-nowrap text-sm font-medium transition-all",
+                  selectedCategory === cat.id ? "bg-primary text-primary-foreground shadow-sm" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                 )}
                 onClick={() => setSelectedCategory(cat.id)}
               >
@@ -103,18 +105,18 @@ const Discover = () => {
               Array(6).fill(0).map((_, i) => (
                 <div key={i} className="aspect-[3/4] rounded-2xl bg-muted animate-pulse" />
               ))
-            ) : filteredReels.length > 0 ? (
-              filteredReels.map((reel) => (
+            ) : allReels.length > 0 ? (
+              allReels.map((reel) => (
                 <div
                   key={reel.id}
-                  className="group relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted cursor-pointer"
+                  className="group relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted cursor-pointer shadow-sm hover:shadow-md transition-shadow"
                 >
                   <img
                     src={reel.thumbnailUrl || "/placeholder.svg"}
                     alt={reel.title}
-                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
 
                   {/* Badges */}
                   <div className="absolute top-3 left-3 flex flex-col gap-2">
@@ -130,15 +132,18 @@ const Discover = () => {
 
                   {/* Content */}
                   <div className="absolute bottom-0 left-0 right-0 p-3 space-y-1">
-                    <h3 className="font-semibold text-primary-foreground text-sm line-clamp-2">
+                    <h3 className="font-semibold text-primary-foreground text-sm line-clamp-2 leading-tight">
                       {reel.title}
                     </h3>
-                    <p className="text-xs text-primary-foreground/80">{reel.location}</p>
+                    <div className="flex items-center gap-1 text-[10px] text-primary-foreground/70">
+                      <MapPin className="h-3 w-3" />
+                      {reel.location}
+                    </div>
                     <div className="flex items-center justify-between pt-1">
                       <span className="text-sm font-semibold text-primary-foreground">
-                        KES {reel.price}
-                        <span className="text-xs font-normal text-primary-foreground/80">
-                          /night
+                        KES {reel.price.toLocaleString()}
+                        <span className="text-[10px] font-normal text-primary-foreground/70 ml-1">
+                          /{reel.priceUnit}
                         </span>
                       </span>
                     </div>

@@ -130,21 +130,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
 
   const handleReelUpload = (reelId: string) => {
     currentReelIdRef.current = reelId;
-    setShowRecorder(true); // Default to recorder, but we'll add gallery option
-  };
-
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-
-  const handleGalleryClick = (reelId: string) => {
-    currentReelIdRef.current = reelId;
-    galleryInputRef.current?.click();
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.startsWith("video/")) {
-      await handleRecordingComplete(file);
-    }
+    setShowRecorder(true);
   };
 
   const handleRecordingComplete = async (file: File, loc?: { lat: number; lng: number }) => {
@@ -452,6 +438,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
                     size="sm"
                     variant={reel.uploaded ? "outline" : "default"}
                     onClick={() => handleReelUpload(reel.id)}
+                    className="w-full"
                     disabled={reel.uploaded || (uploadingId !== null && uploadingId !== reel.id)}
                   >
                     {reel.uploaded ? (
@@ -467,20 +454,10 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
                     ) : (
                       <>
                         <Video className="h-4 w-4 mr-1" />
-                        Record
+                        Record Live
                       </>
                     )}
                   </Button>
-                  {!reel.uploaded && !uploadingId && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleGalleryClick(reel.id)}
-                    >
-                      <FolderOpen className="h-4 w-4 mr-1" />
-                      Gallery
-                    </Button>
-                  )}
                 </div>
               </div>
             ))}

@@ -1,28 +1,54 @@
--- Create the 'reels' storage bucket if it doesn't exist
+-- Refined Storage Setup for Zuru Reels
+-- Handles 'reels' and 'avatars' buckets with production RLS
+
+-- 1. Buckets
 insert into storage.buckets (id, name, public)
 values ('reels', 'reels', true)
-on conflict (id) do nothing;
+on conflict (id) do update set public = true;
 
--- Allow public access to read reels
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do update set public = true;
+
+-- 2. REELS Policies
 drop policy if exists "Public Access" on storage.objects;
 create policy "Public Access"
 on storage.objects for select
-using ( bucket_id = 'reels' );
+using ( bucket_id = 'reels' OR bucket_id = 'avatars' );
 
--- Allow authenticated users to upload their own reels
 drop policy if exists "Authenticated users can upload reels" on storage.objects;
 create policy "Authenticated users can upload reels"
 on storage.objects for insert
+to authenticated
 with check (
   bucket_id = 'reels' AND
-  auth.role() = 'authenticated'
+  (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- Allow users to delete their own reels
+drop policy if exists "Users can update their own reels" on storage.objects;
+create policy "Users can update their own reels"
+on storage.objects for update
+to authenticated
+using ( bucket_id = 'reels' AND owner = auth.uid() );
+
 drop policy if exists "Users can delete their own reels" on storage.objects;
 create policy "Users can delete their own reels"
 on storage.objects for delete
-using (
-  bucket_id = 'reels' AND
-  auth.uid() = owner
+to authenticated
+using ( bucket_id = 'reels' AND owner = auth.uid() );
+
+-- 3. AVATARS Policies
+drop policy if exists "Authenticated users can upload avatars" on storage.objects;
+create policy "Authenticated users can upload avatars"
+on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'avatars' AND
+  (storage.foldername(name))[1] = auth.uid()::text
 );
+
+drop policy if exists "Users can update their own avatars" on storage.objects;
+create policy "Users can update their own avatars"
+on storage.objects for update
+to authenticated
+using ( bucket_id = 'avatars' AND owner = auth.uid() );

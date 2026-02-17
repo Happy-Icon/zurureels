@@ -18,7 +18,7 @@ export interface Experience {
     created_at: string;
 }
 
-export const useExperiences = (category?: string, city?: string) => {
+export const useExperiences = (category?: string, city?: string, search?: string) => {
     const [experiences, setExperiences] = useState<Experience[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any>(null);
@@ -33,8 +33,12 @@ export const useExperiences = (category?: string, city?: string) => {
                     query = query.eq("category", category);
                 }
 
-                if (city) {
+                if (city && city !== "Current Location") {
                     query = query.eq("location", city);
+                }
+
+                if (search) {
+                    query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,entity_name.ilike.%${search}%`);
                 }
 
                 const { data, error: fetchError } = await query.order("created_at", { ascending: false });

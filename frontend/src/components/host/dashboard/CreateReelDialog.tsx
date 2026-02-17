@@ -138,9 +138,9 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                 .insert({
                     user_id: user.id,
                     category: selectedCategory,
-                    entity_name: "My Experience", // Default or add field
-                    title: title || "New Experience",
-                    location: location || "zanzibar",
+                    entity_name: "Local Experience",
+                    title: title || "New Coastal Activity",
+                    location: location || "diani",
                     current_price: parseFloat(price) || 0,
                     description: description
                 })

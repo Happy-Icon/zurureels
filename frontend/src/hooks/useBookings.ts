@@ -43,16 +43,12 @@ export const useBookings = (mode: "guest" | "host" = "guest") => {
                 if (mode === "guest") {
                     query = query.eq("user_id", user.id);
                 } else {
-                    // For host, we need bookings for experiences owned by the user
-                    // Supabase doesn't support complex joins in one select easily if not defined in schema
-                    // But we can filter by experience.user_id if the relationship is set up
-                    // Alternative: fetch host's experience IDs first
                     const { data: hostExperiences } = await supabase
                         .from("experiences")
                         .select("id")
                         .eq("user_id", user.id);
 
-                    const experienceIds = hostExperiences?.map(e => e.id) || [];
+                    const experienceIds = (hostExperiences as { id: string }[] | null)?.map(e => e.id) || [];
                     query = query.in("experience_id", experienceIds);
                 }
 
@@ -60,7 +56,7 @@ export const useBookings = (mode: "guest" | "host" = "guest") => {
 
                 if (fetchError) throw fetchError;
 
-                setBookings(data || []);
+                setBookings(data as Booking[] || []);
             } catch (err) {
                 console.error("Error fetching bookings:", err);
                 setError(err);
@@ -76,7 +72,7 @@ export const useBookings = (mode: "guest" | "host" = "guest") => {
         try {
             const { error } = await supabase
                 .from("bookings")
-                .update({ status })
+                .update({ status } as any)
                 .eq("id", bookingId);
 
             if (error) throw error;
@@ -91,5 +87,9 @@ export const useBookings = (mode: "guest" | "host" = "guest") => {
         }
     };
 
-    return { bookings, loading, error, updateBookingStatus };
+    const cancelBooking = async (bookingId: string) => {
+        return updateBookingStatus(bookingId, 'cancelled');
+    };
+
+    return { bookings, loading, error, updateBookingStatus, cancelBooking };
 };
