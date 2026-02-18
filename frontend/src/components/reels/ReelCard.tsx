@@ -1,5 +1,5 @@
-import { Heart, Share2, Bookmark, MessageCircle, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle } from "lucide-react";
-import { useState } from "react";
+import { Heart, Share2, Bookmark, MessageCircle, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(reel.saved);
   const [likeCount, setLikeCount] = useState(reel.likes);
+  const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -57,9 +58,37 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
       if (isPlaying) {
         videoRef.current.pause();
       } else {
-        videoRef.current.play();
+        setError(null);
+        videoRef.current.play().catch(err => {
+          console.error("Manual play error:", err);
+          setError("Failed to play video");
+        });
       }
       setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleVideoError = (e: any) => {
+    const videoElement = e.target as HTMLVideoElement;
+    console.error("Video playback error:", videoElement.error);
+    let message = "Failed to load video";
+    if (videoElement.error) {
+      switch (videoElement.error.code) {
+        case 1: message = "Video loading aborted"; break;
+        case 2: message = "Network error while loading video"; break;
+        case 3: message = "Video decoding failed"; break;
+        case 4: message = "Video format not supported or access denied"; break;
+      }
+    }
+    setError(message);
+    setIsPlaying(false);
+  };
+
+  const retryLoad = () => {
+    setError(null);
+    if (videoRef.current) {
+      videoRef.current.load();
+      videoRef.current.play().catch(err => console.log("Retry play blocked:", err));
     }
   };
 
@@ -99,8 +128,12 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
           loop
           playsInline
           muted={isMuted}
-          onPlay={() => setIsPlaying(true)}
+          onPlay={() => {
+            setIsPlaying(true);
+            setError(null);
+          }}
           onPause={() => setIsPlaying(false)}
+          onError={handleVideoError}
         />
 
         {/* Play/Pause Overlay */}
@@ -108,9 +141,33 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
           onClick={togglePlay}
           className="absolute inset-0 flex items-center justify-center z-10"
         >
-          {!isPlaying && (
+          {!isPlaying && !error && (
             <div className="rounded-full bg-black/30 p-4 backdrop-blur-sm transition-transform active:scale-90">
               <Play className="h-12 w-12 text-white fill-white" />
+            </div>
+          )}
+
+          {error && (
+            <div className="flex flex-col items-center gap-4 p-6 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 max-w-[80%] text-center">
+              <div className="h-12 w-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-red-500" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-white font-medium">{error}</p>
+                <p className="text-xs text-white/60">Tap to try again</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  retryLoad();
+                }}
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Retry
+              </Button>
             </div>
           )}
         </button>
