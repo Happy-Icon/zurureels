@@ -58,19 +58,49 @@ serve(async (req) => {
         }
 
         if (statusToUpdate) {
-            const { error } = await supabaseAdmin
+            const { data: userProfile, error } = await supabaseAdmin
                 .from('profiles')
-                .update({
+                .update({ 
                     verification_status: statusToUpdate,
                     verification_id: reference // Store the latest reference ID
                 })
-                .eq('id', userId);
+                .eq('id', userId)
+                .select('email, full_name') // Select email to send notification
+                .single();
 
             if (error) {
                 console.error("Database Update Error:", error);
                 throw error;
             }
             console.log(`Successfully updated User ${userId} status to ${statusToUpdate}`);
+
+            // TRIGGER EMAIL IF VERIFIED
+            if (statusToUpdate === 'verified' && userProfile?.email) {
+                try {
+                    const emailFunctionUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-email`;
+                    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+                    console.log("Triggering Verification Success Email to:", userProfile.email);
+
+                    await fetch(emailFunctionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${serviceRoleKey}`
+                        },
+                        body: JSON.stringify({
+                            type: 'verification_success',
+                            email: userProfile.email,
+                            data: {
+                                name: userProfile.full_name || 'Host'
+                            }
+                        })
+                    });
+                } catch (emailError) {
+                    console.error("Failed to trigger verification email:", emailError);
+                    // Don't fail the webhook if email fails
+                }
+            }
         }
 
         return new Response(JSON.stringify({ message: "Webhook processed successfully" }), {
