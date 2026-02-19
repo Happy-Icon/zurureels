@@ -10,7 +10,8 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-    // Handle CORS preflight requests
+    console.log("SHUFTI FUNCTION V8 - PRODUCTION URLS");
+
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
@@ -41,25 +42,21 @@ serve(async (req) => {
             throw new Error('Shufti credentials not configured')
         }
 
-        // Construct Payload for Hosted Verification Page
         // Documentation: https://api.shuftipro.com/api/documentation
 
         // Ensure we have a valid URL for redirects
+        // PRODUCTION NOTE: You MUST set 'APP_URL' in Supabase Secrets to your real domain (e.g. https://zurusasa.com)
         const appUrl = Deno.env.get('APP_URL') ?? 'http://localhost:5173';
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 
+        // PAYLOAD V8: Correct logic for Redirect vs Callback
         const payload = {
             reference: verificationReference,
-            callback_url: `${appUrl}/api/shufti-webhook`,
-            redirect_url: `${appUrl}/host?verification_complete=true`,
             email: email,
-            language: "EN",
-            verification_mode: "any",
-            document: {
-                supported_types: ["id_card", "passport", "driving_license"],
-                allow_offline: "1",
-                allow_online: "1",
-            },
-            face: {}
+            // Callback points to the Backend Function (Supabase), NOT the Frontend
+            callback_url: `${supabaseUrl}/functions/v1/shufti-webhook`,
+            // Redirect points to the Frontend (User's App)
+            redirect_url: `${appUrl}/host?verification_complete=true`,
         };
 
         console.log("Sending payload to Shufti:", JSON.stringify(payload));
