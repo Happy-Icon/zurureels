@@ -32,6 +32,7 @@ const Profile = () => {
   const navigate = useNavigate();
   const [completeness, setCompleteness] = useState(0);
   const [role, setRole] = useState<string>('guest');
+  const [verificationStatus, setVerificationStatus] = useState<string>('none');
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -39,7 +40,7 @@ const Profile = () => {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('profile_completeness, role')
+        .select('profile_completeness, role, verification_status')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -52,6 +53,7 @@ const Profile = () => {
         const profileData = data as any;
         setCompleteness(profileData.profile_completeness || 20);
         setRole(profileData.role || 'guest');
+        setVerificationStatus(profileData.verification_status || 'none');
       }
     };
     fetchProfile();
@@ -158,16 +160,27 @@ const Profile = () => {
                 >
                   Switch to Guest
                 </Button>
-              ) : user.user_metadata?.role === 'host' ? (
-                <Button
-                  onClick={() => {
-                    switchViewMode('host');
-                    navigate('/host');
-                  }}
-                  className="shadow-lg rounded-full px-6 py-3 h-auto text-sm font-semibold bg-primary hover:bg-primary/90 transition-all hover:scale-105"
-                >
-                  Switch to Hosting
-                </Button>
+              ) : (user.user_metadata?.role === 'host' || role === 'host') ? (
+                verificationStatus === 'verified' ? (
+                  <Button
+                    onClick={() => {
+                      switchViewMode('host');
+                      navigate('/host');
+                    }}
+                    className="shadow-lg rounded-full px-6 py-3 h-auto text-sm font-semibold bg-primary hover:bg-primary/90 transition-all hover:scale-105"
+                  >
+                    Switch to Hosting
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      navigate('/host/verification');
+                    }}
+                    className="shadow-lg rounded-full px-6 py-3 h-auto text-sm font-semibold bg-yellow-500 hover:bg-yellow-600 text-black transition-all hover:scale-105"
+                  >
+                    Complete Verification
+                  </Button>
+                )
               ) : (
                 <Link to="/become-host">
                   <Button className="shadow-lg rounded-full px-6 py-3 h-auto text-sm font-semibold bg-primary hover:bg-primary/90 transition-all hover:scale-105">

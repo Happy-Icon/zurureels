@@ -87,7 +87,18 @@ const BecomeHost = () => {
 
             if (authError) throw authError;
 
-            // 3. Success
+            // 3. Send Email
+            await supabase.functions.invoke('send-email', {
+                body: {
+                    type: 'host_application',
+                    email: user.email,
+                    data: {
+                        name: user.user_metadata?.full_name || user.email?.split('@')[0]
+                    }
+                }
+            });
+
+            // 4. Success
             toast.success("Application submitted! Please verify your identity.");
 
             // Force refresh or redirect

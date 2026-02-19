@@ -294,15 +294,18 @@ const getSecurityNotification = (message: string) => {
     };
 };
 
-const getSupportAcknowledgment = (ticketId: string) => {
+const getHostApplicationEmail = (name: string) => {
     const content = `
-    <h1 style="${styles.h1}">We received your message</h1>
-    <p style="${styles.p}">Thanks for reaching out! This email confirms that we've received your support request.</p>
-    <p style="${styles.p}">Ticket ID: <strong>#${ticketId}</strong></p>
-    <p style="${styles.p}">Our team will review your message and get back to you as soon as possible.</p>
+    <h1 style="${styles.h1}">Application Received</h1>
+    <p style="${styles.p}">Hello ${name},</p>
+    <p style="${styles.p}">We have received your request to become a host on Zurusasa.</p>
+    <p style="${styles.p}">To ensure the safety of our community, we require all hosts to verify their identity before publishing listings.</p>
+    <p style="${styles.p}">Please click the button below to complete the verification process:</p>
+    <a href="${appUrl}/host/verification" style="${styles.button}">Verify Identity</a>
+    <p style="${styles.p}">If you have any questions, our support team is here to help.</p>
   `;
     return {
-        subject: `Support Request Received (#${ticketId})`,
+        subject: "Action Required: Verify your Host Account",
         html: layouts(content)
     };
 };
@@ -361,6 +364,9 @@ serve(async (req) => {
                 break;
             case 'support':
                 emailContent = getSupportAcknowledgment(data?.ticketId || 'Pending');
+                break;
+            case 'host_application':
+                emailContent = getHostApplicationEmail(data?.name || 'Partner');
                 break;
             default:
                 throw new Error("Invalid email type");
