@@ -12,6 +12,7 @@ import Profile from "./pages/Profile";
 import Host from "./pages/Host";
 import Listings from "./pages/host/Listings";
 import BookingsHost from "./pages/host/Bookings";
+import Verification from "./pages/host/Verification";
 import BecomeHost from "./pages/BecomeHost";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/host" element={<Host />} />
             <Route path="/host/listings" element={<ProtectedRoute><Listings /></ProtectedRoute>} />
             <Route path="/host/bookings" element={<ProtectedRoute><BookingsHost /></ProtectedRoute>} />
+            <Route path="/host/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
             <Route path="/become-host" element={<ProtectedRoute><BecomeHost /></ProtectedRoute>} />
             <Route path="/home" element={<Home />} />
             <Route path="/bookings" element={<Bookings />} />

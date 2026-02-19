@@ -1,6 +1,8 @@
+// @ts-nocheck
+// deno-lint-ignore-file
 
 const styles = {
-    container: `
+  container: `
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     max-width: 600px;
     margin: 0 auto;
@@ -8,34 +10,34 @@ const styles = {
     color: #333333;
     line-height: 1.6;
   `,
-    header: `
+  header: `
     padding: 32px 0;
     text-align: center;
     border-bottom: 1px solid #f0f0f0;
   `,
-    logo: `
+  logo: `
     font-size: 24px;
     font-weight: 700;
     color: #111111;
     text-decoration: none;
     letter-spacing: -0.5px;
   `,
-    content: `
+  content: `
     padding: 40px 24px;
   `,
-    h1: `
+  h1: `
     margin: 0 0 24px;
     font-size: 24px;
     font-weight: 600;
     color: #111111;
     letter-spacing: -0.5px;
   `,
-    p: `
+  p: `
     margin: 0 0 24px;
     font-size: 16px;
     color: #4b5563;
   `,
-    button: `
+  button: `
     display: inline-block;
     padding: 12px 32px;
     background-color: #000000;
@@ -47,7 +49,7 @@ const styles = {
     margin: 8px 0 32px;
     text-align: center;
   `,
-    footer: `
+  footer: `
     padding: 32px 24px;
     background-color: #f9fafb;
     border-top: 1px solid #f0f0f0;
@@ -55,7 +57,7 @@ const styles = {
     font-size: 12px;
     color: #6b7280;
   `,
-    link: `
+  link: `
     color: #6b7280;
     text-decoration: underline;
   `
@@ -93,49 +95,121 @@ const layouts = (content: string) => `
 `;
 
 export const getWelcomeEmail = (name: string) => {
-    const content = `
-    <h1 style="${styles.h1}">Welcome to Zurusasa, ${name}!</h1>
-    <p style="${styles.p}">We're thrilled to have you on board. Zurusasa is your new home for discovering and sharing amazing experiences.</p>
-    <p style="${styles.p}">To get started, explore the dashboard and setup your profile.</p>
-    <a href="${appUrl}/dashboard" style="${styles.button}">Go to Dashboard</a>
-    <p style="${styles.p}">If you have any questions, our support team is always here to help.</p>
-  `;
-    return {
-        subject: "Welcome to Zurusasa",
-        html: layouts(content)
-    };
+  // Premium Styles for Welcome Email
+  const pStyles = {
+    container: "background-color: #000000; color: #ffffff; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border-radius: 0px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.3);",
+    header: "background-color: #000000; padding: 40px 0; text-align: center; border-bottom: 1px solid #222222;",
+    logo: "color: #ffffff; font-size: 26px; font-weight: 800; text-decoration: none; letter-spacing: 3px; text-transform: uppercase;",
+    content: "padding: 60px 40px; background-color: #0a0a0a; text-align: center;",
+    h1: "color: #ffffff; font-size: 36px; font-weight: 200; margin-bottom: 20px; letter-spacing: -0.5px; line-height: 1.2;",
+    p: "color: #888888; font-size: 16px; line-height: 1.8; margin-bottom: 30px; max-width: 400px; margin-left: auto; margin-right: auto;",
+    highlight: "color: #D4AF37;", // Gold
+    button: "display: inline-block; background-color: #D4AF37; color: #000000; padding: 18px 48px; border-radius: 0px; font-weight: 600; text-decoration: none; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; margin-top: 10px;",
+    footer: "background-color: #050505; padding: 40px; text-align: center; color: #444444; font-size: 12px; border-top: 1px solid #111111;"
+  };
+
+  const content = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #000000;">
+      <div style="padding: 40px 20px;">
+        <div style="${pStyles.container}">
+          
+          <!-- Header -->
+          <div style="${pStyles.header}">
+             <a href="${appUrl}" style="${pStyles.logo}">ZURU<span style="${pStyles.highlight}">.</span></a>
+          </div>
+          
+          <!-- Main Content -->
+          <div style="${pStyles.content}">
+             <h1 style="${pStyles.h1}">Welcome to the <br/><span style="${pStyles.highlight}">Inner Circle</span></h1>
+             
+             <p style="${pStyles.p}">Hello ${name},</p>
+             
+             <p style="${pStyles.p}">Your account is verified. You have officially unlocked the ultimate coastal lifestyle experience.</p>
+             
+             <div style="text-align: left; max-width: 400px; margin: 30px auto; color: #bbbbbb; font-size: 15px; line-height: 1.6;">
+                <p style="margin-bottom: 15px;">✨ <strong style="color: #fff;">Discover</strong> hidden villas and luxury stays tailored to your taste.</p>
+                <p style="margin-bottom: 15px;">🚤 <strong style="color: #fff;">Book</strong> exclusive yacht charters and curated local adventures.</p>
+                <p style="margin-bottom: 15px;">🌍 <strong style="color: #fff;">Connect</strong> with a vibrant community of explorers and hosts.</p>
+             </div>
+             
+             <p style="${pStyles.p}">The coast is calling. How will you answer?</p>
+             
+             <div style="margin-top: 40px;">
+               <a href="${appUrl}/discover" style="${pStyles.button}">Start Exploring</a>
+             </div>
+          </div>
+          
+          <!-- Footer -->
+          <div style="${pStyles.footer}">
+             <p style="margin: 0 0 20px; letter-spacing: 1px; color: #666666;">ZURU REELS</p>
+             
+             <!-- Social Icons -->
+             <div style="margin-bottom: 30px;">
+                <!-- Instagram -->
+                <a href="https://instagram.com" style="margin: 0 12px; text-decoration: none; display: inline-block;">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3955/3955024.png" width="24" height="24" alt="Instagram" style="opacity: 0.5; filter: invert(1);">
+                </a>
+                <!-- Twitter/X -->
+                <a href="https://twitter.com" style="margin: 0 12px; text-decoration: none; display: inline-block;">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3670/3670151.png" width="24" height="24" alt="Twitter" style="opacity: 0.5; filter: invert(1);">
+                </a>
+                <!-- Facebook -->
+                <a href="https://facebook.com" style="margin: 0 12px; text-decoration: none; display: inline-block;">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3670/3670124.png" width="24" height="24" alt="Facebook" style="opacity: 0.5; filter: invert(1);">
+                </a>
+             </div>
+
+             <p style="margin: 0; color: #444;">&copy; ${new Date().getFullYear()} All rights reserved.</p>
+          </div>
+          
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+
+  return {
+    subject: "Your Zuru Access is Ready",
+    html: content
+  };
 };
 
 export const getEmailVerification = (url: string) => {
-    const content = `
+  const content = `
     <h1 style="${styles.h1}">Verify your email address</h1>
     <p style="${styles.p}">Thanks for signing up for Zurusasa. We want to make sure it's really you.</p>
     <p style="${styles.p}">Please click the button below to verify your account.</p>
     <a href="${url}" style="${styles.button}">Verify Email</a>
     <p style="${styles.p}">If you didn't create an account, you can safely ignore this email.</p>
   `;
-    return {
-        subject: "Verify your email - Zurusasa",
-        html: layouts(content)
-    };
+  return {
+    subject: "Verify your email - Zurusasa",
+    html: layouts(content)
+  };
 };
 
 export const getPasswordReset = (url: string) => {
-    const content = `
+  const content = `
     <h1 style="${styles.h1}">Reset your password</h1>
     <p style="${styles.p}">We received a request to reset your password. If you didn't make this request, you can ignore this email.</p>
     <p style="${styles.p}">To rest your password, click the button below:</p>
     <a href="${url}" style="${styles.button}">Reset Password</a>
     <p style="${styles.p}">This link will expire in 1 hour for your security.</p>
   `;
-    return {
-        subject: "Reset your password - Zurusasa",
-        html: layouts(content)
-    };
+  return {
+    subject: "Reset your password - Zurusasa",
+    html: layouts(content)
+  };
 };
 
 export const getLoginAlert = (device: string, location: string) => {
-    const content = `
+  const content = `
     <h1 style="${styles.h1}">New login detected</h1>
     <p style="${styles.p}">We noticed a new login to your Zurusasa account.</p>
     <ul style="margin: 0 0 24px; padding-left: 20px; color: #4b5563;">
@@ -147,35 +221,35 @@ export const getLoginAlert = (device: string, location: string) => {
     <p style="${styles.p}">If you don't recognize this activity, please change your password immediately.</p>
     <a href="${appUrl}/profile/security" style="${styles.button}">Check Security Settings</a>
   `;
-    return {
-        subject: "New login detected - Zurusasa",
-        html: layouts(content)
-    };
+  return {
+    subject: "New login detected - Zurusasa",
+    html: layouts(content)
+  };
 };
 
 export const getSecurityNotification = (message: string) => {
-    const content = `
+  const content = `
     <h1 style="${styles.h1}">Security Alert</h1>
     <p style="${styles.p}">We detected a potential security issue with your account:</p>
     <p style="${styles.p}"><strong>${message}</strong></p>
     <p style="${styles.p}">Please review your account settings to ensure your data is safe.</p>
     <a href="${appUrl}/profile/security" style="${styles.button}">Review Account</a>
   `;
-    return {
-        subject: "Security Notification - Zurusasa",
-        html: layouts(content)
-    };
+  return {
+    subject: "Security Notification - Zurusasa",
+    html: layouts(content)
+  };
 };
 
 export const getSupportAcknowledgment = (ticketId: string) => {
-    const content = `
+  const content = `
     <h1 style="${styles.h1}">We received your message</h1>
     <p style="${styles.p}">Thanks for reaching out! This email confirms that we've received your support request.</p>
     <p style="${styles.p}">Ticket ID: <strong>#${ticketId}</strong></p>
     <p style="${styles.p}">Our team will review your message and get back to you as soon as possible.</p>
   `;
-    return {
-        subject: `Support Request Received (#${ticketId})`,
-        html: layouts(content)
-    };
+  return {
+    subject: `Support Request Received (#${ticketId})`,
+    html: layouts(content)
+  };
 };

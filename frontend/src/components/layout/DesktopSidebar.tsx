@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Zap, Compass, Heart, Calendar, User, LayoutDashboard, ListVideo, MessageSquare } from "lucide-react";
+import { Zap, Compass, Heart, Calendar, User, LayoutDashboard, ListVideo, MessageSquare, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";

@@ -54,7 +54,7 @@ const CityPulse = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showAI, setShowAI] = useState(false);
   const [bookingReel, setBookingReel] = useState<ReelData | null>(null);
-  const { role, hasPass } = useAuth();
+  const { role, hasPass, viewMode } = useAuth();
 
   // Determine the location to pass to useWeather
   const weatherLocation = useMemo(() => {
@@ -147,7 +147,7 @@ const CityPulse = () => {
   return (
     <MainLayout>
       <div className="relative pb-20 md:pb-8 min-h-screen">
-        {!hasPass && role === 'guest' && <ZuruPassOverlay />}
+        {/* {!hasPass && role === 'guest' && <ZuruPassOverlay />} */}
         {/* Header */}
         <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
           <div className="p-4 space-y-3">
@@ -212,7 +212,7 @@ const CityPulse = () => {
         </div>
 
         {/* Floating Ask Zuru Button & Chat */}
-        {role !== 'host' && (
+        {viewMode === 'guest' && (
           <>
             <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
             {showAI && (

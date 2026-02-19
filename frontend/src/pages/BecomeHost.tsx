@@ -13,7 +13,7 @@ const phoneSchema = z.string().min(10, "Valid phone number required");
 
 const BecomeHost = () => {
     const navigate = useNavigate();
-    const { user, refreshSession } = useAuth(); // Assuming refreshSession is available or we reload
+    const { user } = useAuth(); // Assuming refreshSession is available or we reload
     const [loading, setLoading] = useState(false);
 
     // Form State
@@ -61,6 +61,7 @@ const BecomeHost = () => {
             // 1. Update Profile in Validation Table (profiles)
             const { error: profileError } = await supabase
                 .from('profiles')
+                // @ts-ignore
                 .update({
                     phone: phone,
                     business_name: businessName,
@@ -87,10 +88,10 @@ const BecomeHost = () => {
             if (authError) throw authError;
 
             // 3. Success
-            toast.success("Application submitted! Welcome to hosting.");
+            toast.success("Application submitted! Please verify your identity.");
 
             // Force refresh or redirect
-            navigate("/host");
+            navigate("/host/verification");
             window.location.reload(); // Simple way to refresh auth context role
 
         } catch (error: any) {

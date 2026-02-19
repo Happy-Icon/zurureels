@@ -8,10 +8,10 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signOut: () => Promise<void>;
-  role?: "guest" | "host" | "admin";
+  role: "guest" | "host" | "admin" | null;
   viewMode: "guest" | "host";
   switchViewMode: (mode: "guest" | "host") => void;
-  hasPass?: boolean;
+  hasPass: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -19,8 +19,10 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signOut: async () => { },
+  role: null,
   viewMode: "guest",
   switchViewMode: () => { },
+  hasPass: false,
 });
 
 export const useAuth = () => {
@@ -79,9 +81,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq("id", userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // PGRST116: JSON object requested, multiple (or no) rows returned
+        if (error.code === 'PGRST116') {
+          console.warn("Profile not found - User might be deleted. Signing out.");
+          await signOut();
+          return;
+        }
+        throw error;
+      }
       setProfile(data);
-    } catch (err) {
+    } catch (err) { // eslint-disable-next-line @typescript-eslint/no-explicit-any
       console.error("Error fetching profile:", err);
     } finally {
       setLoading(false);
@@ -92,15 +102,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await supabase.auth.signOut();
   };
 
-  const role = (user?.user_metadata?.role as "guest" | "host" | "admin") ||
-    (profile?.role as "guest" | "host" | "admin") || "guest";
+  const role = user
+    ? ((user.user_metadata?.role as "guest" | "host" | "admin") || (profile?.role as "guest" | "host" | "admin") || "guest")
+    : null;
 
   const hasPass = profile?.metadata?.has_pass === true;
 
   // Effect to sync viewMode with Role. 
   // If user is a Guest, they cannot be in Host viewMode.
   useEffect(() => {
-    if (role === "guest" && viewMode === "host") {
+    if ((role === "guest" || role === null) && viewMode === "host") {
       setViewMode("guest");
     }
   }, [role, viewMode]);

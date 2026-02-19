@@ -1,4 +1,4 @@
-import { Home, Compass, Heart, Calendar, User, LayoutDashboard, ListVideo, MessageSquare, Zap } from "lucide-react";
+import { Home, Compass, Heart, Calendar, User, LayoutDashboard, ListVideo, MessageSquare, Zap, ShieldCheck } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
