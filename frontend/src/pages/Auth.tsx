@@ -171,10 +171,17 @@ const Auth = () => {
 
   const handleGoogleLogin = async () => {
     try {
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+      let redirectUrl = `${appUrl}/`;
+
+      if (returnTo) {
+        redirectUrl = (`${appUrl}/auth?return_to=${encodeURIComponent(returnTo)}`);
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${import.meta.env.VITE_APP_URL || window.location.origin}/`, // Redirect to Home directly
+          redirectTo: redirectUrl,
         },
       });
 

@@ -116,6 +116,7 @@ const styles = {
 };
 
 const appUrl = Deno.env.get("APP_URL") || "https://zurusasa.com";
+console.log("Email Function APP_URL:", appUrl);
 
 const layouts = (content: string) => `
 <!DOCTYPE html>
