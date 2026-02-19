@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ const passwordSchema = z.string().min(6, "Password must be at least 6 characters
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -25,6 +26,8 @@ const Auth = () => {
 
   const [checkEmail, setCheckEmail] = useState(false);
 
+  const returnTo = searchParams.get("return_to") || location.state?.from?.pathname;
+
   // Redirect if already logged in
   useEffect(() => {
     const hash = window.location.hash;
@@ -34,16 +37,15 @@ const Auth = () => {
     }
 
     if (user) {
-      const from = location.state?.from?.pathname || "/";
-      navigate(from, { replace: true });
+      navigate(returnTo || "/", { replace: true });
     }
-  }, [user, navigate, location]);
+  }, [user, navigate, location, returnTo]);
 
   useEffect(() => {
-    if (location.state?.from) {
+    if (returnTo) {
       setIsLogin(true);
     }
-  }, [location]);
+  }, [returnTo]);
 
   const validateForm = () => {
     const emailResult = emailSchema.safeParse(email);

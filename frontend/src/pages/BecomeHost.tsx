@@ -27,9 +27,6 @@ const BecomeHost = () => {
             toast.error("Please sign in to become a host");
             navigate("/auth");
         }
-        if (user?.user_metadata?.role === "host") {
-            navigate("/host");
-        }
     }, [user, navigate]);
 
     const validateForm = () => {
