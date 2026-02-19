@@ -66,7 +66,7 @@ const BecomeHost = () => {
                     phone: phone,
                     business_name: businessName,
                     id_number: idNumber,
-                    verification_status: 'pending',
+                    verification_status: 'none',
                     // We don't change 'role' column in profiles if it doesn't exist or is separate, 
                     // but we update metadata below.
                 })
@@ -81,14 +81,15 @@ const BecomeHost = () => {
                     phone: phone,
                     business_name: businessName,
                     id_number: idNumber,
-                    verification_status: 'pending'
+                    verification_status: 'none'
                 }
             });
 
             if (authError) throw authError;
 
             // 3. Send Email
-            await supabase.functions.invoke('send-email', {
+            console.log("Attempting to send host application email...");
+            const { error: emailError } = await supabase.functions.invoke('send-email', {
                 body: {
                     type: 'host_application',
                     email: user.email,
@@ -97,6 +98,9 @@ const BecomeHost = () => {
                     }
                 }
             });
+
+            if (emailError) console.error("Email function error:", emailError);
+            else console.log("Email function invoked successfully");
 
             // 4. Success
             toast.success("Application submitted! Please verify your identity.");
