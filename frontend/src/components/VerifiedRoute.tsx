@@ -61,7 +61,7 @@ export const VerifiedRoute = ({ children }: { children: React.ReactNode }) => {
     }
 
     if (isVerified === false) {
-        return <Navigate to="/host/verification" replace />;
+        return <Navigate to={`/host/verification${location.search}`} replace />;
     }
 
     return <>{children}</>;
