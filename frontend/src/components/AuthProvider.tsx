@@ -9,6 +9,8 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   role?: "guest" | "host" | "admin";
+  viewMode: "guest" | "host";
+  switchViewMode: (mode: "guest" | "host") => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -16,6 +18,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signOut: async () => { },
+  viewMode: "guest",
+  switchViewMode: () => { },
 });
 
 export const useAuth = () => {
@@ -60,10 +64,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await supabase.auth.signOut();
   };
 
+  const [viewMode, setViewMode] = useState<"guest" | "host">(() => {
+    // Initialize from localStorage if available, otherwise default to "guest"
+    return (localStorage.getItem("viewMode") as "guest" | "host") || "guest";
+  });
+
   const role = (user?.user_metadata?.role as "guest" | "host" | "admin") || "guest";
 
+  // Effect to sync viewMode with Role. 
+  // If user is a Guest, they cannot be in Host viewMode.
+  useEffect(() => {
+    if (role === "guest" && viewMode === "host") {
+      setViewMode("guest");
+    }
+  }, [role, viewMode]);
+
+  const switchViewMode = (mode: "guest" | "host") => {
+    setViewMode(mode);
+    localStorage.setItem("viewMode", mode);
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user, loading, signOut, role }}>
+    <AuthContext.Provider value={{ session, user, loading, signOut, role, viewMode, switchViewMode }}>
       {children}
     </AuthContext.Provider>
   );

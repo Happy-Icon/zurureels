@@ -10,7 +10,9 @@ import Bookings from "./pages/Bookings";
 import Saved from "./pages/Saved";
 import Profile from "./pages/Profile";
 import Host from "./pages/Host";
-import HostSignup from "./pages/HostSignup";
+import Listings from "./pages/host/Listings";
+import BookingsHost from "./pages/host/Bookings";
+import BecomeHost from "./pages/BecomeHost";
 import Auth from "./pages/Auth";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -25,6 +27,7 @@ import { ComingSoon } from "@/pages/profile/ComingSoon";
 import Support from "@/pages/profile/Support";
 import Settings from "@/pages/profile/Settings";
 import { Notifications } from "@/pages/profile/Notifications";
+import Messages from "@/pages/profile/Messages";
 
 const queryClient = new QueryClient();
 
@@ -39,7 +42,9 @@ const App = () => (
             <Route path="/" element={<CityPulse />} />
             <Route path="/discover" element={<Discover />} />
             <Route path="/host" element={<Host />} />
-            <Route path="/host/signup" element={<HostSignup />} />
+            <Route path="/host/listings" element={<ProtectedRoute><Listings /></ProtectedRoute>} />
+            <Route path="/host/bookings" element={<ProtectedRoute><BookingsHost /></ProtectedRoute>} />
+            <Route path="/become-host" element={<ProtectedRoute><BecomeHost /></ProtectedRoute>} />
             <Route path="/home" element={<Home />} />
             <Route path="/bookings" element={<Bookings />} />
             <Route path="/saved" element={<Saved />} />
@@ -50,6 +55,7 @@ const App = () => (
             <Route path="/profile/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
             <Route path="/profile/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
             <Route path="/profile/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/profile/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />

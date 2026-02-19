@@ -1,26 +1,30 @@
 import { Link, useLocation } from "react-router-dom";
-import { Zap, Compass, PlusCircle, Calendar, User, LogOut } from "lucide-react";
+import { Zap, Compass, Heart, Calendar, User, LayoutDashboard, ListVideo, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { useAuth } from "@/components/AuthProvider";
 
-const navItems = [
+const guestNavItems = [
   { icon: Zap, label: "Pulse", path: "/" },
   { icon: Compass, label: "Discover", path: "/discover" },
-  { icon: PlusCircle, label: "Host", path: "/host" },
-  { icon: Calendar, label: "Bookings", path: "/bookings" },
+  { icon: Heart, label: "Saved", path: "/saved" },
+  { icon: Calendar, label: "Trips", path: "/bookings" },
   { icon: User, label: "Profile", path: "/profile" },
 ];
 
-import { useAuth } from "@/components/AuthProvider";
+const hostNavItems = [
+  { icon: LayoutDashboard, label: "Dashboard", path: "/host" },
+  { icon: ListVideo, label: "Listings", path: "/host/listings" },
+  { icon: Calendar, label: "Reservations", path: "/host/bookings" },
+  { icon: MessageSquare, label: "Inbox", path: "/profile/messages" },
+  { icon: User, label: "Profile", path: "/profile" },
+];
 
 export function DesktopSidebar() {
   const location = useLocation();
-  const { role } = useAuth();
+  const { viewMode } = useAuth();
 
-  const filteredNavItems = navItems.filter((item) => {
-    if (item.label === "Host" && role !== "host" && role !== "admin") return false;
-    return true;
-  });
+  const navItems = viewMode === "host" ? hostNavItems : guestNavItems;
 
   return (
     <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 flex-col border-r border-border bg-card z-50">
@@ -36,11 +40,11 @@ export function DesktopSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
-        {filteredNavItems.map((item) => {
+        {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link
-              key={item.path}
+              key={item.label}
               to={item.path}
               className={cn(
                 "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 font-medium",

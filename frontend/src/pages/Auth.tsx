@@ -312,14 +312,7 @@ const Auth = () => {
           </button>
         </p>
 
-        <div className="mt-8 pt-6 border-t text-center">
-          <p className="text-sm text-muted-foreground">
-            Want to list your property or experience?
-          </p>
-          <Link to="/host/signup" className="mt-2 inline-block text-sm font-semibold text-primary hover:underline">
-            Become a Host
-          </Link>
-        </div>
+
       </div>
     </div>
   );

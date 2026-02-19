@@ -1,34 +1,38 @@
-import { Home, Compass, Calendar, Heart, User, Zap, PlusCircle } from "lucide-react";
+import { Home, Compass, Heart, Calendar, User, LayoutDashboard, ListVideo, MessageSquare, Zap } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/AuthProvider";
 
-const navItems = [
+const guestNavItems = [
   { icon: Zap, label: "Pulse", path: "/" },
   { icon: Compass, label: "Discover", path: "/discover" },
-  { icon: PlusCircle, label: "Host", path: "/host" },
-  { icon: Calendar, label: "Bookings", path: "/bookings" },
+  { icon: Heart, label: "Saved", path: "/saved" },
+  { icon: Calendar, label: "Trips", path: "/bookings" },
   { icon: User, label: "Profile", path: "/profile" },
 ];
 
-import { useAuth } from "@/components/AuthProvider";
+const hostNavItems = [
+  { icon: LayoutDashboard, label: "Dashboard", path: "/host" },
+  { icon: ListVideo, label: "Listings", path: "/host/listings" },
+  { icon: Calendar, label: "Bookings", path: "/host/bookings" },
+  { icon: MessageSquare, label: "Inbox", path: "/profile/messages" },
+  { icon: User, label: "Profile", path: "/profile" },
+];
 
 export function BottomNav() {
   const location = useLocation();
-  const { role } = useAuth();
+  const { viewMode } = useAuth();
 
-  const filteredNavItems = navItems.filter((item) => {
-    if (item.label === "Host" && role !== "host" && role !== "admin") return false;
-    return true;
-  });
+  const navItems = viewMode === "host" ? hostNavItems : guestNavItems;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-border/50 md:hidden">
       <div className="flex items-center justify-around py-2 px-2">
-        {filteredNavItems.map((item) => {
+        {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link
-              key={item.path}
+              key={item.label}
               to={item.path}
               className={cn(
                 "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-all duration-200",
