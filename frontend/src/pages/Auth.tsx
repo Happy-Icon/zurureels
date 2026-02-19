@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/components/AuthProvider"; // Added
+import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,8 @@ const passwordSchema = z.string().min(6, "Password must be at least 6 characters
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { user } = useAuth(); // Using context
+  const location = useLocation();
+  const { user } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -26,8 +27,6 @@ const Auth = () => {
 
   // Redirect if already logged in
   useEffect(() => {
-    // Check if we are in a password recovery flow
-    // Supabase appends #access_token=...&type=recovery to the URL
     const hash = window.location.hash;
     if (hash && hash.includes("type=recovery")) {
       navigate("/reset-password");
@@ -35,9 +34,16 @@ const Auth = () => {
     }
 
     if (user) {
-      navigate("/");
+      const from = location.state?.from?.pathname || "/";
+      navigate(from, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, location]);
+
+  useEffect(() => {
+    if (location.state?.from) {
+      setIsLogin(true);
+    }
+  }, [location]);
 
   const validateForm = () => {
     const emailResult = emailSchema.safeParse(email);
