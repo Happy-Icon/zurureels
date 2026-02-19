@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 const Verification = () => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
-    const [status, setStatus] = useState<'unverified' | 'pending' | 'verified' | 'rejected'>('unverified');
+    const [status, setStatus] = useState<'none' | 'pending' | 'verified' | 'rejected'>('none');
     const [verificationId, setVerificationId] = useState<string | null>(null);
 
     // Fetch current status

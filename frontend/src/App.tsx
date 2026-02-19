@@ -30,6 +30,8 @@ import Settings from "@/pages/profile/Settings";
 import { Notifications } from "@/pages/profile/Notifications";
 import Messages from "@/pages/profile/Messages";
 
+import { VerifiedRoute } from "@/components/VerifiedRoute";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -42,9 +44,9 @@ const App = () => (
           <Routes>
             <Route path="/" element={<CityPulse />} />
             <Route path="/discover" element={<Discover />} />
-            <Route path="/host" element={<Host />} />
-            <Route path="/host/listings" element={<ProtectedRoute><Listings /></ProtectedRoute>} />
-            <Route path="/host/bookings" element={<ProtectedRoute><BookingsHost /></ProtectedRoute>} />
+            <Route path="/host" element={<VerifiedRoute><Host /></VerifiedRoute>} />
+            <Route path="/host/listings" element={<VerifiedRoute><Listings /></VerifiedRoute>} />
+            <Route path="/host/bookings" element={<VerifiedRoute><BookingsHost /></VerifiedRoute>} />
             <Route path="/host/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
             <Route path="/become-host" element={<ProtectedRoute><BecomeHost /></ProtectedRoute>} />
             <Route path="/home" element={<Home />} />
