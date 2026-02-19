@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,12 +15,38 @@ const Verification = () => {
     const [status, setStatus] = useState<'none' | 'pending' | 'verified' | 'rejected'>('none');
     const [verificationId, setVerificationId] = useState<string | null>(null);
 
+    const [searchParams] = useSearchParams();
+    const isRedirect = searchParams.get('verification_complete') === 'true';
+
     // Fetch current status
     useEffect(() => {
         if (user) {
             fetchVerificationStatus();
         }
     }, [user]);
+
+    // Polling logic when waiting for verification
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if ((isRedirect || status === 'pending') && status !== 'verified' && status !== 'rejected') {
+            interval = setInterval(fetchVerificationStatus, 2000);
+        }
+        return () => clearInterval(interval);
+    }, [isRedirect, status]);
+
+    // Auto-redirect when verified
+    useEffect(() => {
+        if (status === 'verified') {
+            if (isRedirect) {
+                toast.success("Identity verified successfully!");
+            }
+            // Delay slightly to let the user see the success state if they are on this page
+            const timer = setTimeout(() => {
+                window.location.href = '/host';
+            }, 1500);
+            return () => clearTimeout(timer);
+        }
+    }, [status, isRedirect]);
 
     const fetchVerificationStatus = async () => {
         try {
@@ -106,29 +132,30 @@ const Verification = () => {
                             </div>
                             <div>
                                 <h2 className="text-xl font-semibold text-green-700">You are verified!</h2>
-                                <p className="text-green-600/80">Thank you for helping us keep Zuru safe.</p>
+                                <p className="text-green-600/80">Redirecting you to the dashboard...</p>
                             </div>
                             <Button onClick={() => window.location.href = '/host'} className="bg-green-600 hover:bg-green-700 text-white">
                                 Go to Dashboard
                             </Button>
                         </CardContent>
                     </Card>
-                ) : status === 'pending' ? (
+                ) : (status === 'pending' || isRedirect) ? (
                     <Card className="border-yellow-500/20 bg-yellow-500/5">
                         <CardContent className="pt-6 flex flex-col items-center text-center space-y-4">
                             <div className="h-16 w-16 rounded-full bg-yellow-500/20 flex items-center justify-center animate-pulse">
                                 <Loader2 className="h-8 w-8 text-yellow-600 animate-spin" />
                             </div>
                             <div>
-                                <h2 className="text-xl font-semibold text-yellow-700">Verification in Progress</h2>
+                                <h2 className="text-xl font-semibold text-yellow-700">
+                                    {isRedirect ? "Finalizing Verification..." : "Verification in Progress"}
+                                </h2>
                                 <p className="text-yellow-600/80 max-w-sm mx-auto">
-                                    We are processing your documents. The system will update you shortly.
-                                    You can refresh this page to check your status.
+                                    {isRedirect
+                                        ? "We are receiving your results from Shufti Pro. This will just take a moment."
+                                        : "We are processing your documents. The system will update you shortly."}
                                 </p>
                             </div>
-                            <Button variant="outline" onClick={fetchVerificationStatus} className="mt-4">
-                                Check Status
-                            </Button>
+
                         </CardContent>
                     </Card>
                 ) : ( // This covers 'unverified' and 'rejected'

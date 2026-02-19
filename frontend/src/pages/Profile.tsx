@@ -33,11 +33,16 @@ const Profile = () => {
   const [completeness, setCompleteness] = useState(0);
   const [role, setRole] = useState<string>('guest');
   const [verificationStatus, setVerificationStatus] = useState<string>('none');
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user) return;
+      if (!user) {
+        setLoadingProfile(false);
+        return;
+      }
 
+      console.log("Fetching profile for:", user.id);
       const { data, error } = await supabase
         .from('profiles')
         .select('profile_completeness, role, verification_status')
@@ -46,6 +51,8 @@ const Profile = () => {
 
       if (error) {
         console.error("Error fetching profile:", error);
+      } else {
+        console.log("Profile Data Fetched:", data);
       }
 
       if (data) {
@@ -55,6 +62,7 @@ const Profile = () => {
         setRole(profileData.role || 'guest');
         setVerificationStatus(profileData.verification_status || 'none');
       }
+      setLoadingProfile(false);
     };
     fetchProfile();
   }, [user]);
@@ -159,6 +167,10 @@ const Profile = () => {
                   className="shadow-lg rounded-full px-6 py-3 h-auto text-sm font-semibold bg-secondary text-primary hover:bg-secondary/90 transition-all hover:scale-105 border border-primary/20"
                 >
                   Switch to Guest
+                </Button>
+              ) : loadingProfile ? (
+                <Button disabled className="shadow-lg rounded-full px-6 py-3 h-auto text-sm font-semibold bg-secondary text-primary border border-primary/20">
+                  Loading...
                 </Button>
               ) : (user.user_metadata?.role === 'host' || role === 'host') ? (
                 verificationStatus === 'verified' ? (

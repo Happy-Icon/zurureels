@@ -45,24 +45,31 @@ serve(async (req) => {
         // Documentation: https://api.shuftipro.com/api/documentation
 
         // Ensure we have a valid URL for redirects
-        // PRODUCTION NOTE: You can set 'APP_URL' in Supabase Secrets, OR rely on the browser request origin.
+        // PRODUCTION NOTE: You can set 'APP_URL' in Supabase Secrets, OR rely on the browser request origin/referer.
+        // We default to 'zurusasa.com' for production reliability if headers are stripped.
         const origin = req.headers.get("origin");
-        const appUrl = Deno.env.get('APP_URL') ?? origin ?? 'http://localhost:5173';
+        const referer = req.headers.get("referer");
+        const appUrl = Deno.env.get('APP_URL') ?? origin ?? (referer ? new URL(referer).origin : null) ?? 'https://zurusasa.com';
         const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+
+        // Revert to full URL as the user whitelist seems slightly better now
+        // And CRUCIALLY, restore the 'document' and 'face' services so Shufti knows what to do.
 
         // PAYLOAD V8: Correct logic for Redirect vs Callback
         const payload = {
             reference: verificationReference,
             email: email,
-            // Callback points to the Backend Function (Supabase), NOT the Frontend
             callback_url: `${supabaseUrl}/functions/v1/shufti-webhook`,
-            // Redirect points to the Frontend (User's App)
             redirect_url: `${appUrl}/host?verification_complete=true`,
+            language: "EN",
+            verification_mode: "any",
+            document: {
+                supported_types: ["id_card", "passport", "driving_license"],
+                allow_offline: "1",
+                allow_online: "1",
+            },
+            face: {}
         };
-
-        console.log("SHUFTI PAYLOAD DEBUG:");
-        console.log("redirect_url (Check Shufti Whitelist):", payload.redirect_url);
-        console.log("callback_url:", payload.callback_url);
 
         console.log("Sending payload to Shufti:", JSON.stringify(payload));
 
@@ -79,7 +86,10 @@ serve(async (req) => {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Shufti API Error:', errorText);
-            throw new Error(`Shufti API Error: ${response.status} ${response.statusText} - ${errorText}`);
+
+            // Helpful Debugging: Tell the user exactly what URL failed whitelist
+            const debugInfo = `(Sent redirect_url: ${payload.redirect_url}, callback_url: ${payload.callback_url})`;
+            throw new Error(`Shufti API Error: ${response.status} ${response.statusText} - ${errorText} ${debugInfo}`);
         }
 
         const data = await response.json();
