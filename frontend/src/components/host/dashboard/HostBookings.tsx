@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { Check, X, Calendar, User, Clock, MessageSquare } from "lucide-react";
+import { Check, X, Calendar, User, Clock, MessageSquare, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useToast } from "@/components/ui/use-toast";
-
-import { BookingRequest } from "@/types/host";
+import { toast } from "sonner";
+import { useBookings } from "@/hooks/useBookings";
 
 const mockBookings: BookingRequest[] = [
     {
@@ -37,25 +36,34 @@ const mockBookings: BookingRequest[] = [
 ];
 
 export const HostBookings = () => {
-    const [requests, setRequests] = useState<BookingRequest[]>(mockBookings);
-    const { toast } = useToast();
+    const { bookings, loading, updateBookingStatus } = useBookings("host");
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-    const handleAction = (id: string, action: "approve" | "decline") => {
-        // In a real app, this would call Supabase
-        setRequests(prev => prev.filter(req => req.id !== id));
+    const pendingRequests = bookings.filter(b => b.status === "paid" || b.status === "pending");
 
-        // Simulate Notification Trigger
-        const request = requests.find(r => r.id === id);
-        if (!request) return;
+    const handleAction = async (id: string, action: "approve" | "decline") => {
+        setActionLoading(id);
+        const status = action === "approve" ? "completed" : "cancelled";
+        const result = await updateBookingStatus(id, status);
 
-        toast({
-            title: action === "approve" ? "Booking Accepted! 🎉" : "Booking Declined",
-            description: `You ${action}d ${request.guestName}'s request.`,
-            variant: action === "approve" ? "default" : "destructive",
-        });
+        if (result.success) {
+            toast.success(action === "approve" ? "Booking Accepted! 🎉" : "Booking Declined");
+        } else {
+            toast.error("Failed to update booking");
+        }
+        setActionLoading(null);
     };
 
-    if (requests.length === 0) {
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+                <p className="text-muted-foreground text-sm">Loading requests...</p>
+            </div>
+        );
+    }
+
+    if (pendingRequests.length === 0) {
         return (
             <div className="text-center py-12">
                 <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
@@ -69,62 +77,51 @@ export const HostBookings = () => {
 
     return (
         <div className="space-y-4">
-            {requests.map((req) => (
+            {pendingRequests.map((req) => (
                 <Card key={req.id} className="overflow-hidden border-border bg-card">
                     <div className="p-4 space-y-4">
                         {/* Header: Guest Info */}
                         <div className="flex items-start justify-between">
                             <div className="flex gap-3">
                                 <Avatar className="h-10 w-10">
-                                    <AvatarImage src={req.guestImage} />
-                                    <AvatarFallback>{req.guestName[0]}</AvatarFallback>
+                                    <AvatarFallback>G</AvatarFallback>
                                 </Avatar>
                                 <div>
-                                    <h4 className="font-semibold text-sm">{req.guestName}</h4>
+                                    <h4 className="font-semibold text-sm">Guest Reservation</h4>
                                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                                         <Clock className="h-3 w-3" />
-                                        Requested 2h ago
+                                        Requested {new Date(req.created_at).toLocaleDateString()}
                                     </p>
                                 </div>
                             </div>
                             <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">
-                                New Request
+                                {req.status === 'paid' ? 'Confirmed' : 'Pending'}
                             </Badge>
                         </div>
 
                         {/* Body: Experience Details */}
                         <div className="bg-muted/30 rounded-lg p-3 space-y-2 text-sm">
-                            <p className="font-medium text-foreground">{req.experienceTitle}</p>
+                            <p className="font-medium text-foreground">{req.trip_title}</p>
                             <div className="flex items-center gap-4 text-muted-foreground">
                                 <div className="flex items-center gap-1">
                                     <Calendar className="h-3 w-3" />
-                                    <span>{new Date(req.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    <span>{req.time}</span>
+                                    <span>{new Date(req.check_in).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <User className="h-3 w-3" />
                                     <span>{req.guests} guests</span>
                                 </div>
                             </div>
-                            <p className="font-semibold text-primary">KES {req.totalPrice.toLocaleString()}</p>
-
-                            {req.message && (
-                                <div className="mt-2 text-xs bg-background p-2 rounded border border-border flex gap-2">
-                                    <MessageSquare className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                                    <p className="italic text-muted-foreground">"{req.message}"</p>
-                                </div>
-                            )}
+                            <p className="font-semibold text-primary">KES {req.amount.toLocaleString()}</p>
                         </div>
 
-                        {/* Action Buttons (Big Touch Targets) */}
+                        {/* Action Buttons */}
                         <div className="grid grid-cols-2 gap-3 pt-2">
                             <Button
                                 variant="outline"
                                 className="h-12 border-red-200 hover:bg-red-50 hover:text-red-600 text-red-600"
                                 onClick={() => handleAction(req.id, "decline")}
+                                disabled={actionLoading === req.id}
                             >
                                 <X className="h-5 w-5 mr-2" />
                                 Decline
@@ -132,9 +129,16 @@ export const HostBookings = () => {
                             <Button
                                 className="h-12 bg-green-600 hover:bg-green-700 text-white"
                                 onClick={() => handleAction(req.id, "approve")}
+                                disabled={actionLoading === req.id}
                             >
-                                <Check className="h-5 w-5 mr-2" />
-                                Accept
+                                {actionLoading === req.id ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                ) : (
+                                    <>
+                                        <Check className="h-5 w-5 mr-2" />
+                                        Accept
+                                    </>
+                                )}
                             </Button>
                         </div>
                     </div>

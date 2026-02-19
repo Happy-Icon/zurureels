@@ -14,10 +14,11 @@ serve(async (req) => {
   try {
     const { message, city, context } = await req.json();
 
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    // Get API Key from Environment
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "AIzaSyBXB5QsVjX_TNYSNqicn9ho4OrLMVi5-uw";
 
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured");
     }
 
     const systemPrompt = `You are Zuru, an AI assistant inside a reels-based travel booking platform for ${city || "the Kenyan coast"}.
@@ -138,30 +139,34 @@ When you detect booking intent, interest in reserving, or readiness to take acti
 
 Ensure your JSON is minified or naturally formatted, but do NOT wrap it in markdown code blocks like \`\`\`json ... \`\`\`. Just return the raw JSON object if a schema matches. Otherwise, return plain text.`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
+        contents: [
+          {
+            parts: [
+              { text: systemPrompt + "\n\nUser Message: " + message }
+            ]
+          }
         ],
-        stream: false,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 500,
+        }
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("OpenAI API Error:", response.status, errorText);
-      throw new Error(`OpenAI API Error: ${response.statusText} - ${errorText}`);
+      console.error("Gemini API Error:", response.status, errorText);
+      throw new Error(`Gemini API Error: ${response.statusText} - ${errorText}`);
     }
 
     const data = await response.json();
-    const answer = data.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.";
+    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response.";
 
     // Simulate SSE for the frontend
     const sseStream = new ReadableStream({

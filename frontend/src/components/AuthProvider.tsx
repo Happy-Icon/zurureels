@@ -11,6 +11,7 @@ interface AuthContextType {
   role?: "guest" | "host" | "admin";
   viewMode: "guest" | "host";
   switchViewMode: (mode: "guest" | "host") => void;
+  hasPass?: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -34,42 +35,67 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY") {
-        // Provide a hint to the app that we are in recovery mode
-        // We can't use useNavigate here easily because AuthProvider might be outside Router context or cause circular dependencies
-        // So we just set the session. The redirection should be handled by the component verifying the session/URL.
-      }
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
+  const [profile, setProfile] = useState<any>(null);
 
   const [viewMode, setViewMode] = useState<"guest" | "host">(() => {
     // Initialize from localStorage if available, otherwise default to "guest"
     return (localStorage.getItem("viewMode") as "guest" | "host") || "guest";
   });
 
-  const role = (user?.user_metadata?.role as "guest" | "host" | "admin") || "guest";
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Listen for changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id);
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (error) throw error;
+      setProfile(data);
+    } catch (err) {
+      console.error("Error fetching profile:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const role = (user?.user_metadata?.role as "guest" | "host" | "admin") ||
+    (profile?.role as "guest" | "host" | "admin") || "guest";
+
+  const hasPass = profile?.metadata?.has_pass === true;
 
   // Effect to sync viewMode with Role. 
   // If user is a Guest, they cannot be in Host viewMode.
@@ -85,7 +111,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, signOut, role, viewMode, switchViewMode }}>
+    <AuthContext.Provider value={{ session, user, loading, signOut, role, viewMode, switchViewMode, hasPass }}>
       {children}
     </AuthContext.Provider>
   );

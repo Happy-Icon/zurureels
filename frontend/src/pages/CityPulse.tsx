@@ -13,7 +13,6 @@ import { useExperiences } from "@/hooks/useExperiences";
 import {
   coastalCities,
 } from "@/data/mockCityPulse";
-import { mockEvents } from "@/data/mockReels";
 import { ReelCard, ReelData } from "@/components/reels/ReelCard";
 import {
   MapPin,
@@ -26,6 +25,7 @@ import {
   Wine,
   ChefHat,
   Navigation,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -54,7 +54,7 @@ const CityPulse = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showAI, setShowAI] = useState(false);
   const [bookingReel, setBookingReel] = useState<ReelData | null>(null);
-  const { role } = useAuth();
+  const { role, hasPass } = useAuth();
 
   // Determine the location to pass to useWeather
   const weatherLocation = useMemo(() => {
@@ -104,7 +104,6 @@ const CityPulse = () => {
     const context = {
       experiences: experiences,
       reels: liveReels,
-      events: mockEvents,
     };
     sendMessage(message, selectedCity, context);
   };
@@ -113,6 +112,30 @@ const CityPulse = () => {
     setShowAI(false);
     clearMessages();
   };
+
+  const [activeReelId, setActiveReelId] = useState<string | null>(null);
+
+  // Intersection Observer for Trending Reels
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveReelId(entry.target.getAttribute("data-reel-id"));
+          }
+        });
+      },
+      {
+        threshold: 0.6, // Reel must be 60% visible to be considered active
+        rootMargin: "0px",
+      }
+    );
+
+    const reelElements = document.querySelectorAll(".reel-item");
+    reelElements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [liveReels]);
 
   const filteredBoats = experiences.filter((e) => e.category === "boats");
   const filteredFood = experiences.filter((e) => e.category === "food");
@@ -123,7 +146,8 @@ const CityPulse = () => {
 
   return (
     <MainLayout>
-      <div className="pb-20 md:pb-8">
+      <div className="relative pb-20 md:pb-8 min-h-screen">
+        {!hasPass && role === 'guest' && <ZuruPassOverlay />}
         {/* Header */}
         <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
           <div className="p-4 space-y-3">
@@ -224,10 +248,14 @@ const CityPulse = () => {
                   ))
                 ) : liveReels.length > 0 ? (
                   liveReels.map((reel) => (
-                    <div key={reel.id} className="min-w-[280px] h-[500px] snap-center rounded-2xl overflow-hidden shadow-lg border border-border/50">
+                    <div
+                      key={reel.id}
+                      data-reel-id={reel.id}
+                      className="reel-item min-w-[280px] h-[500px] snap-center rounded-2xl overflow-hidden shadow-lg border border-border/50"
+                    >
                       <ReelCard
                         reel={reel}
-                        isActive={false}
+                        isActive={activeReelId === reel.id}
                         onBook={(id) => setBookingReel(liveReels.find(r => r.id === id) || null)}
                       />
                     </div>
@@ -291,6 +319,7 @@ const CityPulse = () => {
                 {filteredActivities.slice(0, 3).map((activity) => (
                   <CheckOutDialog
                     key={activity.id}
+                    experienceId={activity.id}
                     tripTitle={activity.title}
                     amount={activity.current_price}
                     trigger={
@@ -324,6 +353,7 @@ const CityPulse = () => {
                 {filteredBoats.map((boat) => (
                   <CheckOutDialog
                     key={boat.id}
+                    experienceId={boat.id}
                     tripTitle={boat.title}
                     amount={boat.current_price}
                     trigger={
@@ -446,6 +476,7 @@ const CityPulse = () => {
       {
         bookingReel && (
           <CheckOutDialog
+            experienceId={bookingReel.id}
             tripTitle={bookingReel.title}
             amount={bookingReel.price}
             open={!!bookingReel}
@@ -455,6 +486,57 @@ const CityPulse = () => {
         )
       }
     </MainLayout >
+  );
+};
+
+// Zuru Pass Overlay Component
+const ZuruPassOverlay = () => {
+  return (
+    <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
+      <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-6 animate-pulse">
+        <Sparkles className="h-8 w-8 text-primary" />
+      </div>
+      <h2 className="text-3xl font-display font-bold mb-2">Zuru Pass Required</h2>
+      <p className="text-muted-foreground mb-8 max-w-xs">
+        Unlock real-time coastal alerts, exclusive deals, and Zuru's premium AI guide.
+      </p>
+
+      <div className="w-full space-y-3">
+        <Button className="w-full h-14 text-lg font-semibold rounded-2xl bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
+          Get Zuru Pass — KES 999
+        </Button>
+        <Button variant="ghost" className="w-full h-12 text-muted-foreground" onClick={() => window.history.back()}>
+          Maybe later
+        </Button>
+      </div>
+
+      <div className="mt-12 grid grid-cols-2 gap-4 text-left w-full max-w-xs">
+        <div className="flex gap-2 items-start text-xs">
+          <div className="mt-1 p-0.5 rounded-full bg-primary/10">
+            <Check className="h-3 w-3 text-primary" />
+          </div>
+          <span>Live Crowd Alerts</span>
+        </div>
+        <div className="flex gap-2 items-start text-xs">
+          <div className="mt-1 p-0.5 rounded-full bg-primary/10">
+            <Check className="h-3 w-3 text-primary" />
+          </div>
+          <span>Priority Booking</span>
+        </div>
+        <div className="flex gap-2 items-start text-xs">
+          <div className="mt-1 p-0.5 rounded-full bg-primary/10">
+            <Check className="h-3 w-3 text-primary" />
+          </div>
+          <span>AI Concierge</span>
+        </div>
+        <div className="flex gap-2 items-start text-xs">
+          <div className="mt-1 p-0.5 rounded-full bg-primary/10">
+            <Check className="h-3 w-3 text-primary" />
+          </div>
+          <span>Exclusive Reels</span>
+        </div>
+      </div>
+    </div>
   );
 };
 

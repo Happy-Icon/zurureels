@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Video, Check, ChevronRight, ChevronLeft, Clock, Home, Bed, Bath, Sofa, Building } from "lucide-react";
+import { Video, Check, ChevronRight, ChevronLeft, Clock, Home, Bed, Bath, Sofa, Building, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -130,7 +130,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
 
   const handleReelUpload = (reelId: string) => {
     currentReelIdRef.current = reelId;
-    setShowRecorder(true); // Always force recorder for accommodations
+    setShowRecorder(true);
   };
 
   const handleRecordingComplete = async (file: File, loc?: { lat: number; lng: number }) => {
@@ -161,17 +161,17 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
         return next;
       });
 
-      toast.success("Verified video uploaded!");
+      toast.success("Video uploaded!");
     } catch (error: any) {
       console.error("Upload error:", error);
-      toast.error("Failed to upload verified video");
+      toast.error("Failed to upload video");
     } finally {
       setUploadingId(null);
     }
   };
 
   const handleComplete = () => {
-    if (!title || !location || !price || !entityName) {
+    if (!title || !locationName || !price || !entityName) {
       toast.error("Please fill in all property details");
       setStep(1);
       return;
@@ -194,23 +194,23 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
   return (
     <div className="space-y-6">
       {/* Progress Steps */}
-      <div className="flex items-center justify-center gap-2">
+      <div className="flex items-center justify-center gap-3">
         {[1, 2, 3].map((s) => (
           <div key={s} className="flex items-center">
             <div
               className={cn(
-                "h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors",
+                "h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 shadow-sm",
                 step >= s
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-primary text-primary-foreground scale-110"
                   : "bg-secondary text-muted-foreground"
               )}
             >
-              {step > s ? <Check className="h-4 w-4" /> : s}
+              {step > s ? <Check className="h-5 w-5" /> : s}
             </div>
             {s < 3 && (
               <div
                 className={cn(
-                  "w-12 h-0.5 mx-1",
+                  "w-10 sm:w-16 h-1 mx-1 rounded-full",
                   step > s ? "bg-primary" : "bg-secondary"
                 )}
               />
@@ -220,14 +220,14 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
       </div>
 
       {/* Step Labels */}
-      <div className="flex justify-center text-xs text-muted-foreground">
-        <span className={cn("w-20 text-center", step === 1 && "text-primary font-medium")}>
+      <div className="flex justify-center text-[10px] sm:text-xs text-muted-foreground px-4">
+        <span className={cn("flex-1 text-center truncate px-1", step === 1 && "text-primary font-semibold")}>
           Property Info
         </span>
-        <span className={cn("w-20 text-center", step === 2 && "text-primary font-medium")}>
+        <span className={cn("flex-1 text-center truncate px-1", step === 2 && "text-primary font-semibold")}>
           Amenities
         </span>
-        <span className={cn("w-20 text-center", step === 3 && "text-primary font-medium")}>
+        <span className={cn("flex-1 text-center truncate px-1", step === 3 && "text-primary font-semibold")}>
           Record Reels
         </span>
       </div>
@@ -342,22 +342,23 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-2">
+          <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-2 pb-2">
             {amenitiesList.map((amenity) => (
               <label
                 key={amenity.id}
                 className={cn(
-                  "flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors",
+                  "flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all active:scale-[0.98]",
                   selectedAmenities.includes(amenity.id)
-                    ? "border-primary bg-primary/5"
+                    ? "border-primary bg-primary/5 shadow-sm"
                     : "border-border hover:border-primary/50"
                 )}
               >
                 <Checkbox
                   checked={selectedAmenities.includes(amenity.id)}
                   onCheckedChange={() => handleAmenityToggle(amenity.id)}
+                  className="h-5 w-5"
                 />
-                <span className="text-sm">{amenity.label}</span>
+                <span className="text-sm font-medium">{amenity.label}</span>
               </label>
             ))}
           </div>
@@ -396,6 +397,13 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
           </div>
 
           <div className="space-y-2">
+            <input
+              type="file"
+              accept="video/*"
+              className="hidden"
+              ref={galleryInputRef}
+              onChange={handleFileSelect}
+            />
             {reelRequirements.map((reel, index) => (
               <div
                 key={reel.id}
@@ -425,29 +433,32 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{reel.description}</p>
                 </div>
-                <Button
-                  size="sm"
-                  variant={reel.uploaded ? "outline" : "default"}
-                  onClick={() => handleReelUpload(reel.id)}
-                  disabled={reel.uploaded || (uploadingId !== null && uploadingId !== reel.id)}
-                >
-                  {reel.uploaded ? (
-                    <>
-                      <Check className="h-4 w-4 mr-1" />
-                      Done
-                    </>
-                  ) : uploadingId === reel.id ? (
-                    <>
-                      <div className="h-4 w-4 mr-1 border-2 border-white/30 border-t-white animate-spin rounded-full" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Video className="h-4 w-4 mr-1" />
-                      Record
-                    </>
-                  )}
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    size="sm"
+                    variant={reel.uploaded ? "outline" : "default"}
+                    onClick={() => handleReelUpload(reel.id)}
+                    className="w-full"
+                    disabled={reel.uploaded || (uploadingId !== null && uploadingId !== reel.id)}
+                  >
+                    {reel.uploaded ? (
+                      <>
+                        <Check className="h-4 w-4 mr-1" />
+                        Done
+                      </>
+                    ) : uploadingId === reel.id ? (
+                      <>
+                        <div className="h-4 w-4 mr-1 border-2 border-white/30 border-t-white animate-spin rounded-full" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Video className="h-4 w-4 mr-1" />
+                        Record Live
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
