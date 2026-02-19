@@ -45,8 +45,9 @@ serve(async (req) => {
         // Documentation: https://api.shuftipro.com/api/documentation
 
         // Ensure we have a valid URL for redirects
-        // PRODUCTION NOTE: You MUST set 'APP_URL' in Supabase Secrets to your real domain (e.g. https://zurusasa.com)
-        const appUrl = Deno.env.get('APP_URL') ?? 'http://localhost:5173';
+        // PRODUCTION NOTE: You can set 'APP_URL' in Supabase Secrets, OR rely on the browser request origin.
+        const origin = req.headers.get("origin");
+        const appUrl = Deno.env.get('APP_URL') ?? origin ?? 'http://localhost:5173';
         const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 
         // PAYLOAD V8: Correct logic for Redirect vs Callback
@@ -58,6 +59,10 @@ serve(async (req) => {
             // Redirect points to the Frontend (User's App)
             redirect_url: `${appUrl}/host?verification_complete=true`,
         };
+
+        console.log("SHUFTI PAYLOAD DEBUG:");
+        console.log("redirect_url (Check Shufti Whitelist):", payload.redirect_url);
+        console.log("callback_url:", payload.callback_url);
 
         console.log("Sending payload to Shufti:", JSON.stringify(payload));
 
