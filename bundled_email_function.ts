@@ -300,7 +300,7 @@ const getHostApplicationEmail = (name: string) => {
     <p style="${styles.p}">Hello ${name},</p>
     <p style="${styles.p}">We have received your request to become a host on Zurusasa.</p>
     <p style="${styles.p}">To ensure the safety of our community, we require all hosts to verify their identity before publishing listings.</p>
-    <p style="${styles.p}">Please click the button below to complete the verification process:</p>
+    <p style="${styles.p}">Please log in and click the button below to complete the verification process:</p>
     <a href="${appUrl}/host/verification" style="${styles.button}">Verify Identity</a>
     <p style="${styles.p}">If you have any questions, our support team is here to help.</p>
   `;

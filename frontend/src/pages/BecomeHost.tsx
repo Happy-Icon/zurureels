@@ -103,11 +103,11 @@ const BecomeHost = () => {
             else console.log("Email function invoked successfully");
 
             // 4. Success
-            toast.success("Application submitted! Please verify your identity.");
+            toast.success("Application received! Check your email for verification instructions.");
 
-            // Force refresh or redirect
-            navigate("/host/verification");
-            window.location.reload(); // Simple way to refresh auth context role
+            // Redirect to City Pulse
+            navigate("/");
+            window.location.reload();
 
         } catch (error: any) {
             console.error(error);
