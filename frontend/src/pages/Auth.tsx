@@ -108,11 +108,18 @@ const Auth = () => {
         });
 
         if (error) {
-          if (error.message.includes("User already registered")) {
+          if (error.message.includes("User already registered") || error.message.includes("already registered")) {
             toast.error("This email is already registered. Try signing in instead.");
           } else {
             toast.error(error.message);
           }
+          return;
+        }
+
+        // When "Prevent Email Enumeration" is enabled in Supabase, duplicate signups
+        // don't return an error. Instead, they return a user object with an empty identities array.
+        if (data?.user && data.user.identities && data.user.identities.length === 0) {
+          toast.error("This email is already registered. Try signing in instead.");
           return;
         }
 
