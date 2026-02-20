@@ -311,6 +311,21 @@ const getHostApplicationEmail = (name: string) => {
     };
 };
 
+const getVerificationSuccessEmail = (name: string) => {
+    const content = `
+    <h1 style="${styles.h1}">Identity Verified!</h1>
+    <p style="${styles.p}">Great news, ${name}!</p>
+    <p style="${styles.p}">Your identity has been successfully verified. You are now a fully verified host on Zurusasa.</p>
+    <p style="${styles.p}">You can now publish your listings and start accepting bookings from guests.</p>
+    <a href="${appUrl}/host" style="${styles.button}">Go to Dashboard</a>
+    <p style="${styles.p}">Thank you for helping us keep our community safe.</p>
+  `;
+    return {
+        subject: "You're Verified! Welcome to Hosting",
+        html: layouts(content)
+    };
+};
+
 // --------------------------------------------------------------------------
 // MAIN SERVER HANDLER
 // --------------------------------------------------------------------------
@@ -368,6 +383,9 @@ serve(async (req) => {
                 break;
             case 'host_application':
                 emailContent = getHostApplicationEmail(data?.name || 'Partner');
+                break;
+            case 'verification_success':
+                emailContent = getVerificationSuccessEmail(data?.name || 'Host');
                 break;
             default:
                 throw new Error("Invalid email type");

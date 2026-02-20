@@ -4,7 +4,13 @@ import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
 
-const guestNavItems = [
+const unauthGuestNavItems = [
+  { icon: Zap, label: "Pulse", path: "/" },
+  { icon: Compass, label: "Discover", path: "/discover" },
+  { icon: User, label: "Log In", path: "/profile" },
+];
+
+const authGuestNavItems = [
   { icon: Zap, label: "Pulse", path: "/" },
   { icon: Compass, label: "Discover", path: "/discover" },
   { icon: Heart, label: "Saved", path: "/saved" },
@@ -22,9 +28,13 @@ const hostNavItems = [
 
 export function DesktopSidebar() {
   const location = useLocation();
-  const { viewMode } = useAuth();
+  const { viewMode, user } = useAuth();
 
-  const navItems = viewMode === "host" ? hostNavItems : guestNavItems;
+  const navItems = viewMode === "host"
+    ? hostNavItems
+    : user
+      ? authGuestNavItems
+      : unauthGuestNavItems;
 
   return (
     <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 flex-col border-r border-border bg-card z-50">

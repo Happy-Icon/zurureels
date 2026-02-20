@@ -11,6 +11,8 @@ import {
     getLoginAlert,
     getSecurityNotification,
     getSupportAcknowledgment,
+    getBroadcastTemplate,
+    getYachtDropsTemplate,
 } from "../_shared/email-templates.ts";
 
 serve(async (req) => {

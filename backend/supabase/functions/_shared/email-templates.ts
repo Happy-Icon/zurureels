@@ -253,3 +253,215 @@ export const getSupportAcknowledgment = (ticketId: string) => {
     html: layouts(content)
   };
 };
+
+export const getBroadcastTemplate = (subject: string, title: string, messageHtml: string, heroImageUrl?: string, ctaText?: string, ctaUrl?: string) => {
+  // Premium Styles for Broadcast/Newsletter Email
+  const pStyles = {
+    container: "background-color: #000000; color: #ffffff; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border-radius: 0px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.3);",
+    header: "background-color: #000000; padding: 30px 0; text-align: center; border-bottom: 1px solid #222222;",
+    logo: "color: #ffffff; font-size: 22px; font-weight: 800; text-decoration: none; letter-spacing: 3px; text-transform: uppercase;",
+    heroImage: "width: 100%; height: auto; max-height: 400px; object-fit: cover; display: block;",
+    content: "padding: 50px 40px; background-color: #0a0a0a; text-align: left;",
+    h1: "color: #ffffff; font-size: 32px; font-weight: 200; margin-top: 0; margin-bottom: 25px; letter-spacing: -0.5px; line-height: 1.2;",
+    messageContainer: "color: #cccccc; font-size: 16px; line-height: 1.8; margin-bottom: 30px;",
+    highlight: "color: #D4AF37;", // Gold
+    button: "display: inline-block; background-color: #D4AF37; color: #000000; padding: 18px 48px; border-radius: 0px; font-weight: 600; text-decoration: none; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; margin-top: 20px; text-align: center;",
+    footer: "background-color: #050505; padding: 40px; text-align: center; color: #444444; font-size: 12px; border-top: 1px solid #111111;"
+  };
+
+  const heroSection = heroImageUrl
+    ? `<img src="${heroImageUrl}" alt="Featured Image" style="${pStyles.heroImage}" />`
+    : '';
+
+  const ctaSection = (ctaText && ctaUrl)
+    ? `<div style="text-align: center; margin-top: 40px;">
+         <a href="${ctaUrl}" style="${pStyles.button}">${ctaText}</a>
+       </div>`
+    : '';
+
+  const content = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #000000;">
+      <div style="padding: 40px 20px;">
+        <div style="${pStyles.container}">
+          
+          <!-- Header -->
+          <div style="${pStyles.header}">
+             <a href="${appUrl}" style="${pStyles.logo}">ZURU<span style="${pStyles.highlight}">.</span></a>
+          </div>
+          
+          <!-- Hero Image (Optional) -->
+          ${heroSection}
+          
+          <!-- Main Content -->
+          <div style="${pStyles.content}">
+             <h1 style="${pStyles.h1}">${title}</h1>
+             
+             <div style="${pStyles.messageContainer}">
+                ${messageHtml}
+             </div>
+             
+             ${ctaSection}
+          </div>
+          
+          <!-- Footer -->
+          <div style="${pStyles.footer}">
+             <p style="margin: 0 0 20px; letter-spacing: 1px; color: #666666;">ZURU REELS</p>
+             
+             <!-- Social Icons -->
+             <div style="margin-bottom: 30px;">
+                <a href="#" style="margin: 0 12px; text-decoration: none; display: inline-block;">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3955/3955024.png" width="24" height="24" alt="Instagram" style="opacity: 0.5; filter: invert(1);">
+                </a>
+                <a href="#" style="margin: 0 12px; text-decoration: none; display: inline-block;">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3670/3670151.png" width="24" height="24" alt="Twitter" style="opacity: 0.5; filter: invert(1);">
+                </a>
+             </div>
+
+             <p style="margin: 0; color: #444;">&copy; ${new Date().getFullYear()} All rights reserved.</p>
+             <p style="margin: 15px 0 0; font-size: 11px; color: #333;">You are receiving this email because you are subscribed to ZuruSasa updates.</p>
+          </div>
+          
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return {
+    subject,
+    html: content
+  };
+};
+
+export const getYachtDropsTemplate = () => {
+  // Premium Styles for the Summer Yacht Drops Newsletter
+  const pStyles = {
+    container: "background-color: #000000; color: #ffffff; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border-radius: 0px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.3);",
+    header: "background-image: linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&q=80&w=800'); background-size: cover; background-position: center; padding: 60px 20px; text-align: center; border-bottom: 2px solid #D4AF37;",
+    logo: "color: #ffffff; font-size: 32px; font-weight: 800; text-decoration: none; letter-spacing: 4px; text-transform: uppercase; text-shadow: 0 2px 10px rgba(0,0,0,0.5);",
+    content: "padding: 50px 40px; background-color: #0a0a0a; text-align: left;",
+    h1: "color: #ffffff; font-size: 36px; font-weight: 200; margin-top: 0; margin-bottom: 10px; letter-spacing: -0.5px; line-height: 1.1;",
+    subh1: "color: #D4AF37; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 30px; display: block;",
+    p: "color: #cccccc; font-size: 16px; line-height: 1.8; margin-bottom: 25px;",
+    list: "color: #cccccc; font-size: 15px; line-height: 1.8; padding-left: 20px; margin-bottom: 35px;",
+    li: "margin-bottom: 12px;",
+    highlight: "color: #D4AF37; font-weight: 600;", // Gold text
+    buttonPrimary: "display: block; background-color: #D4AF37; color: #000000; padding: 18px 0; border-radius: 0px; font-weight: 600; text-decoration: none; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; margin: 40px 0 20px; text-align: center; width: 100%;",
+    buttonSecondary: "display: block; background-color: transparent; border: 1px solid #D4AF37; color: #D4AF37; padding: 16px 0; border-radius: 0px; font-weight: 600; text-decoration: none; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 40px; text-align: center; width: 100%;",
+    gridContainer: "margin: 40px 0;",
+    gridItem: "margin-bottom: 30px; text-align: center;",
+    gridImage: "width: 100%; height: 200px; object-fit: cover; margin-bottom: 15px; border: 1px solid #222;",
+    gridTitle: "color: #ffffff; font-size: 18px; font-weight: 600; margin: 0 0 5px; letter-spacing: 1px; text-transform: uppercase;",
+    gridDesc: "color: #888888; font-size: 14px; margin: 0; line-height: 1.6;",
+    footer: "background-color: #050505; padding: 50px 40px; text-align: center; color: #444444; font-size: 12px; border-top: 1px solid #111111;"
+  };
+
+  const content = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #000000;">
+      <div style="padding: 40px 20px;">
+        <div style="${pStyles.container}">
+          
+          <!-- Hero Header -->
+          <div style="${pStyles.header}">
+             <a href="${appUrl}" style="${pStyles.logo}">ZURU<span style="color: #D4AF37;">.</span></a>
+             <div style="margin-top: 40px;">
+               <h2 style="color: #fff; font-size: 42px; font-weight: 200; margin: 0; line-height: 1.1; letter-spacing: -1px;">Seize the Summer.</h2>
+             </div>
+          </div>
+          
+          <!-- Main Content -->
+          <div style="${pStyles.content}">
+             <span style="${pStyles.subh1}">The Ocean is Calling: Summer 2026</span>
+             <h1 style="${pStyles.h1}">Your 24-Hour Exclusive Access</h1>
+             
+             <p style="${pStyles.p}">
+               The wait is over. We've spent months scouting the most breathtaking coastlines to bring you an exclusive fleet of luxury yachts for the upcoming season.
+             </p>
+             <p style="${pStyles.p}">
+               Because you are part of the ZuruSasa inner circle, you aren't just invited—you're first in line. We are giving you 24 hours of early access to browse and book these charters before they go live to the general public.
+             </p>
+
+             <div style="margin: 40px 0; padding: 30px; background-color: #111111; border-left: 3px solid #D4AF37;">
+               <h3 style="color: #fff; font-size: 18px; font-weight: 600; margin-top: 0; margin-bottom: 20px; letter-spacing: 1px; text-transform: uppercase;">Exclusive Subscriber Benefits</h3>
+               <ul style="${pStyles.list}">
+                 <li style="${pStyles.li}"><span style="${pStyles.highlight}">Priority Booking:</span> Secure the most sought-after vessels and popular dates immediately.</li>
+                 <li style="${pStyles.li}"><span style="${pStyles.highlight}">The Zuru Perk:</span> Enjoy a complimentary champagne welcome or a custom excursion on your first charter.</li>
+                 <li style="${pStyles.li}"><span style="${pStyles.highlight}">Concierge Support:</span> Dedicated 1:1 assistance from our coastal experts to plan your flawless itinerary.</li>
+               </ul>
+             </div>
+
+             <h3 style="color: #fff; font-size: 20px; font-weight: 200; margin: 50px 0 20px; text-align: center; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid #222; padding-bottom: 15px;">What's Waiting For You</h3>
+
+             <!-- Featured Grids -->
+             <div style="${pStyles.gridContainer}">
+               
+               <div style="${pStyles.gridItem}">
+                 <img src="https://images.unsplash.com/photo-1559564278-df033e5ed0c1?auto=format&fit=crop&q=80&w=600" alt="Private Catamarans" style="${pStyles.gridImage}">
+                 <h4 style="${pStyles.gridTitle}">Private Catamarans</h4>
+                 <p style="${pStyles.gridDesc}">Perfect for sunset cruises, intimate gatherings, and weekend escapes along the Swahili coast.</p>
+               </div>
+
+               <div style="${pStyles.gridItem}">
+                 <img src="https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&q=80&w=600" alt="Luxury Motor Yachts" style="${pStyles.gridImage}">
+                 <h4 style="${pStyles.gridTitle}">Luxury Motor Yachts</h4>
+                 <p style="${pStyles.gridDesc}">Full-service professional crews ready to cater to your every need. Ultimate opulence on the water.</p>
+               </div>
+
+               <div style="${pStyles.gridItem}">
+                 <img src="https://images.unsplash.com/photo-1537162998323-3d3675e0e87c?auto=format&fit=crop&q=80&w=600" alt="Curated Itineraries" style="${pStyles.gridImage}">
+                 <h4 style="${pStyles.gridTitle}">Curated Itineraries</h4>
+                 <p style="${pStyles.gridDesc}">From the hidden coves of the Lamu Archipelago to vibrant island parties off the coast of Diani.</p>
+               </div>
+
+             </div>
+
+             <p style="${pStyles.p} text-align: center; font-size: 18px; margin-top: 50px;">
+               Don't wait—the most popular dates always go first. <br/><strong>Your summer story starts here.</strong>
+             </p>
+             
+             <!-- Dual CTAs -->
+             <a href="${appUrl}/discover" style="${pStyles.buttonPrimary}">Explore The Collection</a>
+             <a href="mailto:concierge@zurusasa.com" style="${pStyles.buttonSecondary}">Plan Your Custom Trip</a>
+          </div>
+          
+          <!-- Footer -->
+          <div style="${pStyles.footer}">
+             <p style="margin: 0 0 20px; letter-spacing: 2px; color: #888888; text-transform: uppercase;">Zuru Reels &bull; Inner Circle</p>
+             
+             <!-- Social Icons -->
+             <div style="margin-bottom: 30px;">
+                <a href="#" style="margin: 0 15px; text-decoration: none; display: inline-block;">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3955/3955024.png" width="20" height="20" alt="Instagram" style="opacity: 0.5; filter: invert(1);">
+                </a>
+                <a href="#" style="margin: 0 15px; text-decoration: none; display: inline-block;">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3670/3670151.png" width="20" height="20" alt="Twitter" style="opacity: 0.5; filter: invert(1);">
+                </a>
+             </div>
+
+             <p style="margin: 0; color: #555555;">&copy; ${new Date().getFullYear()} Zurusasa. All rights reserved.</p>
+             <p style="margin: 15px 0 0; font-size: 10px; color: #333333; line-height: 1.5;">You are receiving this exclusive drop because you are an active subscriber to ZuruSasa premium updates.</p>
+          </div>
+          
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return {
+    subject: "⚓ Your 24-Hour Exclusive Access: Zuru Summer Yacht Drops",
+    html: content
+  };
+};

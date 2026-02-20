@@ -3,7 +3,13 @@ import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
 
-const guestNavItems = [
+const unauthGuestNavItems = [
+  { icon: Zap, label: "Pulse", path: "/" },
+  { icon: Compass, label: "Discover", path: "/discover" },
+  { icon: User, label: "Log In", path: "/profile" },
+];
+
+const authGuestNavItems = [
   { icon: Zap, label: "Pulse", path: "/" },
   { icon: Compass, label: "Discover", path: "/discover" },
   { icon: Heart, label: "Saved", path: "/saved" },
@@ -21,9 +27,13 @@ const hostNavItems = [
 
 export function BottomNav() {
   const location = useLocation();
-  const { viewMode } = useAuth();
+  const { viewMode, user } = useAuth();
 
-  const navItems = viewMode === "host" ? hostNavItems : guestNavItems;
+  const navItems = viewMode === "host"
+    ? hostNavItems
+    : user
+      ? authGuestNavItems
+      : unauthGuestNavItems;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-border/50 md:hidden pb-[env(safe-area-inset-bottom)]">
