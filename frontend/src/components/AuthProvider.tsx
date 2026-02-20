@@ -103,7 +103,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const role = user
-    ? ((user.user_metadata?.role as "guest" | "host" | "admin") || (profile?.role as "guest" | "host" | "admin") || "guest")
+    ? ((profile?.role as "guest" | "host" | "admin") || (user.user_metadata?.role as "guest" | "host" | "admin") || "guest")
     : null;
 
   const hasPass = profile?.metadata?.has_pass === true;

@@ -6,7 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 const unauthGuestNavItems = [
   { icon: Zap, label: "Pulse", path: "/" },
   { icon: Compass, label: "Discover", path: "/discover" },
-  { icon: User, label: "Log In", path: "/profile" },
+  { icon: User, label: "Log In", path: "/auth" },
 ];
 
 const authGuestNavItems = [

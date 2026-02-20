@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 import { DesktopSidebar } from "./DesktopSidebar";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { EmailVerificationBanner } from "@/components/EmailVerificationBanner";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -12,6 +13,7 @@ interface MainLayoutProps {
 export function MainLayout({ children, hideNav = false }: MainLayoutProps) {
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0 safe-top">
+      <EmailVerificationBanner />
       {!hideNav && <DesktopSidebar />}
 
       {/* Mobile Top Bar */}

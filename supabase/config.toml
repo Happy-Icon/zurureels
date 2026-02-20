@@ -1,1 +1,5 @@
 project_id = "ibesxkfvjgkfsqhsrxvm"
+
+[auth.hook.send_sms]
+enabled = true
+uri = "pg-functions://postgres/public/custom_sms_sender"

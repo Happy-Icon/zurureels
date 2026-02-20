@@ -21,6 +21,7 @@ import NotFound from "./pages/NotFound";
 
 import { AuthProvider } from "@/components/AuthProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 import { PersonalInfo } from "@/pages/profile/PersonalInfo";
 import { PaymentMethods } from "@/pages/profile/PaymentMethods";
 import { Security } from "@/pages/profile/Security";
@@ -29,6 +30,9 @@ import Support from "@/pages/profile/Support";
 import Settings from "@/pages/profile/Settings";
 import { Notifications } from "@/pages/profile/Notifications";
 import Messages from "@/pages/profile/Messages";
+
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import Broadcasts from "./pages/admin/Broadcasts";
 
 import { VerifiedRoute } from "@/components/VerifiedRoute";
 
@@ -60,6 +64,10 @@ const App = () => (
             <Route path="/profile/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
             <Route path="/profile/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/profile/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+
+            <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+            <Route path="/admin/broadcasts" element={<AdminRoute><Broadcasts /></AdminRoute>} />
+
             <Route path="/auth" element={<Auth />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
