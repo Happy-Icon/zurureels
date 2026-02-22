@@ -29,6 +29,7 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 .from("reels")
                 .select(`
                     id,
+                    user_id,
                     video_url,
                     thumbnail_url,
                     category,
@@ -72,6 +73,8 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
             // Transform database records to ReelData interface
             let transformedReels: ReelData[] = (data || []).map((item: any) => ({
                 id: item.id,
+                experienceId: item.experience_id,
+                hostUserId: item.user_id,
                 videoUrl: item.video_url,
                 thumbnailUrl: item.thumbnail_url || "/placeholder.svg",
                 title: item.experience?.title || "Untitled Experience",
