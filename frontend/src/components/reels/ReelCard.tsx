@@ -35,6 +35,7 @@ interface ReelCardProps {
 export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [showMuteHint, setShowMuteHint] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(reel.saved);
   const [likeCount, setLikeCount] = useState(reel.likes);
@@ -44,6 +45,10 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
   useEffect(() => {
     if (videoRef.current) {
       if (isActive) {
+        // Browsers require muted for autoplay — start muted, user can unmute
+        videoRef.current.muted = true;
+        setIsMuted(true);
+        setShowMuteHint(true);
         videoRef.current.play().catch(err => console.log("Autoplay blocked:", err));
         setIsPlaying(true);
       } else {
@@ -65,6 +70,16 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
         });
       }
       setIsPlaying(!isPlaying);
+    }
+  };
+
+  const toggleMute = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (videoRef.current) {
+      const newMuted = !isMuted;
+      videoRef.current.muted = newMuted;
+      setIsMuted(newMuted);
+      setShowMuteHint(false);
     }
   };
 
@@ -177,21 +192,33 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
       <div className="absolute inset-0 gradient-overlay pointer-events-none" />
 
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between md:hidden">
+      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20">
         <span className="text-xl font-display font-semibold text-primary-foreground drop-shadow-md">
           ZuruSasa
         </span>
         <button
-          onClick={() => setIsMuted(!isMuted)}
-          className="rounded-full glass-dark p-2"
+          onClick={toggleMute}
+          className="rounded-full bg-black/40 backdrop-blur-sm p-2.5 transition-all hover:bg-black/60 active:scale-90"
+          aria-label={isMuted ? "Unmute" : "Mute"}
         >
           {isMuted ? (
-            <VolumeX className="h-5 w-5 text-primary-foreground" />
+            <VolumeX className="h-5 w-5 text-white" />
           ) : (
-            <Volume2 className="h-5 w-5 text-primary-foreground" />
+            <Volume2 className="h-5 w-5 text-white" />
           )}
         </button>
       </div>
+
+      {/* Tap-for-sound hint (shown when video is playing but muted) */}
+      {isPlaying && isMuted && showMuteHint && (
+        <button
+          onClick={toggleMute}
+          className="absolute top-16 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2 rounded-full bg-black/50 backdrop-blur-sm text-white text-sm font-medium animate-pulse"
+        >
+          <VolumeX className="h-4 w-4" />
+          Tap for sound
+        </button>
+      )}
 
       {/* Right Side Actions */}
       <div className="absolute right-4 bottom-32 md:bottom-24 flex flex-col items-center gap-5">
@@ -286,7 +313,7 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
         {/* Price & Rating */}
         <div className="flex items-center gap-4">
           <span className="text-lg font-semibold text-primary-foreground">
-            ${reel.price}
+            KES {reel.price.toLocaleString()}
             <span className="text-sm font-normal text-primary-foreground/80">
               /{reel.priceUnit}
             </span>
