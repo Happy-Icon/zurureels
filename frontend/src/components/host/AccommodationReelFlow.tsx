@@ -397,13 +397,6 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
           </div>
 
           <div className="space-y-2">
-            <input
-              type="file"
-              accept="video/*"
-              className="hidden"
-              ref={galleryInputRef}
-              onChange={handleFileSelect}
-            />
             {reelRequirements.map((reel, index) => (
               <div
                 key={reel.id}

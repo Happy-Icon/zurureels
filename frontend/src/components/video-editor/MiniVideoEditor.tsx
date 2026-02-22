@@ -213,7 +213,10 @@ export const MiniVideoEditor = ({
 
   const handleSubmit = async () => {
     const sourceFile = recordedFile || videoFile;
-    if (!sourceFile) return;
+    if (!sourceFile) {
+      toast.error("No video found. Please record or upload a video first.");
+      return;
+    }
 
     const selectedDuration = trimEnd - trimStart;
 
