@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { getReelExpiryDisplay, isReelExpiringSoon } from "@/utils/reelExpiry";
 import { useReelInteractions } from "@/hooks/useReelInteractions";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 export interface ReelData {
   id: string;
@@ -153,7 +154,6 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
         });
       } else {
         await navigator.clipboard.writeText(window.location.origin + `/reel/${reel.id}`);
-        const { toast } = await import("sonner");
         toast.success("Link copied!");
       }
     } catch (err) {

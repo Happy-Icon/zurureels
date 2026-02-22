@@ -4,13 +4,13 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
 
 const unauthGuestNavItems = [
-  { icon: Zap, label: "Zuru Pulse", path: "/" },
+  { icon: Zap, label: "Pulse", path: "/" },
   { icon: Compass, label: "Discover", path: "/discover" },
   { icon: User, label: "Log In", path: "/auth" },
 ];
 
 const authGuestNavItems = [
-  { icon: Zap, label: "Zuru Pulse", path: "/" },
+  { icon: Zap, label: "Pulse", path: "/" },
   { icon: Compass, label: "Discover", path: "/discover" },
   { icon: Heart, label: "Saved", path: "/saved" },
   { icon: Calendar, label: "Trips", path: "/bookings" },
