@@ -35,7 +35,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isAccommodationCategory = (cat: string): cat is AccommodationType => {
-        return ["hotel", "villa", "apartment"].includes(cat);
+        return ["villa", "apartment"].includes(cat);
     };
 
     const handleCategoryChange = (value: string) => {

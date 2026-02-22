@@ -1,100 +1,145 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ReelData } from "@/components/reels/ReelCard";
 export type { ReelData };
+
+/**
+ * Fisher-Yates shuffle — unbiased, O(n) random ordering.
+ * Ensures no host gets unfair priority regardless of upload time.
+ */
+function shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+}
 
 export const useReels = (category?: string, experienceId?: string, search?: string) => {
     const [reels, setReels] = useState<ReelData[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any>(null);
 
-    useEffect(() => {
-        const fetchReels = async () => {
-            setLoading(true);
-            try {
-                // Query reels with joins to experiences and profiles
-                let query = supabase
-                    .from("reels")
-                    .select(`
-            id,
-            video_url,
-            thumbnail_url,
-            category,
-            created_at,
-            experience_id,
-            is_live,
-            lat,
-            lng,
-            experience:experiences (
-              title,
-              location,
-              current_price,
-              price_unit,
-              entity_name,
-              metadata
-            ),
-            host:profiles (
-              full_name,
-              metadata
-            )
-          `)
-                    .eq("status", "active")
-                    .gt("expires_at", new Date().toISOString());
+    const fetchReels = useCallback(async () => {
+        setLoading(true);
+        try {
+            // Query reels with joins to experiences and profiles
+            let query = supabase
+                .from("reels")
+                .select(`
+                    id,
+                    video_url,
+                    thumbnail_url,
+                    category,
+                    created_at,
+                    experience_id,
+                    is_live,
+                    lat,
+                    lng,
+                    duration,
+                    experience:experiences (
+                        title,
+                        location,
+                        current_price,
+                        price_unit,
+                        entity_name,
+                        metadata
+                    ),
+                    host:profiles (
+                        full_name,
+                        metadata
+                    )
+                `)
+                .eq("status", "active")
+                .gt("expires_at", new Date().toISOString());
 
-                if (category && category !== "all") {
-                    query = query.eq("category", category);
-                }
-
-                if (experienceId) {
-                    query = query.eq("experience_id", experienceId);
-                }
-
-                if (search) {
-                    // Use ilike on the joined experience title
-                    // Note: Supabase filtering on joined tables can be tricky, 
-                    // but since we want to search the title, we'll apply it to the main query if possible
-                    // or use a structured search if supported.
-                    query = query.ilike('experience.title', `%${search}%`);
-                }
-
-                const { data, error: fetchError } = await query.order("created_at", {
-                    ascending: false,
-                });
-
-                if (fetchError) throw fetchError;
-
-                // Transform database records to ReelData interface
-                const transformedReels: ReelData[] = (data || []).map((item: any) => ({
-                    id: item.id,
-                    videoUrl: item.video_url,
-                    thumbnailUrl: item.thumbnail_url || "/placeholder.svg",
-                    title: item.experience?.title || "Untitled Experience",
-                    location: item.experience?.location || "Unknown Location",
-                    category: item.category as ReelData["category"],
-                    price: item.experience?.current_price || 0,
-                    priceUnit: item.experience?.price_unit || "person",
-                    rating: item.experience?.metadata?.rating || 5.0,
-                    likes: 0, // In production, this would come from a 'likes' table or counter
-                    saved: false, // In production, this would be checked against user's saved items
-                    hostName: item.host?.full_name || item.experience?.entity_name || "Host",
-                    hostAvatar: item.host?.metadata?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + item.id,
-                    postedAt: item.created_at,
-                    isLive: item.is_live,
-                    lat: item.lat,
-                    lng: item.lng,
-                }));
-
-                setReels(transformedReels);
-            } catch (err) {
-                console.error("Error fetching reels:", err);
-                setError(err);
-            } finally {
-                setLoading(false);
+            if (category && category !== "all") {
+                query = query.eq("category", category);
             }
-        };
 
+            if (experienceId) {
+                query = query.eq("experience_id", experienceId);
+            }
+
+            // Fetch all matching, we'll shuffle client-side
+            const { data, error: fetchError } = await query.order("created_at", {
+                ascending: false,
+            });
+
+            if (fetchError) throw fetchError;
+
+            // Transform database records to ReelData interface
+            let transformedReels: ReelData[] = (data || []).map((item: any) => ({
+                id: item.id,
+                videoUrl: item.video_url,
+                thumbnailUrl: item.thumbnail_url || "/placeholder.svg",
+                title: item.experience?.title || "Untitled Experience",
+                location: item.experience?.location || "Unknown Location",
+                category: item.category as ReelData["category"],
+                price: item.experience?.current_price || 0,
+                priceUnit: item.experience?.price_unit || "person",
+                rating: item.experience?.metadata?.rating || 5.0,
+                likes: 0,
+                saved: false,
+                hostName: item.host?.full_name || item.experience?.entity_name || "Host",
+                hostAvatar: item.host?.metadata?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + item.id,
+                postedAt: item.created_at,
+                isLive: item.is_live,
+                lat: item.lat,
+                lng: item.lng,
+            }));
+
+            // Client-side search filter (Supabase ilike on joined tables is unreliable)
+            if (search && search.trim()) {
+                const q = search.toLowerCase();
+                transformedReels = transformedReels.filter(
+                    (r) =>
+                        r.title.toLowerCase().includes(q) ||
+                        r.location.toLowerCase().includes(q) ||
+                        r.hostName.toLowerCase().includes(q) ||
+                        r.category.toLowerCase().includes(q)
+                );
+            }
+
+            // Shuffle for fair, unbiased ordering (TikTok / Instagram Reels style)
+            // Live/verified reels get a slight boost by being placed in the top half
+            const liveReels = transformedReels.filter((r) => r.isLive && r.lat && r.lng);
+            const otherReels = transformedReels.filter((r) => !r.isLive || !r.lat || !r.lng);
+
+            const shuffledLive = shuffleArray(liveReels);
+            const shuffledOther = shuffleArray(otherReels);
+
+            // Interleave: every 3rd reel is a live/verified one (if available)
+            const finalReels: ReelData[] = [];
+            let li = 0,
+                oi = 0;
+            let position = 0;
+
+            while (li < shuffledLive.length || oi < shuffledOther.length) {
+                // Every 3rd position, try to insert a verified reel
+                if (position % 3 === 0 && li < shuffledLive.length) {
+                    finalReels.push(shuffledLive[li++]);
+                } else if (oi < shuffledOther.length) {
+                    finalReels.push(shuffledOther[oi++]);
+                } else if (li < shuffledLive.length) {
+                    finalReels.push(shuffledLive[li++]);
+                }
+                position++;
+            }
+
+            setReels(finalReels);
+        } catch (err) {
+            console.error("Error fetching reels:", err);
+            setError(err);
+        } finally {
+            setLoading(false);
+        }
+    }, [category, experienceId, search]);
+
+    useEffect(() => {
         fetchReels();
-    }, [category, experienceId]);
+    }, [fetchReels]);
 
-    return { reels, loading, error };
+    return { reels, loading, error, refetch: fetchReels };
 };

@@ -1,18 +1,18 @@
 import { cn } from "@/lib/utils";
 
-export type Category = 
-  | "all" 
-  | "hotel" 
-  | "villa" 
-  | "boat" 
-  | "tour" 
-  | "event" 
-  | "apartment" 
-  | "food" 
-  | "drinks" 
-  | "rentals" 
-  | "adventure" 
-  | "camps";
+export type Category =
+  | "all"
+  | "hotel"
+  | "villa"
+  | "boats"
+  | "tours"
+  | "events"
+  | "apartment"
+  | "food"
+  | "drinks"
+  | "rentals"
+  | "adventure"
+  | "parks_camps";
 
 interface CategoryFilterProps {
   selected: Category;
@@ -24,14 +24,14 @@ const categories: { value: Category; label: string; emoji: string }[] = [
   { value: "hotel", label: "Hotels", emoji: "🏨" },
   { value: "villa", label: "Villas", emoji: "🏡" },
   { value: "apartment", label: "Apartments", emoji: "🏠" },
-  { value: "boat", label: "Boats", emoji: "⛵" },
+  { value: "boats", label: "Boats", emoji: "⛵" },
   { value: "food", label: "Food", emoji: "🍽️" },
   { value: "drinks", label: "Drinks", emoji: "🍹" },
   { value: "rentals", label: "Rentals", emoji: "🛵" },
   { value: "adventure", label: "Adventure", emoji: "🧭" },
-  { value: "camps", label: "Parks & Camps", emoji: "⛺" },
-  { value: "tour", label: "Tours", emoji: "🎒" },
-  { value: "event", label: "Events", emoji: "🎉" },
+  { value: "parks_camps", label: "Parks & Camps", emoji: "⛺" },
+  { value: "tours", label: "Tours", emoji: "🎒" },
+  { value: "events", label: "Events", emoji: "🎉" },
 ];
 
 export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
