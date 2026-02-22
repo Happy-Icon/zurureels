@@ -275,7 +275,7 @@ export const MiniVideoEditor = ({
   const rightPct = videoDuration > 0 ? ((videoDuration - trimEnd) / videoDuration) * 100 : 0;
   const playheadPct = videoDuration > 0 ? (currentTime / videoDuration) * 100 : 0;
   const needsTrimming = videoDuration > MAX_REEL_DURATION;
-  const canUpload = trimmedDuration >= 1 && trimmedDuration <= MAX_REEL_DURATION && !isExporting;
+  const canUpload = videoDuration > 0 && trimmedDuration >= 1 && trimmedDuration <= MAX_REEL_DURATION && !isExporting;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDER: Recording mode
