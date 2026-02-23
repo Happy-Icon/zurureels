@@ -70,6 +70,9 @@ export const MiniVideoEditor = ({
 
   const [isExporting, setIsExporting] = useState(false);
 
+  // Fallback duration from the recorder timer (used when WebM reports Infinity)
+  const [durationFromRecorder, setDurationFromRecorder] = useState(0);
+
   // Keep the ref in sync with state (prevents stale closures in pointer events)
   useEffect(() => {
     trimRef.current = { start: trimStart, end: trimEnd, duration: videoDuration };
@@ -88,9 +91,13 @@ export const MiniVideoEditor = ({
   // ── Recording complete handler ────────────────────────────────────────────
 
   const handleRecordingComplete = useCallback(
-    (file: File, loc?: { lat: number; lng: number }) => {
+    (file: File, loc?: { lat: number; lng: number }, recordingDuration?: number) => {
       setRecordedFile(file);
       if (loc) setCapturedLocation(loc);
+      if (recordingDuration && recordingDuration > 0) {
+        console.log("[VideoEditor] Received recorder duration fallback:", recordingDuration);
+        setDurationFromRecorder(recordingDuration);
+      }
       const url = URL.createObjectURL(file);
       setLocalVideoUrl(url);
       setShowRecorder(false);
@@ -98,18 +105,82 @@ export const MiniVideoEditor = ({
     []
   );
 
+  // ── Chrome WebM Infinity duration workaround ──────────────────────────────
+  // Chrome's MediaRecorder produces WebM with unknown duration. The trick is
+  // to seek past the end, which forces Chrome to calculate the real duration.
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !localVideoUrl) return;
+
+    const handleDurationFix = () => {
+      if (!isFinite(video.duration) || video.duration === 0) {
+        console.log("[VideoEditor] Duration is Infinity/0, seeking to fix…");
+        video.currentTime = 1e101; // seek past end
+      }
+    };
+
+    const handleSeeked = () => {
+      if (isFinite(video.duration) && video.duration > 0) {
+        console.log("[VideoEditor] Duration resolved after seek:", video.duration);
+        video.currentTime = 0; // reset to start
+      }
+    };
+
+    video.addEventListener("loadedmetadata", handleDurationFix);
+    video.addEventListener("seeked", handleSeeked);
+
+    return () => {
+      video.removeEventListener("loadedmetadata", handleDurationFix);
+      video.removeEventListener("seeked", handleSeeked);
+    };
+  }, [localVideoUrl]);
+
   // ── Video metadata ready → set duration + extract filmstrip ───────────────
 
   const handleLoadedMetadata = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !isFinite(video.duration)) return;
+    if (!video) return;
 
-    const dur = video.duration;
+    let dur = video.duration;
+
+    // If duration is Infinity (Chrome WebM bug), use fallback from recorder
+    if (!isFinite(dur) || dur === 0) {
+      console.warn("[VideoEditor] video.duration is", dur, "— using recorder fallback", durationFromRecorder);
+      if (durationFromRecorder > 0) {
+        dur = durationFromRecorder;
+      } else {
+        // Not ready yet — the seeked workaround will call handleDurationChange
+        return;
+      }
+    }
+
+    console.log("[VideoEditor] Duration set:", dur);
     setVideoDuration(dur);
     setTrimStart(0);
     setTrimEnd(Math.min(dur, MAX_REEL_DURATION));
     extractThumbnails(video, dur);
-  }, []);
+  }, [durationFromRecorder]);
+
+  // Listen for durationchange — this fires when Chrome resolves the actual duration
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onDurationChange = () => {
+      if (isFinite(video.duration) && video.duration > 0 && videoDuration === 0) {
+        console.log("[VideoEditor] durationchange fired, duration:", video.duration);
+        const dur = video.duration;
+        setVideoDuration(dur);
+        setTrimStart(0);
+        setTrimEnd(Math.min(dur, MAX_REEL_DURATION));
+        extractThumbnails(video, dur);
+      }
+    };
+
+    video.addEventListener("durationchange", onDurationChange);
+    return () => video.removeEventListener("durationchange", onDurationChange);
+  }, [localVideoUrl, videoDuration]);
 
   // ── Extract thumbnail frames for the filmstrip ────────────────────────────
 
@@ -218,19 +289,24 @@ export const MiniVideoEditor = ({
       return;
     }
 
-    const selectedDuration = trimEnd - trimStart;
+    // Use the best available duration estimate
+    const effectiveDuration = videoDuration > 0 ? videoDuration : (durationFromRecorder || MAX_REEL_DURATION);
+    const selectedDuration = videoDuration > 0 ? (trimEnd - trimStart) : effectiveDuration;
 
-    // If the entire video is already ≤ 20s and user didn't adjust handles → skip trimming
+    // If duration is unknown or within limit → upload original directly
     const fullRange =
-      videoDuration <= MAX_REEL_DURATION + 0.5 &&
-      trimStart < 0.5 &&
-      trimEnd >= videoDuration - 0.5;
+      videoDuration === 0 || (
+        effectiveDuration <= MAX_REEL_DURATION + 0.5 &&
+        trimStart < 0.5 &&
+        trimEnd >= effectiveDuration - 0.5
+      );
 
     if (fullRange) {
+      console.log("[VideoEditor] Uploading original file, duration:", effectiveDuration);
       onSubmit({
         category,
         videoFile: sourceFile,
-        duration: Math.round(videoDuration),
+        duration: Math.round(effectiveDuration),
         lat: capturedLocation?.lat,
         lng: capturedLocation?.lng,
         isLive: !!recordedFile,
@@ -275,7 +351,11 @@ export const MiniVideoEditor = ({
   const rightPct = videoDuration > 0 ? ((videoDuration - trimEnd) / videoDuration) * 100 : 0;
   const playheadPct = videoDuration > 0 ? (currentTime / videoDuration) * 100 : 0;
   const needsTrimming = videoDuration > MAX_REEL_DURATION;
-  const canUpload = videoDuration > 0 && trimmedDuration >= 1 && trimmedDuration <= MAX_REEL_DURATION && !isExporting;
+  // Allow upload if: (1) we have a video file (even if duration is unknown), OR (2) normal trim range
+  const hasVideoFile = !!(recordedFile || videoFile);
+  const canUpload = hasVideoFile && !isExporting && (
+    videoDuration === 0 || (trimmedDuration >= 1 && trimmedDuration <= MAX_REEL_DURATION)
+  );
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDER: Recording mode

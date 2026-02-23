@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 
 interface LiveVideoRecorderProps {
-    onRecordingComplete: (file: File, location?: { lat: number; lng: number }) => void;
+    onRecordingComplete: (file: File, location?: { lat: number; lng: number }, recordingDuration?: number) => void;
     onCancel?: () => void;
 }
 
@@ -130,7 +130,8 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
             const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
             const blob = new Blob(chunksRef.current, { type: mimeType });
             const file = new File([blob], `verified-recording.${extension}`, { type: mimeType });
-            onRecordingComplete(file, capturedCoords);
+            // Pass recording duration (seconds) as 3rd argument
+            onRecordingComplete(file, capturedCoords, seconds);
         };
 
         mediaRecorderRef.current = mediaRecorder;

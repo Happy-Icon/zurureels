@@ -133,7 +133,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
     setShowRecorder(true);
   };
 
-  const handleRecordingComplete = async (file: File, loc?: { lat: number; lng: number }) => {
+  const handleRecordingComplete = async (file: File, loc?: { lat: number; lng: number }, _recordingDuration?: number) => {
     const reelId = currentReelIdRef.current;
     if (!file || !reelId) return;
 
