@@ -14,6 +14,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { extractVideoThumbnail } from "@/utils/videoThumbnail";
+import { transcodeVideo } from "@/utils/videoTranscoder";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, Sparkles } from "lucide-react";
 
 
 
@@ -32,6 +35,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
     const [location, setLocation] = useState("");
     const [price, setPrice] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [optimizationProgress, setOptimizationProgress] = useState<number | null>(null);
     const { user } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,7 +85,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     lat: r.lat,
                     lng: r.lng,
                     is_live: true, // Accommodation reels are now forced live
-                    status: 'active'
+                    status: 'active',
+                    processing_status: 'processing'
                 }));
 
             if (reelsToInsert.length > 0) {
@@ -140,6 +145,24 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         }
         setIsSubmitting(true);
         try {
+            // Step 0: Optimize Video (Free client-side transcoding)
+            console.log("[Publish] Step 0: Optimizing video…");
+            setOptimizationProgress(0);
+
+            let finalVideoFile = data.videoFile;
+            try {
+                // We optimize everything to ensure standard H.264 MP4
+                finalVideoFile = await transcodeVideo(data.videoFile, (progress) => {
+                    setOptimizationProgress(progress);
+                });
+                console.log("[Publish] Optimization complete:", finalVideoFile.size);
+            } catch (err) {
+                console.warn("[Publish] Optimization failed, using original file:", err);
+                // Continue with original file if transcoding fails
+            } finally {
+                setOptimizationProgress(null);
+            }
+
             // Step 1: Create Experience record
             console.log("[Publish] Step 1: Creating experience…");
             const { data: exp, error: expError } = await supabase
@@ -164,14 +187,14 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
 
             // Step 2: Upload video to storage
             console.log("[Publish] Step 2: Uploading video…");
-            const fileExt = data.videoFile.name.split('.').pop() || 'webm';
+            const fileExt = finalVideoFile.name.split('.').pop() || 'mp4';
             const fileName = `${crypto.randomUUID()}.${fileExt}`;
             const filePath = `reels/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
                 .from('reels')
-                .upload(filePath, data.videoFile, {
-                    contentType: data.videoFile.type || 'video/webm',
+                .upload(filePath, finalVideoFile, {
+                    contentType: finalVideoFile.type || 'video/mp4',
                     upsert: false,
                 });
 
@@ -230,7 +253,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     lat: data.lat,
                     lng: data.lng,
                     is_live: data.isLive ?? false,
-                    status: 'active'
+                    status: 'active',
+                    processing_status: 'processing'
                 });
 
             if (reelError) {
@@ -282,6 +306,23 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                         }
                     </DialogTitle>
                 </DialogHeader>
+
+                {optimizationProgress !== null && (
+                    <div className="py-8 px-4 flex flex-col items-center gap-4 bg-primary/5 rounded-2xl border border-primary/10 mb-4">
+                        <div className="relative">
+                            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                            <Sparkles className="absolute -top-1 -right-1 h-5 w-5 text-amber-500 animate-pulse" />
+                        </div>
+                        <div className="space-y-2 w-full text-center">
+                            <p className="font-semibold text-primary">Optimizing for all devices...</p>
+                            <Progress value={optimizationProgress} className="h-2 w-full" />
+                            <p className="text-xs text-muted-foreground">{Math.round(optimizationProgress)}% complete</p>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground max-w-[200px]">
+                            We are converting your video to a web-safe format to ensure it plays on every device.
+                        </p>
+                    </div>
+                )}
 
                 {showAccommodationFlow && isAccommodationCategory(selectedCategory) ? (
                     <AccommodationReelFlow

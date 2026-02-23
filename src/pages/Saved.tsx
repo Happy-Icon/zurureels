@@ -60,6 +60,8 @@ const Saved = () => {
                 is_live,
                 lat,
                 lng,
+                processing_status,
+                processed_video_url,
                 experience:experiences (
                   title,
                   location,
@@ -97,6 +99,8 @@ const Saved = () => {
               isLive: item.is_live,
               lat: item.lat,
               lng: item.lng,
+              processingStatus: item.processing_status,
+              processedVideoUrl: item.processed_video_url,
             }));
           }
         }

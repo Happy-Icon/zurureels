@@ -10,6 +10,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useRef } from "react";
 import { AccommodationData, ReelRequirement } from "@/types/host";
+import { transcodeVideo } from "@/utils/videoTranscoder";
+import { Progress } from "@/components/ui/progress";
+import { Sparkles, Loader2 } from "lucide-react";
 
 interface AccommodationReelFlowProps {
   category: "hotel" | "villa" | "apartment";
@@ -50,6 +53,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
   const [uploadedReels, setUploadedReels] = useState<Map<string, { url: string; lat?: number; lng?: number }>>(new Map());
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [showRecorder, setShowRecorder] = useState(false);
+  const [optimizationProgress, setOptimizationProgress] = useState<number | null>(null);
   const currentReelIdRef = useRef<string | null>(null);
 
   const categoryLabel = category === "hotel" ? "Hotel" : category === "villa" ? "Villa" : "Apartment";
@@ -141,13 +145,26 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
     setShowRecorder(false);
 
     try {
-      const fileExt = file.name.split('.').pop();
+      // Step 0: Optimize Video
+      setOptimizationProgress(0);
+      let finalFile = file;
+      try {
+        finalFile = await transcodeVideo(file, (p) => setOptimizationProgress(p));
+      } catch (err) {
+        console.warn("Transcoding failed, using original:", err);
+      } finally {
+        setOptimizationProgress(null);
+      }
+
+      const fileExt = finalFile.name.split('.').pop() || 'mp4';
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `reels/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('reels')
-        .upload(filePath, file);
+        .upload(filePath, finalFile, {
+          contentType: 'video/mp4'
+        });
 
       if (uploadError) throw uploadError;
 
@@ -231,6 +248,20 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
           Record Reels
         </span>
       </div>
+
+      {optimizationProgress !== null && (
+        <div className="mx-4 p-4 bg-primary/5 rounded-xl border border-primary/10 flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2 text-primary font-medium">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <Sparkles className="h-4 w-4 text-amber-500" />
+            <span>Optimizing for best quality...</span>
+          </div>
+          <Progress value={optimizationProgress} className="h-1.5 w-full" />
+          <p className="text-[10px] text-muted-foreground">
+            Formatting video for all devices ({Math.round(optimizationProgress)}%)
+          </p>
+        </div>
+      )}
 
       {/* Step 1: Property Info */}
       {step === 1 && (
