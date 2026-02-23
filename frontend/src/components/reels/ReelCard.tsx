@@ -1,4 +1,4 @@
-import { Heart, Share2, Bookmark, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw, Plus, Check } from "lucide-react";
+import { Heart, Share2, Bookmark, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw, Plus, Check, Loader2, Video } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,8 @@ export interface ReelData {
   isLive?: boolean;
   lat?: number;
   lng?: number;
+  processingStatus?: 'uploading' | 'processing' | 'ready' | 'failed';
+  processedVideoUrl?: string;
 }
 
 interface ReelCardProps {
@@ -202,7 +204,7 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
       <div className="absolute inset-0 bg-black">
         <video
           ref={videoRef}
-          src={reel.videoUrl}
+          src={reel.processedVideoUrl || reel.videoUrl}
           poster={reel.thumbnailUrl}
           className="h-full w-full object-cover"
           loop
@@ -217,6 +219,24 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
           onPause={() => setIsPlaying(false)}
           onError={handleVideoError}
         />
+
+        {/* Processing/Loading States */}
+        {reel.processingStatus && reel.processingStatus !== 'ready' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/40 backdrop-blur-sm">
+            <div className="p-6 bg-black/60 rounded-3xl border border-white/10 flex flex-col items-center gap-4 text-center">
+              <div className="relative">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Video className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-white font-medium capitalize">Video {reel.processingStatus}...</p>
+                <p className="text-xs text-white/60">Optimizing for universal playback</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Play/Pause Overlay */}
         <button
