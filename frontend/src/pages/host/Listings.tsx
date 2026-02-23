@@ -1,18 +1,98 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { HostReelsList } from "@/components/host/dashboard/HostReelsList";
 import { CreateReelDialog } from "@/components/host/dashboard/CreateReelDialog";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { mockHostReels } from "@/data/mockHostData";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
+import { ReelData } from "@/types/host";
 
 const Listings = () => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<"published" | "drafts">("published");
+    const [reels, setReels] = useState<ReelData[]>([]);
+    const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
 
-    const publishedReels = mockHostReels.filter(r => r.status === "published");
-    const draftReels = mockHostReels.filter(r => r.status === "draft");
+    const fetchReels = useCallback(async () => {
+        if (!user) return;
+        setLoading(true);
+
+        try {
+            const { data, error } = await supabase
+                .from("reels")
+                .select(`
+                    id,
+                    category,
+                    video_url,
+                    thumbnail_url,
+                    status,
+                    created_at,
+                    expires_at,
+                    experience:experiences (
+                        title,
+                        location,
+                        current_price
+                    )
+                `)
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: false });
+
+            if (error) throw error;
+
+            // Get like counts for each reel
+            const reelIds = (data || []).map((r) => r.id);
+            let likeCounts: Record<string, number> = {};
+
+            if (reelIds.length > 0) {
+                // Count likes per reel
+                const { data: likes } = await supabase
+                    .from("reel_likes")
+                    .select("reel_id")
+                    .in("reel_id", reelIds);
+
+                if (likes) {
+                    for (const like of likes) {
+                        likeCounts[like.reel_id] = (likeCounts[like.reel_id] || 0) + 1;
+                    }
+                }
+            }
+
+            const transformed: ReelData[] = (data || []).map((item: any) => ({
+                id: item.id,
+                title: item.experience?.title || "Untitled Experience",
+                location: item.experience?.location || "Unknown",
+                category: item.category,
+                price: item.experience?.current_price || 0,
+                views: likeCounts[item.id] || 0,
+                status: item.status === "active" ? "published" : "draft",
+                thumbnail: item.thumbnail_url || "",
+                expiresAt: item.expires_at,
+            }));
+
+            setReels(transformed);
+        } catch (err) {
+            console.error("Error fetching host reels:", err);
+        } finally {
+            setLoading(false);
+        }
+    }, [user]);
+
+    useEffect(() => {
+        fetchReels();
+    }, [fetchReels]);
+
+    const handleDialogChange = (open: boolean) => {
+        setIsCreateOpen(open);
+        if (!open) {
+            fetchReels(); // refetch when dialog closes
+        }
+    };
+
+    const publishedReels = reels.filter(r => r.status === "published");
+    const draftReels = reels.filter(r => r.status === "draft");
 
     return (
         <MainLayout>
@@ -59,13 +139,19 @@ const Listings = () => {
                 </div>
 
                 <div className="p-4">
-                    <HostReelsList
-                        reels={activeTab === "published" ? publishedReels : draftReels}
-                        type={activeTab}
-                    />
+                    {loading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : (
+                        <HostReelsList
+                            reels={activeTab === "published" ? publishedReels : draftReels}
+                            type={activeTab}
+                        />
+                    )}
                 </div>
 
-                <CreateReelDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />
+                <CreateReelDialog open={isCreateOpen} onOpenChange={handleDialogChange} />
             </div>
         </MainLayout>
     );

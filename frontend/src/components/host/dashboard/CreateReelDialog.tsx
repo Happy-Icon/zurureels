@@ -13,6 +13,7 @@ import { categories, locations } from "@/data/hostConstants";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
+import { extractVideoThumbnail } from "@/utils/videoThumbnail";
 
 
 
@@ -188,8 +189,35 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             }
             console.log("[Publish] Video uploaded:", publicUrl);
 
-            // Step 3: Create Reel record
-            console.log("[Publish] Step 3: Creating reel record…");
+            // Step 3: Extract + upload thumbnail
+            console.log("[Publish] Step 3: Extracting thumbnail…");
+            let thumbnailUrl: string | null = null;
+            try {
+                const thumbBlob = await extractVideoThumbnail(data.videoFile);
+                if (thumbBlob) {
+                    const thumbName = `thumbnails/${crypto.randomUUID()}.jpg`;
+                    const { error: thumbError } = await supabase.storage
+                        .from('reels')
+                        .upload(thumbName, thumbBlob, {
+                            contentType: 'image/jpeg',
+                            upsert: false,
+                        });
+                    if (!thumbError) {
+                        const { data: thumbData } = supabase.storage
+                            .from('reels')
+                            .getPublicUrl(thumbName);
+                        thumbnailUrl = thumbData.publicUrl;
+                        console.log("[Publish] Thumbnail uploaded:", thumbnailUrl);
+                    } else {
+                        console.warn("[Publish] Thumbnail upload failed:", thumbError);
+                    }
+                }
+            } catch (thumbErr) {
+                console.warn("[Publish] Thumbnail extraction failed, proceeding without:", thumbErr);
+            }
+
+            // Step 4: Create Reel record
+            console.log("[Publish] Step 4: Creating reel record…");
             const { error: reelError } = await supabase
                 .from("reels")
                 .insert({
@@ -197,6 +225,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     experience_id: exp.id,
                     category: selectedCategory,
                     video_url: publicUrl,
+                    thumbnail_url: thumbnailUrl,
                     duration: data.duration || 20,
                     lat: data.lat,
                     lng: data.lng,

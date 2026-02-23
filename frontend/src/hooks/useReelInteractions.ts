@@ -117,6 +117,8 @@ export function useReelInteractions(reelId: string, hostUserId?: string) {
             if (err?.code === "23505") {
                 // Duplicate — state was out of sync, just set to liked
                 setIsLiked(true);
+            } else {
+                toast.error("Couldn't update like. Please try again.");
             }
         }
     }, [user, isLiked, reelId]);
@@ -152,6 +154,8 @@ export function useReelInteractions(reelId: string, hostUserId?: string) {
             console.error("Save error:", err);
             if (err?.code === "23505") {
                 setIsSaved(true);
+            } else {
+                toast.error("Couldn't save reel. Please try again.");
             }
         }
     }, [user, isSaved, reelId]);
@@ -189,6 +193,8 @@ export function useReelInteractions(reelId: string, hostUserId?: string) {
             console.error("Follow error:", err);
             if (err?.code === "23505") {
                 setIsFollowing(true);
+            } else {
+                toast.error("Couldn't update follow. Please try again.");
             }
         }
     }, [user, isFollowing, hostUserId]);

@@ -1,4 +1,4 @@
-import { Heart, Share2, Bookmark, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw, UserPlus, Check } from "lucide-react";
+import { Heart, Share2, Bookmark, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw, Plus, Check } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -289,7 +289,7 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
             {isFollowing ? (
               <Check className="h-3.5 w-3.5" />
             ) : (
-              <UserPlus className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5" />
             )}
           </button>
         </div>

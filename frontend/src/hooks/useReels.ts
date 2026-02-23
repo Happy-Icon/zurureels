@@ -82,7 +82,7 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 category: item.category as ReelData["category"],
                 price: item.experience?.current_price || 0,
                 priceUnit: item.experience?.price_unit || "person",
-                rating: item.experience?.metadata?.rating || 5.0,
+                rating: item.experience?.metadata?.rating || 0,
                 likes: 0,
                 saved: false,
                 hostName: item.host?.full_name || item.experience?.entity_name || "Host",
