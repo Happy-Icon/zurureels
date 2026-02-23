@@ -1,17 +1,22 @@
-import { Heart, Share2, Bookmark, MessageCircle, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw } from "lucide-react";
+import { Heart, Share2, Bookmark, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw, UserPlus, Check } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getReelExpiryDisplay, isReelExpiringSoon } from "@/utils/reelExpiry";
+import { useReelInteractions } from "@/hooks/useReelInteractions";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 export interface ReelData {
   id: string;
+  experienceId?: string;
+  hostUserId?: string;
   videoUrl: string;
   thumbnailUrl: string;
   title: string;
   location: string;
-  category: "hotel" | "villa" | "boat" | "tour" | "event" | "apartment" | "food" | "drinks" | "rentals" | "adventure" | "camps";
+  category: "hotel" | "villa" | "apartment" | "boats" | "food" | "drinks" | "rentals" | "adventure" | "parks_camps" | "tours" | "events";
   price: number;
   priceUnit: string;
   rating: number;
@@ -35,15 +40,28 @@ interface ReelCardProps {
 export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
-  const [isLiked, setIsLiked] = useState(false);
-  const [isSaved, setIsSaved] = useState(reel.saved);
-  const [likeCount, setLikeCount] = useState(reel.likes);
+  const [showMuteHint, setShowMuteHint] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const navigate = useNavigate();
+
+  // Persistent interactions via Supabase
+  const {
+    isLiked,
+    likeCount,
+    isSaved,
+    isFollowing,
+    toggleLike,
+    toggleSave,
+    toggleFollow,
+  } = useReelInteractions(reel.id, reel.hostUserId);
 
   useEffect(() => {
     if (videoRef.current) {
       if (isActive) {
+        videoRef.current.muted = true;
+        setIsMuted(true);
+        setShowMuteHint(true);
         videoRef.current.play().catch(err => console.log("Autoplay blocked:", err));
         setIsPlaying(true);
       } else {
@@ -65,6 +83,16 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
         });
       }
       setIsPlaying(!isPlaying);
+    }
+  };
+
+  const toggleMute = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (videoRef.current) {
+      const newMuted = !isMuted;
+      videoRef.current.muted = newMuted;
+      setIsMuted(newMuted);
+      setShowMuteHint(false);
     }
   };
 
@@ -92,28 +120,59 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
     }
   };
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikeCount((prev) => (isLiked ? prev - 1 : prev + 1));
+  const handleLike = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleLike();
   };
 
-  const handleSave = () => {
-    setIsSaved(!isSaved);
+  const handleSave = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleSave();
     onSave?.(reel.id);
+  };
+
+  const handleFollow = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleFollow();
+  };
+
+  const handleAvatarClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (reel.hostUserId) {
+      navigate(`/profile/${reel.hostUserId}`);
+    }
+  };
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: reel.title,
+          text: `Check out ${reel.title} on ZuruSasa!`,
+          url: window.location.origin + `/reel/${reel.id}`,
+        });
+      } else {
+        await navigator.clipboard.writeText(window.location.origin + `/reel/${reel.id}`);
+        toast.success("Link copied!");
+      }
+    } catch (err) {
+      // User cancelled share or it failed silently
+    }
   };
 
   const categoryColors: Record<string, string> = {
     hotel: "bg-blue-500/90",
     villa: "bg-emerald-500/90",
-    boat: "bg-cyan-500/90",
-    tour: "bg-amber-500/90",
-    event: "bg-purple-500/90",
+    boats: "bg-cyan-500/90",
+    tours: "bg-amber-500/90",
+    events: "bg-purple-500/90",
     apartment: "bg-indigo-500/90",
     food: "bg-orange-500/90",
     drinks: "bg-pink-500/90",
     rentals: "bg-teal-500/90",
     adventure: "bg-red-500/90",
-    camps: "bg-green-600/90",
+    parks_camps: "bg-green-600/90",
   };
 
   return (
@@ -177,38 +236,66 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
       <div className="absolute inset-0 gradient-overlay pointer-events-none" />
 
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between md:hidden">
+      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20">
         <span className="text-xl font-display font-semibold text-primary-foreground drop-shadow-md">
           ZuruSasa
         </span>
         <button
-          onClick={() => setIsMuted(!isMuted)}
-          className="rounded-full glass-dark p-2"
+          onClick={toggleMute}
+          className="rounded-full bg-black/40 backdrop-blur-sm p-2.5 transition-all hover:bg-black/60 active:scale-90"
+          aria-label={isMuted ? "Unmute" : "Mute"}
         >
           {isMuted ? (
-            <VolumeX className="h-5 w-5 text-primary-foreground" />
+            <VolumeX className="h-5 w-5 text-white" />
           ) : (
-            <Volume2 className="h-5 w-5 text-primary-foreground" />
+            <Volume2 className="h-5 w-5 text-white" />
           )}
         </button>
       </div>
 
+      {/* Tap-for-sound hint */}
+      {isPlaying && isMuted && showMuteHint && (
+        <button
+          onClick={toggleMute}
+          className="absolute top-16 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2 rounded-full bg-black/50 backdrop-blur-sm text-white text-sm font-medium animate-pulse"
+        >
+          <VolumeX className="h-4 w-4" />
+          Tap for sound
+        </button>
+      )}
+
       {/* Right Side Actions */}
       <div className="absolute right-4 bottom-32 md:bottom-24 flex flex-col items-center gap-5">
-        {/* Host Avatar */}
+        {/* Host Avatar + Follow */}
         <div className="relative">
-          <img
-            src={reel.hostAvatar}
-            alt={reel.hostName}
-            className="h-12 w-12 rounded-full border-2 border-primary-foreground object-cover"
-          />
-          <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-xs font-bold px-1.5 rounded">
-            +
-          </span>
+          <button onClick={handleAvatarClick} className="block">
+            <img
+              src={reel.hostAvatar}
+              alt={reel.hostName}
+              className="h-12 w-12 rounded-full border-2 border-primary-foreground object-cover transition-transform hover:scale-105"
+            />
+          </button>
+          {/* Follow/Unfollow button */}
+          <button
+            onClick={handleFollow}
+            className={cn(
+              "absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full p-0.5 transition-all active:scale-90",
+              isFollowing
+                ? "bg-emerald-500 text-white"
+                : "bg-primary text-primary-foreground"
+            )}
+            aria-label={isFollowing ? "Unfollow" : "Follow"}
+          >
+            {isFollowing ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <UserPlus className="h-3.5 w-3.5" />
+            )}
+          </button>
         </div>
 
         {/* Like */}
-        <button onClick={handleLike} className="flex flex-col items-center gap-1">
+        <button onClick={handleLike} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
           <Heart
             className={cn(
               "h-7 w-7 transition-all duration-200",
@@ -223,7 +310,7 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
         </button>
 
         {/* Save */}
-        <button onClick={handleSave} className="flex flex-col items-center gap-1">
+        <button onClick={handleSave} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
           <Bookmark
             className={cn(
               "h-7 w-7 transition-all duration-200",
@@ -232,11 +319,13 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
                 : "text-primary-foreground"
             )}
           />
-          <span className="text-xs text-primary-foreground font-medium">Save</span>
+          <span className="text-xs text-primary-foreground font-medium">
+            {isSaved ? "Saved" : "Save"}
+          </span>
         </button>
 
         {/* Share */}
-        <button className="flex flex-col items-center gap-1">
+        <button onClick={handleShare} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
           <Share2 className="h-7 w-7 text-primary-foreground" />
           <span className="text-xs text-primary-foreground font-medium">Share</span>
         </button>
@@ -286,7 +375,7 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
         {/* Price & Rating */}
         <div className="flex items-center gap-4">
           <span className="text-lg font-semibold text-primary-foreground">
-            ${reel.price}
+            KES {reel.price.toLocaleString()}
             <span className="text-sm font-normal text-primary-foreground/80">
               /{reel.priceUnit}
             </span>

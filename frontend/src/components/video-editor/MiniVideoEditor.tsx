@@ -1,438 +1,518 @@
+/**
+ * MiniVideoEditor — Clean video recorder + trimmer.
+ *
+ * Two modes:
+ *  1. RECORD: Opens LiveVideoRecorder (20s max, front/back camera, auto-stops).
+ *  2. TRIM:   Shows the recorded/uploaded video with a WhatsApp-style trim bar
+ *             so users can crop to ≤ 20 seconds before uploading.
+ *
+ * No scores. No emojis. No fake audio cues. Just record → trim → upload.
+ */
+
 import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import {
-  ChevronLeft, Upload, Play, Pause, RotateCcw,
-  Camera, Volume2, Type, Sparkles, Check, Video, ShieldCheck
-} from "lucide-react";
+import { ChevronLeft, Upload, Play, Pause, Scissors, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { VideoTimeline, RequiredElement, TIMELINE_SEGMENTS } from "./VideoTimeline";
-import { ReelScorePreview, ScoreBreakdown, calculateOverallScore } from "./ReelScorePreview";
-import { ShotSuggestions } from "./ShotSuggestions";
-import { AudioCuesLibrary } from "./AudioCuesLibrary";
-import { TextOverlayTemplates } from "./TextOverlayTemplates";
-import { ValidationScorecard, ValidationWarning } from "./ValidationScorecard";
-import { GuidanceTooltip, GuidanceMessage } from "./GuidanceTooltip";
-import { getReelSpecByCategory, ExperienceReelSpec } from "@/data/reelSpecifications";
 import { LiveVideoRecorder } from "./LiveVideoRecorder";
-import { ScoreBreakdown } from "@/types/host";
+import { toast } from "sonner";
+
+// ─── Public Types ──────────────────────────────────────────────────────────────
 
 interface MiniVideoEditorProps {
   category: string;
   videoFile?: File | null;
-  videoUrl?: string;
   onBack: () => void;
   onSubmit: (data: VideoEditorSubmitData) => void;
 }
 
 export interface VideoEditorSubmitData {
   category: string;
-  videoFile?: File;
-  videoUrl?: string;
+  videoFile: File;
   duration: number;
-  scores: ScoreBreakdown;
-  elementsSatisfied: string[];
   lat?: number;
   lng?: number;
   isLive?: boolean;
 }
 
-// Category to icon mapping for required elements
-const ELEMENT_ICONS: Record<string, string> = {
-  motion: "🏃",
-  water: "🌊",
-  human_presence: "👤",
-  food_motion: "🍳",
-  texture: "✨",
-  human_reaction: "😊",
-  pour: "🍷",
-  atmosphere: "🌃",
-  social_energy: "🥳",
-  vehicle_motion: "🏍️",
-  rider_presence: "🧑",
-  terrain: "🛤️",
-  adrenaline: "⚡",
-  height_or_speed: "🎢",
-  nature: "🌲",
-  space: "🏕️",
-  calm_human_presence: "🧘",
-  movement: "🚶",
-  landmark: "🏛️",
-  guide_context: "🎤",
-  crowd: "👥",
-  energy: "🔥",
-  live_action: "🎵",
-};
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+const MAX_REEL_DURATION = 20; // seconds — hard limit
+const THUMBNAIL_COUNT = 12;   // frames in the filmstrip
+
+// ─── Component ─────────────────────────────────────────────────────────────────
 
 export const MiniVideoEditor = ({
   category,
   videoFile,
-  videoUrl,
   onBack,
   onSubmit,
 }: MiniVideoEditorProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const trimBarRef = useRef<HTMLDivElement>(null);
+
+  // Mutable ref to avoid stale closures in drag handlers
+  const trimRef = useRef({ start: 0, end: MAX_REEL_DURATION, duration: 0 });
+
+  // ── State ──────────────────────────────────────────────────────────────────
+
+  const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [activeToolTab, setActiveToolTab] = useState("shots");
-  const [showScorecard, setShowScorecard] = useState(false);
-  const [guidanceMessage, setGuidanceMessage] = useState<GuidanceMessage | null>(null);
-  const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(!!videoFile || !!videoUrl);
-  const [elementsSatisfied, setElementsSatisfied] = useState<string[]>([]);
+
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(MAX_REEL_DURATION);
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
+
+  const [showRecorder, setShowRecorder] = useState(!videoFile);
   const [recordedFile, setRecordedFile] = useState<File | null>(null);
   const [capturedLocation, setCapturedLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-  // Mock scores - in production, these would be calculated from video analysis
-  const [scores, setScores] = useState<ScoreBreakdown>({
-    hook_strength: 75,
-    motion_quality: 80,
-    human_emotion: 65,
-    visual_clarity: 85,
-    signature_moment: 70,
-    viral_potential: 60,
-  });
+  const [isExporting, setIsExporting] = useState(false);
 
-  // Get spec for this category
-  const spec = getReelSpecByCategory(category);
+  // Keep the ref in sync with state (prevents stale closures in pointer events)
+  useEffect(() => {
+    trimRef.current = { start: trimStart, end: trimEnd, duration: videoDuration };
+  }, [trimStart, trimEnd, videoDuration]);
 
-  // Generate required elements from spec
-  const getRequiredElements = (): RequiredElement[] => {
-    if (!spec) return [];
+  // ── Create object URL for the source video ────────────────────────────────
 
-    return spec.required_elements.map((element, index) => ({
-      id: element,
-      icon: ELEMENT_ICONS[element] || "✓",
-      label: element.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-      // Mock: randomly mark some as satisfied based on playback progress
-      satisfied: currentTime > (index + 1) * 3,
-    }));
-  };
-
-  // Create local URL for uploaded file
   useEffect(() => {
     if (videoFile) {
       const url = URL.createObjectURL(videoFile);
       setLocalVideoUrl(url);
       return () => URL.revokeObjectURL(url);
-    } else if (videoUrl) {
-      setLocalVideoUrl(videoUrl);
     }
-  }, [videoFile, videoUrl]);
+  }, [videoFile]);
 
-  // Handle video metadata loaded
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration);
+  // ── Recording complete handler ────────────────────────────────────────────
+
+  const handleRecordingComplete = useCallback(
+    (file: File, loc?: { lat: number; lng: number }) => {
+      setRecordedFile(file);
+      if (loc) setCapturedLocation(loc);
+      const url = URL.createObjectURL(file);
+      setLocalVideoUrl(url);
+      setShowRecorder(false);
+    },
+    []
+  );
+
+  // ── Video metadata ready → set duration + extract filmstrip ───────────────
+
+  const handleLoadedMetadata = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !isFinite(video.duration)) return;
+
+    const dur = video.duration;
+    setVideoDuration(dur);
+    setTrimStart(0);
+    setTrimEnd(Math.min(dur, MAX_REEL_DURATION));
+    extractThumbnails(video, dur);
+  }, []);
+
+  // ── Extract thumbnail frames for the filmstrip ────────────────────────────
+
+  const extractThumbnails = async (video: HTMLVideoElement, duration: number) => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = 56;
+    canvas.height = 96;
+    const frames: string[] = [];
+
+    for (let i = 0; i < THUMBNAIL_COUNT; i++) {
+      const time = (duration / THUMBNAIL_COUNT) * (i + 0.5);
+      video.currentTime = time;
+      await new Promise<void>((r) =>
+        video.addEventListener("seeked", () => r(), { once: true })
+      );
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      frames.push(canvas.toDataURL("image/jpeg", 0.35));
     }
+
+    video.currentTime = 0;
+    setThumbnails(frames);
   };
 
-  // Handle time update
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      const time = videoRef.current.currentTime;
-      setCurrentTime(time);
+  // ── Time update — loop playback within trim bounds ────────────────────────
 
-      // Trigger guidance messages based on playback progress
-      triggerGuidance(time);
-    }
-  };
+  const handleTimeUpdate = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    setCurrentTime(video.currentTime);
 
-  const handleLiveRecordingComplete = (file: File, loc?: { lat: number; lng: number }) => {
-    setRecordedFile(file);
-    if (loc) setCapturedLocation(loc);
-    const url = URL.createObjectURL(file);
-    setLocalVideoUrl(url);
-    setShowPreview(true);
-    // If videoRef is available, load the new video
-    if (videoRef.current) {
-      videoRef.current.load();
-    }
-  };
-
-  // Trigger contextual guidance
-  const triggerGuidance = useCallback((time: number) => {
-    // Only show guidance occasionally
-    if (Math.random() > 0.02) return;
-
-    const segment = TIMELINE_SEGMENTS.find(
-      (s) => time >= s.startTime && time < s.endTime
-    );
-
-    if (!segment) return;
-
-    const messages: Record<string, GuidanceMessage[]> = {
-      hook: [
-        { id: "hook1", message: "Great hook! Motion detected in first 3s → +hook_strength", type: "success" },
-        { id: "hook2", message: "Start with action to grab attention!", type: "tip" },
-      ],
-      peak: [
-        { id: "peak1", message: "Add human reaction for better emotion score!", type: "tip" },
-        { id: "peak2", message: "Signature moment detected! 🎉", type: "success" },
-      ],
-      close: [
-        { id: "close1", message: "End with a smile or CTA for higher engagement!", type: "tip" },
-        { id: "close2", message: "Strong closing frame detected!", type: "success" },
-      ],
-    };
-
-    const segmentMessages = messages[segment.id] || [];
-    if (segmentMessages.length > 0) {
-      const randomMessage = segmentMessages[Math.floor(Math.random() * segmentMessages.length)];
-      setGuidanceMessage(randomMessage);
+    if (video.currentTime >= trimRef.current.end) {
+      video.pause();
+      video.currentTime = trimRef.current.start;
+      setIsPlaying(false);
     }
   }, []);
 
-  // Play/Pause toggle
-  const togglePlayback = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
+  // ── Play / Pause ──────────────────────────────────────────────────────────
+
+  const togglePlayback = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      // If cursor is outside trim range, reset to start
+      if (video.currentTime < trimRef.current.start || video.currentTime >= trimRef.current.end) {
+        video.currentTime = trimRef.current.start;
       }
-      setIsPlaying(!isPlaying);
-    }
-  };
-
-  // Seek to time
-  const handleSeek = (time: number) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = time;
-      setCurrentTime(time);
-    }
-  };
-
-  // Reset playback
-  const handleReset = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      videoRef.current.pause();
-      setCurrentTime(0);
+      video.play();
+      setIsPlaying(true);
+    } else {
+      video.pause();
       setIsPlaying(false);
     }
+  }, []);
+
+  // ── Trim-handle drag logic (uses ref → never stale) ───────────────────────
+
+  const handleDragStart = useCallback(
+    (handle: "start" | "end") => (e: React.PointerEvent) => {
+      e.preventDefault();
+      const bar = trimBarRef.current;
+      if (!bar) return;
+
+      const onMove = (ev: PointerEvent) => {
+        const rect = bar.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+        const { duration, start, end } = trimRef.current;
+        const time = ratio * duration;
+
+        if (handle === "start") {
+          const ns = Math.max(0, Math.min(time, end - 1));
+          if (end - ns <= MAX_REEL_DURATION) {
+            setTrimStart(ns);
+            trimRef.current.start = ns;
+          }
+        } else {
+          const ne = Math.min(duration, Math.max(time, start + 1));
+          if (ne - start <= MAX_REEL_DURATION) {
+            setTrimEnd(ne);
+            trimRef.current.end = ne;
+          }
+        }
+      };
+
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+      };
+
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+    },
+    []
+  );
+
+  // ── Submit — trim if needed, then hand file to parent ─────────────────────
+
+  const handleSubmit = async () => {
+    const sourceFile = recordedFile || videoFile;
+    if (!sourceFile) {
+      toast.error("No video found. Please record or upload a video first.");
+      return;
+    }
+
+    const selectedDuration = trimEnd - trimStart;
+
+    // If the entire video is already ≤ 20s and user didn't adjust handles → skip trimming
+    const fullRange =
+      videoDuration <= MAX_REEL_DURATION + 0.5 &&
+      trimStart < 0.5 &&
+      trimEnd >= videoDuration - 0.5;
+
+    if (fullRange) {
+      onSubmit({
+        category,
+        videoFile: sourceFile,
+        duration: Math.round(videoDuration),
+        lat: capturedLocation?.lat,
+        lng: capturedLocation?.lng,
+        isLive: !!recordedFile,
+      });
+      return;
+    }
+
+    // Trim via captureStream + MediaRecorder
+    if (!videoRef.current) return;
+    setIsExporting(true);
+
+    try {
+      const trimmed = await trimVideo(videoRef.current, trimStart, trimEnd);
+      onSubmit({
+        category,
+        videoFile: trimmed,
+        duration: Math.round(selectedDuration),
+        lat: capturedLocation?.lat,
+        lng: capturedLocation?.lng,
+        isLive: !!recordedFile,
+      });
+    } catch (err) {
+      console.error("Trim failed, uploading original:", err);
+      // Graceful fallback: upload original file with the trim metadata
+      onSubmit({
+        category,
+        videoFile: sourceFile,
+        duration: Math.round(selectedDuration),
+        lat: capturedLocation?.lat,
+        lng: capturedLocation?.lng,
+        isLive: !!recordedFile,
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
-  // Generate warnings based on spec validation
-  const getValidationWarnings = (): ValidationWarning[] => {
-    const warnings: ValidationWarning[] = [];
+  // ── Derived layout values ─────────────────────────────────────────────────
 
-    if (duration > 20.5) { // Allow slight buffer for processing
-      warnings.push({
-        id: "duration",
-        message: `Clip is ${duration.toFixed(1)}s – strictly limited to 20s.`,
-        severity: "critical", // Changed from warning to critical
-        action: "Trim to 20s or re-record",
-      });
-    }
+  const trimmedDuration = trimEnd - trimStart;
+  const leftPct = videoDuration > 0 ? (trimStart / videoDuration) * 100 : 0;
+  const rightPct = videoDuration > 0 ? ((videoDuration - trimEnd) / videoDuration) * 100 : 0;
+  const playheadPct = videoDuration > 0 ? (currentTime / videoDuration) * 100 : 0;
+  const needsTrimming = videoDuration > MAX_REEL_DURATION;
+  const canUpload = videoDuration > 0 && trimmedDuration >= 1 && trimmedDuration <= MAX_REEL_DURATION && !isExporting;
 
-    if (spec?.validation_rules.must_have_motion && scores.motion_quality < 50) {
-      warnings.push({
-        id: "motion",
-        message: `Low motion detected for ${category} reel.`,
-        severity: "warning",
-        action: "Add more dynamic movement",
-      });
-    }
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: Recording mode
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    if (spec?.validation_rules.must_have_human_presence && scores.human_emotion < 50) {
-      warnings.push({
-        id: "human",
-        message: "Human presence recommended for this category.",
-        severity: "suggestion",
-        action: "Add reaction shots for 2x engagement",
-      });
-    }
+  if (showRecorder) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black">
+        <LiveVideoRecorder
+          onRecordingComplete={handleRecordingComplete}
+          onCancel={onBack}
+        />
+      </div>
+    );
+  }
 
-    if (scores.signature_moment < 60) {
-      warnings.push({
-        id: "signature",
-        message: "Signature moment missing – this category needs a wow factor!",
-        severity: "suggestion",
-        action: getCategorySignatureTip(category),
-      });
-    }
-
-    // Category-specific warnings
-    if (category === "rentals" && scores.hook_strength < 70) {
-      warnings.push({
-        id: "helmet",
-        message: "Safety gear not clearly visible – confirm override?",
-        severity: "critical",
-        action: "Show helmet/gear in intro for trust",
-      });
-    }
-
-    return warnings;
-  };
-
-  const getCategorySignatureTip = (cat: string): string => {
-    const tips: Record<string, string> = {
-      boats: "Add a big splash or wake jump!",
-      food: "Capture the perfect bite close-up!",
-      drinks: "Show the cheers moment!",
-      rentals: "Include a speed shot or scenic stop!",
-      adventure: "Capture the peak adrenaline moment!",
-      parks_camps: "Show the peaceful campfire or sunrise!",
-      tours: "Reveal the iconic landmark!",
-      events: "Capture crowd going wild!",
-    };
-    return tips[cat.toLowerCase()] || "Add your signature wow moment!";
-  };
-
-  // Handle submit
-  const handleSubmit = () => {
-    const elementsSatisfied = getRequiredElements()
-      .filter((e) => e.satisfied)
-      .map((e) => e.id);
-
-    onSubmit({
-      category,
-      videoFile: recordedFile || videoFile || undefined,
-      videoUrl: videoUrl,
-      duration,
-      scores,
-      elementsSatisfied,
-      lat: capturedLocation?.lat,
-      lng: capturedLocation?.lng,
-      isLive: !!recordedFile
-    });
-  };
-
-  const overallScore = calculateOverallScore(scores);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: Trim + Preview mode
+  // ═══════════════════════════════════════════════════════════════════════════
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
-      {/* Top Bar */}
+      {/* ── Top Bar ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ChevronLeft className="h-4 w-4 mr-1" />
           Back
         </Button>
 
-        <ReelScorePreview scores={scores} compact />
+        <div className="flex items-center gap-1.5 text-sm">
+          <Scissors className="h-4 w-4 text-muted-foreground" />
+          <span
+            className={cn(
+              "font-semibold tabular-nums",
+              trimmedDuration > MAX_REEL_DURATION ? "text-destructive" : "text-foreground"
+            )}
+          >
+            {trimmedDuration.toFixed(1)}s
+          </span>
+          <span className="text-muted-foreground">/ {MAX_REEL_DURATION}s</span>
+        </div>
 
-        <Button size="sm" onClick={() => setShowScorecard(true)}>
-          <Upload className="h-4 w-4 mr-1" />
-          Submit
+        <Button size="sm" onClick={handleSubmit} disabled={!canUpload}>
+          {isExporting ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              Trimming…
+            </>
+          ) : (
+            <>
+              <Upload className="h-4 w-4 mr-1" />
+              Upload
+            </>
+          )}
         </Button>
       </div>
 
-      {/* Video Preview - 9:16 aspect ratio */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="relative flex-1 bg-black flex items-center justify-center">
-          {localVideoUrl && showPreview ? (
-            <video
-              ref={videoRef}
-              src={localVideoUrl}
-              className="max-h-full max-w-full object-contain"
-              style={{ aspectRatio: "9/16" }}
-              onLoadedMetadata={handleLoadedMetadata}
-              onTimeUpdate={handleTimeUpdate}
-              onEnded={() => setIsPlaying(false)}
-              playsInline
-            />
-          ) : (
-            <LiveVideoRecorder
-              onRecordingComplete={handleLiveRecordingComplete}
-              onCancel={onBack}
-            />
-          )}
-
-          {/* Playback Controls Overlay */}
-          {localVideoUrl && showPreview && (
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
-              <div className="flex items-center gap-4">
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  className="h-12 w-12 rounded-full"
-                  onClick={handleReset}
-                >
-                  <RotateCcw className="h-5 w-5" />
-                </Button>
-                <Button
-                  size="icon"
-                  className="h-16 w-16 rounded-full"
-                  onClick={togglePlayback}
-                >
-                  {isPlaying ? (
-                    <Pause className="h-7 w-7" />
-                  ) : (
-                    <Play className="h-7 w-7 ml-1" />
-                  )}
-                </Button>
-                {capturedLocation && (
-                  <ShieldCheck className="h-4 w-4 text-emerald-500 absolute top-4 right-4" />
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Timeline */}
-        <div className="px-4 py-3 bg-background border-t border-border">
-          <VideoTimeline
-            currentTime={currentTime}
-            duration={duration || 20}
-            onSeek={handleSeek}
-            requiredElements={getRequiredElements()}
+      {/* ── Video Preview ───────────────────────────────────────────────── */}
+      <div
+        className="flex-1 relative bg-black flex items-center justify-center cursor-pointer"
+        onClick={togglePlayback}
+      >
+        {localVideoUrl ? (
+          <video
+            ref={videoRef}
+            src={localVideoUrl}
+            className="max-h-full max-w-full object-contain"
+            style={{ aspectRatio: "9/16" }}
+            onLoadedMetadata={handleLoadedMetadata}
+            onTimeUpdate={handleTimeUpdate}
+            onEnded={() => setIsPlaying(false)}
+            playsInline
+            muted
           />
-        </div>
+        ) : (
+          <p className="text-white/40">No video loaded</p>
+        )}
 
-        {/* Tools Tray */}
-        <div className="h-48 bg-card border-t border-border">
-          <Tabs value={activeToolTab} onValueChange={setActiveToolTab} className="h-full flex flex-col">
-            <TabsList className="grid grid-cols-3 mx-4 mt-2">
-              <TabsTrigger value="shots" className="gap-1.5 text-xs">
-                <Camera className="h-3.5 w-3.5" />
-                Shots
-              </TabsTrigger>
-              <TabsTrigger value="audio" className="gap-1.5 text-xs">
-                <Volume2 className="h-3.5 w-3.5" />
-                Audio
-              </TabsTrigger>
-              <TabsTrigger value="text" className="gap-1.5 text-xs">
-                <Type className="h-3.5 w-3.5" />
-                Text
-              </TabsTrigger>
-            </TabsList>
-
-            <div className="flex-1 overflow-y-auto px-4 py-2">
-              <TabsContent value="shots" className="mt-0">
-                <ShotSuggestions category={category} />
-              </TabsContent>
-              <TabsContent value="audio" className="mt-0">
-                <AudioCuesLibrary category={category} />
-              </TabsContent>
-              <TabsContent value="text" className="mt-0">
-                <TextOverlayTemplates category={category} />
-              </TabsContent>
+        {/* Play overlay (visible when paused) */}
+        {localVideoUrl && !isPlaying && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="h-16 w-16 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
+              <Play className="h-7 w-7 text-white ml-1" />
             </div>
-          </Tabs>
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Guidance Tooltip */}
-      <GuidanceTooltip
-        message={guidanceMessage}
-        onDismiss={() => setGuidanceMessage(null)}
-      />
+      {/* ── Trim Bar (WhatsApp-style filmstrip with drag handles) ────── */}
+      {videoDuration > 0 && (
+        <div className="px-4 pt-3 pb-5 bg-background border-t border-border space-y-2">
+          {needsTrimming && (
+            <p className="text-xs text-center text-amber-500 font-medium">
+              Video is {videoDuration.toFixed(1)}s — drag handles to select up to {MAX_REEL_DURATION}s
+            </p>
+          )}
 
-      {/* Validation Scorecard Modal */}
-      <ValidationScorecard
-        open={showScorecard}
-        onClose={() => setShowScorecard(false)}
-        onSubmit={handleSubmit}
-        onReRecord={() => {
-          setShowScorecard(false);
-          handleReset();
-        }}
-        scores={scores}
-        warnings={getValidationWarnings()}
-        category={category}
-      />
+          <div className="relative h-14 touch-none" ref={trimBarRef}>
+            {/* Filmstrip thumbnails */}
+            <div className="absolute inset-0 flex rounded-lg overflow-hidden">
+              {thumbnails.length > 0
+                ? thumbnails.map((src, i) => (
+                  <img
+                    key={i}
+                    src={src}
+                    alt=""
+                    className="h-full flex-1 object-cover"
+                    draggable={false}
+                  />
+                ))
+                : <div className="h-full w-full bg-muted animate-pulse rounded-lg" />
+              }
+            </div>
+
+            {/* Dimmed regions outside trim range */}
+            <div
+              className="absolute top-0 bottom-0 left-0 bg-black/60 rounded-l-lg pointer-events-none"
+              style={{ width: `${leftPct}%` }}
+            />
+            <div
+              className="absolute top-0 bottom-0 right-0 bg-black/60 rounded-r-lg pointer-events-none"
+              style={{ width: `${rightPct}%` }}
+            />
+
+            {/* Selected region border */}
+            <div
+              className="absolute top-0 bottom-0 border-2 border-primary pointer-events-none"
+              style={{ left: `${leftPct}%`, right: `${rightPct}%` }}
+            />
+
+            {/* Left trim handle */}
+            <div
+              className="absolute top-0 bottom-0 z-10 flex items-center justify-center cursor-ew-resize"
+              style={{ left: `${leftPct}%`, width: 20, transform: "translateX(-10px)" }}
+              onPointerDown={handleDragStart("start")}
+            >
+              <div className="h-8 w-1.5 bg-primary rounded-full shadow-lg" />
+            </div>
+
+            {/* Right trim handle */}
+            <div
+              className="absolute top-0 bottom-0 z-10 flex items-center justify-center cursor-ew-resize"
+              style={{ left: `${100 - rightPct}%`, width: 20, transform: "translateX(-10px)" }}
+              onPointerDown={handleDragStart("end")}
+            >
+              <div className="h-8 w-1.5 bg-primary rounded-full shadow-lg" />
+            </div>
+
+            {/* Playhead */}
+            {isPlaying && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-white z-20 pointer-events-none shadow"
+                style={{ left: `${playheadPct}%` }}
+              />
+            )}
+          </div>
+
+          {/* Time labels */}
+          <div className="flex justify-between text-[11px] text-muted-foreground tabular-nums px-0.5">
+            <span>{formatTime(trimStart)}</span>
+            <span>{formatTime(trimEnd)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Format seconds to M:SS */
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Trim a video element's playback range to a new File using captureStream.
+ * Falls back by rejecting if captureStream is unavailable.
+ */
+function trimVideo(
+  video: HTMLVideoElement,
+  start: number,
+  end: number
+): Promise<File> {
+  return new Promise((resolve, reject) => {
+    // captureStream may not exist in all browsers
+    const captureStream =
+      (video as any).captureStream || (video as any).mozCaptureStream;
+    if (!captureStream) {
+      reject(new Error("captureStream not supported"));
+      return;
+    }
+
+    const stream: MediaStream = captureStream.call(video);
+    const mimeTypes = [
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm",
+    ];
+    const mimeType =
+      mimeTypes.find((t) => MediaRecorder.isTypeSupported(t)) || "video/webm";
+
+    const recorder = new MediaRecorder(stream, { mimeType });
+    const chunks: Blob[] = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: mimeType });
+      const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+      resolve(new File([blob], `reel-trimmed.${ext}`, { type: mimeType }));
+    };
+
+    recorder.onerror = () => reject(new Error("MediaRecorder error"));
+
+    // Seek to start, then play + record until end
+    video.currentTime = start;
+    const onSeeked = () => {
+      video.removeEventListener("seeked", onSeeked);
+      video.play();
+      recorder.start();
+
+      const poll = () => {
+        if (video.currentTime >= end || video.paused) {
+          video.pause();
+          if (recorder.state === "recording") recorder.stop();
+        } else {
+          requestAnimationFrame(poll);
+        }
+      };
+      poll();
+    };
+
+    video.addEventListener("seeked", onSeeked, { once: true });
+  });
+}

@@ -35,7 +35,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isAccommodationCategory = (cat: string): cat is AccommodationType => {
-        return ["hotel", "villa", "apartment"].includes(cat);
+        return ["villa", "apartment"].includes(cat);
     };
 
     const handleCategoryChange = (value: string) => {
@@ -129,10 +129,18 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
     };
 
     const handleEditorSubmit = async (data: VideoEditorSubmitData) => {
-        if (!user) return;
+        if (!user) {
+            toast.error("You must be signed in to publish a reel");
+            return;
+        }
+        if (!data.videoFile) {
+            toast.error("No video to upload. Please record or select a video.");
+            return;
+        }
         setIsSubmitting(true);
         try {
-            // 1. Create (or find) Experience - for non-accommodations we create a simple one
+            // Step 1: Create Experience record
+            console.log("[Publish] Step 1: Creating experience…");
             const { data: exp, error: expError } = await supabase
                 .from("experiences")
                 .insert({
@@ -147,53 +155,72 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                 .select()
                 .single();
 
-            if (expError) throw expError;
+            if (expError) {
+                console.error("[Publish] Experience insert failed:", expError);
+                throw new Error(`Experience creation failed: ${expError.message}`);
+            }
+            console.log("[Publish] Experience created:", exp.id);
 
-            // 2. Upload video (if editing was done locally, but usually it's already uploaded in editor?)
-            // Assuming data.videoFile is what we upload if it's there
-            let finalVideoUrl = "";
-            if (data.videoFile) {
-                const fileExt = data.videoFile.name.split('.').pop();
-                const fileName = `${crypto.randomUUID()}.${fileExt}`;
-                const filePath = `reels/${fileName}`;
+            // Step 2: Upload video to storage
+            console.log("[Publish] Step 2: Uploading video…");
+            const fileExt = data.videoFile.name.split('.').pop() || 'webm';
+            const fileName = `${crypto.randomUUID()}.${fileExt}`;
+            const filePath = `reels/${fileName}`;
 
-                const { error: uploadError } = await supabase.storage
-                    .from('reels')
-                    .upload(filePath, data.videoFile);
+            const { error: uploadError } = await supabase.storage
+                .from('reels')
+                .upload(filePath, data.videoFile, {
+                    contentType: data.videoFile.type || 'video/webm',
+                    upsert: false,
+                });
 
-                if (uploadError) throw uploadError;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from('reels')
-                    .getPublicUrl(filePath);
-
-                finalVideoUrl = publicUrl;
+            if (uploadError) {
+                console.error("[Publish] Storage upload failed:", uploadError);
+                throw new Error(`Video upload failed: ${uploadError.message}`);
             }
 
-            // 3. Create Reel
+            const { data: { publicUrl } } = supabase.storage
+                .from('reels')
+                .getPublicUrl(filePath);
+
+            if (!publicUrl) {
+                throw new Error("Failed to get public URL for uploaded video");
+            }
+            console.log("[Publish] Video uploaded:", publicUrl);
+
+            // Step 3: Create Reel record
+            console.log("[Publish] Step 3: Creating reel record…");
             const { error: reelError } = await supabase
                 .from("reels")
                 .insert({
                     user_id: user.id,
                     experience_id: exp.id,
                     category: selectedCategory,
-                    video_url: finalVideoUrl,
-                    duration: data.duration,
+                    video_url: publicUrl,
+                    duration: data.duration || 20,
                     lat: data.lat,
                     lng: data.lng,
-                    is_live: data.isLive,
+                    is_live: data.isLive ?? false,
                     status: 'active'
                 });
 
-            if (reelError) throw reelError;
+            if (reelError) {
+                console.error("[Publish] Reel insert failed:", reelError);
+                throw new Error(`Reel creation failed: ${reelError.message}`);
+            }
+            console.log("[Publish] ✅ Reel published successfully!");
 
             toast.success("Reel published successfully!");
             setShowVideoEditor(false);
             onOpenChange(false);
             setSelectedVideoFile(null);
             setSelectedCategory("");
+            setTitle("");
+            setDescription("");
+            setLocation("");
+            setPrice("");
         } catch (error: any) {
-            console.error("Publish error:", error);
+            console.error("[Publish] Pipeline error:", error);
             toast.error(error.message || "Failed to publish reel");
         } finally {
             setIsSubmitting(false);

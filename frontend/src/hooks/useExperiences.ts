@@ -34,7 +34,7 @@ export const useExperiences = (category?: string, city?: string, search?: string
                 }
 
                 if (city && city !== "Current Location") {
-                    query = query.eq("location", city);
+                    query = query.ilike("location", `%${city}%`);
                 }
 
                 if (search) {
@@ -55,7 +55,7 @@ export const useExperiences = (category?: string, city?: string, search?: string
         };
 
         fetchExperiences();
-    }, [category, city]);
+    }, [category, city, search]);
 
     return { experiences, loading, error };
 };

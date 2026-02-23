@@ -89,13 +89,15 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
         if (!streamRef.current) return;
 
         // Request location when starting recording
+        // Store in a local variable to avoid stale closure in onstop
+        let capturedCoords: { lat: number; lng: number } | undefined;
         try {
             const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
                 navigator.geolocation.getCurrentPosition(resolve, reject);
             });
-            const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            setLocation(coords);
-            console.log("Verified location captured:", coords);
+            capturedCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setLocation(capturedCoords);
+            console.log("Verified location captured:", capturedCoords);
         } catch (err) {
             console.error("Location error:", err);
             toast.error("Location access is required for verified recording");
@@ -123,11 +125,12 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
             }
         };
 
+        // Use capturedCoords (local variable) instead of `location` (stale state)
         mediaRecorder.onstop = () => {
             const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
             const blob = new Blob(chunksRef.current, { type: mimeType });
             const file = new File([blob], `verified-recording.${extension}`, { type: mimeType });
-            onRecordingComplete(file, location || undefined);
+            onRecordingComplete(file, capturedCoords);
         };
 
         mediaRecorderRef.current = mediaRecorder;
