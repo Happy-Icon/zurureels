@@ -7,7 +7,7 @@ const daysAgo = (days: number) => subDays(new Date(), days).toISOString();
 export const mockReels: ReelData[] = [
   {
     id: "1",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-waves-coming-to-the-shore-4116-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=800&h=1200&fit=crop",
     title: "Oceanfront Luxury Suite",
     location: "Diani Beach, Kenya",
@@ -23,7 +23,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "2",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-resort-and-the-ocean-4108-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&h=1200&fit=crop",
     title: "Swahili Heritage Villa",
     location: "Lamu Island, Kenya",
@@ -39,7 +39,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "3",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-small-boat-sailing-in-the-sea-4110-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&h=1200&fit=crop",
     title: "Traditional Dhow Cruise",
     location: "Watamu, Kenya",
@@ -55,7 +55,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "4",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-underwater-view-of-a-coral-reef-4113-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&h=1200&fit=crop",
     title: "Marine Safari Adventure",
     location: "Malindi, Kenya",
@@ -71,7 +71,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "5",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-group-of-friends-partying-on-the-beach-4118-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&h=1200&fit=crop",
     title: "Sunset Beach Party",
     location: "Mombasa, Kenya",
@@ -87,7 +87,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "6",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-swimming-pool-in-a-resort-4115-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&h=1200&fit=crop",
     title: "Kilifi Creek Resort",
     location: "Kilifi, Kenya",
@@ -104,7 +104,7 @@ export const mockReels: ReelData[] = [
   // Apartments
   {
     id: "7",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-modern-apartment-interior-4119-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=1200&fit=crop",
     title: "Modern Beach Apartment",
     location: "Nyali, Mombasa",
@@ -120,7 +120,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "8",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-swahili-style-decorations-4120-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=1200&fit=crop",
     title: "Swahili Style Apartment",
     location: "Bamburi, Kenya",
@@ -137,7 +137,7 @@ export const mockReels: ReelData[] = [
   // Food
   {
     id: "9",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-sea-food-on-a-plate-4121-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&h=1200&fit=crop",
     title: "Swahili Seafood Feast",
     location: "Mombasa Old Town",
@@ -153,7 +153,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "10",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-chef-preparing-food-in-a-kitchen-4122-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&h=1200&fit=crop",
     title: "Chef's Tasting Menu",
     location: "Diani Beach",
@@ -170,7 +170,7 @@ export const mockReels: ReelData[] = [
   // Drinks
   {
     id: "11",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-cocktail-drink-in-a-glass-4123-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&h=1200&fit=crop",
     title: "Sunset Cocktail Experience",
     location: "Forty Thieves Beach Bar, Diani",
@@ -186,7 +186,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "12",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-bartender-shaking-a-cocktail-4124-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=800&h=1200&fit=crop",
     title: "Rooftop Bar Night",
     location: "SkyLounge, Mombasa",
@@ -203,7 +203,7 @@ export const mockReels: ReelData[] = [
   // Rentals
   {
     id: "13",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-scooter-driving-on-the-beach-4125-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=1200&fit=crop",
     title: "Beach Scooter Rental",
     location: "Diani Beach",
@@ -219,7 +219,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "14",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-mountain-bike-riding-on-a-trail-4126-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1571068316344-75bc76f77890?w=800&h=1200&fit=crop",
     title: "Mountain Bike Adventure",
     location: "Watamu, Kenya",
@@ -236,7 +236,7 @@ export const mockReels: ReelData[] = [
   // Adventure
   {
     id: "15",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-safari-jeep-driving-through-the-savanna-4127-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1516426122078-c23e76319801?w=800&h=1200&fit=crop",
     title: "Safari Day Trip",
     location: "Tsavo East National Park",
@@ -252,7 +252,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "16",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-skydiver-falling-through-the-air-4128-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1544551763-77ef2d0cfc6c?w=800&h=1200&fit=crop",
     title: "Skydiving Over Diani",
     location: "Diani Beach",
@@ -268,7 +268,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "17",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-snorkeling-under-the-sea-4129-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1530549387789-4c1017266635?w=800&h=1200&fit=crop",
     title: "Snorkeling & Diving Tour",
     location: "Watamu Marine Park",
@@ -285,7 +285,7 @@ export const mockReels: ReelData[] = [
   // Camps & Parks
   {
     id: "18",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-camping-tent-in-the-mountains-4130-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=800&h=1200&fit=crop",
     title: "Shimba Hills Camp",
     location: "Shimba Hills Reserve",
@@ -301,7 +301,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "19",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-scenic-view-of-a-national-park-4131-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=800&h=1200&fit=crop",
     title: "Marine Park Experience",
     location: "Kisite-Mpunguti Marine Park",
@@ -317,7 +317,7 @@ export const mockReels: ReelData[] = [
   },
   {
     id: "20",
-    videoUrl: "",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-tropical-forest-walking-trail-4132-large.mp4",
     thumbnailUrl: "https://images.unsplash.com/photo-1535941339077-2dd1c7963098?w=800&h=1200&fit=crop",
     title: "Arabuko Sokoke Forest Walk",
     location: "Arabuko Sokoke, Malindi",

@@ -71,7 +71,8 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
     }
   }, [isActive]);
 
-  const togglePlay = () => {
+  const togglePlay = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
@@ -96,6 +97,12 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
     }
   };
 
+  useEffect(() => {
+    if (!reel.videoUrl) {
+      setError("Video currently unavailable");
+    }
+  }, [reel.videoUrl]);
+
   const handleVideoError = (e: any) => {
     const videoElement = e.target as HTMLVideoElement;
     console.error("Video playback error:", videoElement.error);
@@ -107,6 +114,8 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
         case 3: message = "Video decoding failed"; break;
         case 4: message = "Video format not supported or access denied"; break;
       }
+    } else if (!reel.videoUrl) {
+      message = "Video currently unavailable";
     }
     setError(message);
     setIsPlaying(false);
@@ -197,7 +206,7 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
 
         {/* Play/Pause Overlay */}
         <button
-          onClick={togglePlay}
+          onClick={(e) => togglePlay(e)}
           className="absolute inset-0 flex items-center justify-center z-10"
         >
           {!isPlaying && !error && (

@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
 import { ReelData } from "@/hooks/useReels";
 import { CheckOutDialog } from "@/components/booking/CheckOutDialog";
+import { ReelGridCard } from "@/components/reels/ReelGridCard";
 
 const Discover = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -131,83 +132,11 @@ const Discover = () => {
               ))
             ) : allReels.length > 0 ? (
               allReels.map((reel) => (
-                <div
+                <ReelGridCard
                   key={reel.id}
-                  onClick={() => setBookingReel(reel)}
-                  className="group relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted cursor-pointer shadow-sm hover:shadow-lg transition-all duration-300"
-                >
-                  {/* Video thumbnail or actual video preview */}
-                  {reel.videoUrl ? (
-                    <video
-                      src={reel.videoUrl}
-                      poster={reel.thumbnailUrl !== "/placeholder.svg" ? reel.thumbnailUrl : undefined}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      muted
-                      playsInline
-                      preload="metadata"
-                      onMouseEnter={(e) => (e.target as HTMLVideoElement).play().catch(() => { })}
-                      onMouseLeave={(e) => {
-                        const v = e.target as HTMLVideoElement;
-                        v.pause();
-                        v.currentTime = 0;
-                      }}
-                    />
-                  ) : (
-                    <img
-                      src={reel.thumbnailUrl || "/placeholder.svg"}
-                      alt={reel.title}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                  )}
-
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-
-                  {/* Play icon hint */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className="rounded-full bg-black/30 backdrop-blur-sm p-3">
-                      <Play className="h-6 w-6 text-white fill-white" />
-                    </div>
-                  </div>
-
-                  {/* Badges */}
-                  <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                    <Badge className={cn("text-[10px] font-bold uppercase px-2 py-0.5", categoryColors[reel.category] || "bg-primary")}>
-                      {reel.category.replace("_", " ")}
-                    </Badge>
-                    {reel.isLive && (
-                      <Badge className="bg-red-500 text-white animate-pulse border-0 text-[10px] px-2 py-0.5">
-                        LIVE
-                      </Badge>
-                    )}
-                    {reel.lat && reel.lng && (
-                      <Badge className="bg-emerald-500 text-white border-0 text-[10px] px-2 py-0.5">
-                        ✓ Verified
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div className="absolute bottom-0 left-0 right-0 p-3 space-y-1">
-                    <h3 className="font-semibold text-primary-foreground text-sm line-clamp-2 leading-tight">
-                      {reel.title}
-                    </h3>
-                    <div className="flex items-center gap-1 text-[10px] text-primary-foreground/70">
-                      <MapPin className="h-3 w-3" />
-                      {reel.location}
-                    </div>
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-sm font-semibold text-primary-foreground">
-                        KES {reel.price.toLocaleString()}
-                        <span className="text-[10px] font-normal text-primary-foreground/70 ml-1">
-                          /{reel.priceUnit}
-                        </span>
-                      </span>
-                      <span className="text-[10px] text-primary-foreground/70">
-                        ⭐ {reel.rating.toFixed(1)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  reel={reel}
+                  onBook={setBookingReel}
+                />
               ))
             ) : (
               <div className="col-span-full py-16 flex flex-col items-center justify-center text-muted-foreground">
