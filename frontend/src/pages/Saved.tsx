@@ -32,82 +32,84 @@ const Saved = () => {
 
   useEffect(() => {
     const fetchSavedReels = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
       try {
-        // Fetch saved reel IDs then join with reels + experiences + profiles
-        const { data: saves, error: savesError } = await supabase
-          .from("reel_saves")
-          .select("reel_id")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+        let transformed: ReelData[] = [];
 
-        if (savesError) throw savesError;
+        if (user) {
+          // Fetch saved reel IDs then join with reels + experiences + profiles
+          const { data: saves, error: savesError } = await supabase
+            .from("reel_saves")
+            .select("reel_id")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
 
-        if (!saves || saves.length === 0) {
-          setSavedReels([]);
-          setLoading(false);
-          return;
+          if (savesError) throw savesError;
+
+          if (saves && saves.length > 0) {
+            const reelIds = saves.map((s: any) => s.reel_id);
+
+            const { data: reels, error: reelsError } = await supabase
+              .from("reels")
+              .select(`
+                id,
+                user_id,
+                video_url,
+                thumbnail_url,
+                category,
+                created_at,
+                experience_id,
+                is_live,
+                lat,
+                lng,
+                experience:experiences (
+                  title,
+                  location,
+                  current_price,
+                  price_unit,
+                  entity_name,
+                  metadata
+                ),
+                host:profiles (
+                  full_name,
+                  metadata
+                )
+              `)
+              .in("id", reelIds);
+
+            if (reelsError) throw reelsError;
+
+            transformed = (reels || []).map((item: any) => ({
+              id: item.id,
+              experienceId: item.experience_id,
+              hostUserId: item.user_id,
+              videoUrl: item.video_url,
+              thumbnailUrl: item.thumbnail_url || "/placeholder.svg",
+              title: item.experience?.title || "Untitled Experience",
+              location: item.experience?.location || "Unknown Location",
+              category: item.category,
+              price: item.experience?.current_price || 0,
+              priceUnit: item.experience?.price_unit || "person",
+              rating: item.experience?.metadata?.rating || 5.0,
+              likes: 0,
+              saved: true,
+              hostName: item.host?.full_name || item.experience?.entity_name || "Host",
+              hostAvatar: item.host?.metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.id}`,
+              postedAt: item.created_at,
+              isLive: item.is_live,
+              lat: item.lat,
+              lng: item.lng,
+            }));
+          }
         }
 
-        const reelIds = saves.map((s: any) => s.reel_id);
+        // Merge with mock reels (from data and localStorage)
+        const mockSaves = JSON.parse(localStorage.getItem("zuru_mock_saves") || "[]");
+        const { mockReels } = await import("@/data/mockReels");
 
-        const { data: reels, error: reelsError } = await supabase
-          .from("reels")
-          .select(`
-            id,
-            user_id,
-            video_url,
-            thumbnail_url,
-            category,
-            created_at,
-            experience_id,
-            is_live,
-            lat,
-            lng,
-            experience:experiences (
-              title,
-              location,
-              current_price,
-              price_unit,
-              entity_name,
-              metadata
-            ),
-            host:profiles (
-              full_name,
-              metadata
-            )
-          `)
-          .in("id", reelIds);
+        const savedMocks = mockReels.filter(m => m.saved || mockSaves.includes(m.id));
 
-        if (reelsError) throw reelsError;
-
-        const transformed: ReelData[] = (reels || []).map((item: any) => ({
-          id: item.id,
-          experienceId: item.experience_id,
-          hostUserId: item.user_id,
-          videoUrl: item.video_url,
-          thumbnailUrl: item.thumbnail_url || "/placeholder.svg",
-          title: item.experience?.title || "Untitled Experience",
-          location: item.experience?.location || "Unknown Location",
-          category: item.category,
-          price: item.experience?.current_price || 0,
-          priceUnit: item.experience?.price_unit || "person",
-          rating: item.experience?.metadata?.rating || 5.0,
-          likes: 0,
-          saved: true,
-          hostName: item.host?.full_name || item.experience?.entity_name || "Host",
-          hostAvatar: item.host?.metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.id}`,
-          postedAt: item.created_at,
-          isLive: item.is_live,
-          lat: item.lat,
-          lng: item.lng,
-        }));
-
-        setSavedReels(transformed);
+        // Combine real + mocks, ensuring no duplicates and sorting by newest (real first for now)
+        setSavedReels([...transformed, ...savedMocks]);
       } catch (err) {
         console.error("Error fetching saved reels:", err);
       } finally {
@@ -119,13 +121,22 @@ const Saved = () => {
   }, [user]);
 
   const handleUnsave = async (reelId: string) => {
-    if (!user) return;
     try {
-      await supabase
-        .from("reel_saves")
-        .delete()
-        .eq("reel_id", reelId)
-        .eq("user_id", user.id);
+      // Check if it's a UUID (real reel)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reelId);
+
+      if (isUUID && user) {
+        await supabase
+          .from("reel_saves")
+          .delete()
+          .eq("reel_id", reelId)
+          .eq("user_id", user.id);
+      } else {
+        // Handle mock unsave
+        const mockSaves = JSON.parse(localStorage.getItem("zuru_mock_saves") || "[]");
+        const newSaves = mockSaves.filter((id: string) => id !== reelId);
+        localStorage.setItem("zuru_mock_saves", JSON.stringify(newSaves));
+      }
 
       setSavedReels((prev) => prev.filter((r) => r.id !== reelId));
     } catch (err) {
@@ -176,7 +187,7 @@ const Saved = () => {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : !user ? (
+          ) : (!user && savedReels.length === 0) ? (
             <div className="text-center py-12">
               <Bookmark className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="font-semibold text-lg mb-2">Sign in to see saved</h3>

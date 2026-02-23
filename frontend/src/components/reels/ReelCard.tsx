@@ -106,13 +106,25 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
   const handleVideoError = (e: any) => {
     const videoElement = e.target as HTMLVideoElement;
     console.error("Video playback error:", videoElement.error);
+    const videoUrl = reel.videoUrl || "";
+    const isMov = videoUrl.toLowerCase().endsWith('.mov');
+    const isHevc = videoUrl.toLowerCase().includes('hevc');
+
     let message = "Failed to load video";
     if (videoElement.error) {
       switch (videoElement.error.code) {
         case 1: message = "Video loading aborted"; break;
         case 2: message = "Network error while loading video"; break;
         case 3: message = "Video decoding failed"; break;
-        case 4: message = "Video format not supported or access denied"; break;
+        case 4:
+          if (isMov) {
+            message = "iPhone video (.mov) may not be supported in this browser. Try Chrome or Safari.";
+          } else if (isHevc) {
+            message = "HEVC video format not supported on this device.";
+          } else {
+            message = "Video format not supported or access denied";
+          }
+          break;
       }
     } else if (!reel.videoUrl) {
       message = "Video currently unavailable";
@@ -196,6 +208,8 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
           loop
           playsInline
           muted={isMuted}
+          preload="metadata"
+          crossOrigin="anonymous"
           onPlay={() => {
             setIsPlaying(true);
             setError(null);

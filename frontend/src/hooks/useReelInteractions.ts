@@ -34,8 +34,10 @@ export function useReelInteractions(reelId: string, hostUserId?: string) {
         if (!reelId) return;
 
         const fetchState = async () => {
-            // For mock IDs (non-UUIDs), just use the initial state or local persistence
+            // For mock IDs (non-UUIDs), just use local persistence
             if (!isUUID(reelId)) {
+                const mockSaves = JSON.parse(localStorage.getItem("zuru_mock_saves") || "[]");
+                setIsSaved(mockSaves.includes(reelId));
                 setLoaded(true);
                 return;
             }
@@ -148,9 +150,18 @@ export function useReelInteractions(reelId: string, hostUserId?: string) {
         const wasSaved = isSaved;
         setIsSaved(!wasSaved);
 
-        // Skip DB for mocks
+        // Persist mocks in localStorage
         if (!isUUID(reelId)) {
-            toast.success(wasSaved ? "Removed from saved" : "Saved!");
+            const mockSaves = JSON.parse(localStorage.getItem("zuru_mock_saves") || "[]");
+            let newSaves;
+            if (wasSaved) {
+                newSaves = mockSaves.filter((id: string) => id !== reelId);
+                toast.success("Removed from saved");
+            } else {
+                newSaves = [...mockSaves, reelId];
+                toast.success("Saved!");
+            }
+            localStorage.setItem("zuru_mock_saves", JSON.stringify(newSaves));
             return;
         }
 
