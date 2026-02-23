@@ -60,7 +60,7 @@ const Home = () => {
 
           {bookingReel && (
             <CheckOutDialog
-              experienceId={bookingReel.id}
+              experienceId={bookingReel.experienceId || bookingReel.id}
               tripTitle={bookingReel.title}
               amount={bookingReel.price}
               open={!!bookingReel}

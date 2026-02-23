@@ -23,11 +23,23 @@ export function useReelInteractions(reelId: string, hostUserId?: string) {
     // Loading
     const [loaded, setLoaded] = useState(false);
 
+    // Helper to check if a string is a valid UUID
+    const isUUID = (id: string) => {
+        const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return regex.test(id);
+    };
+
     // Fetch initial state
     useEffect(() => {
         if (!reelId) return;
 
         const fetchState = async () => {
+            // For mock IDs (non-UUIDs), just use the initial state or local persistence
+            if (!isUUID(reelId)) {
+                setLoaded(true);
+                return;
+            }
+
             try {
                 // 1. Count likes for this reel
                 const { count: likes } = await supabase
@@ -95,6 +107,9 @@ export function useReelInteractions(reelId: string, hostUserId?: string) {
         setIsLiked(!wasLiked);
         setLikeCount((prev) => (wasLiked ? prev - 1 : prev + 1));
 
+        // Skip DB for mocks
+        if (!isUUID(reelId)) return;
+
         try {
             if (wasLiked) {
                 const { error } = await supabase
@@ -132,6 +147,12 @@ export function useReelInteractions(reelId: string, hostUserId?: string) {
 
         const wasSaved = isSaved;
         setIsSaved(!wasSaved);
+
+        // Skip DB for mocks
+        if (!isUUID(reelId)) {
+            toast.success(wasSaved ? "Removed from saved" : "Saved!");
+            return;
+        }
 
         try {
             if (wasSaved) {
@@ -171,6 +192,12 @@ export function useReelInteractions(reelId: string, hostUserId?: string) {
 
         const wasFollowing = isFollowing;
         setIsFollowing(!wasFollowing);
+
+        // Skip DB for mocks (detecting if hostUserId is a UUID)
+        if (!isUUID(hostUserId)) {
+            toast.success(wasFollowing ? "Unfollowed" : "Following!");
+            return;
+        }
 
         try {
             if (wasFollowing) {

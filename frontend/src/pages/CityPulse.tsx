@@ -7,13 +7,13 @@ import { AIChatBox } from "@/components/city-pulse/AIChatBox";
 import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
 import { QuickListingCard } from "@/components/city-pulse/QuickListingCard";
 import { useWeather } from "@/hooks/useWeather";
-import { useReels } from "@/hooks/useReels";
+import { useReels, ReelData } from "@/hooks/useReels";
 import { useCityPulseAI } from "@/hooks/useCityPulseAI";
 import { useExperiences } from "@/hooks/useExperiences";
 import {
   coastalCities,
 } from "@/data/mockCityPulse";
-import { ReelCard, ReelData } from "@/components/reels/ReelCard";
+import { ReelCard } from "@/components/reels/ReelCard";
 import {
   MapPin,
   ChevronDown,
@@ -476,7 +476,7 @@ const CityPulse = () => {
       {
         bookingReel && (
           <CheckOutDialog
-            experienceId={bookingReel.id}
+            experienceId={bookingReel.experienceId || bookingReel.id}
             tripTitle={bookingReel.title}
             amount={bookingReel.price}
             open={!!bookingReel}

@@ -11,12 +11,15 @@ import { useCityPulseAI } from "@/hooks/useCityPulseAI";
 import { useExperiences } from "@/hooks/useExperiences";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
+import { ReelData } from "@/hooks/useReels";
+import { CheckOutDialog } from "@/components/booking/CheckOutDialog";
 
 const Discover = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showAI, setShowAI] = useState(false);
+  const [bookingReel, setBookingReel] = useState<ReelData | null>(null);
 
   const { reels: allReels, loading: reelsLoading } = useReels(selectedCategory, undefined, debouncedSearch);
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
@@ -130,6 +133,7 @@ const Discover = () => {
               allReels.map((reel) => (
                 <div
                   key={reel.id}
+                  onClick={() => setBookingReel(reel)}
                   className="group relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted cursor-pointer shadow-sm hover:shadow-lg transition-all duration-300"
                 >
                   {/* Video thumbnail or actual video preview */}
@@ -230,6 +234,17 @@ const Discover = () => {
             />
           )}
         </>
+      )}
+
+      {bookingReel && (
+        <CheckOutDialog
+          experienceId={bookingReel.experienceId || bookingReel.id}
+          tripTitle={bookingReel.title}
+          amount={bookingReel.price}
+          open={!!bookingReel}
+          onOpenChange={(open) => !open && setBookingReel(null)}
+          trigger={<></>}
+        />
       )}
     </MainLayout>
   );

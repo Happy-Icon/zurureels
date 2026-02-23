@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ReelData } from "@/components/reels/ReelCard";
+import { mockReels } from "@/data/mockReels";
 export type { ReelData };
 
 /**
@@ -93,10 +94,19 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 lng: item.lng,
             }));
 
+            // Add mock reels for density (only in "all" or matching categories)
+            const filteredMocks = mockReels.filter(m =>
+                (!category || category === "all" || m.category === category) &&
+                (!search || m.title.toLowerCase().includes(search.toLowerCase()) || m.location.toLowerCase().includes(search.toLowerCase()))
+            );
+
+            // Combine real + mocks
+            let combinedReels = [...transformedReels, ...filteredMocks];
+
             // Client-side search filter (Supabase ilike on joined tables is unreliable)
             if (search && search.trim()) {
                 const q = search.toLowerCase();
-                transformedReels = transformedReels.filter(
+                combinedReels = combinedReels.filter(
                     (r) =>
                         r.title.toLowerCase().includes(q) ||
                         r.location.toLowerCase().includes(q) ||
@@ -105,22 +115,19 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 );
             }
 
-            // Shuffle for fair, unbiased ordering (TikTok / Instagram Reels style)
-            // Live/verified reels get a slight boost by being placed in the top half
-            const liveReels = transformedReels.filter((r) => r.isLive && r.lat && r.lng);
-            const otherReels = transformedReels.filter((r) => !r.isLive || !r.lat || !r.lng);
+            // Shuffle for fair, unbiased ordering
+            const liveReels = combinedReels.filter((r) => r.isLive && r.lat && r.lng);
+            const otherReels = combinedReels.filter((r) => !r.isLive || !r.lat || !r.lng);
 
             const shuffledLive = shuffleArray(liveReels);
             const shuffledOther = shuffleArray(otherReels);
 
-            // Interleave: every 3rd reel is a live/verified one (if available)
             const finalReels: ReelData[] = [];
             let li = 0,
                 oi = 0;
             let position = 0;
 
             while (li < shuffledLive.length || oi < shuffledOther.length) {
-                // Every 3rd position, try to insert a verified reel
                 if (position % 3 === 0 && li < shuffledLive.length) {
                     finalReels.push(shuffledLive[li++]);
                 } else if (oi < shuffledOther.length) {
