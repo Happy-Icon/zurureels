@@ -7,6 +7,7 @@ import { getReelExpiryDisplay, isReelExpiringSoon } from "@/utils/reelExpiry";
 import { useReelInteractions } from "@/hooks/useReelInteractions";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { CloudinaryVideo } from "@/components/media/CloudinaryVideo";
 
 export interface ReelData {
   id: string;
@@ -30,6 +31,7 @@ export interface ReelData {
   lng?: number;
   processingStatus?: 'uploading' | 'processing' | 'ready' | 'failed';
   processedVideoUrl?: string;
+  cloudinaryPublicId?: string | null;
 }
 
 interface ReelCardProps {
@@ -59,19 +61,35 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
   } = useReelInteractions(reel.id, reel.hostUserId);
 
   useEffect(() => {
-    if (videoRef.current) {
-      if (isActive) {
-        videoRef.current.muted = true;
-        setIsMuted(true);
-        setShowMuteHint(true);
-        videoRef.current.play().catch(err => console.log("Autoplay blocked:", err));
-        setIsPlaying(true);
-      } else {
-        videoRef.current.pause();
-        setIsPlaying(false);
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isActive) {
+      video.muted = true;
+      setIsMuted(true);
+      setShowMuteHint(true);
+
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => setIsPlaying(true))
+          .catch((err: Error) => {
+            // AbortError is expected when scrolling fast — play() interrupted by pause()
+            if (err.name !== "AbortError") {
+              console.warn("Autoplay blocked:", err);
+            }
+          });
       }
+    } else {
+      // Wait for any pending play promise to settle before pausing
+      const playPromise = video.play().catch(() => { });
+      Promise.resolve(playPromise).finally(() => {
+        video.pause();
+        setIsPlaying(false);
+      });
     }
   }, [isActive]);
+
 
   const togglePlay = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -202,9 +220,9 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
     <div className="relative h-full w-full snap-start overflow-hidden">
       {/* Video Background */}
       <div className="absolute inset-0 bg-black">
-        <video
-          ref={videoRef}
-          src={reel.processedVideoUrl || reel.videoUrl}
+        <CloudinaryVideo
+          videoRef={videoRef}
+          src={reel.cloudinaryPublicId || reel.processedVideoUrl || reel.videoUrl}
           poster={reel.thumbnailUrl}
           className="h-full w-full object-cover"
           loop
@@ -238,18 +256,26 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
           </div>
         )}
 
-        {/* Play/Pause Overlay */}
-        <button
-          onClick={(e) => togglePlay(e)}
-          className="absolute inset-0 flex items-center justify-center z-10"
-        >
-          {!isPlaying && !error && (
-            <div className="rounded-full bg-black/30 p-4 backdrop-blur-sm transition-transform active:scale-90">
-              <Play className="h-12 w-12 text-white fill-white" />
-            </div>
-          )}
+        {/* Play/Pause tap area — only when no error */}
+        {!error && (
+          <button
+            onClick={(e) => togglePlay(e)}
+            className="absolute inset-0 flex items-center justify-center z-10"
+          >
+            {!isPlaying && (
+              <div className="rounded-full bg-black/30 p-4 backdrop-blur-sm transition-transform active:scale-90">
+                <Play className="h-12 w-12 text-white fill-white" />
+              </div>
+            )}
+          </button>
+        )}
 
-          {error && (
+        {/* Error overlay — separate from play button so no nested <button> */}
+        {error && (
+          <div
+            onClick={retryLoad}
+            className="absolute inset-0 flex items-center justify-center z-10 cursor-pointer"
+          >
             <div className="flex flex-col items-center gap-4 p-6 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 max-w-[80%] text-center">
               <div className="h-12 w-12 rounded-full bg-red-500/20 flex items-center justify-center">
                 <AlertCircle className="h-6 w-6 text-red-500" />
@@ -258,21 +284,13 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
                 <p className="text-white font-medium">{error}</p>
                 <p className="text-xs text-white/60">Tap to try again</p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  retryLoad();
-                }}
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm">
+                <RefreshCw className="h-4 w-4" />
                 Retry
-              </Button>
+              </div>
             </div>
-          )}
-        </button>
+          </div>
+        )}
       </div>
 
       {/* Gradient Overlay */}

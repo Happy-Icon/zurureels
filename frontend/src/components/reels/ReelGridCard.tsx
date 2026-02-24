@@ -1,5 +1,7 @@
 
 import { useState, useRef, useEffect } from "react";
+import { CloudinaryVideo } from "@/components/media/CloudinaryVideo";
+import { CloudinaryImage } from "@/components/media/CloudinaryImage";
 import {
     Heart,
     Bookmark,
@@ -114,8 +116,8 @@ export const ReelGridCard = ({ reel, onBook }: ReelGridCardProps) => {
             {/* Video/Image Content */}
             <div className="absolute inset-0" onClick={togglePlay}>
                 {reel.videoUrl ? (
-                    <video
-                        ref={videoRef}
+                    <CloudinaryVideo
+                        videoRef={videoRef}
                         src={reel.videoUrl}
                         poster={reel.thumbnailUrl !== "/placeholder.svg" ? reel.thumbnailUrl : undefined}
                         className="h-full w-full object-cover"
@@ -126,7 +128,7 @@ export const ReelGridCard = ({ reel, onBook }: ReelGridCardProps) => {
                         onError={handleVideoError}
                     />
                 ) : (
-                    <img
+                    <CloudinaryImage
                         src={reel.thumbnailUrl || "/placeholder.svg"}
                         alt={reel.title}
                         className="h-full w-full object-cover"

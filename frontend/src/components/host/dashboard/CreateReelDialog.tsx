@@ -14,9 +14,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { extractVideoThumbnail } from "@/utils/videoThumbnail";
-import { transcodeVideo } from "@/utils/videoTranscoder";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, Sparkles } from "lucide-react";
+import { uploadToCloudinary } from "@/lib/cloudinaryUpload";
 
 
 
@@ -145,23 +145,9 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         }
         setIsSubmitting(true);
         try {
-            // Step 0: Optimize Video (Free client-side transcoding)
-            console.log("[Publish] Step 0: Optimizing video…");
-            setOptimizationProgress(0);
-
-            let finalVideoFile = data.videoFile;
-            try {
-                // We optimize everything to ensure standard H.264 MP4
-                finalVideoFile = await transcodeVideo(data.videoFile, (progress) => {
-                    setOptimizationProgress(progress);
-                });
-                console.log("[Publish] Optimization complete:", finalVideoFile.size);
-            } catch (err) {
-                console.warn("[Publish] Optimization failed, using original file:", err);
-                // Continue with original file if transcoding fails
-            } finally {
-                setOptimizationProgress(null);
-            }
+            // Cloudinary handles optimization (f_auto, q_auto) server-side —
+            // no client-side FFmpeg transcoding needed.
+            const finalVideoFile = data.videoFile;
 
             // Step 1: Create Experience record
             console.log("[Publish] Step 1: Creating experience…");
@@ -185,58 +171,41 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             }
             console.log("[Publish] Experience created:", exp.id);
 
-            // Step 2: Upload video to storage
-            console.log("[Publish] Step 2: Uploading video…");
-            const fileExt = finalVideoFile.name.split('.').pop() || 'mp4';
-            const fileName = `${crypto.randomUUID()}.${fileExt}`;
-            const filePath = `reels/${fileName}`;
+            // Step 2: Upload video to Cloudinary
+            console.log("[Publish] Step 2: Uploading video to Cloudinary…");
+            setOptimizationProgress(0);
 
-            const { error: uploadError } = await supabase.storage
-                .from('reels')
-                .upload(filePath, finalVideoFile, {
-                    contentType: finalVideoFile.type || 'video/mp4',
-                    upsert: false,
-                });
+            const cldUpload = await uploadToCloudinary(finalVideoFile, {
+                resourceType: "video",
+                folder: "zurureels/reels",
+                onProgress: (pct) => setOptimizationProgress(pct),
+            });
 
-            if (uploadError) {
-                console.error("[Publish] Storage upload failed:", uploadError);
-                throw new Error(`Video upload failed: ${uploadError.message}`);
-            }
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('reels')
-                .getPublicUrl(filePath);
+            setOptimizationProgress(null);
+            const publicId = cldUpload.publicId;
+            const publicUrl = cldUpload.secureUrl;
 
             if (!publicUrl) {
-                throw new Error("Failed to get public URL for uploaded video");
+                throw new Error("Failed to get Cloudinary URL for uploaded video");
             }
-            console.log("[Publish] Video uploaded:", publicUrl);
+            console.log("[Publish] Video uploaded to Cloudinary:", publicId);
 
-            // Step 3: Extract + upload thumbnail
+            // Step 3: Extract thumbnail and upload to Cloudinary
             console.log("[Publish] Step 3: Extracting thumbnail…");
             let thumbnailUrl: string | null = null;
             try {
                 const thumbBlob = await extractVideoThumbnail(data.videoFile);
                 if (thumbBlob) {
-                    const thumbName = `thumbnails/${crypto.randomUUID()}.jpg`;
-                    const { error: thumbError } = await supabase.storage
-                        .from('reels')
-                        .upload(thumbName, thumbBlob, {
-                            contentType: 'image/jpeg',
-                            upsert: false,
-                        });
-                    if (!thumbError) {
-                        const { data: thumbData } = supabase.storage
-                            .from('reels')
-                            .getPublicUrl(thumbName);
-                        thumbnailUrl = thumbData.publicUrl;
-                        console.log("[Publish] Thumbnail uploaded:", thumbnailUrl);
-                    } else {
-                        console.warn("[Publish] Thumbnail upload failed:", thumbError);
-                    }
+                    const thumbFile = new File([thumbBlob], "thumbnail.jpg", { type: "image/jpeg" });
+                    const thumbUpload = await uploadToCloudinary(thumbFile, {
+                        resourceType: "image",
+                        folder: "zurureels/thumbnails",
+                    });
+                    thumbnailUrl = thumbUpload.secureUrl;
+                    console.log("[Publish] Thumbnail uploaded to Cloudinary:", thumbUpload.publicId);
                 }
             } catch (thumbErr) {
-                console.warn("[Publish] Thumbnail extraction failed, proceeding without:", thumbErr);
+                console.warn("[Publish] Thumbnail upload failed, proceeding without:", thumbErr);
             }
 
             // Step 4: Create Reel record
@@ -247,7 +216,9 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     user_id: user.id,
                     experience_id: exp.id,
                     category: selectedCategory,
-                    video_url: publicUrl,
+                    video_url: publicUrl,           // secureUrl — kept for backward compat
+                    cloudinary_public_id: publicId, // used by CloudinaryVideo component
+                    cloudinary_secure_url: publicUrl,
                     thumbnail_url: thumbnailUrl,
                     duration: data.duration || 20,
                     lat: data.lat,
