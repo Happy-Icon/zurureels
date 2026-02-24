@@ -58,7 +58,8 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                     )
                 `)
                 .eq("status", "active")
-                .gt("expires_at", new Date().toISOString());
+                // Allow reels with no expiry (NULL) OR a future expiry date
+                .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
 
             if (category && category !== "all") {
                 query = query.eq("category", category);

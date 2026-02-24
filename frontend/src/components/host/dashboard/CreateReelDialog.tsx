@@ -225,7 +225,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     lng: data.lng,
                     is_live: data.isLive ?? false,
                     status: 'active',
-                    processing_status: 'processing'
+                    processing_status: 'ready',  // Cloudinary upload is already done
+                    expires_at: null,             // No expiry — show indefinitely
                 });
 
             if (reelError) {
