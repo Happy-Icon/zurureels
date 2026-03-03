@@ -12,7 +12,7 @@ import { useExperiences } from "@/hooks/useExperiences";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
 import { ReelData } from "@/hooks/useReels";
-import { CheckOutDialog } from "@/components/booking/CheckOutDialog";
+import { BookingSheet } from "@/components/booking/BookingSheet";
 import { ReelGridCard } from "@/components/reels/ReelGridCard";
 
 const Discover = () => {
@@ -166,13 +166,20 @@ const Discover = () => {
       )}
 
       {bookingReel && (
-        <CheckOutDialog
-          experienceId={bookingReel.experienceId || bookingReel.id}
-          tripTitle={bookingReel.title}
-          amount={bookingReel.price}
+        <BookingSheet
           open={!!bookingReel}
-          onOpenChange={(open) => !open && setBookingReel(null)}
-          trigger={<></>}
+          onOpenChange={(o) => !o && setBookingReel(null)}
+          experienceId={bookingReel.experienceId || bookingReel.id}
+          reelId={bookingReel.id}
+          hostId={bookingReel.hostUserId}
+          title={bookingReel.title}
+          location={bookingReel.location}
+          price={bookingReel.price}
+          priceUnit={bookingReel.priceUnit}
+          rating={bookingReel.rating}
+          imageUrl={bookingReel.thumbnailUrl}
+          category={bookingReel.category}
+          onSuccess={() => setBookingReel(null)}
         />
       )}
     </MainLayout>

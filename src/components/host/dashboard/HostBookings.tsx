@@ -86,6 +86,30 @@ export const HostBookings = () => {
         }
     });
 
+    const capturePayment = useMutation({
+        mutationFn: async (id: string) => {
+            const { data, error } = await supabase.functions.invoke('capture-stripe-payment', {
+                body: { bookingId: id }
+            });
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
+            toast({
+                title: "Payment Released 🎉",
+                description: "Your payout has been initiated successfully.",
+            });
+        },
+        onError: (error) => {
+            toast({
+                title: "Error",
+                description: "Failed to release payment: " + error.message,
+                variant: "destructive"
+            });
+        }
+    });
+
     if (isLoading) {
         return <div className="p-8 text-center text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />Loading requests...</div>;
     }
@@ -125,9 +149,11 @@ export const HostBookings = () => {
                             <Badge variant="outline" className={
                                 req.status === 'paid' ? "bg-yellow-500/10 text-yellow-600 border-yellow-200" :
                                     req.status === 'approved' ? "bg-green-500/10 text-green-600 border-green-200" :
-                                        "bg-secondary text-secondary-foreground"
+                                        req.status === 'authorized' ? "bg-blue-500/10 text-blue-600 border-blue-200" :
+                                            req.status === 'captured' ? "bg-purple-500/10 text-purple-600 border-purple-200" :
+                                                "bg-secondary text-secondary-foreground"
                             }>
-                                {req.status === 'paid' ? 'New Request' : req.status}
+                                {req.status === 'paid' ? 'New Request' : req.status === 'authorized' ? 'Escrow In Progress' : req.status}
                             </Badge>
                         </div>
 
@@ -165,7 +191,7 @@ export const HostBookings = () => {
                                     variant="outline"
                                     className="h-12 border-red-200 hover:bg-red-50 hover:text-red-600 text-red-600"
                                     onClick={() => updateStatus.mutate({ id: req.id, status: "declined" })}
-                                    disabled={updateStatus.isPending}
+                                    disabled={updateStatus.isPending || capturePayment.isPending}
                                 >
                                     <X className="h-5 w-5 mr-2" />
                                     Decline
@@ -173,10 +199,22 @@ export const HostBookings = () => {
                                 <Button
                                     className="h-12 bg-green-600 hover:bg-green-700 text-white"
                                     onClick={() => updateStatus.mutate({ id: req.id, status: "approved" })}
-                                    disabled={updateStatus.isPending}
+                                    disabled={updateStatus.isPending || capturePayment.isPending}
                                 >
                                     <Check className="h-5 w-5 mr-2" />
                                     Accept
+                                </Button>
+                            </div>
+                        )}
+                        {(req.status === 'authorized' || req.status === 'approved') && (
+                            <div className="pt-2">
+                                <Button
+                                    className="w-full h-12 bg-primary hover:bg-primary/90 text-white"
+                                    onClick={() => capturePayment.mutate(req.id)}
+                                    disabled={capturePayment.isPending}
+                                >
+                                    {capturePayment.isPending ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Check className="h-5 w-5 mr-2" />}
+                                    Mark Service Completed (Release Funds)
                                 </Button>
                             </div>
                         )}

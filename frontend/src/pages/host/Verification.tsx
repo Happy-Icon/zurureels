@@ -12,8 +12,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 const Verification = () => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
+    const [stripeLoading, setStripeLoading] = useState(false);
     const [status, setStatus] = useState<'none' | 'pending' | 'verified' | 'rejected'>('none');
     const [verificationId, setVerificationId] = useState<string | null>(null);
+    const [stripeOnboarded, setStripeOnboarded] = useState<boolean | null>(null);
 
     const [searchParams] = useSearchParams();
     const isRedirect = searchParams.get('verification_complete') === 'true';
@@ -34,25 +36,50 @@ const Verification = () => {
         return () => clearInterval(interval);
     }, [isRedirect, status]);
 
-    // Auto-redirect when verified
+    // Auto-trigger Stripe onboarding when verified
     useEffect(() => {
-        if (status === 'verified') {
+        if (status === 'verified' && stripeOnboarded === false) {
             if (isRedirect) {
-                toast.success("Identity verified successfully!");
+                toast.success("Identity verified! Setting up your payouts...");
             }
-            // Delay slightly to let the user see the success state if they are on this page
+            // Auto-trigger Stripe onboarding after a brief delay
+            const timer = setTimeout(() => {
+                handleStripeOnboarding();
+            }, 1500);
+            return () => clearTimeout(timer);
+        } else if (status === 'verified' && stripeOnboarded === true) {
+            // Already onboarded, redirect to host dashboard
             const timer = setTimeout(() => {
                 window.location.href = '/host';
             }, 1500);
             return () => clearTimeout(timer);
         }
-    }, [status, isRedirect]);
+    }, [status, stripeOnboarded, isRedirect]);
+
+    const handleStripeOnboarding = async () => {
+        try {
+            setStripeLoading(true);
+            const { data, error } = await supabase.functions.invoke('create-stripe-onboarding', {});
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+            if (data?.url) {
+                window.location.href = data.url;
+            }
+        } catch (error: any) {
+            toast.error(error.message || "Failed to initiate payout setup");
+            setStripeLoading(false);
+            // Fallback: redirect to host dashboard anyway
+            setTimeout(() => {
+                window.location.href = '/host';
+            }, 3000);
+        }
+    };
 
     const fetchVerificationStatus = async () => {
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('verification_status, verification_id')
+                .select('verification_status, verification_id, stripe_onboarded')
                 .eq('id', user?.id)
                 .single();
 
@@ -61,6 +88,7 @@ const Verification = () => {
                 const profile = data as any;
                 setStatus(profile.verification_status as any);
                 setVerificationId(profile.verification_id);
+                setStripeOnboarded(profile.stripe_onboarded);
             }
         } catch (error) {
             console.error("Error fetching status:", error);
@@ -128,15 +156,27 @@ const Verification = () => {
                     <Card className="border-green-500/20 bg-green-500/5">
                         <CardContent className="pt-6 flex flex-col items-center text-center space-y-4">
                             <div className="h-16 w-16 rounded-full bg-green-500/20 flex items-center justify-center">
-                                <CheckCircle2 className="h-8 w-8 text-green-600" />
+                                {stripeLoading ? (
+                                    <Loader2 className="h-8 w-8 text-green-600 animate-spin" />
+                                ) : (
+                                    <CheckCircle2 className="h-8 w-8 text-green-600" />
+                                )}
                             </div>
                             <div>
                                 <h2 className="text-xl font-semibold text-green-700">You are verified!</h2>
-                                <p className="text-green-600/80">Redirecting you to the dashboard...</p>
+                                <p className="text-green-600/80">
+                                    {stripeLoading
+                                        ? "Setting up your payout account..."
+                                        : stripeOnboarded
+                                            ? "Redirecting you to the dashboard..."
+                                            : "Preparing Stripe onboarding..."}
+                                </p>
                             </div>
-                            <Button onClick={() => window.location.href = '/host'} className="bg-green-600 hover:bg-green-700 text-white">
-                                Go to Dashboard
-                            </Button>
+                            {!stripeLoading && (
+                                <Button onClick={() => window.location.href = '/host'} className="bg-green-600 hover:bg-green-700 text-white">
+                                    Go to Dashboard
+                                </Button>
+                            )}
                         </CardContent>
                     </Card>
                 ) : (status === 'pending' || isRedirect) ? (

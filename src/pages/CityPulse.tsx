@@ -300,6 +300,7 @@ const CityPulse = () => {
                     tripTitle={activity.title}
                     amount={activity.current_price}
                     experienceId={activity.id}
+                    hostId={activity.user_id}
                     trigger={
                       <div className="w-full">
                         <QuickListingCard
@@ -334,6 +335,7 @@ const CityPulse = () => {
                     tripTitle={boat.title}
                     amount={boat.current_price}
                     experienceId={boat.id}
+                    hostId={boat.user_id}
                     trigger={
                       <div className="w-full">
                         <QuickListingCard
@@ -457,6 +459,7 @@ const CityPulse = () => {
             tripTitle={bookingReel.title}
             amount={bookingReel.price}
             experienceId={bookingReel.id}
+            hostId={bookingReel.user_id}
             open={!!bookingReel}
             onOpenChange={(open) => !open && setBookingReel(null)}
             trigger={<></>} // controlled mode doesn't need trigger but prop is required

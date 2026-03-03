@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 type BookingTab = "upcoming" | "completed";
 
@@ -41,12 +42,28 @@ const Bookings = () => {
   });
 
   const filteredBookings = bookings.filter((booking: any) => {
-    const isCompleted = booking.check_in && new Date(booking.check_in) < new Date();
-    // Simple logic: if check_in is past, it's completed (or if status is 'completed' - but DB uses 'paid')
-    // Let's rely on date for now as status is typically 'paid'
+    // If status is captured/completed/refunded/canceled it is past 'upcoming' stage, or if date is past
+    const isCompleted = booking.status === 'captured' || booking.status === 'completed' || booking.status === 'refunded' || booking.status === 'canceled' || (booking.check_in && new Date(booking.check_in) < new Date() && booking.status !== 'authorized');
+
     if (activeTab === "upcoming") return !isCompleted;
     return isCompleted;
   });
+
+  const handleCheckIn = async (bookingId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('capture-stripe-payment', {
+        body: { bookingId }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success("Successfully checked in! Payment released to host.");
+      // Refresh or invalidate queries here if needed
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to check in");
+    }
+  };
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "TBD";
@@ -171,10 +188,18 @@ const Bookings = () => {
                         <div>
                           <p className="text-sm text-muted-foreground">Total paid</p>
                           <p className="text-lg font-semibold">KES {booking.amount?.toLocaleString()}</p>
+                          <Badge variant="outline" className="mt-1 capitalize">{booking.status}</Badge>
                         </div>
-                        <Button variant={activeTab === "upcoming" ? "default" : "outline"} size="sm">
-                          {activeTab === "upcoming" ? "View Details" : "Book Again"}
-                        </Button>
+                        <div className="flex gap-2">
+                          {booking.status === 'authorized' && activeTab === 'upcoming' && (
+                            <Button onClick={() => handleCheckIn(booking.id)} variant="default" size="sm">
+                              Check In
+                            </Button>
+                          )}
+                          <Button variant={activeTab === "upcoming" ? "outline" : "outline"} size="sm">
+                            {activeTab === "upcoming" ? "View Details" : "Book Again"}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>

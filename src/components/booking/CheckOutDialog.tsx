@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import {
     Dialog,
@@ -10,16 +9,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
-import { usePaystackPayment } from "react-paystack";
 import { toast } from "sonner";
-import { CreditCard, Loader2, ShieldCheck, Ticket } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Import Shadcn Radio
+import { Loader2, Ticket } from "lucide-react";
+import { loadStripe } from "@stripe/stripe-js";
+import {
+    Elements,
+    PaymentElement,
+    useStripe,
+    useElements,
+} from "@stripe/react-stripe-js";
+
+// Initialize Stripe with public key
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || "pk_test_placeholder");
 
 interface CheckOutDialogProps {
     tripTitle: string;
     amount: number;
     experienceId?: string;
+    hostId?: string;
+    reelId?: string;
     checkIn?: string;
     checkOut?: string;
     guests?: number;
@@ -29,17 +37,81 @@ interface CheckOutDialogProps {
     onOpenChange?: (open: boolean) => void;
 }
 
-interface PaymentMethod {
-    id: string;
-    brand: string;
-    last4: string;
-    authorization_code: string;
-}
+const CheckoutForm = ({
+    clientSecret,
+    onSuccess,
+    tripTitle,
+    amount,
+    experienceId,
+    checkIn,
+    checkOut,
+    guests,
+}: {
+    clientSecret: string;
+    onSuccess: () => void;
+    tripTitle: string;
+    amount: number;
+    experienceId?: string;
+    checkIn?: string;
+    checkOut?: string;
+    guests?: number;
+}) => {
+    const stripe = useStripe();
+    const elements = useElements();
+    const [loading, setLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState("");
+
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+
+        if (!stripe || !elements) {
+            return;
+        }
+
+        setLoading(true);
+        setErrorMessage("");
+
+        const { error, paymentIntent } = await stripe.confirmPayment({
+            elements,
+            confirmParams: {
+                return_url: window.location.href, // Redirects are handled, but we also handle success below if redirect='if_required'
+            },
+            redirect: 'if_required',
+        });
+
+        if (error) {
+            setErrorMessage(error.message || "An unexpected error occurred.");
+            setLoading(false);
+            toast.error(error.message || "Payment failed");
+        } else if (paymentIntent && paymentIntent.status === "requires_capture") {
+            toast.success("Payment authorized! Booking confirmed.");
+            onSuccess();
+        } else if (paymentIntent && paymentIntent.status === "succeeded") {
+            toast.success("Payment successful! Booking confirmed.");
+            onSuccess();
+        } else {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <PaymentElement />
+            {errorMessage && <div className="text-red-500 text-sm mt-2">{errorMessage}</div>}
+            <Button type="submit" disabled={!stripe || loading} className="w-full text-lg h-11">
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Authorize KES {amount?.toLocaleString()}
+            </Button>
+        </form>
+    );
+};
 
 export const CheckOutDialog = ({
     tripTitle,
     amount,
     experienceId,
+    hostId,
+    reelId,
     checkIn,
     checkOut,
     guests = 1,
@@ -54,125 +126,47 @@ export const CheckOutDialog = ({
     const isControlled = controlledOpen !== undefined;
     const isOpen = isControlled ? controlledOpen : internalOpen;
     const setIsOpen = isControlled ? setControlledOpen : setInternalOpen;
-    const [loading, setLoading] = useState(false);
-    const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-    const [selectedMethodId, setSelectedMethodId] = useState<string>("new");
-    const [saveCard, setSaveCard] = useState(true);
+    const [clientSecret, setClientSecret] = useState<string | null>(null);
+    const [loadingIntent, setLoadingIntent] = useState(false);
 
-    // Paystack Config
-    const config = {
-        reference: (new Date()).getTime().toString(),
-        email: user?.email || "",
-        amount: amount * 100, // kobo
-        publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "",
-        currency: "KES",
-    };
-
-    const c_onSuccess = async (reference: any) => {
-        setLoading(true);
-        try {
-            // 1. Create Booking
-            const { error: bookingError } = await (supabase as any).from('bookings').insert({
-                user_id: user?.id,
-                experience_id: experienceId,
-                trip_title: tripTitle,
-                amount: amount,
-                status: 'paid',
-                payment_reference: reference.reference,
-                check_in: checkIn ? new Date(checkIn).toISOString() : null,
-                check_out: checkOut ? new Date(checkOut).toISOString() : null,
-                guests: guests
-            });
-
-            if (bookingError) throw bookingError;
-
-            // 2. Save Card (if requested and it's a new card)
-            if (selectedMethodId === "new" && saveCard) {
-                console.log("Attempting to save card...");
-                const auth = reference.authorization || {};
-
+    useEffect(() => {
+        if (isOpen && user && !clientSecret && hostId) {
+            const createIntent = async () => {
+                setLoadingIntent(true);
                 try {
-                    // @ts-ignore - payment_methods table exists
-                    const { error: saveError } = await (supabase.from('payment_methods') as any).insert({
-                        user_id: user?.id,
-                        provider: 'paystack',
-                        reference: reference.reference,
-                        authorization_code: auth.authorization_code || 'demo_auth_code_' + Date.now(),
-                        last4: auth.last4 || '0000',
-                        brand: auth.brand || 'Card'
+                    const { data, error } = await supabase.functions.invoke('create-stripe-payment-intent', {
+                        body: {
+                            amount: amount * 100, // Stripe expects lowest denomination (e.g. kobo/cents)
+                            hostId,
+                            experienceId,
+                            reelId,
+                            tripTitle,
+                            checkIn,
+                            checkOut,
+                            guests
+                        }
                     });
 
-                    if (saveError) {
-                        console.error("Supabase Save Error:", saveError);
-                    } else {
-                        toast.success("Card saved for future use!");
-                    }
-                } catch (innerError: any) {
-                    console.error("Save Card Exception:", innerError);
+                    if (error) throw error;
+                    if (data?.error) throw new Error(data.error);
+
+                    setClientSecret(data.clientSecret);
+                } catch (error: any) {
+                    console.error("Failed to initialize payment intent:", error);
+                    toast.error(error.message || "Failed to initialize payment");
+                    setIsOpen(false);
+                } finally {
+                    setLoadingIntent(false);
                 }
-            }
-
-            toast.success("Booking confirmed! Enjoy your trip.");
-            setIsOpen(false);
-            onSuccess?.();
-
-        } catch (error: any) {
-            console.error("Booking Error:", error);
-            toast.error("Booking failed: " + error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Wrapper for Paystack types
-    const onPaystackSuccess = (reference: any) => {
-        c_onSuccess(reference);
-    }
-
-    const onPaystackClose = () => {
-        toast.info("Payment cancelled");
-        setLoading(false);
-    };
-
-    const initializePayment = usePaystackPayment(config);
-
-    const handlePay = () => {
-        if (!user) {
-            toast.error("Please sign in to book");
-            return;
-        }
-
-        setLoading(true);
-
-        if (selectedMethodId === "new") {
-            // @ts-ignore
-            initializePayment(onPaystackSuccess, onPaystackClose);
-        } else {
-            // Charge Saved Card (Backend Logic Simulation)
-            setTimeout(async () => {
-                const simulatedRef = {
-                    reference: "SIM_" + Date.now(),
-                    authorization: {
-                        last4: paymentMethods.find(m => m.id === selectedMethodId)?.last4,
-                        brand: paymentMethods.find(m => m.id === selectedMethodId)?.brand
-                    }
-                };
-                await c_onSuccess(simulatedRef);
-            }, 1000);
-        }
-    };
-
-    // Fetch saved cards
-    useEffect(() => {
-        if (user && isOpen) {
-            const fetchMethods = async () => {
-                // @ts-ignore
-                const { data } = await supabase.from('payment_methods').select('*').eq('user_id', user.id);
-                if (data) setPaymentMethods(data);
             };
-            fetchMethods();
+            createIntent();
         }
-    }, [user, isOpen]);
+    }, [isOpen, user, hostId]);
+
+    const handleSuccess = () => {
+        setIsOpen(false);
+        onSuccess?.();
+    };
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -214,52 +208,29 @@ export const CheckOutDialog = ({
                         )}
                     </div>
 
-                    {/* Payment Selection */}
-                    <div className="space-y-3">
-                        <Label>Payment Method</Label>
-                        <RadioGroup value={selectedMethodId} onValueChange={setSelectedMethodId}>
-                            {/* Saved Cards */}
-                            {paymentMethods.map(method => (
-                                <div key={method.id} className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-secondary/10 cursor-pointer">
-                                    <RadioGroupItem value={method.id} id={method.id} />
-                                    <Label htmlFor={method.id} className="flex-1 flex items-center cursor-pointer">
-                                        <CreditCard className="h-4 w-4 mr-2 text-muted-foreground" />
-                                        {method.brand} •••• {method.last4}
-                                    </Label>
-                                </div>
-                            ))}
-
-                            {/* New Card */}
-                            <div className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-secondary/10 cursor-pointer">
-                                <RadioGroupItem value="new" id="new" />
-                                <Label htmlFor="new" className="flex-1 cursor-pointer">
-                                    New Card / M-Pesa
-                                </Label>
-                            </div>
-                        </RadioGroup>
-                    </div>
-
-                    {/* Save Card Checkbox (Only if New) */}
-                    {selectedMethodId === "new" && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-primary/5 p-3 rounded-lg">
-                            <input
-                                type="checkbox"
-                                id="save-card"
-                                checked={saveCard}
-                                onChange={(e) => setSaveCard(e.target.checked)}
-                                className="rounded border-gray-300 text-primary focus:ring-primary"
+                    {loadingIntent ? (
+                        <div className="flex flex-col items-center justify-center py-6">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                            <p className="text-sm text-muted-foreground">Initializing secure payment...</p>
+                        </div>
+                    ) : clientSecret ? (
+                        <Elements stripe={stripePromise} options={{ clientSecret }}>
+                            <CheckoutForm
+                                clientSecret={clientSecret}
+                                onSuccess={handleSuccess}
+                                tripTitle={tripTitle}
+                                amount={amount}
+                                experienceId={experienceId}
+                                checkIn={checkIn}
+                                checkOut={checkOut}
+                                guests={guests}
                             />
-                            <label htmlFor="save-card" className="flex items-center gap-1.5 cursor-pointer">
-                                <ShieldCheck className="h-3.5 w-3.5" />
-                                Securely save for future 1-click booking
-                            </label>
+                        </Elements>
+                    ) : (
+                        <div className="text-center py-4 text-red-500 text-sm">
+                            Requires host to be fully onboarded to receive payments.
                         </div>
                     )}
-
-                    <Button onClick={handlePay} className="w-full h-11 text-lg" disabled={loading}>
-                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {selectedMethodId === "new" ? `Pay KES ${amount?.toLocaleString()}` : `Pay with Saved Card`}
-                    </Button>
                 </div>
 
             </DialogContent>

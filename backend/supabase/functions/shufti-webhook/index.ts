@@ -62,6 +62,7 @@ serve(async (req) => {
                 .from('profiles')
                 .update({
                     verification_status: statusToUpdate,
+                    shufti_status: statusToUpdate, // Set both for consistency across codebase
                     verification_id: reference // Store the latest reference ID
                 })
                 .eq('id', userId);

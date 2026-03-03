@@ -33,6 +33,7 @@ const Profile = () => {
   const [completeness, setCompleteness] = useState(0);
   const [role, setRole] = useState<string>('guest');
   const [verificationStatus, setVerificationStatus] = useState<string>('none');
+  const [shuftiStatus, setShuftiStatus] = useState<string>('pending');
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   useEffect(() => {

@@ -7,7 +7,7 @@ import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
 import { AIChatBox } from "@/components/city-pulse/AIChatBox";
 import { useCityPulseAI } from "@/hooks/useCityPulseAI";
 import { useExperiences } from "@/hooks/useExperiences";
-import { CheckOutDialog } from "@/components/booking/CheckOutDialog";
+import { BookingSheet } from "@/components/booking/BookingSheet";
 
 const Home = () => {
   const { reels: liveReels, loading } = useReels("all");
@@ -59,13 +59,20 @@ const Home = () => {
           )}
 
           {bookingReel && (
-            <CheckOutDialog
-              experienceId={bookingReel.experienceId || bookingReel.id}
-              tripTitle={bookingReel.title}
-              amount={bookingReel.price}
+            <BookingSheet
               open={!!bookingReel}
-              onOpenChange={(open) => !open && setBookingReel(null)}
-              trigger={<></>}
+              onOpenChange={(o) => !o && setBookingReel(null)}
+              experienceId={bookingReel.experienceId || bookingReel.id}
+              reelId={bookingReel.id}
+              hostId={bookingReel.hostUserId}
+              title={bookingReel.title}
+              location={bookingReel.location}
+              price={bookingReel.price}
+              priceUnit={bookingReel.priceUnit}
+              rating={bookingReel.rating}
+              imageUrl={bookingReel.thumbnailUrl}
+              category={bookingReel.category}
+              onSuccess={() => setBookingReel(null)}
             />
           )}
         </>

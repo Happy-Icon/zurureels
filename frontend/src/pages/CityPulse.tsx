@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { CheckOutDialog } from "@/components/booking/CheckOutDialog";
+import { BookingSheet } from "@/components/booking/BookingSheet";
 import { WeatherWidget } from "@/components/city-pulse/WeatherWidget";
 import { AIChatBox } from "@/components/city-pulse/AIChatBox";
 import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
@@ -144,6 +144,7 @@ const CityPulse = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showAI, setShowAI] = useState(false);
   const [bookingReel, setBookingReel] = useState<ReelData | null>(null);
+  const [bookingExperience, setBookingExperience] = useState<any | null>(null);
   // "feed" = TikTok reel view | "explore" = normal listings view
   const [tab, setTab] = useState<"feed" | "explore">("feed");
   const { role, hasPass, viewMode } = useAuth();
@@ -199,47 +200,49 @@ const CityPulse = () => {
       {tab === "feed" ? (
         <div className="fixed inset-0 z-30 bg-black">
           {/* Top bar overlaid on video */}
-          <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pt-4 pb-2 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
-            <div className="pointer-events-auto">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1.5 text-white text-sm font-semibold">
-                    <MapPin className="h-4 w-4 text-primary" />
-                    <span>{selectedCity}</span>
-                    <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem onClick={() => handleUseLocation(true)} className="gap-2 cursor-pointer">
-                    <Navigation className="h-4 w-4 text-primary" />
-                    <span>Use My Location</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {coastalCities.map((city) => (
-                    <DropdownMenuItem key={city} onClick={() => handleCitySelect(city)}>
-                      {city}
+          <div className="absolute top-0 left-0 right-0 z-50 px-4 pt-12 pb-4 pointer-events-none">
+            <div className="flex items-center justify-between w-full relative">
+              <div className="pointer-events-auto absolute left-0 z-10">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-1.5 text-white text-sm font-semibold bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      <span className="max-w-[100px] truncate">{selectedCity}</span>
+                      <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => handleUseLocation(true)} className="gap-2 cursor-pointer">
+                      <Navigation className="h-4 w-4 text-primary" />
+                      <span>Use My Location</span>
                     </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                    <DropdownMenuSeparator />
+                    {coastalCities.map((city) => (
+                      <DropdownMenuItem key={city} onClick={() => handleCitySelect(city)}>
+                        {city}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
 
-            {/* Tab switcher */}
-            <div className="pointer-events-auto flex items-center bg-black/40 backdrop-blur-sm rounded-full p-1 gap-1">
-              <button
-                onClick={() => setTab("feed")}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-primary text-white"
-              >
-                <Clapperboard className="h-3.5 w-3.5" />
-                Reels
-              </button>
-              <button
-                onClick={() => setTab("explore")}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white/80 hover:text-white"
-              >
-                <LayoutList className="h-3.5 w-3.5" />
-                Explore
-              </button>
+              {/* Tab switcher - Centered */}
+              <div className="pointer-events-auto flex items-center bg-black/40 backdrop-blur-sm rounded-full p-1 mx-auto z-0 shrink-0">
+                <button
+                  onClick={() => setTab("feed")}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-primary text-white"
+                >
+                  <Clapperboard className="h-3.5 w-3.5" />
+                  Reels
+                </button>
+                <button
+                  onClick={() => setTab("explore")}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold text-white/80 hover:text-white transition-colors"
+                >
+                  <LayoutList className="h-3.5 w-3.5" />
+                  Explore
+                </button>
+              </div>
             </div>
           </div>
 
@@ -255,25 +258,45 @@ const CityPulse = () => {
         <div className="relative pb-20 md:pb-8 min-h-screen">
           {/* Sticky header */}
           <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
-            <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-2xl font-display font-semibold">Zuru Pulse</h1>
-                  <p className="text-sm text-muted-foreground">What's happening today</p>
+            <div className="p-4 space-y-4">
+              <div className="flex flex-col relative w-full items-center justify-center">
+                {/* Location selector on left (absolute) */}
+                <div className="absolute left-0 top-0">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-1.5 text-foreground text-sm font-semibold bg-secondary px-3 py-2 rounded-full">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        <span className="max-w-[100px] truncate hidden sm:inline-block">{selectedCity}</span>
+                        <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => handleUseLocation(true)} className="gap-2 cursor-pointer">
+                        <Navigation className="h-4 w-4 text-primary" />
+                        <span>Use My Location</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {coastalCities.map((city) => (
+                        <DropdownMenuItem key={city} onClick={() => handleCitySelect(city)}>
+                          {city}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
-                {/* Tab switcher */}
-                <div className="flex items-center bg-muted rounded-full p-1 gap-1">
+                {/* Tab switcher centered */}
+                <div className="flex items-center bg-muted rounded-full p-1 mx-auto z-0 shrink-0">
                   <button
                     onClick={() => setTab("feed")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-muted-foreground hover:text-foreground"
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Clapperboard className="h-3.5 w-3.5" />
                     Reels
                   </button>
                   <button
                     onClick={() => setTab("explore")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-background shadow text-foreground"
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-background shadow text-foreground"
                   >
                     <LayoutList className="h-3.5 w-3.5" />
                     Explore
@@ -384,26 +407,18 @@ const CityPulse = () => {
                 </div>
                 <div className="space-y-2">
                   {filteredActivities.slice(0, 3).map((activity) => (
-                    <CheckOutDialog
-                      key={activity.id}
-                      experienceId={activity.id}
-                      tripTitle={activity.title}
-                      amount={activity.current_price}
-                      trigger={
-                        <div className="w-full">
-                          <QuickListingCard
-                            title={activity.title}
-                            subtitle={`${activity.metadata?.time || ""} • ${activity.metadata?.duration || ""}`}
-                            location={activity.location}
-                            price={activity.current_price}
-                            priceUnit="person"
-                            imageUrl={activity.image_url || "/placeholder.svg"}
-                            badge={activity.metadata?.type}
-                            available={activity.metadata?.spots_left}
-                          />
-                        </div>
-                      }
-                    />
+                    <div key={activity.id} className="w-full cursor-pointer" onClick={() => setBookingExperience(activity)}>
+                      <QuickListingCard
+                        title={activity.title}
+                        subtitle={`${activity.metadata?.time || ""} • ${activity.metadata?.duration || ""}`}
+                        location={activity.location}
+                        price={activity.current_price}
+                        priceUnit="person"
+                        imageUrl={activity.image_url || "/placeholder.svg"}
+                        badge={activity.metadata?.type}
+                        available={activity.metadata?.spots_left}
+                      />
+                    </div>
                   ))}
                 </div>
               </section>
@@ -418,16 +433,12 @@ const CityPulse = () => {
                 </div>
                 <div className="space-y-2">
                   {filteredBoats.map((boat) => (
-                    <CheckOutDialog key={boat.id} experienceId={boat.id} tripTitle={boat.title} amount={boat.current_price}
-                      trigger={
-                        <div className="w-full">
-                          <QuickListingCard title={boat.title} subtitle={boat.metadata?.type || boat.entity_name}
-                            location={boat.location} price={boat.current_price} priceUnit={boat.price_unit}
-                            imageUrl={boat.image_url || "/placeholder.svg"} rating={boat.metadata?.rating}
-                            available={boat.availability_status === "available"} />
-                        </div>
-                      }
-                    />
+                    <div key={boat.id} className="w-full cursor-pointer" onClick={() => setBookingExperience(boat)}>
+                      <QuickListingCard title={boat.title} subtitle={boat.metadata?.type || boat.entity_name}
+                        location={boat.location} price={boat.current_price} priceUnit={boat.price_unit}
+                        imageUrl={boat.image_url || "/placeholder.svg"} rating={boat.metadata?.rating}
+                        available={boat.availability_status === "available"} />
+                    </div>
                   ))}
                 </div>
               </section>
@@ -507,15 +518,39 @@ const CityPulse = () => {
         </div>
       )}
 
-      {/* Global Booking Dialog for Reels */}
+      {/* Global Booking Sheet for Reels */}
       {bookingReel && (
-        <CheckOutDialog
-          experienceId={bookingReel.experienceId || bookingReel.id}
-          tripTitle={bookingReel.title}
-          amount={bookingReel.price}
+        <BookingSheet
           open={!!bookingReel}
-          onOpenChange={(open) => !open && setBookingReel(null)}
-          trigger={<></>}
+          onOpenChange={(o) => !o && setBookingReel(null)}
+          experienceId={bookingReel.experienceId || bookingReel.id}
+          reelId={bookingReel.id}
+          hostId={bookingReel.hostUserId}
+          title={bookingReel.title}
+          location={bookingReel.location}
+          price={bookingReel.price}
+          priceUnit={bookingReel.priceUnit}
+          rating={bookingReel.rating}
+          imageUrl={bookingReel.thumbnailUrl}
+          category={bookingReel.category}
+          onSuccess={() => setBookingReel(null)}
+        />
+      )}
+
+      {/* Global Booking Sheet for Explore listings */}
+      {bookingExperience && (
+        <BookingSheet
+          open={!!bookingExperience}
+          onOpenChange={(o) => !o && setBookingExperience(null)}
+          experienceId={bookingExperience.id}
+          hostId={bookingExperience.user_id}
+          title={bookingExperience.title}
+          location={bookingExperience.location}
+          price={bookingExperience.current_price}
+          priceUnit={bookingExperience.price_unit}
+          imageUrl={bookingExperience.image_url}
+          category={bookingExperience.category}
+          onSuccess={() => setBookingExperience(null)}
         />
       )}
     </MainLayout>

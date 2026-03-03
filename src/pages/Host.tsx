@@ -12,11 +12,42 @@ import { ReelData } from "@/types/host";
 import { useAuth } from "@/components/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 export const Host = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"published" | "drafts" | "requests">("published");
   const { user } = useAuth();
+  const [setupLoading, setSetupLoading] = useState(false);
+
+  // Fetch Host Profile
+  const { data: profile } = useQuery({
+    queryKey: ['host-profile', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase.from('profiles').select('verification_status, stripe_onboarded').eq('id', user.id).single();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return data as any;
+    },
+    enabled: !!user
+  });
+
+  const handleSetupPayouts = async () => {
+    try {
+      setSetupLoading(true);
+      const { data, error } = await supabase.functions.invoke('create-stripe-onboarding', {});
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to initiate onboarding");
+    } finally {
+      setSetupLoading(false);
+    }
+  };
 
   // Fetch host's reels from database
   const { data: hostReels = [], isLoading } = useQuery({
@@ -123,6 +154,20 @@ export const Host = () => {
 
         {/* Content */}
         <div className="p-4">
+
+          {profile?.verification_status === 'verified' && !profile?.stripe_onboarded && (
+            <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-primary">Set Up Payouts</h3>
+                <p className="text-sm text-foreground/80 mt-1">You need to set up your payout method to receive earnings from your bookings.</p>
+              </div>
+              <Button onClick={handleSetupPayouts} disabled={setupLoading} className="shrink-0">
+                {setupLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Connect Stripe Account
+              </Button>
+            </div>
+          )}
+
           <HostStats totalReels={3} totalViews={2500} bookings={12} />
 
           {activeTab === "requests" ? (
