@@ -200,34 +200,10 @@ const CityPulse = () => {
       {tab === "feed" ? (
         <div className="fixed inset-0 z-30 bg-black">
           {/* Top bar overlaid on video */}
-          <div className="absolute top-0 left-0 right-0 z-50 px-4 pt-12 pb-4 pointer-events-none">
-            <div className="flex items-center justify-between w-full relative">
-              <div className="pointer-events-auto absolute left-0 z-10">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-1.5 text-white text-sm font-semibold bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm">
-                      <MapPin className="h-4 w-4 text-primary" />
-                      <span className="max-w-[100px] truncate">{selectedCity}</span>
-                      <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => handleUseLocation(true)} className="gap-2 cursor-pointer">
-                      <Navigation className="h-4 w-4 text-primary" />
-                      <span>Use My Location</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    {coastalCities.map((city) => (
-                      <DropdownMenuItem key={city} onClick={() => handleCitySelect(city)}>
-                        {city}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
+          <div className="absolute top-0 left-0 right-0 z-50 px-4 pt-20 pb-4 pointer-events-none">
+            <div className="flex items-center justify-center w-full">
               {/* Tab switcher - Centered */}
-              <div className="pointer-events-auto flex items-center bg-black/40 backdrop-blur-sm rounded-full p-1 mx-auto z-0 shrink-0">
+              <div className="pointer-events-auto flex items-center bg-black/40 backdrop-blur-sm rounded-full p-1 z-0 shrink-0">
                 <button
                   onClick={() => setTab("feed")}
                   className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-primary text-white"
@@ -259,15 +235,15 @@ const CityPulse = () => {
           {/* Sticky header */}
           <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
             <div className="p-4 space-y-4">
-              <div className="flex flex-col relative w-full items-center justify-center">
-                {/* Location selector on left (absolute) */}
-                <div className="absolute left-0 top-0">
+              <div className="flex items-center justify-between w-full">
+                {/* Location selector on left */}
+                <div className="flex-shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 text-foreground text-sm font-semibold bg-secondary px-3 py-2 rounded-full">
-                        <MapPin className="h-4 w-4 text-primary" />
-                        <span className="max-w-[100px] truncate hidden sm:inline-block">{selectedCity}</span>
-                        <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                      <button className="flex items-center gap-1.5 text-foreground text-sm font-semibold bg-secondary px-3 py-2 rounded-full max-w-[140px]">
+                        <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
+                        <span className="truncate">{selectedCity}</span>
+                        <ChevronDown className="h-3.5 w-3.5 opacity-70 flex-shrink-0" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
@@ -286,7 +262,7 @@ const CityPulse = () => {
                 </div>
 
                 {/* Tab switcher centered */}
-                <div className="flex items-center bg-muted rounded-full p-1 mx-auto z-0 shrink-0">
+                <div className="flex items-center bg-muted rounded-full p-1 shrink-0">
                   <button
                     onClick={() => setTab("feed")}
                     className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
@@ -302,32 +278,10 @@ const CityPulse = () => {
                     Explore
                   </button>
                 </div>
-              </div>
 
-              {/* City Selector */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-primary" />
-                      <span>{selectedCity}</span>
-                    </div>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-full min-w-[200px]">
-                  <DropdownMenuItem onClick={() => handleUseLocation(true)} className="gap-2 cursor-pointer">
-                    <Navigation className="h-4 w-4 text-primary" />
-                    <span>Use My Location</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {coastalCities.map((city) => (
-                    <DropdownMenuItem key={city} onClick={() => handleCitySelect(city)}>
-                      {city}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                {/* Spacer for balance */}
+                <div className="w-[140px] flex-shrink-0" />
+              </div>
 
               {/* Category Pills */}
               <div className="flex gap-2 overflow-x-auto hide-scrollbar py-1">

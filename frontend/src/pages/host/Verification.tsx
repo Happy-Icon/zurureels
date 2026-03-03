@@ -23,6 +23,24 @@ const Verification = () => {
 
     const [searchParams] = useSearchParams();
     const isRedirect = searchParams.get('verification_complete') === 'true';
+    const [recoveringAuth, setRecoveringAuth] = useState(false);
+
+    // Auth recovery: If returning from Shufti and no user, try to recover session
+    useEffect(() => {
+        if (isRedirect && !user && !recoveringAuth) {
+            console.log("Verification: Attempting auth recovery after Shufti redirect...");
+            setRecoveringAuth(true);
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                if (session) {
+                    console.log("Verification: Session recovered, reloading...");
+                    window.location.reload();
+                } else {
+                    console.log("Verification: No session found after redirect");
+                    setRecoveringAuth(false);
+                }
+            });
+        }
+    }, [isRedirect, user, recoveringAuth]);
 
     // Fetch current status
     useEffect(() => {
@@ -145,6 +163,23 @@ const Verification = () => {
                         To ensure the safety of our community, all hosts must verify their identity.
                     </p>
                 </div>
+
+                {/* Auth recovery loading state */}
+                {recoveringAuth && (
+                    <Card className="border-blue-500/20 bg-blue-500/5">
+                        <CardContent className="pt-6 flex flex-col items-center text-center space-y-4">
+                            <div className="h-16 w-16 rounded-full bg-blue-500/20 flex items-center justify-center animate-pulse">
+                                <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-semibold text-blue-700">Restoring your session...</h2>
+                                <p className="text-blue-600/80 max-w-sm mx-auto">
+                                    Please wait while we reconnect you after verification.
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {status === 'verified' ? (
                     <Card className="border-green-500/20 bg-green-500/5">

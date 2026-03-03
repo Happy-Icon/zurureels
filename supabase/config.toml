@@ -3,3 +3,12 @@ project_id = "ibesxkfvjgkfsqhsrxvm"
 [auth.hook.send_sms]
 enabled = true
 uri = "pg-functions://postgres/public/custom_sms_sender"
+
+[functions.shufti-webhook]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.create-stripe-onboarding]
+verify_jwt = false

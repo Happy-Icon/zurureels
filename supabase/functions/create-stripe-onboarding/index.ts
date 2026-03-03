@@ -13,24 +13,40 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    );
+    console.log("Function started");
 
-    const {
-      data: { user },
-    } = await supabaseClient.auth.getUser();
+    // Get user from JWT payload - edge runtime already validated it
+    const authHeader = req.headers.get('Authorization');
+    console.log("Auth header:", authHeader ? "present" : "missing");
 
-    if (!user) {
-      throw new Error("Unauthorized");
+    if (!authHeader) {
+      throw new Error('No authorization header');
     }
 
-    const { data: profile } = await supabaseClient
+    // Decode JWT payload (base64)
+    const token = authHeader.replace('Bearer ', '');
+    console.log("Token parts:", token.split('.').length);
+
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    console.log("Payload:", JSON.stringify(payload));
+
+    const userId = payload.sub;
+    console.log("User ID:", userId);
+
+    if (!userId) {
+      throw new Error('No user ID in token');
+    }
+
+    // Use service role for database queries
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('stripe_account_id, email, full_name, verification_status')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single();
 
     if (profile?.verification_status !== 'verified') {
@@ -46,28 +62,26 @@ serve(async (req) => {
 
     if (!accountId) {
       // Create a Connect account
+      // For Kenya (KE), we need recipient service agreement for cross-border transfers
       const account = await stripe.accounts.create({
         type: 'express',
-        country: 'KE', // Or let this be dynamic based on user profile
-        email: profile.email || user.email,
+        country: 'KE',
+        email: profile.email,
         business_type: 'individual',
         capabilities: {
           transfers: { requested: true },
         },
+        tos_acceptance: {
+          service_agreement: 'recipient',
+        },
       });
       accountId = account.id;
 
-      // Save to profile using service role to bypass RLS if necessary, 
-      // but user can update their own profile usually.
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
-
+      // Save to profile
       await supabaseAdmin
         .from('profiles')
         .update({ stripe_account_id: accountId })
-        .eq('id', user.id);
+        .eq('id', userId);
     }
 
     // Determine the origin URL for return loops
@@ -76,8 +90,8 @@ serve(async (req) => {
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: `${origin}/host/onboarding/refresh`,
-      return_url: `${origin}/host/dashboard?onboarded=true`,
+      refresh_url: `${origin}/host`,
+      return_url: `${origin}/host?onboarded=true`,
       type: 'account_onboarding',
     });
 

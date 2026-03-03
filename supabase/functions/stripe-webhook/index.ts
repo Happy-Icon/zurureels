@@ -10,11 +10,18 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
 serve(async (req) => {
+    // Log ALL requests for debugging
+    console.log(`Received ${req.method} request to stripe-webhook`);
+    console.log('Headers:', JSON.stringify(Object.fromEntries(req.headers.entries())));
+
     const signature = req.headers.get('Stripe-Signature');
 
     if (!signature) {
+        console.log('No Stripe-Signature header found');
         return new Response("No signature provided", { status: 400 });
     }
+
+    console.log('Stripe-Signature header present');
 
     const endpointSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
     if (!endpointSecret) {
@@ -128,11 +135,24 @@ serve(async (req) => {
 
             case 'account.updated': {
                 const account = event.data.object as Stripe.Account;
+                console.log(`Account updated: ${account.id}`);
+                console.log(`details_submitted: ${account.details_submitted}, charges_enabled: ${account.charges_enabled}`);
+
                 if (account.details_submitted && account.charges_enabled) {
-                    await supabaseAdmin
+                    console.log(`Account ${account.id} is fully onboarded. Updating profile...`);
+                    const { data, error } = await supabaseAdmin
                         .from('profiles')
                         .update({ stripe_onboarded: true })
-                        .eq('stripe_account_id', account.id);
+                        .eq('stripe_account_id', account.id)
+                        .select();
+
+                    if (error) {
+                        console.error(`Error updating profile: ${error.message}`);
+                    } else {
+                        console.log(`Profile updated for account ${account.id}:`, data);
+                    }
+                } else {
+                    console.log(`Account ${account.id} not fully onboarded yet`);
                 }
                 break;
             }

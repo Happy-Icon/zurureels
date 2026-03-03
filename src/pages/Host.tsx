@@ -26,7 +26,8 @@ export const Host = () => {
     queryKey: ['host-profile', user?.id],
     queryFn: async () => {
       if (!user) return null;
-      const { data } = await supabase.from('profiles').select('verification_status, stripe_onboarded').eq('id', user.id).single();
+      const { data, error } = await supabase.from('profiles').select('verification_status, stripe_onboarded').eq('id', user.id).single();
+      console.log('Host profile fetched:', { data, error, userId: user.id });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return data as any;
     },
