@@ -17,22 +17,30 @@ serve(async (req) => {
     }
 
     try {
-        const supabaseClient = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-        )
-
-        const {
-            data: { user },
-        } = await supabaseClient.auth.getUser()
-
-        if (!user) {
-            throw new Error('User not found')
+        // Get user from JWT payload - edge runtime already validated it
+        const authHeader = req.headers.get('Authorization');
+        if (!authHeader) {
+            throw new Error('No authorization header');
         }
 
+        // Decode JWT payload (base64)
+        const token = authHeader.replace('Bearer ', '');
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const userId = payload.sub;
+
+        if (!userId) {
+            throw new Error('No user ID in token');
+        }
+
+        console.log("User from JWT:", userId);
+
+        const supabaseAdmin = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+
         const { email } = await req.json()
-        const verificationReference = `VERIFY_${user.id}_${Date.now()}`
+        const verificationReference = `VERIFY_${userId}_${Date.now()}`
 
         // Shufti Pro details
         const clientId = Deno.env.get('SHUFTI_CLIENT_ID')

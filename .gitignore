@@ -27,3 +27,6 @@ dist-ssr
 
 # TypeScript build cache
 *.tsbuildinfo
+
+# Large files 
+*.exe

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,10 @@ import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+// Utility to validate UUID
+const isValidUUID = (id: string | undefined | null) =>
+    !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 
 const Verification = () => {
     const { user } = useAuth();
@@ -22,12 +26,14 @@ const Verification = () => {
 
     // Fetch current status
     useEffect(() => {
-        if (user) {
+        if (user?.id && isValidUUID(user.id)) {
             fetchVerificationStatus();
+        } else {
+            console.error("Invalid user ID:", user?.id);
         }
     }, [user]);
 
-    // Polling logic when waiting for verification
+    // Polling when verification pending
     useEffect(() => {
         let interval: NodeJS.Timeout;
         if ((isRedirect || status === 'pending') && status !== 'verified' && status !== 'rejected') {
@@ -36,22 +42,14 @@ const Verification = () => {
         return () => clearInterval(interval);
     }, [isRedirect, status]);
 
-    // Auto-trigger Stripe onboarding when verified
+    // Auto-trigger Stripe onboarding
     useEffect(() => {
         if (status === 'verified' && stripeOnboarded === false) {
-            if (isRedirect) {
-                toast.success("Identity verified! Setting up your payouts...");
-            }
-            // Auto-trigger Stripe onboarding after a brief delay
-            const timer = setTimeout(() => {
-                handleStripeOnboarding();
-            }, 1500);
+            if (isRedirect) toast.success("Identity verified! Setting up your payouts...");
+            const timer = setTimeout(handleStripeOnboarding, 1500);
             return () => clearTimeout(timer);
         } else if (status === 'verified' && stripeOnboarded === true) {
-            // Already onboarded, redirect to host dashboard
-            const timer = setTimeout(() => {
-                window.location.href = '/host';
-            }, 1500);
+            const timer = setTimeout(() => (window.location.href = '/host'), 1500);
             return () => clearTimeout(timer);
         }
     }, [status, stripeOnboarded, isRedirect]);
@@ -62,83 +60,79 @@ const Verification = () => {
             const { data, error } = await supabase.functions.invoke('create-stripe-onboarding', {});
             if (error) throw error;
             if (data?.error) throw new Error(data.error);
-            if (data?.url) {
-                window.location.href = data.url;
-            }
-        } catch (error: any) {
-            toast.error(error.message || "Failed to initiate payout setup");
+            if (data?.url) window.location.href = data.url;
+        } catch (err: any) {
+            toast.error(err.message || "Failed to initiate payout setup");
             setStripeLoading(false);
-            // Fallback: redirect to host dashboard anyway
-            setTimeout(() => {
-                window.location.href = '/host';
-            }, 3000);
+            setTimeout(() => (window.location.href = '/host'), 3000);
         }
     };
 
+    // ✅ Fetch verification status safely
     const fetchVerificationStatus = async () => {
+        if (!user?.id || !isValidUUID(user.id)) return;
+
         try {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('profiles')
                 .select('verification_status, verification_id, stripe_onboarded')
-                .eq('id', user?.id)
+                .eq('id', user.id)
                 .single();
 
             if (data) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const profile = data as any;
-                setStatus(profile.verification_status as any);
-                setVerificationId(profile.verification_id);
-                setStripeOnboarded(profile.stripe_onboarded);
+                setStatus(data.verification_status as any);
+                setVerificationId(data.verification_id);
+                setStripeOnboarded(data.stripe_onboarded);
             }
-        } catch (error) {
-            console.error("Error fetching status:", error);
+        } catch (err) {
+            console.error("Error fetching verification status:", err);
         }
     };
 
+    // ✅ Start verification with safe profile fetch
     const startVerification = async () => {
+        if (!user?.id || !isValidUUID(user.id)) {
+            toast.error("Invalid user ID");
+            return;
+        }
+
         setLoading(true);
         try {
-            // 1. Get Verification URL from Edge Function
-            const { data: { session } } = await supabase.auth.getSession();
+            // Fetch profile info safely
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('full_name, phone')
+                .eq('id', user.id)
+                .single();
 
-            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/shufti-token`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${session?.access_token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ email: user?.email })
+            if (profileError) throw profileError;
+            if (!profile) throw new Error("Profile not found");
+
+            // Call Shufti-token Edge Function
+            const { data, error } = await supabase.functions.invoke('shufti-token', {
+                body: {
+                    email: user.email,
+                    full_name: profile.full_name || ''
+                }
             });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                console.error("Verification Init Error:", errorData);
-                throw new Error(errorData.error || 'Failed to initialize verification');
-            }
+            if (error) throw error;
+            if (!data?.verification_url) throw new Error("No verification URL returned");
 
-            const { verification_url } = await response.json();
+            // Update profile status to pending
+            await supabase.from('profiles').update({ verification_status: 'pending' }).eq('id', user.id);
 
-            if (verification_url) {
-                console.log("Redirecting to:", verification_url);
-                // Optimistically update status (optional, depends on preference)
-                await updateProfileStatus('pending');
-
-                // Redirect user to Shufti Hosted Page
-                window.location.href = verification_url;
-            } else {
-                throw new Error("No verification URL received from server.");
-            }
-
-        } catch (error: any) {
-            toast.error(error.message || "An error occurred");
+            window.location.href = data.verification_url;
+        } catch (err: any) {
+            console.error("Verification failed:", err);
+            toast.error(err.message || "Verification failed");
             setLoading(false);
         }
     };
 
     const updateProfileStatus = async (newStatus: string) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        // @ts-ignore
-        await supabase.from('profiles').update({ verification_status: newStatus }).eq('id', user?.id);
+        if (!user?.id || !isValidUUID(user.id)) return;
+        await supabase.from('profiles').update({ verification_status: newStatus }).eq('id', user.id);
         fetchVerificationStatus();
     };
 
@@ -173,7 +167,10 @@ const Verification = () => {
                                 </p>
                             </div>
                             {!stripeLoading && (
-                                <Button onClick={() => window.location.href = '/host'} className="bg-green-600 hover:bg-green-700 text-white">
+                                <Button
+                                    onClick={() => (window.location.href = '/host')}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                >
                                     Go to Dashboard
                                 </Button>
                             )}
@@ -195,10 +192,9 @@ const Verification = () => {
                                         : "We are processing your documents. The system will update you shortly."}
                                 </p>
                             </div>
-
                         </CardContent>
                     </Card>
-                ) : ( // This covers 'unverified' and 'rejected'
+                ) : (
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -237,18 +233,17 @@ const Verification = () => {
                                 </Alert>
                             )}
 
-                            <Button
-                                size="lg"
-                                className="w-full"
-                                onClick={startVerification}
-                                disabled={loading}
-                            >
+                            <Button size="lg" className="w-full" onClick={startVerification} disabled={loading}>
                                 {loading ? (
                                     <>
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                         Redirecting...
                                     </>
-                                ) : status === 'rejected' ? 'Try Again' : 'Verify Identity Now'}
+                                ) : status === 'rejected' ? (
+                                    'Try Again'
+                                ) : (
+                                    'Verify Identity Now'
+                                )}
                             </Button>
 
                             <p className="text-xs text-center text-muted-foreground">
