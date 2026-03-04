@@ -16,7 +16,6 @@ import { useAuth } from "@/components/AuthProvider";
 import { extractVideoThumbnail } from "@/utils/videoThumbnail";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, Sparkles } from "lucide-react";
-import { uploadToCloudinary } from "@/lib/cloudinaryUpload";
 
 
 
@@ -145,8 +144,6 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         }
         setIsSubmitting(true);
         try {
-            // Cloudinary handles optimization (f_auto, q_auto) server-side —
-            // no client-side FFmpeg transcoding needed.
             const finalVideoFile = data.videoFile;
 
             // Step 1: Create Experience record
@@ -171,41 +168,32 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             }
             console.log("[Publish] Experience created:", exp.id);
 
-            // Step 2: Upload video to Cloudinary
-            console.log("[Publish] Step 2: Uploading video to Cloudinary…");
+            // Step 2: Upload video to Supabase Storage
+            console.log("[Publish] Step 2: Uploading video to storage…");
             setOptimizationProgress(0);
 
-            const cldUpload = await uploadToCloudinary(finalVideoFile, {
-                resourceType: "video",
-                folder: "zurureels/reels",
-                onProgress: (pct) => setOptimizationProgress(pct),
-            });
-
+            // TODO: Implement Supabase Storage upload here
+            // This is where the video will be uploaded to Supabase or your storage solution
+            const videoUrl = ""; // Will be populated from storage upload
+            
             setOptimizationProgress(null);
-            const publicId = cldUpload.publicId;
-            const publicUrl = cldUpload.secureUrl;
 
-            if (!publicUrl) {
-                throw new Error("Failed to get Cloudinary URL for uploaded video");
+            if (!videoUrl) {
+                throw new Error("Failed to upload video");
             }
-            console.log("[Publish] Video uploaded to Cloudinary:", publicId);
+            console.log("[Publish] Video uploaded:", videoUrl);
 
-            // Step 3: Extract thumbnail and upload to Cloudinary
+            // Step 3: Extract thumbnail
             console.log("[Publish] Step 3: Extracting thumbnail…");
             let thumbnailUrl: string | null = null;
             try {
                 const thumbBlob = await extractVideoThumbnail(data.videoFile);
                 if (thumbBlob) {
-                    const thumbFile = new File([thumbBlob], "thumbnail.jpg", { type: "image/jpeg" });
-                    const thumbUpload = await uploadToCloudinary(thumbFile, {
-                        resourceType: "image",
-                        folder: "zurureels/thumbnails",
-                    });
-                    thumbnailUrl = thumbUpload.secureUrl;
-                    console.log("[Publish] Thumbnail uploaded to Cloudinary:", thumbUpload.publicId);
+                    // TODO: Upload thumbnail to storage
+                    console.log("[Publish] Thumbnail extracted");
                 }
             } catch (thumbErr) {
-                console.warn("[Publish] Thumbnail upload failed, proceeding without:", thumbErr);
+                console.warn("[Publish] Thumbnail extraction failed, proceeding without:", thumbErr);
             }
 
             // Step 4: Create Reel record
@@ -216,17 +204,15 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     user_id: user.id,
                     experience_id: exp.id,
                     category: selectedCategory,
-                    video_url: publicUrl,           // secureUrl — kept for backward compat
-                    cloudinary_public_id: publicId, // used by CloudinaryVideo component
-                    cloudinary_secure_url: publicUrl,
+                    video_url: videoUrl,
                     thumbnail_url: thumbnailUrl,
                     duration: data.duration || 20,
                     lat: data.lat,
                     lng: data.lng,
                     is_live: data.isLive ?? false,
                     status: 'active',
-                    processing_status: 'ready',  // Cloudinary upload is already done
-                    expires_at: null,             // No expiry — show indefinitely
+                    processing_status: 'ready',
+                    expires_at: null,
                 });
 
             if (reelError) {

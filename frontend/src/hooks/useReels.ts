@@ -41,8 +41,6 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                     lng,
                     processing_status,
                     processed_video_url,
-                    cloudinary_public_id,
-                    cloudinary_secure_url,
                     duration,
                     experience:experiences (
                         title,
@@ -99,7 +97,6 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 lng: item.lng,
                 processingStatus: item.processing_status,
                 processedVideoUrl: item.processed_video_url,
-                cloudinaryPublicId: item.cloudinary_public_id ?? null,
             }));
 
             // Add mock reels for density (only in "all" or matching categories)

@@ -7,7 +7,6 @@ import { getReelExpiryDisplay, isReelExpiringSoon } from "@/utils/reelExpiry";
 import { useReelInteractions } from "@/hooks/useReelInteractions";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CloudinaryVideo } from "@/components/media/CloudinaryVideo";
 
 export interface ReelData {
   id: string;
@@ -31,7 +30,6 @@ export interface ReelData {
   lng?: number;
   processingStatus?: 'uploading' | 'processing' | 'ready' | 'failed';
   processedVideoUrl?: string;
-  cloudinaryPublicId?: string | null;
 }
 
 interface ReelCardProps {
@@ -220,9 +218,9 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
     <div className="relative h-full w-full snap-start overflow-hidden">
       {/* Video Background */}
       <div className="absolute inset-0 bg-black">
-        <CloudinaryVideo
-          videoRef={videoRef}
-          src={reel.cloudinaryPublicId || reel.processedVideoUrl || reel.videoUrl}
+        <video
+          ref={videoRef}
+          src={reel.processedVideoUrl || reel.videoUrl}
           poster={reel.thumbnailUrl}
           className="h-full w-full object-cover"
           loop

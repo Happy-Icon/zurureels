@@ -3,11 +3,11 @@ import { subDays } from "date-fns";
 
 const daysAgo = (days: number) => subDays(new Date(), days).toISOString();
 
-// 3 distinct Cloudinary demo videos (no transformation suffix — direct MP4)
+// Sample video URLs for mock reels
 const V = [
-  "https://res.cloudinary.com/demo/video/upload/samples/sea-turtle.mp4",
-  "https://res.cloudinary.com/demo/video/upload/samples/elephants.mp4",
-  "https://res.cloudinary.com/demo/video/upload/samples/cld-sample-video.mp4",
+  "https://www.w3schools.com/html/mov_bbb.mp4",
+  "https://www.w3schools.com/html/movie.mp4",
+  "https://www.w3schools.com/html/mov_bbb.mp4",
 ];
 
 export const mockReels: ReelData[] = [
