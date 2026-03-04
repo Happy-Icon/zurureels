@@ -30,12 +30,11 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
         if (pageNum === 0) setLoading(true);
         else setLoadingMore(true);
         try {
-            // Query reels with joins to experiences and profiles
+            // Query reels with joins to experiences and profiles, only needed columns
             let query = supabase
                 .from("reels")
                 .select(`
                     id,
-                    user_id,
                     video_url,
                     thumbnail_url,
                     category,
@@ -44,24 +43,10 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                     is_live,
                     lat,
                     lng,
-                    processing_status,
-                    processed_video_url,
-                    duration,
-                    experience:experiences (
-                        title,
-                        location,
-                        current_price,
-                        price_unit,
-                        entity_name,
-                        metadata
-                    ),
-                    host:profiles (
-                        full_name,
-                        metadata
-                    )
+                    experience:experiences (title, location, current_price, price_unit, entity_name, metadata),
+                    host:profiles (full_name, metadata)
                 `)
                 .eq("status", "active")
-                // Allow reels with no expiry (NULL) OR a future expiry date
                 .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
                 .order("created_at", { ascending: false });
 
