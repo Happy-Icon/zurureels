@@ -44,6 +44,7 @@ export function ReelCard({ reel, isActive, onSave, onBook }: ReelCardProps) {
   const [isMuted, setIsMuted] = useState(true);
   const [showMuteHint, setShowMuteHint] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [videoLoaded, setVideoLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const navigate = useNavigate();
 
