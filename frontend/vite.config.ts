@@ -14,11 +14,6 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  optimizeDeps: {
-    include: [
-      "@cloudinary/url-gen",
-      "@cloudinary/react",
-    ],
-  },
+
 }));
 
