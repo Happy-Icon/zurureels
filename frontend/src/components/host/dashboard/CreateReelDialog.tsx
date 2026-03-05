@@ -147,7 +147,6 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             const finalVideoFile = data.videoFile;
 
             // Step 1: Create Experience record
-            console.log("[Publish] Step 1: Creating experience…");
             const { data: exp, error: expError } = await supabase
                 .from("experiences")
                 .insert({
@@ -163,48 +162,47 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                 .single();
 
             if (expError) {
-                console.error("[Publish] Experience insert failed:", expError);
                 throw new Error(`Experience creation failed: ${expError.message}`);
             }
-            console.log("[Publish] Experience created:", exp.id);
 
-            // Step 2: Upload video to Supabase Storage
-            console.log("[Publish] Step 2: Uploading video to storage…");
+            // Step 2: Upload video to Cloudinary
             setOptimizationProgress(0);
-
-            // TODO: Implement Supabase Storage upload here
-            // This is where the video will be uploaded to Supabase or your storage solution
-            const videoUrl = ""; // Will be populated from storage upload
-            
+            let cloudinaryResult;
+            try {
+                // Dynamically import Cloudinary upload utility
+                const { uploadToCloudinary } = await import("@/lib/cloudinaryUpload");
+                cloudinaryResult = await uploadToCloudinary(finalVideoFile, {
+                    resourceType: "video",
+                    folder: "reels",
+                    onProgress: (percent) => setOptimizationProgress(percent)
+                });
+            } catch (err) {
+                throw new Error("Cloudinary upload failed: " + (err?.message || err));
+            }
             setOptimizationProgress(null);
 
-            if (!videoUrl) {
-                throw new Error("Failed to upload video");
+            if (!cloudinaryResult?.secure_url) {
+                throw new Error("Failed to upload video to Cloudinary");
             }
-            console.log("[Publish] Video uploaded:", videoUrl);
 
-            // Step 3: Extract thumbnail
-            console.log("[Publish] Step 3: Extracting thumbnail…");
+            // Step 3: Extract thumbnail (optional, can use Cloudinary transformations)
             let thumbnailUrl: string | null = null;
             try {
-                const thumbBlob = await extractVideoThumbnail(data.videoFile);
-                if (thumbBlob) {
-                    // TODO: Upload thumbnail to storage
-                    console.log("[Publish] Thumbnail extracted");
-                }
+                // Use Cloudinary auto-generated thumbnail
+                thumbnailUrl = cloudinaryResult.secure_url.replace("/upload/", "/upload/w_400,h_600,c_fill,q_auto,f_auto/");
             } catch (thumbErr) {
-                console.warn("[Publish] Thumbnail extraction failed, proceeding without:", thumbErr);
+                thumbnailUrl = null;
             }
 
             // Step 4: Create Reel record
-            console.log("[Publish] Step 4: Creating reel record…");
             const { error: reelError } = await supabase
                 .from("reels")
                 .insert({
                     user_id: user.id,
                     experience_id: exp.id,
                     category: selectedCategory,
-                    video_url: videoUrl,
+                    video_url: cloudinaryResult.secure_url,
+                    cloudinary_public_id: cloudinaryResult.public_id,
                     thumbnail_url: thumbnailUrl,
                     duration: data.duration || 20,
                     lat: data.lat,
@@ -216,10 +214,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                 });
 
             if (reelError) {
-                console.error("[Publish] Reel insert failed:", reelError);
                 throw new Error(`Reel creation failed: ${reelError.message}`);
             }
-            console.log("[Publish] ✅ Reel published successfully!");
 
             toast.success("Reel published successfully!");
             setShowVideoEditor(false);
@@ -231,7 +227,6 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             setLocation("");
             setPrice("");
         } catch (error: any) {
-            console.error("[Publish] Pipeline error:", error);
             toast.error(error.message || "Failed to publish reel");
         } finally {
             setIsSubmitting(false);

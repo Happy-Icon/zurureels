@@ -20,17 +20,21 @@ function shuffleArray<T>(array: T[]): T[] {
 export const useReels = (category?: string, experienceId?: string, search?: string) => {
     const [reels, setReels] = useState<ReelData[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<any>(null);
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const pageSize = 10;
 
-    const fetchReels = useCallback(async () => {
-        setLoading(true);
+    const fetchReels = useCallback(async (pageNum: number = 0) => {
+        if (pageNum === 0) setLoading(true);
+        else setLoadingMore(true);
         try {
-            // Query reels with joins to experiences and profiles
+            // Query reels with joins to experiences and profiles, only needed columns
             let query = supabase
                 .from("reels")
                 .select(`
                     id,
-                    user_id,
                     video_url,
                     thumbnail_url,
                     category,
@@ -39,25 +43,12 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                     is_live,
                     lat,
                     lng,
-                    processing_status,
-                    processed_video_url,
-                    duration,
-                    experience:experiences (
-                        title,
-                        location,
-                        current_price,
-                        price_unit,
-                        entity_name,
-                        metadata
-                    ),
-                    host:profiles (
-                        full_name,
-                        metadata
-                    )
+                    experience:experiences (title, location, current_price, price_unit, entity_name, metadata),
+                    host:profiles (full_name, metadata)
                 `)
                 .eq("status", "active")
-                // Allow reels with no expiry (NULL) OR a future expiry date
-                .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+                .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+                .order("created_at", { ascending: false });
 
             if (category && category !== "all") {
                 query = query.eq("category", category);
@@ -67,12 +58,18 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 query = query.eq("experience_id", experienceId);
             }
 
-            // Fetch all matching, we'll shuffle client-side
-            const { data, error: fetchError } = await query.order("created_at", {
-                ascending: false,
-            });
+            // Pagination: use range
+            const start = pageNum * pageSize;
+            const end = start + pageSize - 1;
+            query = query.range(start, end);
+
+            // Fetch batch
+            const { data, error: fetchError } = await query;
 
             if (fetchError) throw fetchError;
+
+            // Check if we have more results
+            setHasMore((data?.length ?? 0) >= pageSize);
 
             // Transform database records to ReelData interface
             let transformedReels: ReelData[] = (data || []).map((item: any) => ({
@@ -99,19 +96,20 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 processedVideoUrl: item.processed_video_url,
             }));
 
-            // Add mock reels for density (only in "all" or matching categories)
-            const filteredMocks = mockReels.filter(m =>
-                (!category || category === "all" || m.category === category) &&
-                (!search || m.title.toLowerCase().includes(search.toLowerCase()) || m.location.toLowerCase().includes(search.toLowerCase()))
-            );
-
-            // Combine real + mocks
-            let combinedReels = [...transformedReels, ...filteredMocks];
+            // Add mock reels for density (only in first page)
+            let finalReels = transformedReels;
+            if (pageNum === 0) {
+                const filteredMocks = mockReels.filter(m =>
+                    (!category || category === "all" || m.category === category) &&
+                    (!search || m.title.toLowerCase().includes(search.toLowerCase()) || m.location.toLowerCase().includes(search.toLowerCase()))
+                );
+                finalReels = [...transformedReels, ...filteredMocks];
+            }
 
             // Client-side search filter (Supabase ilike on joined tables is unreliable)
             if (search && search.trim()) {
                 const q = search.toLowerCase();
-                combinedReels = combinedReels.filter(
+                finalReels = finalReels.filter(
                     (r) =>
                         r.title.toLowerCase().includes(q) ||
                         r.location.toLowerCase().includes(q) ||
@@ -121,40 +119,55 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
             }
 
             // Shuffle for fair, unbiased ordering
-            const liveReels = combinedReels.filter((r) => r.isLive && r.lat && r.lng);
-            const otherReels = combinedReels.filter((r) => !r.isLive || !r.lat || !r.lng);
+            const liveReels = finalReels.filter((r) => r.isLive && r.lat && r.lng);
+            const otherReels = finalReels.filter((r) => !r.isLive || !r.lat || !r.lng);
 
             const shuffledLive = shuffleArray(liveReels);
             const shuffledOther = shuffleArray(otherReels);
 
-            const finalReels: ReelData[] = [];
+            const processedReels: ReelData[] = [];
             let li = 0,
                 oi = 0;
             let position = 0;
 
             while (li < shuffledLive.length || oi < shuffledOther.length) {
                 if (position % 3 === 0 && li < shuffledLive.length) {
-                    finalReels.push(shuffledLive[li++]);
+                    processedReels.push(shuffledLive[li++]);
                 } else if (oi < shuffledOther.length) {
-                    finalReels.push(shuffledOther[oi++]);
+                    processedReels.push(shuffledOther[oi++]);
                 } else if (li < shuffledLive.length) {
-                    finalReels.push(shuffledLive[li++]);
+                    processedReels.push(shuffledLive[li++]);
                 }
                 position++;
             }
 
-            setReels(finalReels);
+            if (pageNum === 0) {
+                setReels(processedReels);
+            } else {
+                setReels(prev => [...prev, ...processedReels]);
+            }
         } catch (err) {
             console.error("Error fetching reels:", err);
             setError(err);
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
     }, [category, experienceId, search]);
 
     useEffect(() => {
-        fetchReels();
+        setPage(0);
+        setReels([]);
+        fetchReels(0);
     }, [fetchReels]);
 
-    return { reels, loading, error, refetch: fetchReels };
+    const loadMore = useCallback(() => {
+        if (!loadingMore && hasMore) {
+            const nextPage = page + 1;
+            setPage(nextPage);
+            fetchReels(nextPage);
+        }
+    }, [page, loadingMore, hasMore, fetchReels]);
+
+    return { reels, loading, loadingMore, error, hasMore, refetch: fetchReels, loadMore };
 };

@@ -15,28 +15,18 @@ export const useReels = (category?: string, experienceId?: string) => {
                 let query = (supabase as any)
                     .from("reels")
                     .select(`
-            id,
-            video_url,
-            thumbnail_url,
-            category,
-            created_at,
-            experience_id,
-            is_live,
-            lat,
-            lng,
-            experience:experiences (
-              title,
-              location,
-              current_price,
-              price_unit,
-              entity_name,
-              metadata
-            ),
-            host:profiles (
-              full_name,
-              metadata
-            )
-          `)
+                        id,
+                        video_url,
+                        thumbnail_url,
+                        category,
+                        created_at,
+                        experience_id,
+                        is_live,
+                        lat,
+                        lng,
+                        experience:experiences (title, location, current_price, price_unit, entity_name, metadata),
+                        host:profiles (full_name, metadata)
+                    `)
                     .eq("status", "active")
                     .gt("expires_at", new Date().toISOString());
 
@@ -47,6 +37,9 @@ export const useReels = (category?: string, experienceId?: string) => {
                 if (experienceId) {
                     query = query.eq("experience_id", experienceId);
                 }
+
+                // Pagination: only first 20 reels
+                query = query.range(0, 19);
 
                 const { data, error: fetchError } = await query.order("created_at", {
                     ascending: false,
