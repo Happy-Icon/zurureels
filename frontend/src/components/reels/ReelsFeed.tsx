@@ -9,6 +9,7 @@ interface ReelsFeedProps {
   onBook?: (id: string) => void;
 }
 
+export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [displayedReels, setDisplayedReels] = useState<ReelData[]>(reels.slice(0, 10));
   const [hasMore, setHasMore] = useState(reels.length > 10);

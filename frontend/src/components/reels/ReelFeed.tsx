@@ -1,6 +1,6 @@
 /**
  * Full-Screen Reel Feed Component
- * TikTok-style vertical scrolling with one reel per screen
+  * - Displays reels in a vertical, full-screen format
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -29,20 +29,29 @@ export const ReelFeed = ({
   const reelRefs = useRef<(HTMLDivElement | null)[]>([]);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
+  // Smooth scroll to active reel when scrolling
+  const handleScroll = useCallback(() => {
+    if (!containerRef.current) return;
+    
+    const scrollPos = containerRef.current.scrollTop;
+    const viewportHeight = containerRef.current.clientHeight;
+    const newIndex = Math.round(scrollPos / viewportHeight);
+    
+    setActiveReelIndex(Math.max(0, Math.min(newIndex, reels.length - 1)));
+  }, [reels.length]);
+
   // Initialize Intersection Observer for autoplay control and infinite scroll
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           const index = parseInt(entry.target.getAttribute("data-index") || "0");
-          
           // Track active reel
           if (entry.isIntersecting) {
             setActiveReelIndex(index);
           }
-
-          // Trigger load more when user scrolls near end
-          if (hasMore && !loadingMore && index === reels.length - 2 && entry.isIntersecting) {
+          // Prefetch more reels when within 3 of the end
+          if (hasMore && !loadingMore && index >= reels.length - 4 && entry.isIntersecting) {
             onLoadMore();
           }
         });
@@ -52,7 +61,6 @@ export const ReelFeed = ({
         rootMargin: "0px",
       }
     );
-
     return () => {
       observerRef.current?.disconnect();
     };
@@ -71,17 +79,6 @@ export const ReelFeed = ({
     };
   }, [reels.length]);
 
-  // Smooth scroll to active reel when scrolling
-  const handleScroll = useCallback(() => {
-    if (!containerRef.current) return;
-    
-    const scrollPos = containerRef.current.scrollTop;
-    const viewportHeight = containerRef.current.clientHeight;
-    const newIndex = Math.round(scrollPos / viewportHeight);
-    
-    setActiveReelIndex(Math.max(0, Math.min(newIndex, reels.length - 1)));
-  }, [reels.length]);
-
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -95,6 +92,13 @@ export const ReelFeed = ({
       container?.removeEventListener("scroll", handleScroll);
     };
   }, [handleScroll]);
+
+  // Memory management: clear refs for offscreen reels
+  useEffect(() => {
+    reelRefs.current = reelRefs.current.map((ref, idx) =>
+      Math.abs(idx - activeReelIndex) <= 1 ? ref : null
+    );
+  }, [activeReelIndex, reels.length]);
 
   if (loading) {
     return (
@@ -115,6 +119,11 @@ export const ReelFeed = ({
     );
   }
 
+  // Windowing: Only render previous, current, and next reels
+  // Only keep refs for windowed reels
+  const windowedIndexes = reels.map((_, idx) => idx).filter(idx => Math.abs(idx - activeReelIndex) <= 1);
+  const windowedReels = windowedIndexes.map(idx => reels[idx]);
+
   return (
     <div
       ref={containerRef}
@@ -124,26 +133,28 @@ export const ReelFeed = ({
         scrollSnapType: "y mandatory",
       }}
     >
-      {reels.map((reel, index) => (
-        <div
-          key={reel.id}
-          ref={(el) => {
-            reelRefs.current[index] = el;
-          }}
-          data-index={index}
-          className="w-full h-screen flex-shrink-0 snap-start snap-always"
-          style={{
-            scrollSnapAlign: "start",
-            scrollSnapStop: "always",
-          }}
-        >
-          <ReelCard
-            reel={reel}
-            isActive={activeReelIndex === index}
-            onBook={onBook}
-          />
-        </div>
-      ))}
+      {windowedReels.map((reel, i) => {
+        const index = windowedIndexes[i];
+        return (
+          <div
+            key={reel.id}
+            ref={el => { reelRefs.current[index] = el; }}
+            data-index={index}
+            className="w-full h-screen flex-shrink-0 snap-start snap-always"
+            style={{
+              scrollSnapAlign: "start",
+              scrollSnapStop: "always",
+            }}
+          >
+            <ReelCard
+              reel={reel}
+              isActive={activeReelIndex === index}
+              preloadNext={index === activeReelIndex + 1}
+              onBook={onBook ? (id: string) => onBook(reel) : undefined}
+            />
+          </div>
+        );
+      })}
 
       {/* Loading more indicator */}
       {loadingMore && (
