@@ -32,11 +32,11 @@ export const ReelFeed = ({
   // Smooth scroll to active reel when scrolling
   const handleScroll = useCallback(() => {
     if (!containerRef.current) return;
-    
+
     const scrollPos = containerRef.current.scrollTop;
     const viewportHeight = containerRef.current.clientHeight;
     const newIndex = Math.round(scrollPos / viewportHeight);
-    
+
     setActiveReelIndex(Math.max(0, Math.min(newIndex, reels.length - 1)));
   }, [reels.length]);
 
@@ -93,12 +93,9 @@ export const ReelFeed = ({
     };
   }, [handleScroll]);
 
-  // Memory management: clear refs for offscreen reels
-  useEffect(() => {
-    reelRefs.current = reelRefs.current.map((ref, idx) =>
-      Math.abs(idx - activeReelIndex) <= 1 ? ref : null
-    );
-  }, [activeReelIndex, reels.length]);
+  // The observer utilizes reelRefs to track viewport intersection.
+  // The isWindowed logic correctly mounts/unmounts ReelCard components implicitly.
+
 
   if (loading) {
     return (
@@ -119,11 +116,6 @@ export const ReelFeed = ({
     );
   }
 
-  // Windowing: Only render previous, current, and next reels
-  // Only keep refs for windowed reels
-  const windowedIndexes = reels.map((_, idx) => idx).filter(idx => Math.abs(idx - activeReelIndex) <= 1);
-  const windowedReels = windowedIndexes.map(idx => reels[idx]);
-
   return (
     <div
       ref={containerRef}
@@ -133,25 +125,29 @@ export const ReelFeed = ({
         scrollSnapType: "y mandatory",
       }}
     >
-      {windowedReels.map((reel, i) => {
-        const index = windowedIndexes[i];
+      {reels.map((reel, index) => {
+        const isWindowed = Math.abs(index - activeReelIndex) <= 1;
         return (
           <div
             key={reel.id}
             ref={el => { reelRefs.current[index] = el; }}
             data-index={index}
-            className="w-full h-screen flex-shrink-0 snap-start snap-always"
+            className="w-full h-screen flex-shrink-0 snap-start snap-always relative"
             style={{
               scrollSnapAlign: "start",
               scrollSnapStop: "always",
             }}
           >
-            <ReelCard
-              reel={reel}
-              isActive={activeReelIndex === index}
-              preloadNext={index === activeReelIndex + 1}
-              onBook={onBook ? (id: string) => onBook(reel) : undefined}
-            />
+            {isWindowed ? (
+              <ReelCard
+                reel={reel}
+                isActive={activeReelIndex === index}
+                preloadNext={index === activeReelIndex + 1}
+                onBook={onBook ? (id: string) => onBook(reel) : undefined}
+              />
+            ) : (
+              <div className="w-full h-full bg-black" />
+            )}
           </div>
         );
       })}

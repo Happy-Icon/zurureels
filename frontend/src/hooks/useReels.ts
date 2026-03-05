@@ -72,29 +72,42 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
             setHasMore((data?.length ?? 0) >= pageSize);
 
             // Transform database records to ReelData interface
-            let transformedReels: ReelData[] = (data || []).map((item: any) => ({
-                id: item.id,
-                experienceId: item.experience_id,
-                hostUserId: item.user_id,
-                videoUrl: item.video_url,
-                thumbnailUrl: item.thumbnail_url || "/placeholder.svg",
-                title: item.experience?.title || "Untitled Experience",
-                location: item.experience?.location || "Unknown Location",
-                category: item.category as ReelData["category"],
-                price: item.experience?.current_price || 0,
-                priceUnit: item.experience?.price_unit || "person",
-                rating: item.experience?.metadata?.rating || 0,
-                likes: 0,
-                saved: false,
-                hostName: item.host?.full_name || item.experience?.entity_name || "Host",
-                hostAvatar: item.host?.metadata?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + item.id,
-                postedAt: item.created_at,
-                isLive: item.is_live,
-                lat: item.lat,
-                lng: item.lng,
-                processingStatus: item.processing_status,
-                processedVideoUrl: item.processed_video_url,
-            }));
+            let transformedReels: ReelData[] = (data || []).map((item: any) => {
+                let videoUrl = item.video_url;
+                let processedUrl = item.processed_video_url;
+                
+                // Cloudinary Optimization for instant streaming
+                if (videoUrl && videoUrl.includes("res.cloudinary.com") && !videoUrl.includes("q_auto")) {
+                     videoUrl = videoUrl.replace("/upload/", "/upload/q_auto,f_auto/");
+                }
+                if (processedUrl && processedUrl.includes("res.cloudinary.com") && !processedUrl.includes("q_auto")) {
+                     processedUrl = processedUrl.replace("/upload/", "/upload/q_auto,f_auto/");
+                }
+
+                return {
+                    id: item.id,
+                    experienceId: item.experience_id,
+                    hostUserId: item.user_id,
+                    videoUrl: videoUrl,
+                    thumbnailUrl: item.thumbnail_url || "/placeholder.svg",
+                    title: item.experience?.title || "Untitled Experience",
+                    location: item.experience?.location || "Unknown Location",
+                    category: item.category as ReelData["category"],
+                    price: item.experience?.current_price || 0,
+                    priceUnit: item.experience?.price_unit || "person",
+                    rating: item.experience?.metadata?.rating || 0,
+                    likes: 0,
+                    saved: false,
+                    hostName: item.host?.full_name || item.experience?.entity_name || "Host",
+                    hostAvatar: item.host?.metadata?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + item.id,
+                    postedAt: item.created_at,
+                    isLive: item.is_live,
+                    lat: item.lat,
+                    lng: item.lng,
+                    processingStatus: item.processing_status,
+                    processedVideoUrl: processedUrl,
+                };
+            });
 
             // Add mock reels for density (only in first page)
             let finalReels = transformedReels;

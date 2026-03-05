@@ -13,6 +13,29 @@ export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [displayedReels, setDisplayedReels] = useState<ReelData[]>(reels.slice(0, 10));
   const [hasMore, setHasMore] = useState(reels.length > 10);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = parseInt(entry.target.getAttribute("data-index") || "0");
+            setActiveIndex(index);
+          }
+        });
+      },
+      { threshold: 0.6 }
+    );
+    return () => observerRef.current?.disconnect();
+  }, []);
+
+  const observeRef = (el: HTMLDivElement | null, index: number) => {
+    if (el) {
+      el.setAttribute("data-index", index.toString());
+      observerRef.current?.observe(el);
+    }
+  };
 
   useEffect(() => {
     setDisplayedReels(reels.slice(0, 10));
@@ -36,19 +59,27 @@ export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
       <div
         id="reels-scroll-container"
         className={cn(
-          "h-[calc(100vh-4rem)] md:h-screen overflow-y-scroll snap-y-mandatory hide-scrollbar"
+          "h-[calc(100vh-4rem)] md:h-screen overflow-y-scroll snap-y snap-mandatory hide-scrollbar"
         )}
       >
-        {displayedReels.map((reel, index) => (
-          <div key={reel.id} className="h-full w-full">
-            <ReelCard
-              reel={reel}
-              isActive={index === activeIndex}
-              onSave={onSave}
-              onBook={onBook}
-            />
-          </div>
-        ))}
+        {displayedReels.map((reel, index) => {
+          const isWindowed = Math.abs(index - activeIndex) <= 1;
+          return (
+            <div key={reel.id} className="h-full w-full snap-start snap-always" ref={(el) => observeRef(el, index)}>
+              {isWindowed ? (
+                <ReelCard
+                  reel={reel}
+                  isActive={index === activeIndex}
+                  preloadNext={index === activeIndex + 1}
+                  onSave={onSave}
+                  onBook={onBook}
+                />
+              ) : (
+                <div className="w-full h-full bg-black" />
+              )}
+            </div>
+          );
+        })}
       </div>
     </InfiniteScroll>
   );
