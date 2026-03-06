@@ -9,6 +9,7 @@ export interface ReelRequirement {
     required: boolean;
     uploaded: boolean;
     videoUrl?: string;
+    cloudinaryPublicId?: string;
     lat?: number;
     lng?: number;
 }

@@ -50,7 +50,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
   const [locationName, setLocationName] = useState("");
   const [price, setPrice] = useState<string>("");
   const [entityName, setEntityName] = useState("");
-  const [uploadedReels, setUploadedReels] = useState<Map<string, { url: string; lat?: number; lng?: number }>>(new Map());
+  const [uploadedReels, setUploadedReels] = useState<Map<string, { url: string; publicId?: string; lat?: number; lng?: number }>>(new Map());
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [showRecorder, setShowRecorder] = useState(false);
   const [optimizationProgress, setOptimizationProgress] = useState<number | null>(null);
@@ -69,6 +69,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
         required: true,
         uploaded: uploadedReels.has("establishment"),
         videoUrl: uploadedReels.get("establishment")?.url,
+        cloudinaryPublicId: uploadedReels.get("establishment")?.publicId,
         lat: uploadedReels.get("establishment")?.lat,
         lng: uploadedReels.get("establishment")?.lng,
       },
@@ -81,6 +82,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
         required: true,
         uploaded: uploadedReels.has("living"),
         videoUrl: uploadedReels.get("living")?.url,
+        cloudinaryPublicId: uploadedReels.get("living")?.publicId,
         lat: uploadedReels.get("living")?.lat,
         lng: uploadedReels.get("living")?.lng,
       },
@@ -97,6 +99,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
         required: true,
         uploaded: uploadedReels.has(`bedroom_${i}`),
         videoUrl: uploadedReels.get(`bedroom_${i}`)?.url,
+        cloudinaryPublicId: uploadedReels.get(`bedroom_${i}`)?.publicId,
         lat: uploadedReels.get(`bedroom_${i}`)?.lat,
         lng: uploadedReels.get(`bedroom_${i}`)?.lng,
       });
@@ -112,6 +115,7 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
       required: true,
       uploaded: uploadedReels.has("bathroom"),
       videoUrl: uploadedReels.get("bathroom")?.url,
+      cloudinaryPublicId: uploadedReels.get("bathroom")?.publicId,
       lat: uploadedReels.get("bathroom")?.lat,
       lng: uploadedReels.get("bathroom")?.lng,
     });
@@ -145,43 +149,41 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
     setShowRecorder(false);
 
     try {
-      // Step 0: Optimize Video
+      // Step 0: Local transcode for web-safe format
       setOptimizationProgress(0);
       let finalFile = file;
       try {
-        finalFile = await transcodeVideo(file, (p) => setOptimizationProgress(p));
+        finalFile = await transcodeVideo(file, (p) => setOptimizationProgress(Math.round(p * 0.4))); // 0–40%
       } catch (err) {
         console.warn("Transcoding failed, using original:", err);
-      } finally {
-        setOptimizationProgress(null);
       }
 
-      const fileExt = finalFile.name.split('.').pop() || 'mp4';
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `reels/${fileName}`;
+      // Step 1: Upload to Cloudinary
+      const { uploadToCloudinary } = await import("@/lib/cloudinaryUpload");
+      const result = await uploadToCloudinary(finalFile, {
+        resourceType: "video",
+        folder: "reels/accommodation",
+        onProgress: (p) => setOptimizationProgress(40 + Math.round(p * 0.6)), // 40–100%
+      });
 
-      const { error: uploadError } = await supabase.storage
-        .from('reels')
-        .upload(filePath, finalFile, {
-          contentType: 'video/mp4'
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('reels')
-        .getPublicUrl(filePath);
+      setOptimizationProgress(null);
 
       setUploadedReels((prev) => {
         const next = new Map(prev);
-        next.set(reelId, { url: publicUrl, lat: loc?.lat, lng: loc?.lng });
+        next.set(reelId, {
+          url: result.secure_url,
+          publicId: result.public_id,
+          lat: loc?.lat,
+          lng: loc?.lng,
+        });
         return next;
       });
 
       toast.success("Video uploaded!");
     } catch (error: any) {
       console.error("Upload error:", error);
-      toast.error("Failed to upload video");
+      setOptimizationProgress(null);
+      toast.error("Failed to upload video: " + (error?.message || "Unknown error"));
     } finally {
       setUploadingId(null);
     }

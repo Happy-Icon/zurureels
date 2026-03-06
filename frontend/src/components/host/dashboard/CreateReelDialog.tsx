@@ -74,19 +74,26 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             // 2. Create Reels
             const reelsToInsert = data.reels
                 .filter((r: any) => r.uploaded && r.videoUrl)
-                .map((r: any) => ({
-                    user_id: user.id,
-                    experience_id: exp.id,
-                    category: selectedCategory,
-                    video_url: r.videoUrl,
-                    thumbnail_url: null,
-                    duration: r.maxDuration || 20,
-                    lat: r.lat,
-                    lng: r.lng,
-                    is_live: true, // Accommodation reels are now forced live
-                    status: 'active',
-                    processing_status: 'processing'
-                }));
+                .map((r: any) => {
+                    // Generate Cloudinary thumbnail if we have a Cloudinary URL
+                    const thumbnailUrl = r.videoUrl?.includes('res.cloudinary.com')
+                        ? r.videoUrl.replace('/upload/', '/upload/w_400,h_600,c_fill,q_auto,f_jpg/')
+                        : null;
+                    return {
+                        user_id: user.id,
+                        experience_id: exp.id,
+                        category: selectedCategory,
+                        video_url: r.videoUrl,
+                        cloudinary_public_id: r.cloudinaryPublicId || null,
+                        thumbnail_url: thumbnailUrl,
+                        duration: r.maxDuration || 20,
+                        lat: r.lat,
+                        lng: r.lng,
+                        is_live: true,
+                        status: 'active',
+                        processing_status: r.cloudinaryPublicId ? 'processing' : 'ready',
+                    };
+                });
 
             if (reelsToInsert.length > 0) {
                 const { error: reelsError } = await supabase
