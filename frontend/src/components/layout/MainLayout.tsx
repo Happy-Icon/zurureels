@@ -8,16 +8,21 @@ import { EmailVerificationBanner } from "@/components/EmailVerificationBanner";
 interface MainLayoutProps {
   children: ReactNode;
   hideNav?: boolean;
+  hideSidebar?: boolean;
 }
 
-export function MainLayout({ children, hideNav = false }: MainLayoutProps) {
+export function MainLayout({ children, hideNav = false, hideSidebar = false }: MainLayoutProps) {
+  const shouldHideSidebar = hideNav || hideSidebar;
+  const shouldHideTopNav = hideNav || hideSidebar;
+  const shouldHideBottomNav = hideNav;
+
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0 safe-top">
       <EmailVerificationBanner />
-      {!hideNav && <DesktopSidebar />}
+      {!shouldHideSidebar && <DesktopSidebar />}
 
       {/* Mobile Top Bar */}
-      {!hideNav && (
+      {!shouldHideTopNav && (
         <div className="md:hidden sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] flex items-center justify-between">
           <Link to="/" className="text-xl font-display font-semibold text-foreground">
             ZuruSasa
@@ -26,11 +31,10 @@ export function MainLayout({ children, hideNav = false }: MainLayoutProps) {
         </div>
       )}
 
-      <main className={!hideNav ? "md:ml-64" : ""}>
-
+      <main className={!shouldHideSidebar ? "md:ml-64" : "h-full"}>
         {children}
       </main>
-      {!hideNav && <BottomNav />}
+      {!shouldHideBottomNav && <BottomNav />}
     </div>
   );
 }

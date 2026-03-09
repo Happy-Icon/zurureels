@@ -39,7 +39,7 @@ const Home = () => {
   };
 
   return (
-    <MainLayout>
+    <MainLayout hideSidebar={true}>
       {loading ? (
         <div className="flex h-[80vh] items-center justify-center">
           <div className="h-8 w-8 border-4 border-primary border-t-transparent animate-spin rounded-full" />
