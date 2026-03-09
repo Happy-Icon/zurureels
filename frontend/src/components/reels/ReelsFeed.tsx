@@ -49,39 +49,43 @@ export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
   };
 
   return (
-    <InfiniteScroll
-      dataLength={displayedReels.length}
-      next={fetchMoreReels}
-      hasMore={hasMore}
-      loader={<SkeletonLoader />}
-      scrollableTarget="reels-scroll-container"
-    >
-      <div
-        id="reels-scroll-container"
-        className={cn(
-          "h-[calc(100vh-4rem)] md:h-screen overflow-y-scroll snap-y snap-mandatory hide-scrollbar"
-        )}
-      >
-        {displayedReels.map((reel, index) => {
-          const isWindowed = Math.abs(index - activeIndex) <= 1;
-          return (
-            <div key={reel.id} className="h-full w-full snap-start snap-always" ref={(el) => observeRef(el, index)}>
-              {isWindowed ? (
-                <ReelCard
-                  reel={reel}
-                  isActive={index === activeIndex}
-                  preloadNext={index === activeIndex + 1}
-                  onSave={onSave}
-                  onBook={onBook}
-                />
-              ) : (
-                <div className="w-full h-full bg-black" />
-              )}
-            </div>
-          );
-        })}
+    <div className="w-full h-full bg-black md:bg-zinc-950 flex justify-center">
+      <div className="w-full md:max-w-[420px] relative bg-black shadow-2xl">
+        <InfiniteScroll
+          dataLength={displayedReels.length}
+          next={fetchMoreReels}
+          hasMore={hasMore}
+          loader={<SkeletonLoader />}
+          scrollableTarget="reels-scroll-container"
+        >
+          <div
+            id="reels-scroll-container"
+            className={cn(
+              "h-[calc(100vh-4rem)] md:h-screen overflow-y-scroll snap-y snap-mandatory hide-scrollbar"
+            )}
+          >
+            {displayedReels.map((reel, index) => {
+              const isWindowed = Math.abs(index - activeIndex) <= 1;
+              return (
+                <div key={reel.id} className="h-full w-full snap-start snap-always" ref={(el) => observeRef(el, index)}>
+                  {isWindowed ? (
+                    <ReelCard
+                      reel={reel}
+                      isActive={index === activeIndex}
+                      preloadNext={index === activeIndex + 1}
+                      onSave={onSave}
+                      onBook={onBook}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-black" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </InfiniteScroll>
       </div>
-    </InfiniteScroll>
+    </div>
   );
 }
 

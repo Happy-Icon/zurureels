@@ -40,6 +40,8 @@ interface ReelCardProps {
   onBook?: (id: string) => void;
 }
 
+let globalMuted = true;
+
 export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCardProps) {
   // Unload video when not active or next
   // Adaptive streaming (HLS) with dynamic import
@@ -80,8 +82,8 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
     // eslint-disable-next-line
   }, [isActive, preloadNext, reel.processedVideoUrl, reel.videoUrl]);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
-  const [showMuteHint, setShowMuteHint] = useState(true);
+  const [isMuted, setIsMuted] = useState(globalMuted);
+  const [showMuteHint, setShowMuteHint] = useState(globalMuted);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [videoLoaded, setVideoLoaded] = useState(false);
@@ -104,9 +106,9 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
     if (!video) return;
 
     if (isActive) {
-      video.muted = true;
-      setIsMuted(true);
-      setShowMuteHint(true);
+      video.muted = globalMuted;
+      setIsMuted(globalMuted);
+      setShowMuteHint(globalMuted);
 
       const playPromise = video.play();
       if (playPromise !== undefined) {
@@ -150,6 +152,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
     e?.stopPropagation();
     if (videoRef.current) {
       const newMuted = !isMuted;
+      globalMuted = newMuted;
       videoRef.current.muted = newMuted;
       setIsMuted(newMuted);
       setShowMuteHint(false);
@@ -169,7 +172,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
       setRetryCount(retryCount + 1);
       setTimeout(() => {
         videoElement.load();
-        videoElement.play().catch(() => {});
+        videoElement.play().catch(() => { });
       }, 500);
       return;
     }
@@ -286,7 +289,6 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             playsInline
             muted={isMuted}
             preload={isActive ? "auto" : preloadNext ? "auto" : "metadata"}
-            loading="lazy"
             crossOrigin="anonymous"
             onPlay={() => {
               setIsPlaying(true);
