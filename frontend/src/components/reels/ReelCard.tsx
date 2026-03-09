@@ -462,18 +462,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
               {getReelExpiryDisplay(new Date(reel.postedAt))}
             </Badge>
           )}
-          {reel.isLive && (
-            <Badge className="bg-red-500 animate-pulse text-white border-0 gap-1.5 px-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-white" />
-              LIVE
-            </Badge>
-          )}
-          {reel.lat && reel.lng && (
-            <Badge className="bg-emerald-500 text-white border-0 gap-1.5 px-2">
-              <ShieldCheck className="h-3 w-3" />
-              VERIFIED
-            </Badge>
-          )}
+
         </div>
 
         {/* Title & Location */}
