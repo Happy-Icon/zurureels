@@ -69,6 +69,7 @@ export const MiniVideoEditor = ({
   const [capturedLocation, setCapturedLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
 
   // Fallback duration from the recorder timer (used when WebM reports Infinity)
   const [durationFromRecorder, setDurationFromRecorder] = useState(0);
@@ -281,7 +282,6 @@ export const MiniVideoEditor = ({
   );
 
   // ── Submit — trim if needed, then hand file to parent ─────────────────────
-
   const handleSubmit = async () => {
     const sourceFile = recordedFile || videoFile;
     if (!sourceFile) {
@@ -294,6 +294,7 @@ export const MiniVideoEditor = ({
     const selectedDuration = videoDuration > 0 ? (trimEnd - trimStart) : effectiveDuration;
 
     // If duration is unknown or within limit → upload original directly
+    // Be slightly more lenient with the limit (0.5s buffer)
     const fullRange =
       videoDuration === 0 || (
         effectiveDuration <= MAX_REEL_DURATION + 0.5 &&
@@ -317,9 +318,15 @@ export const MiniVideoEditor = ({
     // Trim via captureStream + MediaRecorder
     if (!videoRef.current) return;
     setIsExporting(true);
+    setExportProgress(0);
 
     try {
-      const trimmed = await trimVideo(videoRef.current, trimStart, trimEnd);
+      const trimmed = await trimVideo(
+        videoRef.current,
+        trimStart,
+        trimEnd,
+        (p) => setExportProgress(p)
+      );
       onSubmit({
         category,
         videoFile: trimmed,
@@ -402,7 +409,7 @@ export const MiniVideoEditor = ({
           {isExporting ? (
             <>
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              Trimming…
+              {exportProgress > 0 ? `${exportProgress}%` : "Trimming…"}
             </>
           ) : (
             <>
@@ -540,11 +547,13 @@ function formatTime(seconds: number): string {
 function trimVideo(
   video: HTMLVideoElement,
   start: number,
-  end: number
+  end: number,
+  onProgress?: (pct: number) => void
 ): Promise<File> {
   return new Promise((resolve, reject) => {
     // captureStream may not exist in all browsers
     const captureStream =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (video as any).captureStream || (video as any).mozCaptureStream;
     if (!captureStream) {
       reject(new Error("captureStream not supported"));
@@ -577,19 +586,52 @@ function trimVideo(
 
     // Seek to start, then play + record until end
     video.currentTime = start;
-    const onSeeked = () => {
+
+    const onSeeked = async () => {
       video.removeEventListener("seeked", onSeeked);
-      video.play();
+
+      // Disable high playback rate; it causes dropped frames and stalls on mobile browsers
+      video.playbackRate = 1.0;
+      video.muted = true; // Ensure muted for autoplay policies
+
+      try {
+        await video.play();
+      } catch (err) {
+        console.error("Playback failed during trim:", err);
+        reject(new Error("Could not play video for trimming."));
+        return;
+      }
+
       recorder.start();
 
+      const durationToRecord = end - start;
+      const MAX_TRIM_TIME_MS = (durationToRecord * 1000) + 5000; // 5s buffer
+      const startTimeMs = Date.now();
+
       const poll = () => {
-        if (video.currentTime >= end || video.paused) {
+        const elapsed = video.currentTime - start;
+        const progress = Math.min(99, Math.round((elapsed / durationToRecord) * 100));
+
+        if (onProgress) onProgress(progress);
+
+        const realTimeElapsed = Date.now() - startTimeMs;
+        const timedOut = realTimeElapsed > MAX_TRIM_TIME_MS;
+
+        if (video.currentTime >= end || timedOut) {
+          if (timedOut) {
+            console.warn("[VideoEditor] Trimming timed out, stopping early.");
+          }
           video.pause();
           if (recorder.state === "recording") recorder.stop();
         } else {
+          // If video paused unexpectedly (buffering), try to resume
+          if (video.paused && video.currentTime < end) {
+            video.play().catch(() => {});
+          }
           requestAnimationFrame(poll);
         }
       };
+      
       poll();
     };
 

@@ -138,9 +138,16 @@ export const MiniVideoEditor = ({
     }
   };
 
-  const handleLiveRecordingComplete = (file: File, loc?: { lat: number; lng: number }) => {
+  const handleLiveRecordingComplete = (file: File, loc?: { lat: number; lng: number }, recordingDuration?: number) => {
     setRecordedFile(file);
     if (loc) setCapturedLocation(loc);
+
+    // If we have a recording duration from the recorder, use it
+    // This bypasses the Chrome 'Infinity' duration bug for blobs
+    if (recordingDuration) {
+      setDuration(recordingDuration);
+    }
+
     const url = URL.createObjectURL(file);
     setLocalVideoUrl(url);
     setShowPreview(true);
@@ -302,7 +309,7 @@ export const MiniVideoEditor = ({
   const overallScore = calculateOverallScore(scores);
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div className="fixed inset-0 z-[60] bg-background flex flex-col">
       {/* Top Bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
         <Button variant="ghost" size="sm" onClick={onBack}>

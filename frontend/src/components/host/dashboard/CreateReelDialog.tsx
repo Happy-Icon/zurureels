@@ -51,6 +51,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         }
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleAccommodationComplete = async (data: any) => {
         if (!user) return;
         setIsSubmitting(true);
@@ -73,7 +74,9 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
 
             // 2. Create Reels
             const reelsToInsert = data.reels
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .filter((r: any) => r.uploaded && r.videoUrl)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .map((r: any) => {
                     // Generate Cloudinary thumbnail if we have a Cloudinary URL
                     const thumbnailUrl = r.videoUrl?.includes('res.cloudinary.com')
@@ -105,6 +108,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             toast.success("Accommodation and reels published!");
             setShowAccommodationFlow(false);
             onOpenChange(false);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             console.error("Save error:", error);
             toast.error(error.message || "Failed to save data");
@@ -217,7 +221,6 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     is_live: data.isLive ?? false,
                     status: 'active',
                     processing_status: 'ready',
-                    expires_at: null,
                 });
 
             if (reelError) {
@@ -233,6 +236,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             setDescription("");
             setLocation("");
             setPrice("");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             toast.error(error.message || "Failed to publish reel");
         } finally {

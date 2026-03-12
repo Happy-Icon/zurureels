@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 
 interface LiveVideoRecorderProps {
-    onRecordingComplete: (file: File, location?: { lat: number; lng: number }) => void;
+    onRecordingComplete: (file: File, location?: { lat: number; lng: number }, duration?: number) => void;
     onCancel?: () => void;
 }
 
@@ -90,10 +90,13 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
             }
         };
 
+        // Local variable to capture duration properly in closure
+        let finalSeconds = 0;
+
         mediaRecorder.onstop = () => {
             const blob = new Blob(chunksRef.current, { type: "video/webm" });
             const file = new File([blob], "verified-recording.webm", { type: "video/webm" });
-            onRecordingComplete(file, location || undefined);
+            onRecordingComplete(file, location || undefined, finalSeconds);
         };
 
         mediaRecorderRef.current = mediaRecorder;
@@ -101,12 +104,11 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
         setIsRecording(true);
 
         // Timer
-        let seconds = 0;
         setRecordingTime(0);
         timerRef.current = window.setInterval(() => {
-            seconds += 1;
-            setRecordingTime(seconds);
-            if (seconds >= MAX_DURATION) {
+            finalSeconds += 1;
+            setRecordingTime(finalSeconds);
+            if (finalSeconds >= MAX_DURATION) {
                 stopRecording();
             }
         }, 1000);
