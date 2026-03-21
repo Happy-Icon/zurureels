@@ -87,14 +87,9 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                         experience_id: exp.id,
                         category: selectedCategory,
                         video_url: r.videoUrl,
-                        cloudinary_public_id: r.cloudinaryPublicId || null,
                         thumbnail_url: thumbnailUrl,
                         duration: r.maxDuration || 20,
-                        lat: r.lat,
-                        lng: r.lng,
-                        is_live: true,
-                        status: 'active',
-                        processing_status: r.cloudinaryPublicId ? 'processing' : 'ready',
+                        status: 'active'
                     };
                 });
 
@@ -213,14 +208,9 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     experience_id: exp.id,
                     category: selectedCategory,
                     video_url: cloudinaryResult.secure_url,
-                    cloudinary_public_id: cloudinaryResult.public_id,
                     thumbnail_url: thumbnailUrl,
                     duration: data.duration || 20,
-                    lat: data.lat,
-                    lng: data.lng,
-                    is_live: data.isLive ?? false,
-                    status: 'active',
-                    processing_status: 'ready',
+                    status: 'active'
                 });
 
             if (reelError) {
