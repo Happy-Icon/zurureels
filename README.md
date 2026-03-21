@@ -81,7 +81,7 @@ The project uses a high-performance modern stack:
 Secure access is provided via **Supabase Auth**, supporting:
 - Email/Password with Magic Links
 - Google OAuth Integration
-- Host/User Role Management
+- Host/User Role Management.
 
 ---
 
