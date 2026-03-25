@@ -1,6 +1,7 @@
 import { Sparkles, MessageSquareText, HelpCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
+import { ZuruMascot } from "./ZuruMascot";
 
 interface AskZuruButtonProps {
   onClick: () => void;
@@ -57,9 +58,9 @@ export function AskZuruButton({ onClick, isOpen }: AskZuruButtonProps) {
         <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent pointer-events-none" />
 
         {/* AI Icon with Glint Effect */}
-        <div className="relative">
-          <Sparkles className="h-7 w-7 sm:h-8 sm:w-8 text-white animate-pulse" />
-          <div className="absolute inset-0 bg-white blur-lg opacity-20 group-hover:opacity-40 transition-opacity" />
+        <div className="relative h-10 w-10 sm:h-12 sm:w-12">
+          <ZuruMascot className="relative z-10" />
+          <div className="absolute inset-0 bg-white blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
         </div>
 
         {/* Status Indicator */}
