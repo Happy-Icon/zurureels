@@ -330,20 +330,6 @@ const CityPulse = () => {
             </div>
           </div>
 
-          {viewMode === "guest" && (
-            <>
-              <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
-              {showAI && (
-                <AIChatBox
-                  messages={messages}
-                  isLoading={aiLoading}
-                  onSendMessage={handleSendMessage}
-                  onClose={() => { setShowAI(false); clearMessages(); }}
-                  placeholder={`What should I do in ${selectedCity} today?`}
-                />
-              )}
-            </>
-          )}
 
           <div className="p-4 space-y-6">
             <WeatherWidget weather={weather} loading={weatherLoading} city={selectedCity} />
@@ -518,6 +504,20 @@ const CityPulse = () => {
           category={bookingExperience.category}
           onSuccess={() => setBookingExperience(null)}
         />
+      )}
+      {viewMode === "guest" && (
+        <>
+          <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
+          {showAI && (
+            <AIChatBox
+              messages={messages}
+              isLoading={aiLoading}
+              onSendMessage={handleSendMessage}
+              onClose={() => { setShowAI(false); clearMessages(); }}
+              placeholder={`What should I do in ${selectedCity} today?`}
+            />
+          )}
+        </>
       )}
     </MainLayout>
   );
