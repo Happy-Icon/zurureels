@@ -45,7 +45,7 @@ export function AskZuruButton({ onClick, isOpen }: AskZuruButtonProps) {
         className={cn(
           "pointer-events-auto group relative",
           "h-14 w-14 sm:h-16 sm:w-16 rounded-3xl overflow-hidden",
-          "bg-primary shadow-[0_8px_32px_rgba(var(--primary-rgb),0.3)]",
+          "bg-primary/80 backdrop-blur-md shadow-[0_8px_32px_rgba(var(--primary-rgb),0.3)]",
           "hover:scale-110 active:scale-95 transition-all duration-300",
           "flex items-center justify-center border border-white/20"
         )}
