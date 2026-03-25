@@ -1,4 +1,4 @@
-import { Bell, Check, X, ArrowRight } from "lucide-react";
+import { Bell, Check, X, ArrowRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Sheet,
@@ -65,16 +65,14 @@ export const NotificationBell = () => {
                 )}
             >
                 <div className="p-4 border-b flex items-center gap-4 sticky top-0 bg-background/95 backdrop-blur-md z-10 shrink-0">
-                    {isMobile && (
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => setIsOpen(false)}
-                            className="shrink-0"
-                        >
-                            <X className="h-5 w-5" />
-                        </Button>
-                    )}
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => setIsOpen(false)}
+                        className="shrink-0"
+                    >
+                        <X className="h-5 w-5 text-muted-foreground" />
+                    </Button>
                     <div className="flex-1 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <SheetTitle className="text-xl font-display font-bold">Notifications</SheetTitle>
@@ -84,23 +82,42 @@ export const NotificationBell = () => {
                                 </span>
                             )}
                         </div>
-                        {unreadCount > 0 && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs h-8 text-primary font-bold hover:text-primary hover:bg-primary/5 px-2"
-                                onClick={() => markAllAsRead()}
-                            >
-                                <Check className="h-3.5 w-3.5 mr-1" />
-                                {isMobile ? "Mark all" : "Mark all as read"}
-                            </Button>
-                        )}
+                        <div className="flex items-center gap-1">
+                            {unreadCount > 0 && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs h-8 text-primary font-bold hover:text-primary hover:bg-primary/5 px-2"
+                                    onClick={() => markAllAsRead()}
+                                >
+                                    <Check className="h-3.5 w-3.5 mr-1" />
+                                    {isMobile ? "Read" : "Mark read"}
+                                </Button>
+                            )}
+                            {notifications.length > 0 && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs h-8 text-muted-foreground font-bold hover:text-destructive hover:bg-destructive/5 px-2"
+                                    onClick={() => {
+                                        if (confirm("Clear all notifications?")) {
+                                            // Mock clear all - search for a real one if exists
+                                            notifications.forEach(n => handleNotificationClick(n));
+                                            setIsOpen(false);
+                                        }
+                                    }}
+                                >
+                                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                    {isMobile ? "Clear" : "Clear all"}
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 <ScrollArea className="flex-1">
                     {notifications.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center space-y-4">
+                        <div className="flex flex-col items-center justify-center min-h-[70vh] p-8 text-center space-y-4">
                             <div className="h-20 w-20 rounded-full bg-secondary/50 flex items-center justify-center text-4xl animate-bounce">
                                 📭
                             </div>

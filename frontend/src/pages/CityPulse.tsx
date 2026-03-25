@@ -221,7 +221,7 @@ const CityPulse = () => {
   return (
     <MainLayout hideMobileUI={isMobile && tab === "feed" && !showMobileUI}>
       {tab === "feed" ? (
-        <div className="fixed inset-0 z-30 bg-black overflow-hidden">
+        <div className="fixed inset-0 z-30 bg-background md:pl-64 overflow-hidden flex items-center justify-center">
           {/* Top bar overlaid on video */}
           <div className="absolute top-16 left-0 right-0 z-50 px-4 pb-4">
             <div className="flex items-center justify-start w-full">
