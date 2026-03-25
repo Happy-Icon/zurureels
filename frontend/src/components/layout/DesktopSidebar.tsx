@@ -3,6 +3,7 @@ import { Zap, Compass, Heart, Calendar, User, LayoutDashboard, ListVideo, Messag
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const unauthGuestNavItems = [
   { icon: Zap, label: "Zuru Pulse", path: "/" },
@@ -71,8 +72,9 @@ export function DesktopSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border">
-
+      <div className="p-4 border-t border-border flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">© 2026 ZuruSasa</span>
+        <ThemeToggle />
       </div>
     </aside>
   );

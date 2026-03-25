@@ -331,13 +331,32 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
         <Share2 className="h-7 w-7 text-primary-foreground" />
         <span className="text-xs text-primary-foreground font-medium drop-shadow-md">Share</span>
       </button>
+
+      {/* Mute/Unmute - Mobile specific placement */}
+      <button 
+        onClick={toggleMute} 
+        className={cn(
+          "flex flex-col items-center gap-1 transition-all duration-300 md:hidden",
+          isMuted && "animate-pulse scale-110"
+        )}
+      >
+        <div className={cn(
+          "p-2.5 rounded-full transition-colors",
+          isMuted ? "bg-orange-500 text-white shadow-lg shadow-orange-500/50" : "bg-black/20 text-white"
+        )}>
+          {isMuted ? <VolumeX className="h-6 w-6" /> : <Volume2 className="h-6 w-6" />}
+        </div>
+        <span className="text-[10px] text-primary-foreground font-bold drop-shadow-md uppercase tracking-wider">
+          {isMuted ? "Sound On" : "Mute"}
+        </span>
+      </button>
     </>
   );
 
   return (
-    <div className="relative h-[100dvh] md:h-full w-full snap-start flex items-center justify-center bg-black/95">
+    <div className="relative h-[100dvh] md:h-full w-full snap-start flex items-center justify-center bg-background md:bg-transparent">
       {/* Desktop Container Wrapper */}
-      <div className="relative h-full w-full md:h-[calc(100vh-4rem)] md:max-w-[400px] md:aspect-[9/16] md:rounded-[15px] overflow-hidden flex-shrink-0 group/video bg-black shadow-2xl md:border border-white/10 mx-auto md:mx-0">
+      <div className="relative h-full w-full md:h-[calc(100vh-6rem)] md:max-w-[340px] md:aspect-[9/18] md:rounded-[15px] overflow-hidden flex-shrink-0 group/video bg-black shadow-2xl md:border border-border/50 mx-auto md:mx-0">
         
         {/* Video Background */}
         <div className="absolute inset-0 bg-black">
@@ -419,7 +438,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
       <div className="absolute inset-0 gradient-overlay pointer-events-none" />
 
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20">
+      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20 md:flex hidden">
         <span className="text-xl font-display font-semibold text-primary-foreground drop-shadow-md">
           ZuruSasa
         </span>
@@ -436,16 +455,6 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
         </button>
       </div>
 
-      {/* Tap-for-sound hint */}
-      {isPlaying && isMuted && showMuteHint && (
-        <button
-          onClick={toggleMute}
-          className="absolute top-16 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2 rounded-full bg-black/50 backdrop-blur-sm text-white text-sm font-medium animate-pulse"
-        >
-          <VolumeX className="h-4 w-4" />
-          Tap for sound
-        </button>
-      )}
 
       {/* Right Side Actions - Mobile Only */}
       <div className="absolute right-4 bottom-32 flex flex-col items-center gap-5 z-20 md:hidden">
@@ -455,23 +464,21 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
       {/* Bottom Content */}
       <div className="absolute bottom-20 md:bottom-6 left-0 right-16 md:right-4 p-4 space-y-3 z-30 pointer-events-auto">
         {/* Category & Expiry Badges */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={cn("text-xs capitalize", categoryColors[reel.category])}>
-            {reel.category}
-          </Badge>
+        <div className="flex flex-col items-start gap-1.5 pb-1">
           {reel.postedAt && (
-            <Badge
-              variant="outline"
+            <div 
               className={cn(
-                "text-xs border-primary-foreground/30 text-primary-foreground/90 gap-1",
-                isReelExpiringSoon(new Date(reel.postedAt)) && "border-orange-400/50 text-orange-200"
+                "text-[10px] font-bold uppercase tracking-[0.1em] text-primary-foreground/90 drop-shadow-md flex items-center gap-1",
+                isReelExpiringSoon(new Date(reel.postedAt)) && "text-orange-400"
               )}
             >
               <Clock className="h-3 w-3" />
               {getReelExpiryDisplay(new Date(reel.postedAt))}
-            </Badge>
+            </div>
           )}
-
+          <Badge className={cn("text-[11px] h-5 px-2 font-bold capitalize shadow-lg", categoryColors[reel.category])}>
+            {reel.category}
+          </Badge>
         </div>
 
         {/* Title & Location */}
@@ -514,9 +521,9 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
             if (container) container.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
           }}
-          className="rounded-full bg-zinc-800/80 hover:bg-zinc-700 p-3 mb-2 transition-all"
+          className="rounded-full bg-secondary/80 hover:bg-secondary p-3 mb-2 transition-all shadow-md"
         >
-          <ChevronUp className="h-6 w-6 text-white" />
+          <ChevronUp className="h-6 w-6 text-foreground" />
         </button>
 
         {renderActions()}
@@ -527,9 +534,9 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
             if (container) container.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
           }}
-          className="rounded-full bg-zinc-800/80 hover:bg-zinc-700 p-3 mt-2 transition-all"
+          className="rounded-full bg-secondary/80 hover:bg-secondary p-3 mt-2 transition-all shadow-md"
         >
-          <ChevronDown className="h-6 w-6 text-white" />
+          <ChevronDown className="h-6 w-6 text-foreground" />
         </button>
       </div>
 

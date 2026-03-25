@@ -9,12 +9,18 @@ interface MainLayoutProps {
   children: ReactNode;
   hideNav?: boolean;
   hideSidebar?: boolean;
+  hideMobileUI?: boolean;
 }
 
-export function MainLayout({ children, hideNav = false, hideSidebar = false }: MainLayoutProps) {
+export function MainLayout({ 
+  children, 
+  hideNav = false, 
+  hideSidebar = false,
+  hideMobileUI = false 
+}: MainLayoutProps) {
   const shouldHideSidebar = hideNav || hideSidebar;
-  const shouldHideTopNav = hideNav || hideSidebar;
-  const shouldHideBottomNav = hideNav;
+  const shouldHideTopNav = hideNav || hideSidebar || hideMobileUI;
+  const shouldHideBottomNav = hideNav || hideMobileUI;
 
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0 safe-top">

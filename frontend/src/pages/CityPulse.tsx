@@ -26,8 +26,6 @@ import {
   Check,
   Play,
   Sparkles as SparklesIcon,
-  LayoutList,
-  Clapperboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -40,6 +38,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const categories = [
   { id: "all", label: "All", icon: Sparkles },
@@ -55,15 +54,16 @@ function TikTokFeed({
   reels,
   loading,
   onBook,
+  onInteraction,
 }: {
   reels: ReelData[];
   loading: boolean;
   onBook: (id: string) => void;
+  onInteraction?: () => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Use IntersectionObserver to track which reel is in view
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -118,6 +118,7 @@ function TikTokFeed({
       ref={containerRef}
       className="overflow-y-scroll snap-y snap-mandatory"
       style={{ height: "100dvh", scrollbarWidth: "none", msOverflowStyle: "none" }}
+      onClick={onInteraction}
     >
       {reels.map((reel, i) => (
         <div
@@ -137,7 +138,6 @@ function TikTokFeed({
   );
 }
 
-// ─── Main CityPulse page ────────────────────────────────────────────────────
 const CityPulse = () => {
   const [selectedCity, setSelectedCity] = useState("Mombasa");
   const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null);
@@ -145,9 +145,33 @@ const CityPulse = () => {
   const [showAI, setShowAI] = useState(false);
   const [bookingReel, setBookingReel] = useState<ReelData | null>(null);
   const [bookingExperience, setBookingExperience] = useState<any | null>(null);
-  // "feed" = TikTok reel view | "explore" = normal listings view
   const [tab, setTab] = useState<"feed" | "explore">("feed");
   const { role, hasPass, viewMode } = useAuth();
+  const isMobile = useIsMobile();
+  const [showMobileUI, setShowMobileUI] = useState(true);
+  const uiTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleInteraction = useCallback(() => {
+    if (!isMobile || tab !== "feed") return;
+    
+    setShowMobileUI(true);
+    if (uiTimeoutRef.current) clearTimeout(uiTimeoutRef.current);
+    
+    uiTimeoutRef.current = setTimeout(() => {
+      setShowMobileUI(false);
+    }, 4000);
+  }, [isMobile, tab]);
+
+  useEffect(() => {
+    if (isMobile && tab === "feed") {
+      handleInteraction();
+    } else {
+      setShowMobileUI(true);
+    }
+    return () => {
+      if (uiTimeoutRef.current) clearTimeout(uiTimeoutRef.current);
+    };
+  }, [isMobile, tab, handleInteraction]);
 
   const weatherLocation = useMemo(() => {
     if (selectedCity === "Current Location" && coordinates) {
@@ -195,24 +219,32 @@ const CityPulse = () => {
   );
 
   return (
-    <MainLayout>
-      {/* ── When in feed mode: completely full-screen, nothing else visible ── */}
+    <MainLayout hideMobileUI={isMobile && tab === "feed" && !showMobileUI}>
       {tab === "feed" ? (
-        <div className="fixed inset-0 z-30 bg-black">
-          {/* Top bar overlaid on video */}
-          <div className="absolute top-0 left-0 right-0 z-50 px-4 pt-16 pb-4 pointer-events-none md:pt-4">
+        <div className="fixed inset-0 z-30 bg-black overflow-hidden">
+          <div 
+            className={cn(
+                "absolute top-0 left-0 right-0 z-50 px-4 pt-16 pb-4 transition-all duration-500",
+                isMobile && !showMobileUI ? "opacity-0 -translate-y-full pointer-events-none" : "opacity-100 translate-y-0 pointer-events-none"
+            )}
+          >
             <div className="flex items-center justify-start w-full">
-              {/* Tab switcher - Extreme Left */}
-              <div className="pointer-events-auto flex items-center gap-4 z-0 shrink-0">
+              <div className="pointer-events-auto flex items-center gap-2 p-1 bg-black/20 backdrop-blur-md rounded-full border border-orange-500/30 shadow-2xl">
                 <button
-                  onClick={() => setTab("feed")}
-                  className="flex items-center gap-1.5 text-base font-semibold text-white transition-opacity hover:opacity-100"
+                  onClick={(e) => { e.stopPropagation(); setTab("feed"); }}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-sm font-bold transition-all",
+                    tab === "feed" ? "bg-[#EE7D30] text-white shadow-lg" : "text-white/60 hover:text-white"
+                  )}
                 >
                   For U
                 </button>
                 <button
-                  onClick={() => setTab("explore")}
-                  className="flex items-center gap-1.5 text-base font-semibold text-white/50 transition-opacity hover:opacity-100"
+                  onClick={(e) => { e.stopPropagation(); setTab("explore"); }}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-sm font-bold transition-all",
+                    tab === "explore" ? "bg-[#EE7D30] text-white shadow-lg" : "text-white/60 hover:text-white"
+                  )}
                 >
                   Explore
                 </button>
@@ -220,37 +252,39 @@ const CityPulse = () => {
             </div>
           </div>
 
-          {/* Full-screen reel feed — fills the whole fixed container */}
           <TikTokFeed
             reels={liveReels}
             loading={reelsLoading}
             onBook={(id) => setBookingReel(liveReels.find((r) => r.id === id) || null)}
+            onInteraction={handleInteraction}
           />
         </div>
       ) : (
-        /* ── Explore (normal listings) mode ─────────────────────────────── */
         <div className="relative pb-20 md:pb-8 min-h-screen">
-          {/* Sticky header */}
           <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
             <div className="p-4 space-y-4">
               <div className="flex items-center justify-between w-full">
-                {/* Tab switcher on extreme left */}
-                <div className="flex items-center gap-4 shrink-0">
+                <div className="flex items-center gap-2 p-1 bg-secondary rounded-full border border-border">
                   <button
                     onClick={() => setTab("feed")}
-                    className="flex items-center gap-1.5 text-base font-semibold text-muted-foreground hover:text-foreground transition-opacity"
+                    className={cn(
+                      "px-4 py-1.5 rounded-full text-sm font-bold transition-all",
+                      tab === "feed" ? "bg-[#EE7D30] text-white shadow-md" : "text-muted-foreground hover:text-foreground"
+                    )}
                   >
                     For U
                   </button>
                   <button
                     onClick={() => setTab("explore")}
-                    className="flex items-center gap-1.5 text-base font-semibold text-foreground transition-opacity"
+                    className={cn(
+                      "px-4 py-1.5 rounded-full text-sm font-bold transition-all",
+                      tab === "explore" ? "bg-[#EE7D30] text-white shadow-md" : "text-muted-foreground hover:text-foreground"
+                    )}
                   >
                     Explore
                   </button>
                 </div>
 
-                {/* Location selector moved to right */}
                 <div className="flex-shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -276,7 +310,6 @@ const CityPulse = () => {
                 </div>
               </div>
 
-              {/* Category Pills */}
               <div className="flex gap-2 overflow-x-auto hide-scrollbar py-1">
                 {categories.map((cat) => {
                   const Icon = cat.icon;
@@ -287,7 +320,7 @@ const CityPulse = () => {
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all",
                         selectedCategory === cat.id
-                          ? "bg-primary text-primary-foreground"
+                          ? "bg-[#EE7D30] text-white"
                           : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                       )}
                     >
@@ -300,7 +333,6 @@ const CityPulse = () => {
             </div>
           </div>
 
-          {/* Floating Ask Zuru Button */}
           {viewMode === "guest" && (
             <>
               <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
@@ -316,11 +348,9 @@ const CityPulse = () => {
             </>
           )}
 
-          {/* Content */}
           <div className="p-4 space-y-6">
             <WeatherWidget weather={weather} loading={weatherLoading} city={selectedCity} />
 
-            {/* Drinks of the Day */}
             {(selectedCategory === "all" || selectedCategory === "drinks") && (
               <section>
                 <div className="flex items-center gap-2 mb-3">
@@ -345,7 +375,6 @@ const CityPulse = () => {
               </section>
             )}
 
-            {/* Today's Activities */}
             {selectedCategory === "all" && (
               <section>
                 <div className="flex items-center gap-2 mb-3">
@@ -371,7 +400,6 @@ const CityPulse = () => {
               </section>
             )}
 
-            {/* Boat Rentals */}
             {(selectedCategory === "all" || selectedCategory === "boats") && (
               <section>
                 <div className="flex items-center gap-2 mb-3">
@@ -391,7 +419,6 @@ const CityPulse = () => {
               </section>
             )}
 
-            {/* Restaurant Specials */}
             {(selectedCategory === "all" || selectedCategory === "food") && (
               <section>
                 <div className="flex items-center gap-2 mb-3">
@@ -408,7 +435,6 @@ const CityPulse = () => {
               </section>
             )}
 
-            {/* Chef Specials */}
             {(selectedCategory === "all" || selectedCategory === "food") && (
               <section>
                 <div className="flex items-center gap-2 mb-3">
@@ -426,7 +452,6 @@ const CityPulse = () => {
               </section>
             )}
 
-            {/* Nightlife */}
             {(selectedCategory === "all" || selectedCategory === "nightlife") && (
               <section>
                 <div className="flex items-center gap-2 mb-3">
@@ -444,7 +469,6 @@ const CityPulse = () => {
               </section>
             )}
 
-            {/* Bike Rentals */}
             {(selectedCategory === "all" || selectedCategory === "bikes") && (
               <section>
                 <div className="flex items-center gap-2 mb-3">
@@ -465,7 +489,6 @@ const CityPulse = () => {
         </div>
       )}
 
-      {/* Global Booking Sheet for Reels */}
       {bookingReel && (
         <BookingSheet
           open={!!bookingReel}
@@ -484,7 +507,6 @@ const CityPulse = () => {
         />
       )}
 
-      {/* Global Booking Sheet for Explore listings */}
       {bookingExperience && (
         <BookingSheet
           open={!!bookingExperience}

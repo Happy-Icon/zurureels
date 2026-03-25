@@ -229,9 +229,7 @@ export default function Auth() {
               </h2>
             </div>
 
-            <div className="absolute right-4 text-primary font-bold text-sm tracking-[0.2em]">
-              ZURU.
-            </div>
+            <div className="absolute right-4" />
           </div>
 
           {/* Scrollable Content Area */}
@@ -479,9 +477,7 @@ export default function Auth() {
             {/* STEP 4: COMMITMENT */}
             {step === "commitment" && (
               <div className="space-y-6 pb-6">
-                <div className="font-bold tracking-[0.2em] text-sm text-primary mb-2">
-                  ZURU.
-                </div>
+                <div className="mb-2" />
                 <h1 className="text-[28px] leading-tight font-semibold text-[#222] tracking-tight">
                   ZuruSasa is a community where anyone can belong
                 </h1>

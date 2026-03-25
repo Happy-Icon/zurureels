@@ -20,6 +20,7 @@ import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 import { AuthProvider } from "@/components/AuthProvider";
+import { ThemeProvider } from "next-themes";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { PersonalInfo } from "@/pages/profile/PersonalInfo";
@@ -44,36 +45,38 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<CityPulse />} />
-            <Route path="/discover" element={<Discover />} />
-            <Route path="/host" element={<VerifiedRoute><Host /></VerifiedRoute>} />
-            <Route path="/host/listings" element={<VerifiedRoute><Listings /></VerifiedRoute>} />
-            <Route path="/host/bookings" element={<VerifiedRoute><BookingsHost /></VerifiedRoute>} />
-            <Route path="/host/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
-            <Route path="/become-host" element={<ProtectedRoute><BecomeHost /></ProtectedRoute>} />
-            <Route path="/home" element={<Home />} />
-            <Route path="/bookings" element={<Bookings />} />
-            <Route path="/saved" element={<Saved />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/profile/info" element={<ProtectedRoute><PersonalInfo /></ProtectedRoute>} />
-            <Route path="/profile/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
-            <Route path="/profile/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-            <Route path="/profile/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
-            <Route path="/profile/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
-            <Route path="/profile/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-            <Route path="/profile/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<CityPulse />} />
+              <Route path="/discover" element={<Discover />} />
+              <Route path="/host" element={<VerifiedRoute><Host /></VerifiedRoute>} />
+              <Route path="/host/listings" element={<VerifiedRoute><Listings /></VerifiedRoute>} />
+              <Route path="/host/bookings" element={<VerifiedRoute><BookingsHost /></VerifiedRoute>} />
+              <Route path="/host/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
+              <Route path="/become-host" element={<ProtectedRoute><BecomeHost /></ProtectedRoute>} />
+              <Route path="/home" element={<Home />} />
+              <Route path="/bookings" element={<Bookings />} />
+              <Route path="/saved" element={<Saved />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/profile/info" element={<ProtectedRoute><PersonalInfo /></ProtectedRoute>} />
+              <Route path="/profile/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
+              <Route path="/profile/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+              <Route path="/profile/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
+              <Route path="/profile/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+              <Route path="/profile/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/profile/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
 
-            <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-            <Route path="/admin/broadcasts" element={<AdminRoute><Broadcasts /></AdminRoute>} />
+              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+              <Route path="/admin/broadcasts" element={<AdminRoute><Broadcasts /></AdminRoute>} />
 
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </ThemeProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

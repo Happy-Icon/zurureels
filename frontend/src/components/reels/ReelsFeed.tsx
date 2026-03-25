@@ -62,19 +62,20 @@ export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
   };
 
   const activeReel = displayedReels[activeIndex];
+  const suggestedReels = reels.filter(r => r.id !== activeReel?.id).slice(0, 6);
 
   return (
-    <div className="w-full h-screen md:h-screen bg-black overflow-hidden relative flex flex-col">
-      {/* Blurred Background completely covering the screen on desktop */}
-      <div className="hidden md:block absolute inset-0 z-0 transition-opacity duration-700">
+    <div className="w-full h-screen md:h-screen bg-background overflow-hidden relative flex flex-col">
+      {/* Blurred Background - Only visible in dark/active cases, or themed */}
+      <div className="hidden md:block absolute inset-0 z-0 transition-opacity duration-700 opacity-20 dark:opacity-40">
         {activeReel && (
           <>
             <img
               src={activeReel.thumbnailUrl}
               alt=""
-              className="absolute inset-0 w-full h-full object-cover blur-[60px] opacity-40 scale-110"
+              className="absolute inset-0 w-full h-full object-cover blur-[100px] scale-110"
             />
-            <div className="absolute inset-0 bg-black/50" />
+            <div className="absolute inset-0 bg-background/50" />
           </>
         )}
       </div>
@@ -83,14 +84,14 @@ export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
       <div className="relative z-40 w-full px-4 py-3 flex items-center justify-between pointer-events-none md:pointer-events-auto">
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className="p-2 rounded-full bg-black/20 md:bg-black/40 backdrop-blur-md text-white hover:bg-black/60 transition pointer-events-auto"
+          className="p-2 rounded-full bg-background/20 md:bg-secondary/40 backdrop-blur-md text-foreground hover:bg-secondary/60 transition pointer-events-auto"
         >
           <Menu className="w-6 h-6" />
         </button>
-        <span className="text-xl font-display font-semibold text-white drop-shadow-md hidden md:block pointer-events-auto">
+        <span className="text-xl font-display font-semibold text-foreground drop-shadow-sm hidden md:block pointer-events-auto">
           ZuruSasa
         </span>
-        <button className="p-2 rounded-full bg-black/20 md:bg-black/40 backdrop-blur-md text-white hover:bg-black/60 transition pointer-events-auto hidden md:block">
+        <button className="p-2 rounded-full bg-background/20 md:bg-secondary/40 backdrop-blur-md text-foreground hover:bg-secondary/60 transition pointer-events-auto hidden md:block">
           <Search className="w-5 h-5" />
         </button>
       </div>
@@ -106,17 +107,17 @@ export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed top-0 left-0 h-full w-[260px] bg-zinc-950/95 backdrop-blur-xl border-r border-zinc-800 z-50 transform transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col",
+          "fixed top-0 left-0 h-full w-[260px] bg-background/95 backdrop-blur-xl border-r border-border z-50 transform transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="p-5 flex items-center justify-between border-b border-zinc-800/50">
-          <span className="text-xl font-display font-semibold text-white">
+        <div className="p-5 flex items-center justify-between border-b border-border">
+          <span className="text-xl font-display font-semibold text-foreground">
             ZuruSasa
           </span>
           <button
             onClick={() => setIsSidebarOpen(false)}
-            className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className="p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -126,7 +127,7 @@ export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
             <Link
               key={link.label}
               to={link.href}
-              className="flex items-center gap-4 px-4 py-3 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-colors font-medium"
+              className="flex items-center gap-4 px-4 py-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors font-medium"
               onClick={() => setIsSidebarOpen(false)}
             >
               <link.icon className="w-5 h-5" />
@@ -134,53 +135,100 @@ export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
             </Link>
           ))}
         </div>
-        <div className="p-4 border-t border-zinc-800/50">
-          <button className="flex items-center gap-4 px-4 py-3 w-full rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors font-medium">
+        <div className="p-4 border-t border-border">
+          <button className="flex items-center gap-4 px-4 py-3 w-full rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10 transition-colors font-medium">
             <LogOut className="w-5 h-5" />
             Logout
           </button>
         </div>
       </div>
 
-      {/* Reel Container */}
-      <div className="flex-1 flex justify-center w-full z-10 -mt-16 md:mt-2 relative h-full pointer-events-none md:pointer-events-auto">
-        <div className="w-full h-full md:h-[calc(100vh-6rem)] relative pointer-events-auto">
-          <InfiniteScroll
-            dataLength={displayedReels.length}
-            next={fetchMoreReels}
-            hasMore={hasMore}
-            loader={<SkeletonLoader />}
-            scrollableTarget="reels-scroll-container"
-            className="h-full w-full"
-          >
-            <div
-              id="reels-scroll-container"
-              className={cn(
-                "h-[100vh] md:h-full w-full overflow-y-scroll snap-y snap-mandatory hide-scrollbar"
-              )}
+      {/* Main Content Area */}
+      <div className="flex-1 flex justify-center items-start w-full z-10 -mt-16 md:mt-2 relative h-full pointer-events-none md:pointer-events-auto overflow-hidden">
+        {/* Reel Container */}
+        <div className="w-full h-full md:h-[calc(100vh-6rem)] relative pointer-events-auto flex items-start justify-center gap-8 px-4">
+          
+          {/* Central Video Frame */}
+          <div className="w-full h-full md:max-w-[340px] md:aspect-[9/18] relative pointer-events-auto">
+            <InfiniteScroll
+              dataLength={displayedReels.length}
+              next={fetchMoreReels}
+              hasMore={hasMore}
+              loader={<SkeletonLoader />}
+              scrollableTarget="reels-scroll-container"
+              className="h-full w-full"
             >
-              {displayedReels.map((reel, index) => {
-                const isWindowed = Math.abs(index - activeIndex) <= 1;
-                return (
-                  <div key={reel.id} className="h-full w-full snap-start snap-always" ref={(el) => observeRef(el, index)}>
-                    {isWindowed ? (
-                      <ReelCard
-                        reel={reel}
-                        isActive={index === activeIndex}
-                        preloadNext={index === activeIndex + 1}
-                        onSave={onSave}
-                        onBook={onBook}
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-black flex items-center justify-center">
-                        <img src={reel.thumbnailUrl} className="opacity-20 blur-xl w-full h-full object-cover" alt="" />
+              <div
+                id="reels-scroll-container"
+                className={cn(
+                  "h-[100vh] md:h-full w-full overflow-y-scroll snap-y snap-mandatory hide-scrollbar"
+                )}
+              >
+                {displayedReels.map((reel, index) => {
+                  const isWindowed = Math.abs(index - activeIndex) <= 1;
+                  return (
+                    <div key={reel.id} className="h-full w-full snap-start snap-always" ref={(el) => observeRef(el, index)}>
+                      {isWindowed ? (
+                        <ReelCard
+                          reel={reel}
+                          isActive={index === activeIndex}
+                          preloadNext={index === activeIndex + 1}
+                          onSave={onSave}
+                          onBook={onBook}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-secondary/20 flex items-center justify-center">
+                          <img src={reel.thumbnailUrl} className="opacity-20 blur-xl w-full h-full object-cover" alt="" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </InfiniteScroll>
+          </div>
+
+          {/* Suggestions Sidebar - Desktop Only */}
+          <div className="hidden lg:flex flex-col w-80 h-full py-4 space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-foreground px-2">Other Suggestions</h3>
+              <div className="grid grid-cols-1 gap-4 overflow-y-auto max-h-[calc(100vh-12rem)] pr-2 hide-scrollbar">
+                {suggestedReels.map((reel) => (
+                  <div key={reel.id} className="flex gap-3 group cursor-pointer p-2 rounded-xl hover:bg-secondary transition-colors">
+                    <div className="relative w-20 h-32 flex-shrink-0 rounded-lg overflow-hidden bg-secondary">
+                      <img src={reel.thumbnailUrl} alt={reel.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Play className="w-6 h-6 text-white fill-white" />
                       </div>
-                    )}
+                    </div>
+                    <div className="flex flex-col justify-center py-1">
+                      <h4 className="text-sm font-medium line-clamp-2 leading-snug">{reel.title}</h4>
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {reel.location}
+                      </p>
+                      <div className="mt-2 text-xs font-semibold text-primary">
+                        KES {reel.price.toLocaleString()}
+                      </div>
+                    </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </InfiniteScroll>
+            
+            <div className="p-4 bg-secondary/30 rounded-2xl border border-border mt-auto">
+              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-primary" />
+                Zuru Pulse Pro
+              </h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Unlock exclusive coastal experiences and premium listings with our verified membership.
+              </p>
+              <button className="w-full mt-3 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:opacity-90 transition-opacity">
+                Learn More
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

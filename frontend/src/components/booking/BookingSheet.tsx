@@ -27,6 +27,7 @@ import {
 } from "@stripe/react-stripe-js";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || "");
 
@@ -71,7 +72,6 @@ function StripePaymentForm({
 
     return (
         <form onSubmit={handlePay} className="space-y-5">
-            {/* Stripe's Payment Element — shows Card, M-Pesa, Apple Pay, Google Pay, etc. */}
             <div className="border rounded-2xl p-4 bg-secondary/5">
                 <PaymentElement
                     options={{
@@ -150,6 +150,7 @@ export function BookingSheet({
 }: BookingSheetProps) {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const isMobile = useIsMobile();
 
     const [step, setStep] = useState<Step>("details");
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -167,7 +168,7 @@ export function BookingSheet({
 
     const isNightBased = ["hotel", "villa", "apartment"].includes(category || "");
     const units = isNightBased ? nights : guests;
-    const total = price * units; // guest sees only what they pay — no platform fee displayed
+    const total = price * units;
 
     const isDisabled = (date: Date) => {
         if (isBefore(date, today)) return true;
@@ -191,7 +192,6 @@ export function BookingSheet({
         }
 
         if (!hostId) {
-            // Allow booking without hostId — edge fn will validate
             toast.error("This listing doesn't have a host configured yet.");
             return;
         }
@@ -202,7 +202,7 @@ export function BookingSheet({
                 "create-stripe-payment-intent",
                 {
                     body: {
-                        amount: Math.round(total * 100), // cents
+                        amount: Math.round(total * 100),
                         experienceId,
                         hostId,
                         reelId,
@@ -270,12 +270,16 @@ export function BookingSheet({
     return (
         <Sheet open={open} onOpenChange={handleClose}>
             <SheetContent
-                side="bottom"
-                className="h-[92dvh] rounded-t-3xl overflow-y-auto p-0"
+                side={isMobile ? "bottom" : "right"}
+                className={cn(
+                    "overflow-y-auto p-0 transition-all duration-500",
+                    isMobile 
+                        ? "h-[92dvh] w-full rounded-t-3xl" 
+                        : "h-screen w-[450px] sm:max-w-[450px] border-l border-border"
+                )}
             >
-                {/* Hero image */}
                 {imageUrl && (
-                    <div className="relative h-44 w-full overflow-hidden rounded-t-3xl flex-shrink-0">
+                    <div className="relative h-44 w-full overflow-hidden flex-shrink-0">
                         <img
                             src={imageUrl}
                             alt={title}
@@ -326,10 +330,8 @@ export function BookingSheet({
                         </SheetHeader>
                     )}
 
-                    {/* ── Step 1: Details ───────────────────────────────────────────── */}
                     {step === "details" && (
                         <>
-                            {/* Date picker */}
                             <div className="space-y-2">
                                 <p className="font-semibold text-sm">Select Dates</p>
                                 <button
@@ -385,7 +387,6 @@ export function BookingSheet({
                                 )}
                             </div>
 
-                            {/* Guest counter */}
                             <div className="space-y-2">
                                 <p className="font-semibold text-sm">Guests</p>
                                 <div className="flex items-center justify-between border rounded-xl p-3.5">
@@ -416,7 +417,6 @@ export function BookingSheet({
                                 </div>
                             </div>
 
-                            {/* Price */}
                             {dateRange?.from && (
                                 <div className="bg-secondary/20 rounded-xl p-4 space-y-2 text-sm">
                                     <div className="flex justify-between text-muted-foreground">
@@ -464,7 +464,6 @@ export function BookingSheet({
                         </>
                     )}
 
-                    {/* ── Step 2: Stripe Payment ────────────────────────────────────── */}
                     {step === "payment" && clientSecret && (
                         <>
                             <div className="bg-secondary/20 rounded-xl p-4 text-sm space-y-1">
