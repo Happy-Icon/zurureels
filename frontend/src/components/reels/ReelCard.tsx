@@ -303,10 +303,10 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             "h-7 w-7 transition-all duration-200",
             isLiked
               ? "fill-red-500 text-red-500 scale-110"
-              : "text-primary-foreground"
+              : "text-white"
           )}
         />
-        <span className="text-xs text-primary-foreground font-medium drop-shadow-md">
+        <span className="text-xs text-white font-medium drop-shadow-md">
           {likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}k` : likeCount}
         </span>
       </button>
@@ -318,18 +318,18 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             "h-7 w-7 transition-all duration-200",
             isSaved
               ? "fill-primary text-primary scale-110"
-              : "text-primary-foreground"
+              : "text-white"
           )}
         />
-        <span className="text-xs text-primary-foreground font-medium drop-shadow-md">
+        <span className="text-xs text-white font-medium drop-shadow-md">
           {isSaved ? "Saved" : "Save"}
         </span>
       </button>
 
       {/* Share */}
       <button onClick={handleShare} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
-        <Share2 className="h-7 w-7 text-primary-foreground" />
-        <span className="text-xs text-primary-foreground font-medium drop-shadow-md">Share</span>
+        <Share2 className="h-7 w-7 text-white" />
+        <span className="text-xs text-white font-medium drop-shadow-md">Share</span>
       </button>
 
       {/* Mute/Unmute - Mobile specific placement */}
@@ -343,7 +343,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
         )}>
           {isMuted ? <VolumeX className="h-6 w-6" /> : <Volume2 className="h-6 w-6" />}
         </div>
-        <span className="text-[10px] text-primary-foreground font-bold drop-shadow-md uppercase tracking-wider">
+        <span className="text-[10px] text-white font-bold drop-shadow-md uppercase tracking-wider">
           {isMuted ? "Sound On" : "Mute"}
         </span>
       </button>
@@ -351,48 +351,55 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
   );
 
   return (
-    <div className="relative h-[100dvh] md:h-full w-full snap-start flex items-center justify-center bg-background md:bg-transparent">
-      {/* Desktop Container Wrapper */}
+    <div className="relative h-[100dvh] md:h-full w-full snap-start flex items-center justify-center bg-transparent">
       <div className="relative h-full w-full md:h-[calc(100vh-6rem)] md:max-w-[340px] md:aspect-[9/18] md:rounded-[15px] overflow-hidden flex-shrink-0 group/video bg-black shadow-2xl md:border border-border/50 mx-auto md:mx-0">
         
         {/* Video Background */}
         <div className="absolute inset-0 bg-black">
-        <div className="relative h-full w-full">
-          {/* Blurred poster while loading */}
-          {!videoLoaded && (
-            <img
-              src={reel.thumbnailUrl}
-              alt="Preview"
-              className="absolute inset-0 h-full w-full object-cover blur-lg scale-105 z-10 transition-opacity duration-500"
-              style={{ opacity: videoLoaded ? 0 : 1 }}
+          <div className="relative h-full w-full">
+            {/* Blurred poster while loading */}
+            {!videoLoaded && (
+              <img
+                src={reel.thumbnailUrl}
+                alt="Preview"
+                className="absolute inset-0 h-full w-full object-cover blur-lg scale-105 z-10 transition-opacity duration-500"
+                style={{ opacity: videoLoaded ? 0 : 1 }}
+              />
+            )}
+            <video
+              ref={videoRef}
+              src={reel.processedVideoUrl || reel.videoUrl}
+              poster={reel.thumbnailUrl}
+              className="h-full w-full object-cover"
+              loop
+              playsInline
+              muted={isMuted}
+              preload={isActive ? "auto" : preloadNext ? "auto" : "metadata"}
+              crossOrigin="anonymous"
+              onPlay={() => {
+                setIsPlaying(true);
+                setError(null);
+              }}
+              onPause={() => setIsPlaying(false)}
+              onError={handleVideoError}
+              onLoadedData={() => setVideoLoaded(true)}
             />
-          )}
-          <video
-            ref={videoRef}
-            src={reel.processedVideoUrl || reel.videoUrl}
-            poster={reel.thumbnailUrl}
-            className="h-full w-full object-cover"
-            loop
-            playsInline
-            muted={isMuted}
-            preload={isActive ? "auto" : preloadNext ? "auto" : "metadata"}
-            crossOrigin="anonymous"
-            onPlay={() => {
-              setIsPlaying(true);
-              setError(null);
-            }}
-            onPause={() => setIsPlaying(false)}
-            onError={handleVideoError}
-            onLoadedData={() => setVideoLoaded(true)}
-          />
+          </div>
         </div>
-        {/* Preload next video invisibly for instant playback */}
-        {preloadNext && (
-          <link rel="preload" as="video" href={reel.processedVideoUrl || reel.videoUrl} />
-        )}
 
-        {/* Processing/Loading States */}
-        {/* Patch: Always show video, ignore processingStatus for dev/testing */}
+        {/* Top Bar - Overlay */}
+        <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20 md:flex hidden">
+          <span className="text-xl font-display font-semibold text-white drop-shadow-md">
+            ZuruSasa
+          </span>
+          <button
+            onClick={toggleMute}
+            className="rounded-full bg-black/40 backdrop-blur-sm p-2.5 transition-all hover:bg-black/60 active:scale-90"
+            aria-label={isMuted ? "Unmute" : "Mute"}
+          >
+            {isMuted ? <VolumeX className="h-5 w-5 text-white" /> : <Volume2 className="h-5 w-5 text-white" />}
+          </button>
+        </div>
 
         {/* Play/Pause tap area — only when no error */}
         {!error && (
@@ -412,7 +419,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
         {error && (
           <div
             onClick={retryLoad}
-            className="absolute inset-0 flex items-center justify-center z-10 cursor-pointer"
+            className="absolute inset-0 flex items-center justify-center z-20 cursor-pointer"
           >
             <div className="flex flex-col items-center gap-4 p-6 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 max-w-[80%] text-center">
               <div className="h-12 w-12 rounded-full bg-red-500/20 flex items-center justify-center">
@@ -429,113 +436,91 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             </div>
           </div>
         )}
-      </div>
-
-      {/* Gradient Overlay */}
-      <div className="absolute inset-0 gradient-overlay pointer-events-none" />
-
-      {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20 md:flex hidden">
-        <span className="text-xl font-display font-semibold text-primary-foreground drop-shadow-md">
-          ZuruSasa
-        </span>
-        <button
-          onClick={toggleMute}
-          className="rounded-full bg-black/40 backdrop-blur-sm p-2.5 transition-all hover:bg-black/60 active:scale-90"
-          aria-label={isMuted ? "Unmute" : "Mute"}
-        >
-          {isMuted ? (
-            <VolumeX className="h-5 w-5 text-white" />
-          ) : (
-            <Volume2 className="h-5 w-5 text-white" />
-          )}
-        </button>
-      </div>
-
-
-      {/* Right Side Actions - Mobile Only */}
-      <div className="absolute right-4 bottom-32 flex flex-col items-center gap-5 z-20 md:hidden">
-        {renderActions()}
-      </div>
-
-      {/* Bottom Content */}
-      <div className="absolute bottom-20 md:bottom-6 left-0 right-16 md:right-4 p-4 space-y-3 z-30 pointer-events-auto">
-        {/* Category & Expiry Badges */}
-        <div className="flex flex-col items-start gap-1.5 pb-1">
-          {reel.postedAt && (
-            <div 
-              className={cn(
-                "text-[10px] font-bold uppercase tracking-[0.1em] text-primary-foreground/90 drop-shadow-md flex items-center gap-1",
-                isReelExpiringSoon(new Date(reel.postedAt)) && "text-orange-400"
-              )}
-            >
-              <Clock className="h-3 w-3" />
-              {getReelExpiryDisplay(new Date(reel.postedAt))}
-            </div>
-          )}
-          <Badge className={cn("text-[11px] h-5 px-2 font-bold capitalize shadow-lg", categoryColors[reel.category])}>
-            {reel.category}
-          </Badge>
+        <div className="absolute right-4 bottom-32 flex flex-col items-center gap-5 z-20 md:hidden">
+          {renderActions()}
         </div>
 
-        {/* Title & Location */}
-        <div className="space-y-1">
-          <h3 className="text-xl font-display font-semibold text-primary-foreground line-clamp-2 drop-shadow-md">
-            {reel.title}
-          </h3>
-          <p className="text-sm text-primary-foreground/80">{reel.location}</p>
-        </div>
+        {/* Bottom Content */}
+        <div className="absolute bottom-20 md:bottom-6 left-0 right-16 md:right-4 p-4 space-y-3 z-30 pointer-events-auto">
+          {/* Category & Expiry Badges */}
+          <div className="flex flex-col items-start gap-1.5 pb-1">
+            {reel.postedAt && (
+              <div 
+                className={cn(
+                  "text-[10px] font-bold uppercase tracking-[0.1em] text-white/90 drop-shadow-md flex items-center gap-1",
+                  isReelExpiringSoon(new Date(reel.postedAt)) && "text-orange-400"
+                )}
+              >
+                <Clock className="h-3 w-3" />
+                {getReelExpiryDisplay(new Date(reel.postedAt))}
+              </div>
+            )}
+            <Badge className={cn("text-[11px] h-5 px-2 font-bold capitalize shadow-lg", categoryColors[reel.category])}>
+              {reel.category}
+            </Badge>
+          </div>
 
-        {/* Price & Rating */}
-        <div className="flex items-center gap-4">
-          <span className="text-lg font-semibold text-primary-foreground">
-            KES {reel.price.toLocaleString()}
-            <span className="text-sm font-normal text-primary-foreground/80">
-              /{reel.priceUnit}
+          {/* Title & Location */}
+          <div className="space-y-1">
+            <h3 className="text-xl font-display font-semibold text-white line-clamp-2 drop-shadow-md">
+              {reel.title}
+            </h3>
+            <p className="text-sm text-white/80">{reel.location}</p>
+          </div>
+
+          {/* Price & Rating */}
+          <div className="flex items-center gap-4">
+            <span className="text-lg font-semibold text-white">
+              KES {reel.price.toLocaleString()}
+              <span className="text-sm font-normal text-white/80">
+                /{reel.priceUnit}
+              </span>
             </span>
-          </span>
-          <span className="flex items-center gap-1 text-sm text-primary-foreground">
-            ⭐ {reel.rating.toFixed(1)}
-          </span>
+            <span className="flex items-center gap-1 text-sm text-white">
+              ⭐ {reel.rating.toFixed(1)}
+            </span>
+          </div>
+
+          {/* Book Button */}
+          <Button
+            onClick={() => onBook?.(reel.id)}
+            className="w-full md:w-auto bg-[#EE7D30] hover:bg-[#EE7D30]/90 text-white font-semibold shadow-lg shadow-orange-500/20 px-8"
+          >
+            Book Now
+          </Button>
         </div>
 
-        {/* Book Button */}
-        <Button
-          onClick={() => onBook?.(reel.id)}
-          className="w-full md:w-auto bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
-        >
-          Book Now
-        </Button>
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 gradient-overlay pointer-events-none z-10" />
+
+        {/* Desktop Sidebar Integrated */}
+        <div className="hidden md:flex absolute right-4 bottom-6 flex-col items-center gap-4 z-30">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
+              if (container) container.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+            }}
+            className="rounded-full bg-white/10 hover:bg-white/20 p-2 transition-all backdrop-blur-md"
+          >
+            <ChevronUp className="h-5 w-5 text-white" />
+          </button>
+
+          {renderActions()}
+
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
+              if (container) container.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+            }}
+            className="rounded-full bg-white/10 hover:bg-white/20 p-2 transition-all backdrop-blur-md"
+          >
+            <ChevronDown className="h-5 w-5 text-white" />
+          </button>
+        </div>
       </div>
-      
-      </div> {/* End Video Box */}
 
-      {/* Right Side Actions - Desktop Only */}
-      <div className="hidden md:flex flex-col items-center justify-end h-[calc(100vh-4rem)] pb-6 ml-4 gap-4 z-20 relative">
-        <button 
-          onClick={(e) => {
-            e.stopPropagation();
-            const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
-            if (container) container.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
-          }}
-          className="rounded-full bg-secondary/80 hover:bg-secondary p-3 mb-2 transition-all shadow-md"
-        >
-          <ChevronUp className="h-6 w-6 text-foreground" />
-        </button>
-
-        {renderActions()}
-
-        <button 
-          onClick={(e) => {
-            e.stopPropagation();
-            const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
-            if (container) container.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
-          }}
-          className="rounded-full bg-secondary/80 hover:bg-secondary p-3 mt-2 transition-all shadow-md"
-        >
-          <ChevronDown className="h-6 w-6 text-foreground" />
-        </button>
-      </div>
 
     </div>
   );

@@ -16,6 +16,7 @@
     --popover-foreground: 30 10% 10%;
 
     --primary: 24 80% 50%;
+    --primary-rgb: 232, 104, 23;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 30 15% 93%;
@@ -66,6 +67,7 @@
     --popover-foreground: 30 10% 95%;
 
     --primary: 24 80% 55%;
+    --primary-rgb: 241, 113, 30;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 30 10% 18%;

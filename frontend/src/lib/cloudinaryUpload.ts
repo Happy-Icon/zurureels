@@ -27,75 +27,81 @@ export async function uploadToCloudinary(
     resourceType?: 'video' | 'image' | 'auto';
     folder?: string;
     onProgress?: (percent: number) => void;
+    retries?: number;
   }
 ): Promise<CloudinaryUploadResult> {
-  if (!CLOUDINARY_CLOUD_NAME) {
-    throw new Error('VITE_CLOUDINARY_CLOUD_NAME is not configured');
-  }
+  const maxRetries = options?.retries ?? 2; // Default to 2 retries (3 total attempts)
+  let attempt = 0;
 
-  if (!CLOUDINARY_UPLOAD_PRESET) {
-    throw new Error('VITE_CLOUDINARY_UPLOAD_PRESET is not configured');
-  }
-
-  const resourceType = options?.resourceType || 'auto';
-  const formData = new FormData();
-
-  formData.append('file', file);
-  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  
-  if (options?.folder) {
-    formData.append('folder', options.folder);
-  }
-
-  // Add tags for organization
-  formData.append('tags', 'zurureels');
-
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-
-    // Track upload progress
-    if (options?.onProgress) {
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100);
-          options.onProgress?.(percent);
-        }
-      });
-    }
-
-    xhr.addEventListener('load', () => {
-      if (xhr.status !== 200) {
-        reject(new Error(`Cloudinary upload failed: ${xhr.responseText}`));
+  const executeUpload = (): Promise<CloudinaryUploadResult> => {
+    return new Promise((resolve, reject) => {
+      if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+        reject(new Error('Cloudinary configuration missing'));
         return;
       }
 
-      try {
-        const response = JSON.parse(xhr.responseText);
-        resolve({
-          secure_url: response.secure_url,
-          public_id: response.public_id,
-          width: response.width,
-          height: response.height,
-          duration: response.duration,
-          format: response.format,
+      const resourceType = options?.resourceType || 'auto';
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      if (options?.folder) formData.append('folder', options.folder);
+      formData.append('tags', 'zurureels');
+
+      const xhr = new XMLHttpRequest();
+      xhr.timeout = 60000; // 60s timeout
+
+      if (options?.onProgress) {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            options.onProgress?.(percent);
+          }
         });
-      } catch (e) {
-        reject(new Error('Failed to parse Cloudinary response'));
       }
-    });
 
-    xhr.addEventListener('error', () => {
-      reject(new Error('Network error during upload'));
-    });
+      xhr.addEventListener('load', () => {
+        if (xhr.status !== 200) {
+          reject(new Error(`Status ${xhr.status}: ${xhr.responseText}`));
+          return;
+        }
+        try {
+          const response = JSON.parse(xhr.responseText);
+          resolve({
+            secure_url: response.secure_url,
+            public_id: response.public_id,
+            width: response.width,
+            height: response.height,
+            duration: response.duration,
+            format: response.format,
+          });
+        } catch (e) {
+          reject(new Error('Failed to parse Cloudinary response'));
+        }
+      });
 
-    xhr.addEventListener('abort', () => {
-      reject(new Error('Upload aborted'));
-    });
+      xhr.addEventListener('error', () => reject(new Error('Network error')));
+      xhr.addEventListener('timeout', () => reject(new Error('Upload timed out')));
+      xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
 
-    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
-    xhr.open('POST', url);
-    xhr.send(formData);
-  });
+      const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
+      xhr.open('POST', url);
+      xhr.send(formData);
+    });
+  };
+
+  while (attempt <= maxRetries) {
+    try {
+      return await executeUpload();
+    } catch (err) {
+      attempt++;
+      if (attempt > maxRetries) throw err;
+      console.warn(`Upload attempt ${attempt} failed, retrying...`, err);
+      // Brief delay before retry (exponential backoff)
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
+  }
+
+  throw new Error('Upload failed after multiple attempts');
 }
 
 /**

@@ -175,7 +175,7 @@ export const ReelGridCard = ({ reel, onBook, onSelect }: ReelGridCardProps) => {
             )}
 
             {/* Interaction Rack (Right Side) */}
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-3 items-center z-10">
+            <div className="absolute right-1.5 top-12 flex flex-col gap-2 items-center z-10 sm:right-2 sm:gap-3 sm:top-1/2 sm:-translate-y-1/2">
                 {/* Avatar + Follow */}
                 <div className="relative group/avatar">
                     <Avatar className="h-8 w-8 border-2 border-primary ring-2 ring-black">
@@ -194,25 +194,25 @@ export const ReelGridCard = ({ reel, onBook, onSelect }: ReelGridCardProps) => {
 
                 {/* Like */}
                 <button onClick={(e) => { e.stopPropagation(); toggleLike(); }} className="flex flex-col items-center">
-                    <div className={cn("p-2 rounded-full transition-all", isLiked ? "bg-red-500/20" : "bg-black/40 hover:bg-black/60")}>
-                        <Heart size={18} className={cn("transition-colors", isLiked ? "fill-red-500 text-red-500" : "text-white")} />
+                    <div className={cn("p-1.5 sm:p-2 rounded-full transition-all", isLiked ? "bg-red-500/20" : "bg-black/40 hover:bg-black/60")}>
+                        <Heart size={16} className={cn("sm:w-[18px] sm:h-[18px] transition-colors", isLiked ? "fill-red-500 text-red-500" : "text-white")} />
                     </div>
-                    <span className="text-[10px] text-white font-medium drop-shadow-md">
+                    <span className="text-[9px] sm:text-[10px] text-white font-medium drop-shadow-md">
                         {likeCount > 0 ? (likeCount > 999 ? (likeCount / 1000).toFixed(1) + "k" : likeCount) : ""}
                     </span>
                 </button>
 
                 {/* Save */}
                 <button onClick={(e) => { e.stopPropagation(); toggleSave(); }}>
-                    <div className={cn("p-2 rounded-full transition-all", isSaved ? "bg-primary/20" : "bg-black/40 hover:bg-black/60")}>
-                        <Bookmark size={18} className={cn("transition-colors", isSaved ? "fill-primary text-primary" : "text-white")} />
+                    <div className={cn("p-1.5 sm:p-2 rounded-full transition-all", isSaved ? "bg-primary/20" : "bg-black/40 hover:bg-black/60")}>
+                        <Bookmark size={16} className={cn("sm:w-[18px] sm:h-[18px] transition-colors", isSaved ? "fill-primary text-primary" : "text-white")} />
                     </div>
                 </button>
 
                 {/* Share */}
                 <button onClick={handleShare}>
-                    <div className="p-2 rounded-full bg-black/40 hover:bg-black/60 transition-all text-white">
-                        <Share2 size={18} />
+                    <div className="p-1.5 sm:p-2 rounded-full bg-black/40 hover:bg-black/60 transition-all text-white">
+                        <Share2 size={16} className="sm:w-[18px] sm:h-[18px]" />
                     </div>
                 </button>
             </div>
@@ -242,7 +242,7 @@ export const ReelGridCard = ({ reel, onBook, onSelect }: ReelGridCardProps) => {
                 {/* Book Now Button - SPECIFIC CLICK AREA */}
                 <Button
                     onClick={(e) => { e.stopPropagation(); onBook(reel); }}
-                    className="w-full h-8 text-[11px] font-bold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-lg pointer-events-auto active:scale-95 transition-transform"
+                    className="w-full h-7 sm:h-8 text-[10px] sm:text-[11px] font-bold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-lg pointer-events-auto active:scale-95 transition-transform"
                 >
                     Book Now
                 </Button>

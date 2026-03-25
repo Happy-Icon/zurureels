@@ -12,6 +12,7 @@ import { useCityPulseAI } from "@/hooks/useCityPulseAI";
 import { useExperiences } from "@/hooks/useExperiences";
 import { coastalCities } from "@/data/mockCityPulse";
 import { ReelCard } from "@/components/reels/ReelCard";
+import { SkeletonLoader } from "@/components/reels/ReelsFeed";
 import {
   MapPin,
   ChevronDown,
@@ -91,13 +92,8 @@ function TikTokFeed({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-primary/10 animate-pulse flex items-center justify-center">
-            <Play className="h-6 w-6 text-primary" />
-          </div>
-          <p className="text-sm">Loading reels…</p>
-        </div>
+      <div className="h-screen w-full bg-background">
+        <SkeletonLoader />
       </div>
     );
   }
@@ -226,16 +222,26 @@ const CityPulse = () => {
           <div className="absolute top-16 left-0 right-0 z-50 px-4 pb-4">
             <div className="flex items-center justify-start w-full">
               {/* Tab switcher - Extreme Left */}
-              <div className="pointer-events-auto flex items-center gap-1.5 p-1 bg-black/40 backdrop-blur-xl rounded-full border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+              <div className="pointer-events-auto flex items-center gap-1.5 p-1.5 bg-black/20 backdrop-blur-2xl rounded-full border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.2)] glass-dark">
                 <button
                   onClick={(e) => { e.stopPropagation(); setTab("feed"); }}
-                  className="px-4 py-1.5 rounded-full text-sm font-bold transition-all duration-300 bg-[#EE7D30] text-white shadow-[0_0_15px_rgba(238,125,48,0.4)]"
+                  className={cn(
+                    "px-6 py-2 rounded-full text-sm font-bold transition-all duration-500",
+                    tab === "feed" 
+                      ? "bg-[#EE7D30] text-white shadow-[0_0_25px_rgba(238,125,48,0.6)] scale-[1.02]" 
+                      : "text-white/70 hover:text-white"
+                  )}
                 >
                   For U
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setTab("explore"); }}
-                  className="px-4 py-1.5 rounded-full text-sm font-bold transition-all duration-300 text-white/70 hover:text-white"
+                  className={cn(
+                    "px-6 py-2 rounded-full text-sm font-bold transition-all duration-500",
+                    tab === "explore" 
+                      ? "bg-[#EE7D30] text-white shadow-[0_0_25px_rgba(238,125,48,0.6)] scale-[1.02]" 
+                      : "text-white/70 hover:text-white"
+                  )}
                 >
                   Explore
                 </button>
@@ -516,5 +522,6 @@ const CityPulse = () => {
     </MainLayout>
   );
 };
+
 
 export default CityPulse;

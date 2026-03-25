@@ -14,8 +14,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { extractVideoThumbnail } from "@/utils/videoThumbnail";
-import { Progress } from "@/components/ui/progress";
 import { Loader2, Sparkles } from "lucide-react";
+import { uploadToCloudinary } from "@/lib/cloudinaryUpload";
+import { useEffect } from "react";
 
 
 
@@ -35,8 +36,18 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
     const [price, setPrice] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [optimizationProgress, setOptimizationProgress] = useState<number | null>(null);
-    const { user } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const { user } = useAuth();
+
+    // Warm up Supabase and Cloudinary
+    useEffect(() => {
+        if (open) {
+            // Lightweight query to "wake up" the Supabase session
+            supabase.from("experiences").select("id").limit(1).then(() => {
+                console.log("[CreateReelDialog] Supabase connection warmed up");
+            });
+        }
+    }, [open]);
 
     const isAccommodationCategory = (cat: string): cat is AccommodationType => {
         return ["villa", "apartment"].includes(cat);
@@ -175,14 +186,13 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             setOptimizationProgress(0);
             let cloudinaryResult;
             try {
-                // Dynamically import Cloudinary upload utility
-                const { uploadToCloudinary } = await import("@/lib/cloudinaryUpload");
                 cloudinaryResult = await uploadToCloudinary(finalVideoFile, {
                     resourceType: "video",
                     folder: "reels",
                     onProgress: (percent) => setOptimizationProgress(percent)
                 });
             } catch (err) {
+                setOptimizationProgress(null);
                 throw new Error("Cloudinary upload failed: " + (err?.message || err));
             }
             setOptimizationProgress(null);

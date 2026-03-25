@@ -13,6 +13,9 @@ import { AccommodationData, ReelRequirement } from "@/types/host";
 import { transcodeVideo } from "@/utils/videoTranscoder";
 import { Progress } from "@/components/ui/progress";
 import { Sparkles, Loader2 } from "lucide-react";
+import { uploadToCloudinary } from "@/lib/cloudinaryUpload";
+import { useEffect } from "react";
+import { loadFFmpeg } from "@/utils/videoTranscoder";
 
 interface AccommodationReelFlowProps {
   category: "hotel" | "villa" | "apartment";
@@ -55,6 +58,15 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
   const [showRecorder, setShowRecorder] = useState(false);
   const [optimizationProgress, setOptimizationProgress] = useState<number | null>(null);
   const currentReelIdRef = useRef<string | null>(null);
+
+  // Warm up FFmpeg and Cloudinary
+  useEffect(() => {
+    // Start loading FFmpeg in background as soon as the component mounts
+    // This removes the "first-time" delay when they actually hit the record/upload button
+    loadFFmpeg().then(() => {
+      console.log("[AccommodationFlow] FFmpeg initialized in background");
+    });
+  }, []);
 
   const categoryLabel = category === "hotel" ? "Hotel" : category === "villa" ? "Villa" : "Apartment";
 
@@ -159,7 +171,6 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
       }
 
       // Step 1: Upload to Cloudinary
-      const { uploadToCloudinary } = await import("@/lib/cloudinaryUpload");
       const result = await uploadToCloudinary(finalFile, {
         resourceType: "video",
         folder: "reels/accommodation",

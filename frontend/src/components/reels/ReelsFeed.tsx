@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { ReelCard, ReelData } from "./ReelCard";
 import { cn } from "@/lib/utils";
 import InfiniteScroll from 'react-infinite-scroll-component';
-import { Menu, Search, Home, Compass, MapPin, Bookmark, PlusSquare, User, Settings, LogOut, X } from "lucide-react";
+import { Menu, Search, Home, Compass, MapPin, Bookmark, PlusSquare, User, Settings, LogOut, X, Play, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface ReelsFeedProps {
@@ -235,12 +235,32 @@ export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
   );
 }
 
-function SkeletonLoader() {
+export function SkeletonLoader() {
   return (
-    <div className="h-full w-full flex flex-col gap-4 p-8">
-      {[...Array(3)].map((_, i) => (
-        <div key={i} className="h-96 w-full bg-zinc-900 animate-pulse rounded-xl" />
-      ))}
+    <div className="h-full w-full bg-background flex flex-col items-center justify-center p-0 md:p-4">
+      {/* Skeleton for the central video frame */}
+      <div className="relative h-full w-full md:h-[calc(100vh-6rem)] md:max-w-[340px] md:aspect-[9/18] md:rounded-[15px] overflow-hidden bg-secondary/50 animate-pulse flex-shrink-0">
+        
+        {/* Right side actions skeleton */}
+        <div className="absolute right-4 bottom-32 flex flex-col items-center gap-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex flex-col items-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-secondary-foreground/10" />
+              <div className="w-8 h-2 rounded bg-secondary-foreground/10" />
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom content skeleton */}
+        <div className="absolute bottom-8 left-4 right-12 space-y-4">
+          <div className="w-20 h-5 rounded-full bg-secondary-foreground/10" />
+          <div className="space-y-2">
+            <div className="w-3/4 h-6 rounded bg-secondary-foreground/10" />
+            <div className="w-1/2 h-4 rounded bg-secondary-foreground/10" />
+          </div>
+          <div className="w-full h-10 rounded-xl bg-secondary-foreground/10" />
+        </div>
+      </div>
     </div>
   );
 }
