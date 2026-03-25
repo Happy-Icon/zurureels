@@ -24,9 +24,10 @@ import { toast } from "sonner";
 interface ReelGridCardProps {
     reel: ReelData;
     onBook: (reel: ReelData) => void;
+    onSelect?: (reel: ReelData) => void;
 }
 
-export const ReelGridCard = ({ reel, onBook }: ReelGridCardProps) => {
+export const ReelGridCard = ({ reel, onBook, onSelect }: ReelGridCardProps) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isMuted, setIsMuted] = useState(true);
@@ -112,7 +113,7 @@ export const ReelGridCard = ({ reel, onBook }: ReelGridCardProps) => {
     return (
         <div className="group relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted shadow-sm hover:shadow-lg transition-all duration-300">
             {/* Video/Image Content */}
-            <div className="absolute inset-0" onClick={togglePlay}>
+            <div className="absolute inset-0" onClick={() => onSelect ? onSelect(reel) : togglePlay()}>
                 {reel.videoUrl ? (
                     <video
                         ref={videoRef}

@@ -14,6 +14,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { ReelData } from "@/hooks/useReels";
 import { BookingSheet } from "@/components/booking/BookingSheet";
 import { ReelGridCard } from "@/components/reels/ReelGridCard";
+import { ReelCard } from "@/components/reels/ReelCard";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const Discover = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -21,6 +23,8 @@ const Discover = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [bookingReel, setBookingReel] = useState<ReelData | null>(null);
+  const [selectedReelIndex, setSelectedReelIndex] = useState<number | null>(null);
+  const isMobile = useIsMobile();
 
   const { reels: allReels, loading: reelsLoading } = useReels(selectedCategory, undefined, debouncedSearch);
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
@@ -131,11 +135,12 @@ const Discover = () => {
                 <div key={i} className="aspect-[3/4] rounded-2xl bg-muted animate-pulse" />
               ))
             ) : allReels.length > 0 ? (
-              allReels.map((reel) => (
+              allReels.map((reel, index) => (
                 <ReelGridCard
                   key={reel.id}
                   reel={reel}
                   onBook={setBookingReel}
+                  onSelect={() => setSelectedReelIndex(index)}
                 />
               ))
             ) : (
@@ -148,6 +153,27 @@ const Discover = () => {
           </div>
         </div>
       </div>
+
+      {/* Full Screen Reel View - Overlay */}
+      {selectedReelIndex !== null && allReels[selectedReelIndex] && (
+        <div className="fixed inset-0 z-[60] bg-black">
+          {/* Back Button */}
+          <button 
+            onClick={() => setSelectedReelIndex(null)}
+            className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 z-[70] p-2 rounded-full bg-black/40 backdrop-blur-md text-white border border-white/10 active:scale-95 transition-transform"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          
+          <div className="h-full w-full">
+            <ReelCard 
+              reel={allReels[selectedReelIndex]}
+              isActive={true}
+              onBook={(id) => setBookingReel(allReels.find(r => r.id === id) || null)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Ask Zuru AI - Guests Only */}
       {role !== 'host' && (
@@ -168,7 +194,7 @@ const Discover = () => {
       {bookingReel && (
         <BookingSheet
           open={!!bookingReel}
-          onOpenChange={(o) => !o && setBookingReel(null)}
+          onOpenChange={(o) => { if (!o) { setBookingReel(null); } }}
           experienceId={bookingReel.experienceId || bookingReel.id}
           reelId={bookingReel.id}
           hostId={bookingReel.hostUserId}

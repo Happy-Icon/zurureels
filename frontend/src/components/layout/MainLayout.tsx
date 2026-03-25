@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 import { DesktopSidebar } from "./DesktopSidebar";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { EmailVerificationBanner } from "@/components/EmailVerificationBanner";
 
 interface MainLayoutProps {
@@ -33,7 +34,10 @@ export function MainLayout({
           <Link to="/" className="text-xl font-display font-semibold text-foreground">
             ZuruSasa
           </Link>
-          <NotificationBell />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <NotificationBell />
+          </div>
         </div>
       )}
 

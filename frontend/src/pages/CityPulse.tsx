@@ -222,29 +222,20 @@ const CityPulse = () => {
     <MainLayout hideMobileUI={isMobile && tab === "feed" && !showMobileUI}>
       {tab === "feed" ? (
         <div className="fixed inset-0 z-30 bg-black overflow-hidden">
-          <div 
-            className={cn(
-                "absolute top-0 left-0 right-0 z-50 px-4 pt-16 pb-4 transition-all duration-500",
-                isMobile && !showMobileUI ? "opacity-0 -translate-y-full pointer-events-none" : "opacity-100 translate-y-0 pointer-events-none"
-            )}
-          >
+          {/* Top bar overlaid on video */}
+          <div className="absolute top-16 left-0 right-0 z-50 px-4 pb-4">
             <div className="flex items-center justify-start w-full">
-              <div className="pointer-events-auto flex items-center gap-2 p-1 bg-black/20 backdrop-blur-md rounded-full border border-orange-500/30 shadow-2xl">
+              {/* Tab switcher - Extreme Left */}
+              <div className="pointer-events-auto flex items-center gap-1.5 p-1 bg-black/40 backdrop-blur-xl rounded-full border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
                 <button
                   onClick={(e) => { e.stopPropagation(); setTab("feed"); }}
-                  className={cn(
-                    "px-4 py-1.5 rounded-full text-sm font-bold transition-all",
-                    tab === "feed" ? "bg-[#EE7D30] text-white shadow-lg" : "text-white/60 hover:text-white"
-                  )}
+                  className="px-4 py-1.5 rounded-full text-sm font-bold transition-all duration-300 bg-[#EE7D30] text-white shadow-[0_0_15px_rgba(238,125,48,0.4)]"
                 >
                   For U
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setTab("explore"); }}
-                  className={cn(
-                    "px-4 py-1.5 rounded-full text-sm font-bold transition-all",
-                    tab === "explore" ? "bg-[#EE7D30] text-white shadow-lg" : "text-white/60 hover:text-white"
-                  )}
+                  className="px-4 py-1.5 rounded-full text-sm font-bold transition-all duration-300 text-white/70 hover:text-white"
                 >
                   Explore
                 </button>

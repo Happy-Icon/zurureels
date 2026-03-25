@@ -335,10 +335,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
       {/* Mute/Unmute - Mobile specific placement */}
       <button 
         onClick={toggleMute} 
-        className={cn(
-          "flex flex-col items-center gap-1 transition-all duration-300 md:hidden",
-          isMuted && "animate-pulse scale-110"
-        )}
+        className="flex flex-col items-center gap-1 transition-all duration-300 md:hidden"
       >
         <div className={cn(
           "p-2.5 rounded-full transition-colors",
