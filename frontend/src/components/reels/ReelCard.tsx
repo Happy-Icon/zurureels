@@ -1,4 +1,4 @@
-import { Heart, Share2, Bookmark, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw, Plus, Check, Loader2, Video } from "lucide-react";
+import { Heart, Share2, Bookmark, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw, Plus, Check, Loader2, Video, ChevronUp, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -266,10 +266,81 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
     parks_camps: "bg-green-600/90",
   };
 
+  const renderActions = () => (
+    <>
+      {/* Host Avatar + Follow */}
+      <div className="relative">
+        <button onClick={handleAvatarClick} className="block">
+          <img
+            src={reel.hostAvatar}
+            alt={reel.hostName}
+            className="h-12 w-12 rounded-full border-2 border-primary-foreground object-cover transition-transform hover:scale-105"
+          />
+        </button>
+        {/* Follow/Unfollow button */}
+        <button
+          onClick={handleFollow}
+          className={cn(
+            "absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full p-0.5 transition-all active:scale-90",
+            isFollowing
+              ? "bg-emerald-500 text-white"
+              : "bg-primary text-primary-foreground"
+          )}
+          aria-label={isFollowing ? "Unfollow" : "Follow"}
+        >
+          {isFollowing ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <Plus className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </div>
+
+      {/* Like */}
+      <button onClick={handleLike} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
+        <Heart
+          className={cn(
+            "h-7 w-7 transition-all duration-200",
+            isLiked
+              ? "fill-red-500 text-red-500 scale-110"
+              : "text-primary-foreground"
+          )}
+        />
+        <span className="text-xs text-primary-foreground font-medium drop-shadow-md">
+          {likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}k` : likeCount}
+        </span>
+      </button>
+
+      {/* Save */}
+      <button onClick={handleSave} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
+        <Bookmark
+          className={cn(
+            "h-7 w-7 transition-all duration-200",
+            isSaved
+              ? "fill-primary text-primary scale-110"
+              : "text-primary-foreground"
+          )}
+        />
+        <span className="text-xs text-primary-foreground font-medium drop-shadow-md">
+          {isSaved ? "Saved" : "Save"}
+        </span>
+      </button>
+
+      {/* Share */}
+      <button onClick={handleShare} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
+        <Share2 className="h-7 w-7 text-primary-foreground" />
+        <span className="text-xs text-primary-foreground font-medium drop-shadow-md">Share</span>
+      </button>
+    </>
+  );
+
   return (
-    <div className="relative h-full w-full snap-start overflow-hidden">
-      {/* Video Background */}
-      <div className="absolute inset-0 bg-black">
+    <div className="relative h-[100dvh] md:h-full w-full snap-start flex items-center justify-center bg-black/95">
+      {/* Desktop Container Wrapper */}
+      <div className="relative h-full w-full md:h-[calc(100vh-4rem)] md:max-w-[400px] md:aspect-[9/16] md:rounded-[15px] overflow-hidden flex-shrink-0 group/video bg-black shadow-2xl md:border border-white/10 mx-auto md:mx-0">
+        
+        {/* Video Background */}
+        <div className="absolute inset-0 bg-black">
         <div className="relative h-full w-full">
           {/* Blurred poster while loading */}
           {!videoLoaded && (
@@ -376,75 +447,13 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
         </button>
       )}
 
-      {/* Right Side Actions */}
-      <div className="absolute right-4 bottom-32 md:bottom-24 flex flex-col items-center gap-5">
-        {/* Host Avatar + Follow */}
-        <div className="relative">
-          <button onClick={handleAvatarClick} className="block">
-            <img
-              src={reel.hostAvatar}
-              alt={reel.hostName}
-              className="h-12 w-12 rounded-full border-2 border-primary-foreground object-cover transition-transform hover:scale-105"
-            />
-          </button>
-          {/* Follow/Unfollow button */}
-          <button
-            onClick={handleFollow}
-            className={cn(
-              "absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full p-0.5 transition-all active:scale-90",
-              isFollowing
-                ? "bg-emerald-500 text-white"
-                : "bg-primary text-primary-foreground"
-            )}
-            aria-label={isFollowing ? "Unfollow" : "Follow"}
-          >
-            {isFollowing ? (
-              <Check className="h-3.5 w-3.5" />
-            ) : (
-              <Plus className="h-3.5 w-3.5" />
-            )}
-          </button>
-        </div>
-
-        {/* Like */}
-        <button onClick={handleLike} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
-          <Heart
-            className={cn(
-              "h-7 w-7 transition-all duration-200",
-              isLiked
-                ? "fill-red-500 text-red-500 scale-110"
-                : "text-primary-foreground"
-            )}
-          />
-          <span className="text-xs text-primary-foreground font-medium">
-            {likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}k` : likeCount}
-          </span>
-        </button>
-
-        {/* Save */}
-        <button onClick={handleSave} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
-          <Bookmark
-            className={cn(
-              "h-7 w-7 transition-all duration-200",
-              isSaved
-                ? "fill-primary text-primary scale-110"
-                : "text-primary-foreground"
-            )}
-          />
-          <span className="text-xs text-primary-foreground font-medium">
-            {isSaved ? "Saved" : "Save"}
-          </span>
-        </button>
-
-        {/* Share */}
-        <button onClick={handleShare} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
-          <Share2 className="h-7 w-7 text-primary-foreground" />
-          <span className="text-xs text-primary-foreground font-medium">Share</span>
-        </button>
+      {/* Right Side Actions - Mobile Only */}
+      <div className="absolute right-4 bottom-32 flex flex-col items-center gap-5 z-20 md:hidden">
+        {renderActions()}
       </div>
 
       {/* Bottom Content */}
-      <div className="absolute bottom-20 md:bottom-8 left-0 right-16 p-4 space-y-3">
+      <div className="absolute bottom-20 md:bottom-6 left-0 right-16 md:right-4 p-4 space-y-3 z-30 pointer-events-auto">
         {/* Category & Expiry Badges */}
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className={cn("text-xs capitalize", categoryColors[reel.category])}>
@@ -494,6 +503,36 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
           Book Now
         </Button>
       </div>
+      
+      </div> {/* End Video Box */}
+
+      {/* Right Side Actions - Desktop Only */}
+      <div className="hidden md:flex flex-col items-center justify-end h-[calc(100vh-4rem)] pb-6 ml-4 gap-4 z-20 relative">
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
+            if (container) container.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+          }}
+          className="rounded-full bg-zinc-800/80 hover:bg-zinc-700 p-3 mb-2 transition-all"
+        >
+          <ChevronUp className="h-6 w-6 text-white" />
+        </button>
+
+        {renderActions()}
+
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
+            if (container) container.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+          }}
+          className="rounded-full bg-zinc-800/80 hover:bg-zinc-700 p-3 mt-2 transition-all"
+        >
+          <ChevronDown className="h-6 w-6 text-white" />
+        </button>
+      </div>
+
     </div>
   );
 }

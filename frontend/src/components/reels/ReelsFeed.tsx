@@ -143,8 +143,8 @@ export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {
       </div>
 
       {/* Reel Container */}
-      <div className="flex-1 flex justify-center w-full z-10 -mt-16 md:mt-2 md:pb-6 relative h-full pointer-events-none md:pointer-events-auto">
-        <div className="w-full h-full md:h-[calc(100vh-6rem)] md:max-w-[420px] md:aspect-[9/16] relative bg-black shadow-2xl md:rounded-2xl overflow-hidden pointer-events-auto border-0 md:border border-white/10">
+      <div className="flex-1 flex justify-center w-full z-10 -mt-16 md:mt-2 relative h-full pointer-events-none md:pointer-events-auto">
+        <div className="w-full h-full md:h-[calc(100vh-6rem)] relative pointer-events-auto">
           <InfiniteScroll
             dataLength={displayedReels.length}
             next={fetchMoreReels}

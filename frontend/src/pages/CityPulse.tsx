@@ -200,22 +200,20 @@ const CityPulse = () => {
       {tab === "feed" ? (
         <div className="fixed inset-0 z-30 bg-black">
           {/* Top bar overlaid on video */}
-          <div className="absolute top-0 left-0 right-0 z-50 px-4 pt-20 pb-4 pointer-events-none">
-            <div className="flex items-center justify-center w-full">
-              {/* Tab switcher - Centered */}
-              <div className="pointer-events-auto flex items-center bg-black/40 backdrop-blur-sm rounded-full p-1 z-0 shrink-0">
+          <div className="absolute top-0 left-0 right-0 z-50 px-4 pt-16 pb-4 pointer-events-none md:pt-4">
+            <div className="flex items-center justify-start w-full">
+              {/* Tab switcher - Extreme Left */}
+              <div className="pointer-events-auto flex items-center gap-4 z-0 shrink-0">
                 <button
                   onClick={() => setTab("feed")}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-primary text-white"
+                  className="flex items-center gap-1.5 text-base font-semibold text-white transition-opacity hover:opacity-100"
                 >
-                  <Clapperboard className="h-3.5 w-3.5" />
-                  Reels
+                  For U
                 </button>
                 <button
                   onClick={() => setTab("explore")}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold text-white/80 hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 text-base font-semibold text-white/50 transition-opacity hover:opacity-100"
                 >
-                  <LayoutList className="h-3.5 w-3.5" />
                   Explore
                 </button>
               </div>
@@ -236,7 +234,23 @@ const CityPulse = () => {
           <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
             <div className="p-4 space-y-4">
               <div className="flex items-center justify-between w-full">
-                {/* Location selector on left */}
+                {/* Tab switcher on extreme left */}
+                <div className="flex items-center gap-4 shrink-0">
+                  <button
+                    onClick={() => setTab("feed")}
+                    className="flex items-center gap-1.5 text-base font-semibold text-muted-foreground hover:text-foreground transition-opacity"
+                  >
+                    For U
+                  </button>
+                  <button
+                    onClick={() => setTab("explore")}
+                    className="flex items-center gap-1.5 text-base font-semibold text-foreground transition-opacity"
+                  >
+                    Explore
+                  </button>
+                </div>
+
+                {/* Location selector moved to right */}
                 <div className="flex-shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -246,7 +260,7 @@ const CityPulse = () => {
                         <ChevronDown className="h-3.5 w-3.5 opacity-70 flex-shrink-0" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent>
+                    <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => handleUseLocation(true)} className="gap-2 cursor-pointer">
                         <Navigation className="h-4 w-4 text-primary" />
                         <span>Use My Location</span>
@@ -260,27 +274,6 @@ const CityPulse = () => {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-
-                {/* Tab switcher centered */}
-                <div className="flex items-center bg-muted rounded-full p-1 shrink-0">
-                  <button
-                    onClick={() => setTab("feed")}
-                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Clapperboard className="h-3.5 w-3.5" />
-                    Reels
-                  </button>
-                  <button
-                    onClick={() => setTab("explore")}
-                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold bg-background shadow text-foreground"
-                  >
-                    <LayoutList className="h-3.5 w-3.5" />
-                    Explore
-                  </button>
-                </div>
-
-                {/* Spacer for balance */}
-                <div className="w-[140px] flex-shrink-0" />
               </div>
 
               {/* Category Pills */}
