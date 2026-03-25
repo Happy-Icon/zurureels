@@ -352,7 +352,11 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
 
   return (
     <div className="relative h-[100dvh] md:h-screen w-full snap-start flex items-center justify-center bg-transparent">
-      <div className="relative h-full w-full md:h-[90vh] md:max-w-[400px] md:aspect-[9/16] md:rounded-[24px] overflow-hidden flex-shrink-0 group/video bg-black shadow-2xl md:border border-white/10 mx-auto transition-all duration-500">
+      {/* Root Container for the vertical card + optional outside elements */}
+      <div className="relative h-full w-full md:h-[90vh] md:max-w-[400px] md:aspect-[9/16] flex-shrink-0 mx-auto transition-all duration-500">
+        
+        {/* The Clipped Video Frame */}
+        <div className="relative h-full w-full md:rounded-[32px] overflow-hidden group/video bg-black shadow-2xl md:border border-white/10">
         
         {/* Video Background */}
         <div className="absolute inset-0 bg-black">
@@ -436,11 +440,12 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             </div>
           </div>
         )}
+
         <div className="absolute right-4 bottom-32 flex flex-col items-center gap-5 z-20 md:hidden">
           {renderActions()}
         </div>
 
-        {/* Bottom Content */}
+        {/* Bottom Content - INSIDE THE FRAME */}
         <div className="absolute bottom-20 md:bottom-8 left-0 right-20 md:right-24 p-5 md:p-6 space-y-4 z-30 pointer-events-auto">
           {/* Category & Expiry Badges */}
           <div className="flex flex-col items-start gap-1.5 pb-1">
@@ -492,33 +497,35 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
 
         {/* Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none z-10" />
+      </div> {/* End of Clipped Video Frame */}
 
-        {/* Desktop Sidebar Integrated */}
-        <div className="hidden md:flex absolute right-6 bottom-10 flex-col items-center gap-6 z-30">
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
-              if (container) container.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
-            }}
-            className="rounded-full bg-white/10 hover:bg-white/20 p-2 transition-all backdrop-blur-md"
-          >
-            <ChevronUp className="h-5 w-5 text-white" />
-          </button>
+      {/* Desktop Sidebar (Outside the frame) */}
+      <div className="hidden md:flex absolute -right-20 bottom-12 flex-col items-center gap-6 z-30">
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
+            if (container) container.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+          }}
+          className="rounded-full bg-white/5 hover:bg-white/10 p-2.5 transition-all border border-white/10"
+        >
+          <ChevronUp className="h-5 w-5 text-white/70" />
+        </button>
 
-          {renderActions()}
+        {renderActions()}
 
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
-              if (container) container.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
-            }}
-            className="rounded-full bg-white/10 hover:bg-white/20 p-2 transition-all backdrop-blur-md"
-          >
-            <ChevronDown className="h-5 w-5 text-white" />
-          </button>
-        </div>
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            const container = e.currentTarget.closest('.overflow-y-scroll, .overflow-y-auto');
+            if (container) container.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+          }}
+          className="rounded-full bg-white/5 hover:bg-white/10 p-2.5 transition-all border border-white/10"
+        >
+          <ChevronDown className="h-5 w-5 text-white/70" />
+        </button>
+      </div>
+
       </div>
 
 
