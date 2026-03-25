@@ -303,10 +303,10 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             "h-7 w-7 transition-all duration-200",
             isLiked
               ? "fill-red-500 text-red-500 scale-110"
-              : "text-white"
+              : "text-white drop-shadow-lg"
           )}
         />
-        <span className="text-xs text-white font-medium drop-shadow-md">
+        <span className="text-[10px] md:text-[9px] text-white font-bold drop-shadow-md uppercase tracking-tight">
           {likeCount > 999 ? `${(likeCount / 1000).toFixed(1)}k` : likeCount}
         </span>
       </button>
@@ -318,18 +318,18 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             "h-7 w-7 transition-all duration-200",
             isSaved
               ? "fill-primary text-primary scale-110"
-              : "text-white"
+              : "text-white drop-shadow-lg"
           )}
         />
-        <span className="text-xs text-white font-medium drop-shadow-md">
+        <span className="text-[10px] md:text-[9px] text-white font-bold drop-shadow-md uppercase tracking-tight">
           {isSaved ? "Saved" : "Save"}
         </span>
       </button>
 
       {/* Share */}
       <button onClick={handleShare} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
-        <Share2 className="h-7 w-7 text-white" />
-        <span className="text-xs text-white font-medium drop-shadow-md">Share</span>
+        <Share2 className="h-7 w-7 text-white drop-shadow-lg" />
+        <span className="text-[10px] md:text-[9px] text-white font-bold drop-shadow-md uppercase tracking-tight">Share</span>
       </button>
 
       {/* Mute/Unmute - Mobile specific placement */}
@@ -351,8 +351,8 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
   );
 
   return (
-    <div className="relative h-[100dvh] md:h-full w-full snap-start flex items-center justify-center bg-transparent">
-      <div className="relative h-full w-full md:h-[calc(100vh-6rem)] md:max-w-[340px] md:aspect-[9/18] md:rounded-[15px] overflow-hidden flex-shrink-0 group/video bg-black shadow-2xl md:border border-border/50 mx-auto md:mx-0">
+    <div className="relative h-[100dvh] md:h-screen w-full snap-start flex items-center justify-center bg-transparent">
+      <div className="relative h-full w-full md:h-[90vh] md:max-w-[400px] md:aspect-[9/16] md:rounded-[24px] overflow-hidden flex-shrink-0 group/video bg-black shadow-2xl md:border border-white/10 mx-auto transition-all duration-500">
         
         {/* Video Background */}
         <div className="absolute inset-0 bg-black">
@@ -441,7 +441,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
         </div>
 
         {/* Bottom Content */}
-        <div className="absolute bottom-20 md:bottom-6 left-0 right-16 md:right-4 p-4 space-y-3 z-30 pointer-events-auto">
+        <div className="absolute bottom-20 md:bottom-8 left-0 right-20 md:right-24 p-5 md:p-6 space-y-4 z-30 pointer-events-auto">
           {/* Category & Expiry Badges */}
           <div className="flex flex-col items-start gap-1.5 pb-1">
             {reel.postedAt && (
@@ -491,10 +491,10 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
         </div>
 
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 gradient-overlay pointer-events-none z-10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none z-10" />
 
         {/* Desktop Sidebar Integrated */}
-        <div className="hidden md:flex absolute right-4 bottom-6 flex-col items-center gap-4 z-30">
+        <div className="hidden md:flex absolute right-6 bottom-10 flex-col items-center gap-6 z-30">
           <button 
             onClick={(e) => {
               e.stopPropagation();
