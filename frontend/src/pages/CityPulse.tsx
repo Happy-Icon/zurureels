@@ -92,7 +92,7 @@ function TikTokFeed({
 
   if (loading) {
     return (
-      <div className="h-screen w-full bg-background">
+      <div className="h-screen w-full bg-black flex items-center justify-center">
         <SkeletonLoader />
       </div>
     );
@@ -100,10 +100,15 @@ function TikTokFeed({
 
   if (reels.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        <div className="flex flex-col items-center gap-3">
-          <Sparkles className="h-12 w-12 opacity-20" />
-          <p>No reels yet. Be the first to post!</p>
+      <div className="flex items-center justify-center h-screen w-full bg-black text-white px-8 text-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="p-4 rounded-full bg-white/10 blur-[1px]">
+            <Sparkles className="h-12 w-12 opacity-40 text-primary animate-pulse" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-xl font-bold">No coastal reels found</h3>
+            <p className="text-sm text-white/50">Try choosing a different category or city!</p>
+          </div>
         </div>
       </div>
     );
@@ -112,7 +117,7 @@ function TikTokFeed({
   return (
     <div
       ref={containerRef}
-      className="overflow-y-scroll snap-y snap-mandatory"
+      className="w-full relative overflow-y-scroll snap-y snap-mandatory hide-scrollbar bg-black"
       style={{ height: "100dvh", scrollbarWidth: "none", msOverflowStyle: "none" }}
       onClick={onInteraction}
     >
@@ -217,33 +222,39 @@ const CityPulse = () => {
   return (
     <MainLayout hideMobileUI={isMobile && tab === "feed" && !showMobileUI}>
       {tab === "feed" ? (
-        <div className="fixed inset-0 z-30 bg-background md:pl-64 overflow-hidden flex items-center justify-center">
+        <div className="fixed inset-0 z-30 bg-black md:pl-64 overflow-hidden">
           {/* Top bar overlaid on video */}
           <div className="absolute top-16 left-0 right-0 z-50 px-4 pb-4">
-            <div className="flex items-center justify-start w-full">
-              {/* Tab switcher - Extreme Left */}
-              <div className="pointer-events-auto flex items-center gap-1.5 p-1.5 bg-black/20 backdrop-blur-2xl rounded-full border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.2)] glass-dark">
+            <div className="flex items-center justify-center w-full">
+              {/* Tab switcher - Centered words style */}
+              <div className="pointer-events-auto flex items-center gap-8 px-6 py-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); setTab("feed"); }}
                   className={cn(
-                    "px-6 py-2 rounded-full text-sm font-bold transition-all duration-500",
+                    "text-base font-extrabold transition-all duration-300 relative",
                     tab === "feed" 
-                      ? "bg-[#EE7D30] text-white shadow-[0_0_25px_rgba(238,125,48,0.6)] scale-[1.02]" 
-                      : "text-white/70 hover:text-white"
+                      ? "text-[#EE7D30] scale-110" 
+                      : "text-white/70 hover:text-[#EE7D30]"
                   )}
                 >
                   For U
+                  {tab === "feed" && (
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#EE7D30]" />
+                  )}
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setTab("explore"); }}
                   className={cn(
-                    "px-6 py-2 rounded-full text-sm font-bold transition-all duration-500",
+                    "text-base font-extrabold transition-all duration-300 relative",
                     tab === "explore" 
-                      ? "bg-[#EE7D30] text-white shadow-[0_0_25px_rgba(238,125,48,0.6)] scale-[1.02]" 
-                      : "text-white/70 hover:text-white"
+                      ? "text-[#EE7D30] scale-110" 
+                      : "text-white/70 hover:text-[#EE7D30]"
                   )}
                 >
                   Explore
+                  {tab === "explore" && (
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#EE7D30]" />
+                  )}
                 </button>
               </div>
             </div>
