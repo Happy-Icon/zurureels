@@ -111,7 +111,7 @@ export const ReelGridCard = ({ reel, onBook, onSelect }: ReelGridCardProps) => {
     };
 
     return (
-        <div className="group relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted shadow-sm hover:shadow-lg transition-all duration-300">
+        <div className="group relative aspect-[2/3] md:aspect-[3/4] rounded-2xl overflow-hidden bg-muted shadow-sm hover:shadow-lg transition-all duration-300">
             {/* Video/Image Content */}
             <div className="absolute inset-0" onClick={() => onSelect ? onSelect(reel) : togglePlay()}>
                 {reel.videoUrl ? (

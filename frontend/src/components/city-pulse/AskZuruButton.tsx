@@ -1,6 +1,5 @@
-import { Sparkles, X } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
 
 interface AskZuruButtonProps {
   onClick: () => void;
@@ -27,4 +26,3 @@ export function AskZuruButton({ onClick, isOpen }: AskZuruButtonProps) {
     </div>
   );
 }
-```

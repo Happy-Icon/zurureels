@@ -131,11 +131,11 @@ const Discover = () => {
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
             {reelsLoading ? (
-              Array(8).fill(0).map((_, i) => (
-                <div key={i} className="aspect-[3/4] rounded-2xl bg-muted animate-pulse" />
+              Array(4).fill(0).map((_, i) => (
+                <div key={i} className="aspect-[2/3] rounded-2xl bg-muted animate-pulse" />
               ))
             ) : allReels.length > 0 ? (
-              allReels.map((reel, index) => (
+              (isMobile ? allReels.slice(0, 4) : allReels).map((reel, index) => (
                 <ReelGridCard
                   key={reel.id}
                   reel={reel}
