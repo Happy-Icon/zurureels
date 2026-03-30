@@ -48,7 +48,7 @@ export async function uploadToCloudinary(
       formData.append('tags', 'zurureels');
 
       const xhr = new XMLHttpRequest();
-      xhr.timeout = 60000; // 60s timeout
+      xhr.timeout = 300000; // 300s / 5m timeout
 
       if (options?.onProgress) {
         xhr.upload.addEventListener('progress', (e) => {

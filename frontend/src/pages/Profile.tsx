@@ -179,7 +179,6 @@ const Profile = () => {
                 Loading...
               </Button>
             ) : (user.user_metadata?.role === 'host' || role === 'host') ? (
-              verificationStatus === 'verified' ? (
                 <Button
                   onClick={() => {
                     switchViewMode('host');
@@ -189,16 +188,6 @@ const Profile = () => {
                 >
                   Switch to Hosting
                 </Button>
-              ) : (
-                <Button
-                  onClick={() => {
-                    navigate('/host/verification');
-                  }}
-                  className="shadow-lg rounded-full px-6 py-3 h-auto text-sm font-semibold bg-yellow-500 hover:bg-yellow-600 text-black transition-all hover:scale-105"
-                >
-                  Complete Verification
-                </Button>
-              )
             ) : (
               <Link to="/become-host">
                 <Button className="shadow-lg rounded-full px-6 py-3 h-auto text-sm font-semibold bg-primary hover:bg-primary/90 transition-all hover:scale-105">

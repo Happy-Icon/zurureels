@@ -23,7 +23,7 @@ export const LiveVideoRecorder = ({ onRecordingComplete, onCancel }: LiveVideoRe
     const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
     const timerRef = useRef<number | null>(null);
 
-    const MAX_DURATION = 20; // seconds - strictly enforced for verified reels
+    const MAX_DURATION = 60; // seconds - strictly enforced for verified reels
 
     useEffect(() => {
         startCamera();

@@ -10,7 +10,7 @@ export function AskZuruButton({ onClick, isOpen }: AskZuruButtonProps) {
   if (isOpen) return null;
 
   return (
-    <div className="fixed bottom-20 right-4 md:bottom-8 md:right-8 z-50 flex flex-col items-end gap-3 pointer-events-none">
+    <div className="fixed bottom-24 left-4 md:bottom-8 md:right-8 z-50 flex flex-col items-end gap-3 pointer-events-none">
       {/* Main Floating Button */}
       <button
         onClick={onClick}
