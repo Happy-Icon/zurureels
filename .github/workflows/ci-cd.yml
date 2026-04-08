@@ -1,0 +1,131 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "dev", "feature/*", "horace" ]
+  pull_request:
+    branches: [ "main", "dev" ]
+
+env:
+  NODE_VERSION: '18.x' # Update to match your project's node version
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run Linter
+        working-directory: ./frontend
+        run: npm run lint --if-present
+
+      - name: Run Unit Tests
+        working-directory: ./frontend
+        # Runs testing if a test script exists in package.json
+        run: npm run test --if-present 
+
+  build:
+    name: Build Verification
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build Project
+        working-directory: ./frontend
+        run: npm run build
+        env:
+          # Use staging/dummy variables to verify build works
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist/
+          retention-days: 7
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build
+    # Deploy to staging on pushes to development branches or PR merges
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.zurureels.com # Replace with actual staging URL
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: ./dist
+
+      - name: Deploy to Staging Environment
+        run: |
+          echo "Deploying to staging servers..."
+          # Replace with your actual deployment command (e.g. Vercel, Netlify, SSH, AWS S3)
+          # npx vercel deploy --prebuilt -t ${{ secrets.VERCEL_TOKEN }}
+
+  deploy-production:
+    name: Deploy to Production
+    needs: build
+    # Only deploy to production on successful pushes to the main branch
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://zurureels.com # Replace with actual production URL
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: ./dist
+
+      - name: Create Version Tag
+        id: create_tag
+        run: |
+          TAG_NAME="v$(date +'%Y.%m.%d')-${{ github.run_number }}"
+          git tag -a "$TAG_NAME" -m "Automated release tag $TAG_NAME"
+          git push origin "$TAG_NAME"
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Production Environment
+        run: |
+          echo "Deploying to production servers..."
+          # Replace with your actual deployment command
+          # npx vercel deploy --prebuilt --prod -t ${{ secrets.VERCEL_TOKEN }}
+          
+      - name: Record Deployment Logs
+        run: |
+          echo "Deployment successful for version ${{ steps.create_tag.outputs.tag_name }}"
