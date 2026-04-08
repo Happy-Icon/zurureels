@@ -14,6 +14,7 @@ import { transcodeVideo } from "@/utils/videoTranscoder";
 import { Progress } from "@/components/ui/progress";
 import { Sparkles, Loader2 } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinaryUpload";
+import { CircularProgress } from "@/components/ui/CircularProgress";
 import { useEffect } from "react";
 import { loadFFmpeg } from "@/utils/videoTranscoder";
 
@@ -263,16 +264,29 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
       </div>
 
       {optimizationProgress !== null && (
-        <div className="mx-4 p-4 bg-primary/5 rounded-xl border border-primary/10 flex flex-col items-center gap-3">
-          <div className="flex items-center gap-2 text-primary font-medium">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <Sparkles className="h-4 w-4 text-amber-500" />
-            <span>Optimizing for best quality...</span>
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-card p-10 rounded-[2.5rem] shadow-2xl border border-primary/10 flex flex-col items-center gap-6 max-w-xs w-full text-center">
+            <CircularProgress 
+              value={optimizationProgress} 
+              size={120} 
+              strokeWidth={8} 
+              className="text-primary shadow-sm" 
+            />
+            
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold tracking-tight">
+                {optimizationProgress < 100 ? "Processing Reel..." : "Finalizing..."}
+              </h3>
+              <p className="text-sm text-muted-foreground px-2">
+                Uploading to secure storage and optimizing for high-speed playback.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 px-4 py-2 bg-primary/5 rounded-full text-[10px] font-medium text-primary uppercase tracking-wider">
+              <Sparkles className="h-3 w-3" />
+              <span>Zuru Global CDN</span>
+            </div>
           </div>
-          <Progress value={optimizationProgress} className="h-1.5 w-full" />
-          <p className="text-[10px] text-muted-foreground">
-            Formatting video for all devices ({Math.round(optimizationProgress)}%)
-          </p>
         </div>
       )}
 

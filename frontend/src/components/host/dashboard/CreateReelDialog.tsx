@@ -16,6 +16,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { extractVideoThumbnail } from "@/utils/videoThumbnail";
 import { Loader2, Sparkles } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinaryUpload";
+import { CircularProgress } from "@/components/ui/CircularProgress";
 import { useEffect } from "react";
 
 
@@ -272,19 +273,29 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                 </DialogHeader>
 
                 {optimizationProgress !== null && (
-                    <div className="py-8 px-4 flex flex-col items-center gap-4 bg-primary/5 rounded-2xl border border-primary/10 mb-4">
-                        <div className="relative">
-                            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                            <Sparkles className="absolute -top-1 -right-1 h-5 w-5 text-amber-500 animate-pulse" />
+                    <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+                        <div className="bg-card p-10 rounded-[2.5rem] shadow-2xl border border-primary/10 flex flex-col items-center gap-6 max-w-xs w-full text-center">
+                            <CircularProgress 
+                                value={optimizationProgress} 
+                                size={120} 
+                                strokeWidth={8} 
+                                className="text-primary shadow-sm" 
+                            />
+                            
+                            <div className="space-y-2">
+                                <h3 className="text-lg font-bold tracking-tight">
+                                    {optimizationProgress < 100 ? "Uploading & Optimizing..." : "Finishing up..."}
+                                </h3>
+                                <p className="text-sm text-muted-foreground px-2">
+                                    We're preparing your reel for high-quality playback on all devices.
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 px-4 py-2 bg-primary/5 rounded-full text-[10px] font-medium text-primary uppercase tracking-wider">
+                                <Sparkles className="h-3 w-3" />
+                                <span>Zuru Premium Processing</span>
+                            </div>
                         </div>
-                        <div className="space-y-2 w-full text-center">
-                            <p className="font-semibold text-primary">Optimizing for all devices...</p>
-                            <Progress value={optimizationProgress} className="h-2 w-full" />
-                            <p className="text-xs text-muted-foreground">{Math.round(optimizationProgress)}% complete</p>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground max-w-[200px]">
-                            We are converting your video to a web-safe format to ensure it plays on every device.
-                        </p>
                     </div>
                 )}
 

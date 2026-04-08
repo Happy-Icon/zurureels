@@ -36,7 +36,11 @@ export async function uploadToCloudinary(
   const executeUpload = (): Promise<CloudinaryUploadResult> => {
     return new Promise((resolve, reject) => {
       if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
-        reject(new Error('Cloudinary configuration missing'));
+        console.error('[Cloudinary] Configuration missing!', {
+          cloudName: !!CLOUDINARY_CLOUD_NAME,
+          uploadPreset: !!CLOUDINARY_UPLOAD_PRESET
+        });
+        reject(new Error('Cloudinary configuration missing. Please check your VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET environment variables.'));
         return;
       }
 

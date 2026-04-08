@@ -15,6 +15,8 @@ import { ChevronLeft, Upload, Play, Pause, Scissors, Loader2 } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { LiveVideoRecorder } from "./LiveVideoRecorder";
 import { toast } from "sonner";
+import { CircularProgress } from "@/components/ui/CircularProgress";
+import { Sparkles } from "lucide-react";
 
 // ─── Public Types ──────────────────────────────────────────────────────────────
 
@@ -524,6 +526,26 @@ export const MiniVideoEditor = ({
           <div className="flex justify-between text-[11px] text-muted-foreground tabular-nums px-0.5">
             <span>{formatTime(trimStart)}</span>
             <span>{formatTime(trimEnd)}</span>
+          </div>
+        </div>
+      )}
+      {isExporting && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-background p-8 rounded-[2rem] shadow-2xl border border-primary/20 flex flex-col items-center gap-5 max-w-xs w-full text-center">
+            <CircularProgress 
+              value={exportProgress} 
+              size={100} 
+              strokeWidth={8} 
+              className="text-primary" 
+            />
+            <div className="space-y-1">
+              <h3 className="font-bold text-lg">Trimming Video</h3>
+              <p className="text-sm text-muted-foreground">Preparing your action-packed reel...</p>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full text-[10px] font-bold text-primary uppercase">
+              <Sparkles className="h-3 w-3" />
+              <span>Zuru Editor</span>
+            </div>
           </div>
         </div>
       )}
