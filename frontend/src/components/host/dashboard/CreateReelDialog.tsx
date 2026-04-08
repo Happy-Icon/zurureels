@@ -1,11 +1,19 @@
-import { useState, useRef } from "react";
-import { Plus, Video, Image, DollarSign, FolderOpen } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { format } from "date-fns";
+import { 
+    Plus, Video, Image, DollarSign, FolderOpen, 
+    Calendar as CalendarIcon, Clock, Bell, CheckCircle2, 
+    Loader2, Sparkles 
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AccommodationReelFlow } from "@/components/host/AccommodationReelFlow";
 import { MiniVideoEditor, VideoEditorSubmitData } from "@/components/video-editor";
 import { AccommodationType, AccommodationData } from "@/types/host";
@@ -13,13 +21,10 @@ import { categories, locations } from "@/data/hostConstants";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
-import { extractVideoThumbnail } from "@/utils/videoThumbnail";
-import { Loader2, Sparkles } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinaryUpload";
 import { CircularProgress } from "@/components/ui/CircularProgress";
-import { useEffect } from "react";
-
-
+import { REMINDER_INTERVAL_OPTIONS, ReminderInterval } from "@/types/events";
+import { cn } from "@/lib/utils";
 
 interface CreateReelDialogProps {
     open: boolean;
@@ -37,6 +42,12 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
     const [price, setPrice] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [optimizationProgress, setOptimizationProgress] = useState<number | null>(null);
+    
+    // Event specific state
+    const [eventDate, setEventDate] = useState<Date | undefined>(undefined);
+    const [eventTime, setEventTime] = useState("12:00");
+    const [reminderIntervals, setReminderIntervals] = useState<ReminderInterval[]>(["24h", "1h"]);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { user } = useAuth();
 
@@ -51,7 +62,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
     }, [open]);
 
     const isAccommodationCategory = (cat: string): cat is AccommodationType => {
-        return ["villa", "apartment"].includes(cat);
+        return ["hotel", "villa", "apartment", "parks_camps"].includes(cat);
     };
 
     const handleCategoryChange = (value: string) => {
@@ -228,6 +239,33 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                 throw new Error(`Reel creation failed: ${reelError.message}`);
             }
 
+            // Step 5: If category is "events", create Event record
+            if (selectedCategory === "events" && eventDate) {
+                const combinedDateTime = new Date(eventDate);
+                const [hours, minutes] = eventTime.split(":");
+                combinedDateTime.setHours(parseInt(hours), parseInt(minutes));
+
+                const { error: eventError } = await supabase
+                    .from("events")
+                    .insert({
+                        user_id: user.id,
+                        title: title || "New Event",
+                        description: description,
+                        location: location || "diani",
+                        price: parseFloat(price) || 0,
+                        event_date: combinedDateTime.toISOString(),
+                        category: "events",
+                        image_url: cloudinaryResult.secure_url, 
+                        notification_intervals: reminderIntervals,
+                        status: "active"
+                    });
+
+                if (eventError) {
+                    console.error("Event creation failed, but reel was published:", eventError);
+                    toast.warning("Reel published, but event details could not be saved.");
+                }
+            }
+
             toast.success("Reel published successfully!");
             setShowVideoEditor(false);
             onOpenChange(false);
@@ -237,6 +275,9 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             setDescription("");
             setLocation("");
             setPrice("");
+            setEventDate(undefined);
+            setEventTime("12:00");
+            setReminderIntervals(["24h", "1h"]);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             toast.error(error.message || "Failed to publish reel");
@@ -440,11 +481,97 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                     </div>
                                 </div>
 
+                                {selectedCategory === "events" && (
+                                    <div className="space-y-6 pt-2 pb-2">
+                                        <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 space-y-4">
+                                            <div className="flex items-center gap-2 text-primary">
+                                                <CalendarIcon className="h-4 w-4" />
+                                                <h4 className="text-sm font-bold uppercase tracking-wider">Event Schedule</h4>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs">Date</Label>
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    "w-full justify-start text-left font-normal h-10 rounded-xl bg-background",
+                                                                    !eventDate && "text-muted-foreground"
+                                                                )}
+                                                            >
+                                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                                {eventDate ? format(eventDate, "PPP") : <span>Pick a date</span>}
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0" align="start">
+                                                            <Calendar
+                                                                mode="single"
+                                                                selected={eventDate}
+                                                                onSelect={setEventDate}
+                                                                initialFocus
+                                                                disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs">Time</Label>
+                                                    <div className="relative">
+                                                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                        <Input
+                                                            type="time"
+                                                            className="pl-10 h-10 rounded-xl bg-background"
+                                                            value={eventTime}
+                                                            onChange={(e) => setEventTime(e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-3 pt-2">
+                                                <div className="flex items-center gap-2 text-primary">
+                                                    <Bell className="h-4 w-4" />
+                                                    <h4 className="text-sm font-bold uppercase tracking-wider">Reminder Schedule</h4>
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Subscribers will be notified at these intervals before the event starts.
+                                                </p>
+                                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                                    {REMINDER_INTERVAL_OPTIONS.map((option) => (
+                                                        <div key={option.value} className="flex items-center space-x-2">
+                                                            <Checkbox 
+                                                                id={`interval-${option.value}`} 
+                                                                checked={reminderIntervals.includes(option.value)}
+                                                                onCheckedChange={(checked) => {
+                                                                    if (checked) {
+                                                                        setReminderIntervals([...reminderIntervals, option.value]);
+                                                                    } else {
+                                                                        setReminderIntervals(reminderIntervals.filter(i => i !== option.value));
+                                                                    }
+                                                                }}
+                                                            />
+                                                            <label
+                                                                htmlFor={`interval-${option.value}`}
+                                                                className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                                            >
+                                                                {option.label}
+                                                            </label>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex gap-3 pt-4">
                                     <Button type="button" variant="outline" className="flex-1" onClick={() => handleDialogClose(false)}>
                                         Save as Draft
                                     </Button>
-                                    <Button type="button" className="flex-1" onClick={handleStartRecording} disabled={isSubmitting}>
+                                    <Button type="button" className="flex-1" onClick={handleEditorSubmit} disabled={isSubmitting}>
                                         {isSubmitting ? "Publishing..." : "Record & Publish"}
                                     </Button>
                                 </div>

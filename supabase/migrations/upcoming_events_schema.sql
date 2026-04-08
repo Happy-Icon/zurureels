@@ -109,6 +109,28 @@ AS $$
     );
 $$;
 
+-- 6. Setup CRON job to dispatch reminders every 15 minutes
+-- NOTE: Requires pg_cron extension to be enabled in Supabase
+-- NOTE: Replace 'YOUR_PROJECT_REF' with your actual project reference or use the local function URL
+-- SELECT cron.schedule(
+--   'dispatch-event-reminders',
+--   '*/15 * * * *',
+--   $$
+--   SELECT
+--     net.http_post(
+--       url:='https://YOUR_PROJECT_REF.functions.supabase.co/dispatch-event-reminders',
+--       headers:='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
+--       body:='{}'::jsonb
+--     ) as request_id;
+--   $$
+-- );
+
+-- Alternative simpler approach using Supabase Dashboard's 'Webhooks' or 'Database Webhooks' 
+-- if pg_cron is not directly accessible.
+
+-- 7. Additional Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_events_event_date_status ON public.events(event_date, status) WHERE status = 'active';
+
 -- ============================================================
--- DONE! All tables created, RLS enabled, helper functions ready.
+-- DONE! All tables created, RLS enabled, helper functions and CRON templates ready.
 -- ============================================================
