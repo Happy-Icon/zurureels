@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useReels } from "@/hooks/useReels";
-import { Search, MapPin, Sparkles, Filter, Play } from "lucide-react";
+import { Search, MapPin, Sparkles, Filter, Play, Home, PartyPopper, Mountain } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,10 +18,10 @@ import { ReelCard } from "@/components/reels/ReelCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const DiscoveryGroups = [
-  { id: "all", label: "All", categories: ["all"], icon: "✨" },
-  { id: "accommodations", label: "Accommodations", categories: ["hotel", "villa", "apartment", "parks_camps"], icon: "🏠" },
-  { id: "events", label: "Events", categories: ["events", "food", "drinks"], icon: "🎉" },
-  { id: "adventure", label: "Adventure", categories: ["adventure", "tours", "boats", "rentals"], icon: "🏔️" },
+  { id: "all", label: "All", categories: ["all"], icon: Sparkles },
+  { id: "accommodation", label: "Accommodation", categories: ["hotel", "villa", "apartment", "parks_camps"], icon: Home },
+  { id: "events", label: "Events", categories: ["events", "food", "drinks"], icon: PartyPopper },
+  { id: "adventure", label: "Adventure", categories: ["adventure", "tours", "boats", "rentals"], icon: Mountain },
 ];
 
 const Discover = () => {
@@ -111,8 +111,8 @@ const Discover = () => {
             </Button>
           </div>
 
-          {/* Main Discovery Groups */}
-          <div className="grid grid-cols-4 gap-2">
+          {/* Main Discovery Groups - Long Big Toggle Button */}
+          <div className="bg-secondary/30 p-1 rounded-[1.5rem] flex items-center w-full">
             {DiscoveryGroups.map((group) => (
               <button
                 key={group.id}
@@ -121,14 +121,17 @@ const Discover = () => {
                   setSelectedCategory("all");
                 }}
                 className={cn(
-                  "flex flex-col items-center gap-1.5 p-3 rounded-2xl transition-all duration-300",
+                  "flex-1 flex items-center justify-center gap-2 py-3.5 px-2 rounded-[1.2rem] transition-all duration-300",
                   selectedGroup === group.id 
-                    ? "bg-primary text-primary-foreground shadow-lg scale-105" 
-                    : "bg-secondary/40 hover:bg-secondary text-muted-foreground"
+                    ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]" 
+                    : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
                 )}
               >
-                <span className="text-xl">{group.icon}</span>
-                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter">
+                <group.icon className={cn(
+                  "h-4 w-4",
+                  selectedGroup === group.id ? "animate-pulse" : ""
+                )} />
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tight truncate">
                   {group.label}
                 </span>
               </button>

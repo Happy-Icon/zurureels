@@ -1,4 +1,19 @@
 import { cn } from "@/lib/utils";
+import { 
+  Sparkles, 
+  Building, 
+  Home, 
+  Building2, 
+  Ship, 
+  Utensils, 
+  GlassWater, 
+  Bike, 
+  Compass, 
+  Tent, 
+  Map, 
+  PartyPopper,
+  LucideIcon
+} from "lucide-react";
 
 export type Category =
   | "all"
@@ -19,19 +34,19 @@ interface CategoryFilterProps {
   onChange: (category: Category) => void;
 }
 
-const categories: { value: Category; label: string; emoji: string }[] = [
-  { value: "all", label: "All", emoji: "✨" },
-  { value: "hotel", label: "Hotels", emoji: "🏨" },
-  { value: "villa", label: "Villas", emoji: "🏡" },
-  { value: "apartment", label: "Apartments", emoji: "🏠" },
-  { value: "boats", label: "Boats", emoji: "⛵" },
-  { value: "food", label: "Food", emoji: "🍽️" },
-  { value: "drinks", label: "Drinks", emoji: "🍹" },
-  { value: "rentals", label: "Rentals", emoji: "🛵" },
-  { value: "adventure", label: "Adventure", emoji: "🧭" },
-  { value: "parks_camps", label: "Parks & Camps", emoji: "⛺" },
-  { value: "tours", label: "Tours", emoji: "🎒" },
-  { value: "events", label: "Events", emoji: "🎉" },
+const categories: { value: Category; label: string; icon: LucideIcon }[] = [
+  { value: "all", label: "All", icon: Sparkles },
+  { value: "hotel", label: "Hotels", icon: Building },
+  { value: "villa", label: "Villas", icon: Home },
+  { value: "apartment", label: "Apartments", icon: Building2 },
+  { value: "boats", label: "Boats", icon: Ship },
+  { value: "food", label: "Food", icon: Utensils },
+  { value: "drinks", label: "Drinks", icon: GlassWater },
+  { value: "rentals", label: "Rentals", icon: Bike },
+  { value: "adventure", label: "Adventure", icon: Compass },
+  { value: "parks_camps", label: "Parks & Camps", icon: Tent },
+  { value: "tours", label: "Tours", icon: Map },
+  { value: "events", label: "Events", icon: PartyPopper },
 ];
 
 export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
@@ -48,7 +63,7 @@ export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
               : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
           )}
         >
-          <span>{category.emoji}</span>
+          <category.icon className="h-4 w-4" />
           <span>{category.label}</span>
         </button>
       ))}
