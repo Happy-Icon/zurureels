@@ -95,6 +95,7 @@ export type Database = {
           id: string
           image_url: string | null
           location: string
+          notification_intervals: Json | null
           price: number | null
           status: string | null
           title: string
@@ -111,6 +112,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           location: string
+          notification_intervals?: Json | null
           price?: number | null
           status?: string | null
           title: string
@@ -127,6 +129,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           location?: string
+          notification_intervals?: Json | null
           price?: number | null
           status?: string | null
           title?: string
@@ -134,6 +137,90 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      event_subscribers: {
+        Row: {
+          id: string
+          event_id: string
+          user_id: string
+          channels: string[] | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          user_id: string
+          channels?: string[] | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          user_id?: string
+          channels?: string[] | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_subscribers_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_subscribers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_notification_log: {
+        Row: {
+          id: string
+          event_id: string
+          user_id: string
+          interval_label: string
+          channel: string
+          sent_at: string
+          status: string | null
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          user_id: string
+          interval_label: string
+          channel: string
+          sent_at?: string
+          status?: string | null
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          user_id?: string
+          interval_label?: string
+          channel?: string
+          sent_at?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_notification_log_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_notification_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       experiences: {
         Row: {
@@ -512,6 +599,14 @@ export type Database = {
       register_device: {
         Args: { p_device_token: string; p_platform: string }
         Returns: undefined
+      }
+      get_event_subscriber_count: {
+        Args: { p_event_id: string }
+        Returns: number
+      }
+      is_subscribed_to_event: {
+        Args: { p_event_id: string }
+        Returns: boolean
       }
     }
     Enums: {

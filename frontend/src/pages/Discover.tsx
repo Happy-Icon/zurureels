@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useReels } from "@/hooks/useReels";
-import { Search, MapPin, Sparkles, Filter, Play, Home, PartyPopper, Mountain } from "lucide-react";
+import { Search, MapPin, Sparkles, Filter, Play, Home, PartyPopper, Mountain, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,11 @@ import { BookingSheet } from "@/components/booking/BookingSheet";
 import { ReelGridCard } from "@/components/reels/ReelGridCard";
 import { ReelCard } from "@/components/reels/ReelCard";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { EventTimeToggle } from "@/components/events/EventTimeToggle";
+import { UpcomingEventCard } from "@/components/events/UpcomingEventCard";
+import { HappeningEventCard } from "@/components/events/HappeningEventCard";
+import { useEvents } from "@/hooks/useEvents";
+import { EventTimeFilter } from "@/types/events";
 
 const DiscoveryGroups = [
   { id: "all", label: "All", categories: ["all"], icon: Sparkles },
@@ -32,7 +37,11 @@ const Discover = () => {
   const [showAI, setShowAI] = useState(false);
   const [bookingReel, setBookingReel] = useState<ReelData | null>(null);
   const [selectedReelIndex, setSelectedReelIndex] = useState<number | null>(null);
+  const [eventTimeFilter, setEventTimeFilter] = useState<EventTimeFilter>("upcoming");
   const isMobile = useIsMobile();
+
+  // Are we currently in "Events" view mode?
+  const isEventsView = selectedGroup === "events";
 
   const currentGroup = DiscoveryGroups.find(g => g.id === selectedGroup);
   const activeCategories = currentGroup?.categories || ["all"];
@@ -46,6 +55,13 @@ const Discover = () => {
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
   const { experiences } = useExperiences(selectedCategory, undefined, debouncedSearch);
   const { role } = useAuth();
+
+  // Events data (only fetched when in events view)
+  const { events, loading: eventsLoading } = useEvents(
+    isEventsView ? eventTimeFilter : "upcoming",
+    undefined,
+    isEventsView ? debouncedSearch : undefined
+  );
 
   // Debounce search query
   useEffect(() => {
@@ -138,8 +154,8 @@ const Discover = () => {
             ))}
           </div>
 
-          {/* Sub-Category Filters (Only show if not 'all' group) */}
-          {selectedGroup !== "all" && (
+          {/* Sub-Category Filters (Only show if not 'all' group and not events) */}
+          {selectedGroup !== "all" && !isEventsView && (
             <div className="flex gap-2 overflow-x-auto hide-scrollbar py-1 animate-in fade-in slide-in-from-top-2 duration-300">
               {subCategories.map((cat) => (
                 <Badge
@@ -158,40 +174,92 @@ const Discover = () => {
               ))}
             </div>
           )}
+
+          {/* Events Time Toggle (Only show when Events group is selected) */}
+          {isEventsView && (
+            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+              <EventTimeToggle
+                selected={eventTimeFilter}
+                onChange={setEventTimeFilter}
+              />
+            </div>
+          )}
         </div>
 
-        {/* Results Grid */}
+        {/* Results Area */}
         <div className="p-4">
-          {/* Reels count */}
-          {!reelsLoading && allReels.length > 0 && (
-            <p className="text-sm text-muted-foreground mb-3">
-              {allReels.length} reel{allReels.length !== 1 ? "s" : ""} found
-              {selectedCategory !== "all" && ` in ${subCategories.find(c => c.id === selectedCategory)?.label || selectedCategory}`}
-            </p>
-          )}
+          {/* Events View */}
+          {isEventsView ? (
+            <>
+              {!eventsLoading && events.length > 0 && (
+                <p className="text-sm text-muted-foreground mb-3">
+                  {events.length} event{events.length !== 1 ? "s" : ""}
+                  {eventTimeFilter === "upcoming" ? " coming up" : " happening now"}
+                </p>
+              )}
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-            {reelsLoading ? (
-              Array(4).fill(0).map((_, i) => (
-                <div key={i} className="aspect-[2/3] rounded-2xl bg-muted animate-pulse" />
-              ))
-            ) : allReels.length > 0 ? (
-              (isMobile ? allReels.slice(0, 4) : allReels).map((reel, index) => (
-                <ReelGridCard
-                  key={reel.id}
-                  reel={reel}
-                  onBook={setBookingReel}
-                  onSelect={() => setSelectedReelIndex(index)}
-                />
-              ))
-            ) : (
-              <div className="col-span-full py-16 flex flex-col items-center justify-center text-muted-foreground">
-                <Sparkles className="h-12 w-12 mb-3 opacity-20" />
-                <p className="font-medium">No reels found</p>
-                <p className="text-sm mt-1">Try a different search or category</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {eventsLoading ? (
+                  Array(3).fill(0).map((_, i) => (
+                    <div key={i} className="rounded-2xl bg-muted animate-pulse h-64" />
+                  ))
+                ) : events.length > 0 ? (
+                  events.map((event) =>
+                    eventTimeFilter === "upcoming" ? (
+                      <UpcomingEventCard key={event.id} event={event} />
+                    ) : (
+                      <HappeningEventCard key={event.id} event={event} />
+                    )
+                  )
+                ) : (
+                  <div className="col-span-full py-16 flex flex-col items-center justify-center text-muted-foreground">
+                    <Calendar className="h-12 w-12 mb-3 opacity-20" />
+                    <p className="font-medium">
+                      {eventTimeFilter === "upcoming" ? "No upcoming events" : "No events happening right now"}
+                    </p>
+                    <p className="text-sm mt-1">
+                      {eventTimeFilter === "upcoming"
+                        ? "Check back soon or try 'Happening Now'"
+                        : "Switch to 'Upcoming' to see what's coming"}
+                    </p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            /* Reels Grid (Non-events view) */
+            <>
+              {!reelsLoading && allReels.length > 0 && (
+                <p className="text-sm text-muted-foreground mb-3">
+                  {allReels.length} reel{allReels.length !== 1 ? "s" : ""} found
+                  {selectedCategory !== "all" && ` in ${subCategories.find(c => c.id === selectedCategory)?.label || selectedCategory}`}
+                </p>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                {reelsLoading ? (
+                  Array(4).fill(0).map((_, i) => (
+                    <div key={i} className="aspect-[2/3] rounded-2xl bg-muted animate-pulse" />
+                  ))
+                ) : allReels.length > 0 ? (
+                  (isMobile ? allReels.slice(0, 4) : allReels).map((reel, index) => (
+                    <ReelGridCard
+                      key={reel.id}
+                      reel={reel}
+                      onBook={setBookingReel}
+                      onSelect={() => setSelectedReelIndex(index)}
+                    />
+                  ))
+                ) : (
+                  <div className="col-span-full py-16 flex flex-col items-center justify-center text-muted-foreground">
+                    <Sparkles className="h-12 w-12 mb-3 opacity-20" />
+                    <p className="font-medium">No reels found</p>
+                    <p className="text-sm mt-1">Try a different search or category</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
