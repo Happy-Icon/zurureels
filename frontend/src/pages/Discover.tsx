@@ -17,7 +17,15 @@ import { ReelGridCard } from "@/components/reels/ReelGridCard";
 import { ReelCard } from "@/components/reels/ReelCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 
+const DiscoveryGroups = [
+  { id: "all", label: "All", categories: ["all"], icon: "✨" },
+  { id: "accommodations", label: "Accommodations", categories: ["hotel", "villa", "apartment", "parks_camps"], icon: "🏠" },
+  { id: "events", label: "Events", categories: ["events", "food", "drinks"], icon: "🎉" },
+  { id: "adventure", label: "Adventure", categories: ["adventure", "tours", "boats", "rentals"], icon: "🏔️" },
+];
+
 const Discover = () => {
+  const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -26,7 +34,15 @@ const Discover = () => {
   const [selectedReelIndex, setSelectedReelIndex] = useState<number | null>(null);
   const isMobile = useIsMobile();
 
-  const { reels: allReels, loading: reelsLoading } = useReels(selectedCategory, undefined, debouncedSearch);
+  const currentGroup = DiscoveryGroups.find(g => g.id === selectedGroup);
+  const activeCategories = currentGroup?.categories || ["all"];
+  
+  // Use the selected category if it's not "all", otherwise use all categories in the group
+  const effectiveCategory = selectedCategory !== "all" 
+    ? selectedCategory 
+    : (selectedGroup === "all" ? "all" : activeCategories);
+
+  const { reels: allReels, loading: reelsLoading } = useReels(effectiveCategory, undefined, debouncedSearch);
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
   const { experiences } = useExperiences(selectedCategory, undefined, debouncedSearch);
   const { role } = useAuth();
@@ -66,20 +82,13 @@ const Discover = () => {
     events: "bg-indigo-500/90",
   };
 
-  // All categories matching hostConstants.ts
-  const categories = [
-    { id: "all", label: "All" },
-    { id: "hotel", label: "Hotels" },
-    { id: "villa", label: "Villas" },
-    { id: "apartment", label: "Apartments" },
-    { id: "boats", label: "Boats" },
-    { id: "food", label: "Food" },
-    { id: "drinks", label: "Drinks" },
-    { id: "rentals", label: "Rentals" },
-    { id: "adventure", label: "Adventure" },
-    { id: "parks_camps", label: "Parks & Camps" },
-    { id: "tours", label: "Tours" },
-    { id: "events", label: "Events" },
+  // Sub-categories available for the current group
+  const subCategories = [
+    { id: "all", label: `All ${selectedGroup === "all" ? "" : selectedGroup}` },
+    ...activeCategories.map(catId => ({
+      id: catId,
+      label: catId.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+    }))
   ];
 
   return (
@@ -102,21 +111,50 @@ const Discover = () => {
             </Button>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
-            {categories.map((cat) => (
-              <Badge
-                key={cat.id}
-                variant={selectedCategory === cat.id ? "default" : "secondary"}
+          {/* Main Discovery Groups */}
+          <div className="grid grid-cols-4 gap-2">
+            {DiscoveryGroups.map((group) => (
+              <button
+                key={group.id}
+                onClick={() => {
+                  setSelectedGroup(group.id);
+                  setSelectedCategory("all");
+                }}
                 className={cn(
-                  "px-4 py-2 rounded-full cursor-pointer whitespace-nowrap text-sm font-medium transition-all shrink-0",
-                  selectedCategory === cat.id ? "bg-primary text-primary-foreground shadow-sm" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                  "flex flex-col items-center gap-1.5 p-3 rounded-2xl transition-all duration-300",
+                  selectedGroup === group.id 
+                    ? "bg-primary text-primary-foreground shadow-lg scale-105" 
+                    : "bg-secondary/40 hover:bg-secondary text-muted-foreground"
                 )}
-                onClick={() => setSelectedCategory(cat.id)}
               >
-                {cat.label}
-              </Badge>
+                <span className="text-xl">{group.icon}</span>
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tighter">
+                  {group.label}
+                </span>
+              </button>
             ))}
           </div>
+
+          {/* Sub-Category Filters (Only show if not 'all' group) */}
+          {selectedGroup !== "all" && (
+            <div className="flex gap-2 overflow-x-auto hide-scrollbar py-1 animate-in fade-in slide-in-from-top-2 duration-300">
+              {subCategories.map((cat) => (
+                <Badge
+                  key={cat.id}
+                  variant={selectedCategory === cat.id ? "default" : "secondary"}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full cursor-pointer whitespace-nowrap text-xs font-semibold transition-all shrink-0",
+                    selectedCategory === cat.id 
+                      ? "bg-primary/20 text-primary border border-primary/30" 
+                      : "bg-secondary/80 text-secondary-foreground hover:bg-secondary"
+                  )}
+                  onClick={() => setSelectedCategory(cat.id)}
+                >
+                  {cat.label}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Results Grid */}
@@ -125,7 +163,7 @@ const Discover = () => {
           {!reelsLoading && allReels.length > 0 && (
             <p className="text-sm text-muted-foreground mb-3">
               {allReels.length} reel{allReels.length !== 1 ? "s" : ""} found
-              {selectedCategory !== "all" && ` in ${categories.find(c => c.id === selectedCategory)?.label || selectedCategory}`}
+              {selectedCategory !== "all" && ` in ${subCategories.find(c => c.id === selectedCategory)?.label || selectedCategory}`}
             </p>
           )}
 

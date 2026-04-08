@@ -278,6 +278,15 @@ export function BookingSheet({
                         : "h-screen w-[450px] sm:max-w-[450px] border-l border-border"
                 )}
             >
+                {/* Dismiss Button - Floating Arrow Down */}
+                <button
+                    onClick={handleClose}
+                    className="absolute top-4 right-4 z-[60] h-10 w-10 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-md border border-white/20 text-white hover:bg-black/40 active:scale-90 transition-all shadow-lg"
+                    aria-label="Close booking"
+                >
+                    <ChevronDown className={cn("h-6 w-6", !isMobile && "rotate-[-90deg]")} />
+                </button>
+
                 {imageUrl && (
                     <div className="relative h-44 w-full overflow-hidden flex-shrink-0">
                         <img

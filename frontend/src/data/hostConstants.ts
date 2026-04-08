@@ -7,7 +7,7 @@ export const categories = [
     { value: "drinks", label: "Drinks", isAccommodation: false },
     { value: "rentals", label: "Rentals", isAccommodation: false },
     { value: "adventure", label: "Adventure", isAccommodation: false },
-    { value: "parks_camps", label: "Parks & Camps", isAccommodation: false },
+    { value: "parks_camps", label: "Parks & Camps", isAccommodation: true },
     { value: "tours", label: "Tours", isAccommodation: false },
     { value: "events", label: "Events", isAccommodation: false },
 ];

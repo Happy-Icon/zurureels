@@ -17,7 +17,7 @@ function shuffleArray<T>(array: T[]): T[] {
     return shuffled;
 }
 
-export const useReels = (category?: string, experienceId?: string, search?: string) => {
+export const useReels = (category?: string | string[], experienceId?: string, search?: string) => {
     const [reels, setReels] = useState<ReelData[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -51,7 +51,11 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 .order("created_at", { ascending: false });
 
             if (category && category !== "all") {
-                query = query.eq("category", category);
+                if (Array.isArray(category)) {
+                    query = query.in("category", category);
+                } else {
+                    query = query.eq("category", category);
+                }
             }
 
             if (experienceId) {
