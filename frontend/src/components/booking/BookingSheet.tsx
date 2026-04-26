@@ -303,6 +303,17 @@ export function BookingSheet({
                         </div>
                     )}
 
+                    {/* Escrow Trust Notice */}
+                    <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-2xl p-4 flex items-start gap-3">
+                        <ShieldCheck className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                            <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Zuru Secure Escrow</p>
+                            <p className="text-[11px] text-emerald-600/80 leading-relaxed">
+                                Your payment is held by ZuruSasa and only released to the host after you confirm receipt of the service. Book here to stay fully protected.
+                            </p>
+                        </div>
+                    </div>
+
                     <Button
                         onClick={handleConfirmBooking}
                         disabled={!dateRange?.from || isSubmitting}

@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { getReelExpiryDisplay, isReelExpiringSoon } from "@/utils/reelExpiry";
 import { useReelInteractions } from "@/hooks/useReelInteractions";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/components/AuthProvider";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export interface ReelData {
@@ -101,6 +103,61 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
     toggleSave,
     toggleFollow,
   } = useReelInteractions(reel.id, reel.hostUserId);
+
+  const { user } = useAuth();
+
+  const handleEnquire = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) {
+      toast.error("Please log in to contact the host");
+      navigate("/auth");
+      return;
+    }
+
+    if (!reel.hostUserId) {
+      toast.error("Host information unavailable");
+      return;
+    }
+
+    if (user.id === reel.hostUserId) {
+      toast.error("This is your own listing!");
+      return;
+    }
+
+    try {
+      // Find or create conversation
+      const participants = [user.id, reel.hostUserId].sort();
+      const { data: conv, error } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("participant_one", participants[0])
+        .eq("participant_two", participants[1])
+        .maybeSingle();
+
+      if (error) throw error;
+
+      let convId = conv?.id;
+
+      if (!convId) {
+        const { data: newConv, error: createError } = await supabase
+          .from("conversations")
+          .insert({
+            participant_one: participants[0],
+            participant_two: participants[1]
+          })
+          .select("id")
+          .single();
+        
+        if (createError) throw createError;
+        convId = newConv.id;
+      }
+
+      navigate(`/profile/messages?convId=${convId}`);
+    } catch (err) {
+      console.error("Error creating conversation:", err);
+      toast.error("Failed to initiate chat");
+    }
+  };
   
   const effectiveThumbnail = useMemo(() => {
     if (reel.thumbnailUrl) return reel.thumbnailUrl;
@@ -493,13 +550,22 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
             </span>
           </div>
 
-          {/* Book Button */}
-          <Button
-            onClick={() => onBook?.(reel.id)}
-            className="w-full md:w-auto bg-[#EE7D30] hover:bg-[#EE7D30]/90 text-white font-semibold shadow-lg shadow-orange-500/20 px-8"
-          >
-            Book Now
-          </Button>
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-2 w-full md:w-auto">
+            <Button
+              onClick={() => onBook?.(reel.id)}
+              className="w-full md:w-auto bg-[#EE7D30] hover:bg-[#EE7D30]/90 text-white font-semibold shadow-lg shadow-orange-500/20 px-8 h-11"
+            >
+              Book Now
+            </Button>
+            <Button
+              onClick={handleEnquire}
+              variant="outline"
+              className="w-full md:w-auto border-white/20 bg-white/5 hover:bg-white/10 text-white font-semibold backdrop-blur-sm px-8 h-11"
+            >
+              Enquire
+            </Button>
+          </div>
         </div>
 
         {/* Gradient Overlay */}

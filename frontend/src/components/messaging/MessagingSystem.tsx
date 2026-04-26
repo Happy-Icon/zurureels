@@ -13,8 +13,18 @@ import {
     Calendar, 
     MessageCircle,
     ChevronLeft,
-    Loader2
+    Loader2,
+    ShieldCheck
 } from "lucide-react";
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogHeader, 
+    DialogTitle, 
+    DialogDescription,
+    DialogFooter
+} from "@/components/ui/dialog";
+import { useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -44,12 +54,16 @@ interface Message {
 
 export const MessagingSystem = () => {
     const { user } = useAuth();
+    const [searchParams] = useSearchParams();
+    const convIdFromUrl = searchParams.get("convId");
+
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState("");
     const [isLoading, setIsLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
+    const [showSecurityModal, setShowSecurityModal] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     // Fetch conversations
@@ -94,6 +108,20 @@ export const MessagingSystem = () => {
             }));
 
             setConversations(enriched as Conversation[]);
+            
+            // Handle deep link from URL
+            if (convIdFromUrl) {
+                const found = (enriched as Conversation[]).find(c => c.id === convIdFromUrl);
+                if (found) {
+                    setSelectedConv(found);
+                    // Show security modal for first-time or new conversation context
+                    const hasSeenSecurity = localStorage.getItem("zuru_security_warning_seen");
+                    if (!hasSeenSecurity) {
+                        setShowSecurityModal(true);
+                    }
+                }
+            }
+            
             setIsLoading(false);
         };
 
@@ -178,6 +206,11 @@ export const MessagingSystem = () => {
             console.error(error);
         }
         setIsSending(false);
+    };
+
+    const handleSecurityConfirm = () => {
+        localStorage.setItem("zuru_security_warning_seen", "true");
+        setShowSecurityModal(false);
     };
 
     if (isLoading) {
@@ -331,29 +364,35 @@ export const MessagingSystem = () => {
                                     return (
                                         <div key={msg.id} className="space-y-1">
                                             {showTimestamp && (
-                                                <div className="flex justify-center my-4">
-                                                    <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest bg-background px-3 py-1 rounded-full border border-border/50">
-                                                        {format(new Date(msg.created_at), "MMM d, HH:mm")}
+                                                <div className="flex justify-center my-6">
+                                                    <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.2em] bg-secondary/30 px-4 py-1.5 rounded-full">
+                                                        {format(new Date(msg.created_at), "EEEE, MMM d • HH:mm")}
                                                     </span>
                                                 </div>
                                             )}
                                             <div className={cn(
-                                                "flex flex-col max-w-[85%] md:max-w-[70%] space-y-1.5 animate-in fade-in slide-in-from-bottom-2 duration-300",
+                                                "flex flex-col max-w-[85%] md:max-w-[75%] space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500",
                                                 isMe ? "ml-auto items-end" : "mr-auto items-start"
                                             )}>
-                                                <div className={cn(
-                                                    "px-4 py-2.5 rounded-[1.25rem] text-sm shadow-sm",
+                                                <Card className={cn(
+                                                    "px-5 py-3 rounded-[1.5rem] text-sm shadow-sm border-none relative group",
                                                     isMe 
-                                                        ? "bg-[#EE7D30] text-white rounded-br-none" 
-                                                        : "bg-card text-foreground border border-border/50 rounded-bl-none"
+                                                        ? "bg-[#EE7D30] text-white rounded-br-none shadow-orange-500/10" 
+                                                        : "bg-card text-foreground border border-border/30 rounded-bl-none shadow-black/5"
                                                 )}>
                                                     {msg.content}
-                                                </div>
+                                                    <div className={cn(
+                                                        "absolute bottom-[-18px] opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-medium text-muted-foreground whitespace-nowrap",
+                                                        isMe ? "right-0" : "left-0"
+                                                    )}>
+                                                        {format(new Date(msg.created_at), "HH:mm")}
+                                                    </div>
+                                                </Card>
                                                 
                                                 {msg.is_flagged && (
-                                                    <div className="flex items-center gap-1.5 px-3 py-1 bg-red-500/10 text-red-600 rounded-full text-[9px] font-bold uppercase tracking-wider animate-pulse">
-                                                        <ShieldAlert className="h-3 w-3" />
-                                                        Safety Warning: Off-Platform Link Detected
+                                                    <div className="flex items-center gap-2 px-4 py-2 bg-red-500/5 text-red-500 rounded-2xl text-[10px] font-bold uppercase tracking-wider border border-red-500/10 shadow-sm animate-in zoom-in duration-300">
+                                                        <ShieldAlert className="h-3.5 w-3.5" />
+                                                        Security Alert: External Contact Info Detected
                                                     </div>
                                                 )}
                                             </div>
@@ -386,6 +425,56 @@ export const MessagingSystem = () => {
                     </>
                 )}
             </div>
+
+            {/* Security Warning Modal */}
+            <Dialog open={showSecurityModal} onOpenChange={setShowSecurityModal}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md rounded-[2rem] border-none bg-background shadow-2xl overflow-hidden p-0">
+                    <div className="bg-[#EE7D30] p-8 flex flex-col items-center text-white text-center space-y-4">
+                        <div className="h-20 w-20 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border-2 border-white/30 animate-pulse">
+                            <ShieldAlert className="h-10 w-10 text-white" />
+                        </div>
+                        <h2 className="text-2xl font-display font-bold">Safe Booking Policy</h2>
+                        <p className="text-white/90 text-sm leading-relaxed">
+                            Any transaction outside <span className="font-bold underline">ZuruSasa</span> puts you at extreme risk.
+                        </p>
+                    </div>
+                    
+                    <div className="p-8 space-y-6">
+                        <div className="space-y-4">
+                            <div className="flex gap-4">
+                                <div className="h-10 w-10 shrink-0 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                                    <ShieldCheck className="h-5 w-5 text-orange-500" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-sm">Escrow Protection</h4>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        ZuruSasa withholds your payment and only releases it to the host after you confirm you got what you booked.
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-4">
+                                <div className="h-10 w-10 shrink-0 rounded-xl bg-red-500/10 flex items-center justify-center">
+                                    <ShieldAlert className="h-5 w-5 text-red-500" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-sm">Avoid Direct Payments</h4>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Avoid initiating any transaction outside ZuruSasa as you risk losing your money without any way to recover it.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Button 
+                            onClick={handleSecurityConfirm}
+                            className="w-full h-12 bg-[#EE7D30] hover:bg-[#EE7D30]/90 text-white font-bold rounded-2xl shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all"
+                        >
+                            I Understand, Keep Me Safe
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
