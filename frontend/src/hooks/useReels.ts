@@ -45,7 +45,7 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                     lng,
                     user_id,
                     experience:experiences (id, user_id, title, location, current_price, price_unit, entity_name, metadata),
-                    host:profiles (full_name, metadata)
+                    host:profiles (full_name, username, metadata)
                 `)
                 .eq("status", "active")
                 .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
@@ -103,8 +103,8 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                     rating: item.experience?.metadata?.rating || 0,
                     likes: 0,
                     saved: false,
-                    hostName: item.host?.full_name || item.experience?.entity_name || "Host",
-                    hostAvatar: item.host?.metadata?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + item.id,
+                    hostName: item.host?.full_name || item.host?.username || item.experience?.entity_name || "Zuru Host",
+                    hostAvatar: item.host?.metadata?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + (item.host?.username || item.id),
                     postedAt: item.created_at,
                     isLive: item.is_live,
                     lat: item.lat,

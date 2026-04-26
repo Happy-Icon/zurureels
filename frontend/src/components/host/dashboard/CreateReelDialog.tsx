@@ -181,11 +181,11 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                 .insert({
                     user_id: user.id,
                     category: selectedCategory,
-                    entity_name: "Local Experience",
-                    title: title || "New Coastal Activity",
-                    location: location || "diani",
+                    entity_name: user.user_metadata?.full_name || "Local Experience",
+                    title: title.trim(),
+                    location: location.trim(),
                     current_price: parseFloat(price) || 0,
-                    description: description
+                    description: description.trim()
                 })
                 .select()
                 .single();
@@ -249,9 +249,9 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     .from("events")
                     .insert({
                         user_id: user.id,
-                        title: title || "New Event",
-                        description: description,
-                        location: location || "diani",
+                        title: title.trim(),
+                        description: description.trim(),
+                        location: location.trim(),
                         price: parseFloat(price) || 0,
                         event_date: combinedDateTime.toISOString(),
                         category: "events",
@@ -381,21 +381,87 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
 
                         {selectedCategory && !isAccommodationCategory(selectedCategory) && (
                             <>
-                                <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary/50 transition-colors">
+                                <div className="space-y-4 py-2 border-t border-b border-border/50">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="title" className="flex items-center gap-1">
+                                            Title <span className="text-destructive">*</span>
+                                        </Label>
+                                        <Input
+                                            id="title"
+                                            placeholder="e.g., Sunset Dhow Cruise"
+                                            value={title}
+                                            onChange={(e) => setTitle(e.target.value)}
+                                            className={cn(!title && "border-orange-500/50")}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label className="flex items-center gap-1">
+                                                Location <span className="text-destructive">*</span>
+                                            </Label>
+                                            <Select value={location} onValueChange={setLocation}>
+                                                <SelectTrigger className={cn(!location && "border-orange-500/50")}>
+                                                    <SelectValue placeholder="Select" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {locations.map((loc) => (
+                                                        <SelectItem key={loc} value={loc.toLowerCase()}>
+                                                            {loc}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="price" className="flex items-center gap-1">
+                                                Price (KES) <span className="text-destructive">*</span>
+                                            </Label>
+                                            <div className="relative">
+                                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    id="price"
+                                                    type="number"
+                                                    placeholder="0"
+                                                    className={cn("pl-10", !price && "border-orange-500/50")}
+                                                    value={price}
+                                                    onChange={(e) => setPrice(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="description">Description (Optional)</Label>
+                                        <Textarea
+                                            id="description"
+                                            placeholder="Describe your listing..."
+                                            rows={2}
+                                            value={description}
+                                            onChange={(e) => setDescription(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className={cn(
+                                    "border-2 border-dashed border-border rounded-xl p-6 text-center transition-all",
+                                    (!title || !location || !price) ? "opacity-50 pointer-events-none grayscale" : "hover:border-primary/50"
+                                )}>
                                     <div className="flex flex-col items-center gap-3">
                                         <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                                             <Video className="h-6 w-6 text-primary" />
                                         </div>
-                                        <p className="font-medium">
-                                            {selectedCategory === "rentals" ? "Record - Live Only" : "Add Your Reel"}
+                                        <p className="font-bold">
+                                            {selectedCategory === "rentals" ? "Step 2: Record Live" : "Step 2: Add Your Reel"}
                                         </p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {selectedCategory === "rentals"
-                                                ? "Max 20 seconds • Live recording required"
-                                                : "Max 20 seconds • Record live or upload from gallery"}
+                                        <p className="text-xs text-muted-foreground">
+                                            {!title || !location || !price 
+                                                ? "Fill in the details above to unlock recording" 
+                                                : "Ready to capture your experience!"}
                                         </p>
                                         <div className="flex flex-wrap justify-center gap-2 mt-2">
-                                            <Button type="button" variant="default" size="sm" onClick={handleStartRecording}>
+                                            <Button type="button" variant="default" size="sm" onClick={handleStartRecording} disabled={!title || !location || !price}>
                                                 <Video className="h-4 w-4 mr-2" />
                                                 Start Recording
                                             </Button>
@@ -409,75 +475,13 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                                         ref={fileInputRef}
                                                         onChange={handleFileSelect}
                                                     />
-                                                    <Button type="button" variant="outline" size="sm" onClick={handleUploadFromGallery}>
+                                                    <Button type="button" variant="outline" size="sm" onClick={handleUploadFromGallery} disabled={!title || !location || !price}>
                                                         <FolderOpen className="h-4 w-4 mr-2" />
                                                         From Gallery
                                                     </Button>
                                                 </>
                                             )}
                                         </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Thumbnail</Label>
-                                    <div className="flex gap-2">
-                                        <div className="h-20 w-32 rounded-lg bg-secondary flex items-center justify-center cursor-pointer hover:bg-secondary/80 transition-colors">
-                                            <Image className="h-6 w-6 text-muted-foreground" />
-                                        </div>
-                                        <p className="text-xs text-muted-foreground self-center">Auto-generated from video</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="title">Title</Label>
-                                    <Input
-                                        id="title"
-                                        placeholder="e.g., Sunset Dhow Cruise"
-                                        value={title}
-                                        onChange={(e) => setTitle(e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="description">Description</Label>
-                                    <Textarea
-                                        id="description"
-                                        placeholder="Describe your listing..."
-                                        rows={3}
-                                        value={description}
-                                        onChange={(e) => setDescription(e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Location</Label>
-                                    <Select value={location} onValueChange={setLocation}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select location" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {locations.map((loc) => (
-                                                <SelectItem key={loc} value={loc.toLowerCase()}>
-                                                    {loc}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="price">Price (KES)</Label>
-                                    <div className="relative">
-                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                        <Input
-                                            id="price"
-                                            type="number"
-                                            placeholder="0"
-                                            className="pl-10"
-                                            value={price}
-                                            onChange={(e) => setPrice(e.target.value)}
-                                        />
                                     </div>
                                 </div>
 
