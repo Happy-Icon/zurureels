@@ -171,3 +171,51 @@ BEGIN
     LIMIT 20;
 END;
 $$;
+-- ==========================================
+-- 17. Profile Enhancements & Sync
+-- ==========================================
+
+-- Add username to profiles if it doesn't exist
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'username') THEN
+        ALTER TABLE public.profiles ADD COLUMN username TEXT;
+    END IF;
+END $$;
+
+-- Create or update the profile sync function
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, full_name, username, metadata)
+    VALUES (
+        new.id,
+        COALESCE(new.raw_user_metadata->>'full_name', new.raw_user_metadata->>'name'),
+        COALESCE(new.raw_user_metadata->>'username', SPLIT_PART(new.email, '@', 1)),
+        jsonb_build_object(
+            'avatar_url', new.raw_user_metadata->>'avatar_url',
+            'email', new.email
+        )
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        full_name = EXCLUDED.full_name,
+        username = EXCLUDED.username,
+        metadata = profiles.metadata || EXCLUDED.metadata;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Ensure the trigger exists
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT OR UPDATE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Backfill existing profiles with data from auth.users (idempotent)
+UPDATE public.profiles p
+SET 
+    full_name = COALESCE(u.raw_user_metadata->>'full_name', u.raw_user_metadata->>'name'),
+    username = COALESCE(u.raw_user_metadata->>'username', SPLIT_PART(u.email, '@', 1)),
+    metadata = p.metadata || jsonb_build_object('email', u.email, 'avatar_url', u.raw_user_metadata->>'avatar_url')
+FROM auth.users u
+WHERE p.id = u.id AND (p.username IS NULL OR p.full_name IS NULL);
