@@ -220,10 +220,17 @@ const CityPulse = () => {
       ...mockDrinksOfTheDay.map(d => ({ id: d.id, category: 'drinks', title: d.name, entity_name: d.bar, location: d.location, current_price: d.specialPrice, base_price: d.originalPrice, image_url: d.imageUrl }))
     ];
 
-    return mockData.filter(item => 
+    const filtered = mockData.filter(item => 
       (selectedCategory === 'all' || item.category === selectedCategory) &&
       (selectedCity === 'Current Location' || item.location.toLowerCase().includes(selectedCity.toLowerCase()))
     );
+
+    // If no results for city, show everything in that category across the coast
+    if (filtered.length === 0) {
+      return mockData.filter(item => selectedCategory === 'all' || item.category === selectedCategory);
+    }
+    
+    return filtered;
   }, [dbExperiences, selectedCategory, selectedCity]);
 
   const handleUseLocation = useCallback((showToast = true) => {

@@ -108,14 +108,14 @@ export function UnifiedSearch({ variant = "default" }: { variant?: "default" | "
           "flex items-center gap-2 transition-all duration-200 group",
           isIconOnly
             ? "p-2 rounded-full bg-secondary/50 hover:bg-secondary text-muted-foreground"
-            : "px-4 py-2 text-sm text-muted-foreground bg-secondary/50 hover:bg-secondary border border-border rounded-full w-full md:min-w-[200px] lg:min-w-[300px]"
+            : "px-4 py-2 text-sm text-muted-foreground bg-secondary/50 hover:bg-secondary border border-border rounded-full w-full max-w-full overflow-hidden"
         )}
       >
-        <Search className={cn("h-4 w-4 group-hover:text-primary transition-colors", isIconOnly ? "h-5 w-5" : "")} />
+        <Search className={cn("h-4 w-4 shrink-0 group-hover:text-primary transition-colors", isIconOnly ? "h-5 w-5" : "")} />
         {!isIconOnly && (
           <>
-            <span className="flex-1 text-left truncate">Search Coastal Kenya...</span>
-            <kbd className="hidden md:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+            <span className="flex-1 text-left truncate mr-2">Search Coastal Kenya...</span>
+            <kbd className="hidden lg:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 shrink-0">
               <span className="text-xs">⌘</span>K
             </kbd>
           </>
