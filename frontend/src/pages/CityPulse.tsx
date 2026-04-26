@@ -58,6 +58,7 @@ function TikTokFeed({
   loading,
   onBook,
   onInteraction,
+  topOverlay,
 }: {
   reels: ReelData[];
   loading: boolean;
