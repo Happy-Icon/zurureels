@@ -82,6 +82,20 @@ CREATE POLICY "Anyone can view reels" ON public.reels FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Hosts can manage own reels" ON public.reels;
 CREATE POLICY "Hosts can manage own reels" ON public.reels FOR ALL TO authenticated USING (auth.uid() = user_id);
 
+-- 4.1 STORAGE SETUP (Reels Bucket)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('reels', 'reels', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+DROP POLICY IF EXISTS "Public Access" ON storage.objects;
+CREATE POLICY "Public Access" ON storage.objects FOR SELECT TO anon, authenticated USING (bucket_id = 'reels');
+
+DROP POLICY IF EXISTS "Users can upload reels" ON storage.objects;
+CREATE POLICY "Users can upload reels" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'reels');
+
+DROP POLICY IF EXISTS "Users can delete their own reels" ON storage.objects;
+CREATE POLICY "Users can delete their own reels" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'reels' AND auth.uid() = owner);
+
 -- 5. BOOKINGS
 CREATE TABLE IF NOT EXISTS public.bookings (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -255,3 +269,45 @@ BEGIN
     GROUP BY ds.d ORDER BY ds.d ASC;
 END;
 $$;
+
+-- 10. CLOUDINARY TRANSCODING TRIGGER
+-- This ensures that when a video is uploaded, we immediately trigger the Edge Function
+-- to request an eager transformation from Cloudinary (q_auto,f_auto).
+CREATE OR REPLACE FUNCTION public.handle_video_upload()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  project_url TEXT := 'https://rjzgzxxdrltlteeshtuw.supabase.co';
+  service_key TEXT;
+BEGIN
+  -- Get service role key from Vault or fallback to empty
+  BEGIN
+    service_key := current_setting('app.settings.service_role_key', true);
+  EXCEPTION WHEN OTHERS THEN
+    service_key := '';
+  END;
+
+  -- Only fire if we have a cloudinary video
+  IF NEW.video_url ILIKE '%cloudinary.com%' THEN
+    PERFORM
+      net.http_post(
+        url := project_url || '/functions/v1/transcode-video',
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || service_key
+        ),
+        body := jsonb_build_object('record', row_to_json(NEW))
+      );
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_video_upload ON public.reels;
+CREATE TRIGGER on_video_upload
+  AFTER INSERT ON public.reels
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_video_upload();
