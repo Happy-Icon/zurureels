@@ -10,7 +10,16 @@ import { useWeather } from "@/hooks/useWeather";
 import { useReels, ReelData } from "@/hooks/useReels";
 import { useCityPulseAI } from "@/hooks/useCityPulseAI";
 import { useExperiences } from "@/hooks/useExperiences";
-import { coastalCities } from "@/data/mockCityPulse";
+import { 
+  coastalCities, 
+  mockBoatRentals, 
+  mockRestaurantSpecials, 
+  mockClubEvents, 
+  mockChefSpecials, 
+  mockBikeRentals, 
+  mockDailyActivities, 
+  mockDrinksOfTheDay 
+} from "@/data/mockCityPulse";
 import { ReelCard } from "@/components/reels/ReelCard";
 import { SkeletonLoader } from "@/components/reels/ReelsFeed";
 import { 
@@ -193,8 +202,29 @@ const CityPulse = () => {
 
   const { weather, loading: weatherLoading } = useWeather(weatherLocation);
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
-  const { experiences, loading: experiencesLoading } = useExperiences(selectedCategory, selectedCity);
+  const { experiences: dbExperiences, loading: experiencesLoading } = useExperiences(selectedCategory, selectedCity);
   const { reels: liveReels, loading: reelsLoading } = useReels(selectedCategory);
+
+  // Fallback to mock data if DB is empty for the city explorer
+  const experiences = useMemo(() => {
+    if (dbExperiences && dbExperiences.length > 0) return dbExperiences;
+    
+    // Convert mock data to Experience interface shape
+    const mockData: any[] = [
+      ...mockBoatRentals.map(b => ({ id: b.id, category: 'boats', title: b.name, entity_name: 'Rental', location: b.location, current_price: b.price, image_url: b.imageUrl, metadata: { rating: b.rating } })),
+      ...mockRestaurantSpecials.map(r => ({ id: r.id, category: 'food', title: r.special, entity_name: r.restaurant, location: r.location, current_price: r.discountPrice, base_price: r.originalPrice, image_url: r.imageUrl, metadata: { valid_until: r.validUntil } })),
+      ...mockClubEvents.map(c => ({ id: c.id, category: 'nightlife', title: c.event, entity_name: c.venue, location: c.location, current_price: c.entryFee, image_url: c.imageUrl, metadata: { time: c.time, dj: c.dj } })),
+      ...mockChefSpecials.map(s => ({ id: s.id, category: 'food', title: s.dish, entity_name: s.restaurant, location: s.location, current_price: s.price, image_url: s.imageUrl, metadata: { chef: s.chef } })),
+      ...mockBikeRentals.map(b => ({ id: b.id, category: 'bikes', title: b.type, entity_name: b.provider, location: b.location, current_price: b.pricePerDay, image_url: b.imageUrl, metadata: { available_count: b.available } })),
+      ...mockDailyActivities.map(a => ({ id: a.id, category: 'activities', title: a.name, entity_name: 'Activity', location: a.location, current_price: a.price, image_url: a.imageUrl, metadata: { time: a.time, duration: a.duration, spots_left: a.spotsLeft, type: a.type } })),
+      ...mockDrinksOfTheDay.map(d => ({ id: d.id, category: 'drinks', title: d.name, entity_name: d.bar, location: d.location, current_price: d.specialPrice, base_price: d.originalPrice, image_url: d.imageUrl }))
+    ];
+
+    return mockData.filter(item => 
+      (selectedCategory === 'all' || item.category === selectedCategory) &&
+      (selectedCity === 'Current Location' || item.location.toLowerCase().includes(selectedCity.toLowerCase()))
+    );
+  }, [dbExperiences, selectedCategory, selectedCity]);
 
   const handleUseLocation = useCallback((showToast = true) => {
     if ("geolocation" in navigator) {
@@ -271,8 +301,8 @@ const CityPulse = () => {
                   </button>
                 </div>
                 
-                {/* Floating Search in Immersive Feed */}
-                <div className="absolute top-0 right-4 h-full flex items-center pointer-events-auto">
+                {/* Floating Search in Immersive Feed - Mobile Only */}
+                <div className="absolute top-0 right-4 h-full flex items-center pointer-events-auto md:hidden">
                   <UnifiedSearch variant="icon" />
                 </div>
               </div>

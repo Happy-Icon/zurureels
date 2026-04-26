@@ -410,19 +410,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
           </div>
         )}
 
-        {/* Top Bar - Overlay */}
-        <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20 md:flex hidden">
-          <span className="text-xl font-display font-semibold text-white drop-shadow-md">
-            ZuruSasa
-          </span>
-          <button
-            onClick={toggleMute}
-            className="rounded-full bg-black/40 backdrop-blur-sm p-2.5 transition-all hover:bg-black/60 active:scale-90"
-            aria-label={isMuted ? "Unmute" : "Mute"}
-          >
-            {isMuted ? <VolumeX className="h-5 w-5 text-white" /> : <Volume2 className="h-5 w-5 text-white" />}
-          </button>
-        </div>
+
 
         {/* Play/Pause tap area — only when no error */}
         {!error && (
