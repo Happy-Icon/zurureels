@@ -273,7 +273,7 @@ const CityPulse = () => {
                 
                 {/* Floating Search in Immersive Feed */}
                 <div className="absolute top-0 right-4 h-full flex items-center pointer-events-auto">
-                  <UnifiedSearch />
+                  <UnifiedSearch variant="icon" />
                 </div>
               </div>
             }

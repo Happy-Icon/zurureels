@@ -31,7 +31,7 @@ interface SearchResult {
   metadata?: any;
 }
 
-export function UnifiedSearch() {
+export function UnifiedSearch({ variant = "default" }: { variant?: "default" | "icon" }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -96,19 +96,29 @@ export function UnifiedSearch() {
   const profiles = results.filter(r => r.type === 'profile');
   const events = results.filter(r => r.type === 'event');
 
+  const isIconOnly = variant === "icon" || isMobile;
+
   return (
     <>
-      {/* Visual Trigger for both Mobile & Desktop */}
+      {/* Visual Trigger */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 text-sm text-muted-foreground bg-secondary/50 hover:bg-secondary border border-border rounded-full transition-all duration-200 group w-full md:w-auto md:min-w-[200px] lg:min-w-[300px]"
+        className={cn(
+          "flex items-center gap-2 transition-all duration-200 group",
+          isIconOnly
+            ? "p-2 rounded-full bg-secondary/50 hover:bg-secondary text-muted-foreground"
+            : "px-4 py-2 text-sm text-muted-foreground bg-secondary/50 hover:bg-secondary border border-border rounded-full w-full md:min-w-[200px] lg:min-w-[300px]"
+        )}
       >
-        <Search className="h-4 w-4 group-hover:text-primary transition-colors" />
-        <span className="flex-1 text-left hidden sm:inline">Search Coastal Kenya...</span>
-        <span className="flex-1 text-left sm:hidden">Search...</span>
-        <kbd className="hidden md:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
-          <span className="text-xs">⌘</span>K
-        </kbd>
+        <Search className={cn("h-4 w-4 group-hover:text-primary transition-colors", isIconOnly ? "h-5 w-5" : "")} />
+        {!isIconOnly && (
+          <>
+            <span className="flex-1 text-left truncate">Search Coastal Kenya...</span>
+            <kbd className="hidden md:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+              <span className="text-xs">⌘</span>K
+            </kbd>
+          </>
+        )}
       </button>
 
       <CommandDialog open={open} onOpenChange={setOpen}>
