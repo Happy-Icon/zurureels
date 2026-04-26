@@ -16,7 +16,8 @@ export const HostAnalytics = () => {
         saves: 0,
         bookings: 0,
         shares: 0,
-        followers: 0
+        followers: 0,
+        profile_views: 0
     });
 
     useEffect(() => {
@@ -46,7 +47,10 @@ export const HostAnalytics = () => {
                         saves: Number(d.saves),
                         bookings: Number(d.bookings),
                         shares: Number(d.shares || 0),
-                        followers: Number(d.followers || 0)
+                        followers: Number(d.followers || 0),
+                        profile_views: Number(d.profile_views || 0),
+                        engagementRate: d.views > 0 ? (((Number(d.likes) + Number(d.saves) + Number(d.shares)) / Number(d.views)) * 100).toFixed(1) : 0,
+                        bookingRate: d.views > 0 ? ((Number(d.bookings) / Number(d.views)) * 100).toFixed(1) : 0
                     }));
                     setStats(formattedData);
 
@@ -56,7 +60,8 @@ export const HostAnalytics = () => {
                         saves: formattedData.reduce((acc: number, curr: any) => acc + curr.saves, 0),
                         bookings: formattedData.reduce((acc: number, curr: any) => acc + curr.bookings, 0),
                         shares: formattedData.reduce((acc: number, curr: any) => acc + curr.shares, 0),
-                        followers: formattedData.reduce((acc: number, curr: any) => acc + curr.followers, 0)
+                        followers: formattedData.reduce((acc: number, curr: any) => acc + curr.followers, 0),
+                        profile_views: formattedData.reduce((acc: number, curr: any) => acc + curr.profile_views, 0)
                     });
                 }
             } catch (error) {
@@ -79,70 +84,44 @@ export const HostAnalytics = () => {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <Card className="bg-card/50 backdrop-blur-sm border-border">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Total Views</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold font-display">{kpis.views.toLocaleString()}</div>
-                    </CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                <Card className="bg-card/50 backdrop-blur-sm border-border p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Views</div>
+                    <div className="text-xl font-bold font-display">{kpis.views.toLocaleString()}</div>
                 </Card>
-                <Card className="bg-card/50 backdrop-blur-sm border-border">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Total Likes</CardTitle>
-                        <Heart className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold font-display">{kpis.likes.toLocaleString()}</div>
-                    </CardContent>
+                <Card className="bg-card/50 backdrop-blur-sm border-border p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Likes</div>
+                    <div className="text-xl font-bold font-display">{kpis.likes.toLocaleString()}</div>
                 </Card>
-                <Card className="bg-card/50 backdrop-blur-sm border-border">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">New Followers</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold font-display">{kpis.followers.toLocaleString()}</div>
-                    </CardContent>
+                <Card className="bg-card/50 backdrop-blur-sm border-border p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Followers</div>
+                    <div className="text-xl font-bold font-display">{kpis.followers.toLocaleString()}</div>
                 </Card>
-                <Card className="bg-card/50 backdrop-blur-sm border-border">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Shares</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold font-display">{kpis.shares.toLocaleString()}</div>
-                    </CardContent>
+                <Card className="bg-card/50 backdrop-blur-sm border-border p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Shares</div>
+                    <div className="text-xl font-bold font-display">{kpis.shares.toLocaleString()}</div>
                 </Card>
-                <Card className="bg-card/50 backdrop-blur-sm border-border">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Saves</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold font-display">{kpis.saves.toLocaleString()}</div>
-                    </CardContent>
+                <Card className="bg-card/50 backdrop-blur-sm border-border p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Profile</div>
+                    <div className="text-xl font-bold font-display">{kpis.profile_views.toLocaleString()}</div>
                 </Card>
-                <Card className="bg-card/50 backdrop-blur-sm border-border">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Bookings</CardTitle>
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold font-display">{kpis.bookings.toLocaleString()}</div>
-                    </CardContent>
+                <Card className="bg-card/50 backdrop-blur-sm border-border p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Saves</div>
+                    <div className="text-xl font-bold font-display">{kpis.saves.toLocaleString()}</div>
+                </Card>
+                <Card className="bg-card/50 backdrop-blur-sm border-border p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 text-primary">Bookings</div>
+                    <div className="text-xl font-bold font-display text-primary">{kpis.bookings.toLocaleString()}</div>
                 </Card>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card className="bg-card/50 backdrop-blur-sm border-border">
-                    <CardHeader>
-                        <CardTitle className="font-display">Views & Engagement</CardTitle>
-                        <CardDescription>Daily views, likes, and followers over the last 30 days.</CardDescription>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="font-display text-lg">Views & Engagement</CardTitle>
+                        <CardDescription className="text-xs">Daily views, likes, and profile clicks.</CardDescription>
                     </CardHeader>
-                    <CardContent className="h-72">
+                    <CardContent className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={stats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <defs>
@@ -152,33 +131,32 @@ export const HostAnalytics = () => {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
-                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} minTickGap={20} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} minTickGap={20} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
                                 <Tooltip 
-                                    contentStyle={{ borderRadius: '12px', backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                    itemStyle={{ fontSize: '14px', fontWeight: 'bold' }}
+                                    contentStyle={{ borderRadius: '12px', backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
                                 />
                                 <Area type="monotone" dataKey="views" stroke="#ec4899" fillOpacity={1} fill="url(#colorViews)" />
                                 <Area type="monotone" dataKey="likes" stroke="#a855f7" fillOpacity={0} strokeWidth={2} />
-                                <Area type="monotone" dataKey="followers" stroke="#3b82f6" fillOpacity={0} strokeWidth={2} />
+                                <Area type="monotone" dataKey="profile_views" stroke="#3b82f6" fillOpacity={0} strokeWidth={2} />
                             </AreaChart>
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
 
                 <Card className="bg-card/50 backdrop-blur-sm border-border">
-                    <CardHeader>
-                        <CardTitle className="font-display">Conversions & Reach</CardTitle>
-                        <CardDescription>Bookings, saves, and shares over time.</CardDescription>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="font-display text-lg">Reach & Conversions</CardTitle>
+                        <CardDescription className="text-xs">Daily bookings, saves, and shares.</CardDescription>
                     </CardHeader>
-                    <CardContent className="h-72">
+                    <CardContent className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={stats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
-                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} minTickGap={20} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} minTickGap={20} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
                                 <Tooltip 
-                                    contentStyle={{ borderRadius: '12px', backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    contentStyle={{ borderRadius: '12px', backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
                                     cursor={{ fill: 'hsl(var(--muted))' }}
                                 />
                                 <Bar dataKey="saves" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
@@ -189,6 +167,27 @@ export const HostAnalytics = () => {
                     </CardContent>
                 </Card>
             </div>
+
+            <Card className="bg-card/50 backdrop-blur-sm border-border">
+                <CardHeader className="pb-2">
+                    <CardTitle className="font-display text-lg">Performance Insights</CardTitle>
+                    <CardDescription className="text-xs">Conversion rates and engagement efficiency.</CardDescription>
+                </CardHeader>
+                <CardContent className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={stats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
+                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} minTickGap={20} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} unit="%" />
+                            <Tooltip 
+                                contentStyle={{ borderRadius: '12px', backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                            />
+                            <Area type="monotone" dataKey="engagementRate" name="Eng. Rate %" stroke="#f43f5e" fillOpacity={0.1} fill="#f43f5e" strokeWidth={2} />
+                            <Area type="monotone" dataKey="bookingRate" name="Booking Rate %" stroke="#10b981" fillOpacity={0.1} fill="#10b981" strokeWidth={2} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
         </div>
     );
 };
