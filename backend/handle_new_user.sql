@@ -8,7 +8,11 @@ begin
   insert into public.profiles (id, full_name, phone, email, role, security_settings)
   values (
     new.id,
-    new.raw_user_meta_data ->> 'full_name',
+    coalesce(
+      new.raw_user_meta_data ->> 'full_name',
+      new.raw_user_meta_data ->> 'name',
+      'User'
+    ),
     new.raw_user_meta_data ->> 'phone',
     new.email,
     coalesce(new.raw_user_meta_data ->> 'role', 'guest'),

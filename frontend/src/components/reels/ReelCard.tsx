@@ -404,7 +404,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
       {/* Mute/Unmute - Mobile specific placement */}
       <button 
         onClick={toggleMute} 
-        className="flex flex-col items-center gap-1 transition-all duration-300 md:hidden"
+        className="flex flex-col items-center gap-1 transition-all duration-300"
       >
         <div className={cn(
           "p-2.5 rounded-full transition-colors",
@@ -448,7 +448,6 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
               playsInline
               muted={isMuted}
               preload={isActive ? "auto" : preloadNext ? "auto" : "metadata"}
-              crossOrigin="anonymous"
               onPlay={() => {
                 setIsPlaying(true);
                 setError(null);
@@ -472,12 +471,18 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
         {/* Play/Pause tap area — only when no error */}
         {!error && (
           <button
-            onClick={(e) => togglePlay(e)}
+            onClick={(e) => isMuted ? toggleMute(e) : togglePlay(e)}
             className="absolute inset-0 flex items-center justify-center z-10"
           >
             {!isPlaying && (
               <div className="rounded-full bg-black/30 p-4 backdrop-blur-sm transition-transform active:scale-90">
                 <Play className="h-12 w-12 text-white fill-white" />
+              </div>
+            )}
+            {isPlaying && isMuted && showMuteHint && (
+              <div className="animate-in fade-in zoom-in duration-300 flex flex-col items-center gap-2 bg-black/40 backdrop-blur-sm px-6 py-3 rounded-full border border-white/10">
+                <VolumeX className="h-6 w-6 text-white" />
+                <span className="text-white text-xs font-bold uppercase tracking-widest">Tap for sound</span>
               </div>
             )}
           </button>

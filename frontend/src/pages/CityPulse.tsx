@@ -40,7 +40,8 @@ import {
   Bike,
   Check,
   Play,
-  ChefHat
+  ChefHat,
+  Calendar
 } from "lucide-react";
 import { UnifiedSearch } from "@/components/UnifiedSearch";
 import { Button } from "@/components/ui/button";

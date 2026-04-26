@@ -48,6 +48,8 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                     lat,
                     lng,
                     user_id,
+                    processed_video_url,
+                    processing_status,
                     experience:experiences (id, user_id, title, location, current_price, price_unit, entity_name, metadata),
                     host:profiles (full_name, username, metadata)
                 `)
