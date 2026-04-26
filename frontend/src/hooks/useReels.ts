@@ -4,10 +4,6 @@ import { ReelData } from "@/components/reels/ReelCard";
 import { mockReels } from "@/data/mockReels";
 export type { ReelData };
 
-/**
- * Fisher-Yates shuffle — unbiased, O(n) random ordering.
- * Ensures no host gets unfair priority regardless of upload time.
- */
 function shuffleArray<T>(array: T[]): T[] {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -29,8 +25,16 @@ export const useReels = (category?: string | string[], experienceId?: string, se
     const fetchReels = useCallback(async (pageNum: number = 0) => {
         if (pageNum === 0) setLoading(true);
         else setLoadingMore(true);
+
+        const showMocks = (cat?: string | string[]) => {
+            const filtered = mockReels.filter(m =>
+                !cat || cat === "all" || m.category === cat ||
+                (Array.isArray(cat) && cat.includes(m.category))
+            );
+            return shuffleArray(filtered);
+        };
+
         try {
-            // Query reels with joins to experiences and profiles, only needed columns
             let query = supabase
                 .from("reels")
                 .select(`
@@ -58,42 +62,35 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                     query = query.eq("category", category);
                 }
             }
+            if (experienceId) query = query.eq("experience_id", experienceId);
 
-            if (experienceId) {
-                query = query.eq("experience_id", experienceId);
-            }
-
-            // Pagination: use range
             const start = pageNum * pageSize;
-            const end = start + pageSize - 1;
-            query = query.range(start, end);
+            query = query.range(start, start + pageSize - 1);
 
-            // Fetch batch
             const { data, error: fetchError } = await query;
 
-            if (fetchError) throw fetchError;
+            if (fetchError) {
+                console.warn("[useReels] DB error, using mock fallback:", fetchError.message);
+                if (pageNum === 0) setReels(showMocks(category));
+                return;
+            }
 
-            // Check if we have more results
             setHasMore((data?.length ?? 0) >= pageSize);
 
-            // Transform database records to ReelData interface
-            let transformedReels: ReelData[] = (data || []).map((item: any) => {
+            const transformedReels: ReelData[] = (data || []).map((item: any) => {
                 let videoUrl = item.video_url;
                 let processedUrl = item.processed_video_url;
-                
-                // Cloudinary Optimization for instant streaming
-                if (videoUrl && videoUrl.includes("res.cloudinary.com") && !videoUrl.includes("q_auto")) {
-                     videoUrl = videoUrl.replace("/upload/", "/upload/q_auto,f_auto/");
+                if (videoUrl?.includes("res.cloudinary.com") && !videoUrl.includes("q_auto")) {
+                    videoUrl = videoUrl.replace("/upload/", "/upload/q_auto,f_auto/");
                 }
-                if (processedUrl && processedUrl.includes("res.cloudinary.com") && !processedUrl.includes("q_auto")) {
-                     processedUrl = processedUrl.replace("/upload/", "/upload/q_auto,f_auto/");
+                if (processedUrl?.includes("res.cloudinary.com") && !processedUrl.includes("q_auto")) {
+                    processedUrl = processedUrl.replace("/upload/", "/upload/q_auto,f_auto/");
                 }
-
                 return {
                     id: item.id,
                     experienceId: item.experience_id,
                     hostUserId: item.user_id || item.experience?.user_id,
-                    videoUrl: videoUrl,
+                    videoUrl,
                     thumbnailUrl: item.thumbnail_url || "/placeholder.svg",
                     title: item.experience?.title || "Untitled Experience",
                     location: item.experience?.location || "Unknown Location",
@@ -104,7 +101,7 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                     likes: 0,
                     saved: false,
                     hostName: item.host?.full_name || item.host?.username || item.experience?.entity_name || "Zuru Host",
-                    hostAvatar: item.host?.metadata?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + (item.host?.username || item.id),
+                    hostAvatar: item.host?.metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.host?.username || item.id}`,
                     postedAt: item.created_at,
                     isLive: item.is_live,
                     lat: item.lat,
@@ -114,46 +111,41 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                 };
             });
 
-            // Add mock reels for density (only in first page)
+            // Always merge mocks on page 0 so feed is never empty
             let finalReels = transformedReels;
             if (pageNum === 0) {
-                const filteredMocks = mockReels.filter(m =>
+                const realIds = new Set(transformedReels.map(r => r.id));
+                const mocks = mockReels.filter(m =>
+                    !realIds.has(m.id) &&
                     (!category || category === "all" || m.category === category) &&
                     (!search || m.title.toLowerCase().includes(search.toLowerCase()) || m.location.toLowerCase().includes(search.toLowerCase()))
                 );
-                finalReels = [...transformedReels, ...filteredMocks];
+                finalReels = [...transformedReels, ...mocks];
             }
 
-            // Client-side search filter (Supabase ilike on joined tables is unreliable)
-            if (search && search.trim()) {
+            if (search?.trim()) {
                 const q = search.toLowerCase();
-                finalReels = finalReels.filter(
-                    (r) =>
-                        r.title.toLowerCase().includes(q) ||
-                        r.location.toLowerCase().includes(q) ||
-                        r.hostName.toLowerCase().includes(q) ||
-                        r.category.toLowerCase().includes(q)
+                finalReels = finalReels.filter(r =>
+                    r.title.toLowerCase().includes(q) ||
+                    r.location.toLowerCase().includes(q) ||
+                    r.hostName.toLowerCase().includes(q) ||
+                    r.category.toLowerCase().includes(q)
                 );
             }
 
-            // Shuffle for fair, unbiased ordering
-            const liveReels = finalReels.filter((r) => r.isLive && r.lat && r.lng);
-            const otherReels = finalReels.filter((r) => !r.isLive || !r.lat || !r.lng);
-
+            const liveReels = finalReels.filter(r => r.isLive && r.lat && r.lng);
+            const otherReels = finalReels.filter(r => !r.isLive || !r.lat || !r.lng);
             const shuffledLive = shuffleArray(liveReels);
             const shuffledOther = shuffleArray(otherReels);
-
             const processedReels: ReelData[] = [];
-            let li = 0,
-                oi = 0;
-            let position = 0;
+            let li = 0, oi = 0, position = 0;
 
             while (li < shuffledLive.length || oi < shuffledOther.length) {
                 if (position % 3 === 0 && li < shuffledLive.length) {
                     processedReels.push(shuffledLive[li++]);
                 } else if (oi < shuffledOther.length) {
                     processedReels.push(shuffledOther[oi++]);
-                } else if (li < shuffledLive.length) {
+                } else {
                     processedReels.push(shuffledLive[li++]);
                 }
                 position++;
@@ -165,8 +157,10 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                 setReels(prev => [...prev, ...processedReels]);
             }
         } catch (err) {
-            console.error("Error fetching reels:", err);
+            console.error("[useReels] Unexpected error:", err);
             setError(err);
+            // Safety net — ALWAYS show mocks, never blank
+            if (pageNum === 0) setReels(showMocks(category));
         } finally {
             setLoading(false);
             setLoadingMore(false);
