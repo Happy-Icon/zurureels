@@ -5,6 +5,7 @@ import { DesktopSidebar } from "./DesktopSidebar";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EmailVerificationBanner } from "@/components/EmailVerificationBanner";
+import { UnifiedSearch } from "@/components/UnifiedSearch";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -34,6 +35,9 @@ export function MainLayout({
           <Link to="/" className="text-xl font-display font-semibold text-foreground">
             ZuruSasa
           </Link>
+          <div className="flex items-center gap-2 flex-1 justify-center px-4">
+            <UnifiedSearch />
+          </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <NotificationBell />

@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UnifiedSearch } from "@/components/UnifiedSearch";
 
 const unauthGuestNavItems = [
   { icon: Zap, label: "Zuru Pulse", path: "/" },
@@ -47,6 +48,11 @@ export function DesktopSidebar() {
           </span>
         </Link>
         <NotificationBell />
+      </div>
+
+      {/* Search */}
+      <div className="p-4 border-b border-border">
+        <UnifiedSearch />
       </div>
 
       {/* Navigation */}

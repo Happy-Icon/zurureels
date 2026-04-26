@@ -13,21 +13,27 @@ import { useExperiences } from "@/hooks/useExperiences";
 import { coastalCities } from "@/data/mockCityPulse";
 import { ReelCard } from "@/components/reels/ReelCard";
 import { SkeletonLoader } from "@/components/reels/ReelsFeed";
-import {
-  MapPin,
-  ChevronDown,
-  Ship,
+import { 
+  Search, 
+  MapPin, 
+  ChevronDown, 
+  Navigation, 
+  Wine, 
+  Utensils, 
+  Music, 
+  Waves, 
+  Ship, 
+  Palmtree, 
+  Sparkles, 
+  Filter, 
+  SlidersHorizontal,
   UtensilsCrossed,
-  Music,
   Bike,
-  Calendar,
-  Wine,
-  ChefHat,
-  Navigation,
   Check,
   Play,
-  Sparkles as SparklesIcon,
+  ChefHat
 } from "lucide-react";
+import { UnifiedSearch } from "@/components/UnifiedSearch";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -38,7 +44,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { Sparkles } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const categories = [
@@ -265,6 +270,11 @@ const CityPulse = () => {
                     )}
                   </button>
                 </div>
+                
+                {/* Floating Search in Immersive Feed */}
+                <div className="absolute top-0 right-4 h-full flex items-center pointer-events-auto">
+                  <UnifiedSearch />
+                </div>
               </div>
             }
           />
@@ -292,6 +302,10 @@ const CityPulse = () => {
                   >
                     Explore
                   </button>
+                </div>
+
+                <div className="flex items-center gap-2 flex-1 justify-center px-4">
+                  <UnifiedSearch />
                 </div>
 
                 <div className="flex-shrink-0">
