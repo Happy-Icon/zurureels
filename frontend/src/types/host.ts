@@ -46,6 +46,7 @@ export interface BookingRequest {
 
 export interface ReelData {
     id: string;
+    experienceId: string;
     title: string;
     location: string;
     category: string;

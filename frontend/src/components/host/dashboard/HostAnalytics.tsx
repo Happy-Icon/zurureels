@@ -14,7 +14,9 @@ export const HostAnalytics = () => {
         views: 0,
         likes: 0,
         saves: 0,
-        bookings: 0
+        bookings: 0,
+        shares: 0,
+        followers: 0
     });
 
     useEffect(() => {
@@ -30,26 +32,8 @@ export const HostAnalytics = () => {
                 });
 
                 if (error) {
-                    // Fallback mock data if RPC hasn't been run yet by the host locally
-                    console.log("Analytics RPC not available yet, using fallback data");
-                    const mockData = Array.from({length: 30}).map((_, i) => {
-                        const date = new Date();
-                        date.setDate(date.getDate() - (29 - i));
-                        return {
-                            date: format(date, "MMM dd"),
-                            views: Math.floor(Math.random() * 100) + 20,
-                            likes: Math.floor(Math.random() * 30) + 5,
-                            saves: Math.floor(Math.random() * 15),
-                            bookings: Math.floor(Math.random() * 3)
-                        };
-                    });
-                    setStats(mockData);
-                    setKpis({
-                        views: mockData.reduce((acc, curr) => acc + curr.views, 0),
-                        likes: mockData.reduce((acc, curr) => acc + curr.likes, 0),
-                        saves: mockData.reduce((acc, curr) => acc + curr.saves, 0),
-                        bookings: mockData.reduce((acc, curr) => acc + curr.bookings, 0)
-                    });
+                    console.error("RPC Error:", error);
+                    // Do not fallback to mock data; handle empty state naturally based on the platform
                     setLoading(false);
                     return;
                 }
@@ -60,7 +44,9 @@ export const HostAnalytics = () => {
                         views: Number(d.views),
                         likes: Number(d.likes),
                         saves: Number(d.saves),
-                        bookings: Number(d.bookings)
+                        bookings: Number(d.bookings),
+                        shares: Number(d.shares || 0),
+                        followers: Number(d.followers || 0)
                     }));
                     setStats(formattedData);
 
@@ -68,7 +54,9 @@ export const HostAnalytics = () => {
                         views: formattedData.reduce((acc: number, curr: any) => acc + curr.views, 0),
                         likes: formattedData.reduce((acc: number, curr: any) => acc + curr.likes, 0),
                         saves: formattedData.reduce((acc: number, curr: any) => acc + curr.saves, 0),
-                        bookings: formattedData.reduce((acc: number, curr: any) => acc + curr.bookings, 0)
+                        bookings: formattedData.reduce((acc: number, curr: any) => acc + curr.bookings, 0),
+                        shares: formattedData.reduce((acc: number, curr: any) => acc + curr.shares, 0),
+                        followers: formattedData.reduce((acc: number, curr: any) => acc + curr.followers, 0)
                     });
                 }
             } catch (error) {
@@ -91,7 +79,7 @@ export const HostAnalytics = () => {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <Card className="bg-card/50 backdrop-blur-sm border-border">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium">Total Views</CardTitle>
@@ -99,7 +87,6 @@ export const HostAnalytics = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold font-display">{kpis.views.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Past 30 days</p>
                     </CardContent>
                 </Card>
                 <Card className="bg-card/50 backdrop-blur-sm border-border">
@@ -109,7 +96,24 @@ export const HostAnalytics = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold font-display">{kpis.likes.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Past 30 days</p>
+                    </CardContent>
+                </Card>
+                <Card className="bg-card/50 backdrop-blur-sm border-border">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-sm font-medium">New Followers</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold font-display">{kpis.followers.toLocaleString()}</div>
+                    </CardContent>
+                </Card>
+                <Card className="bg-card/50 backdrop-blur-sm border-border">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-sm font-medium">Shares</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold font-display">{kpis.shares.toLocaleString()}</div>
                     </CardContent>
                 </Card>
                 <Card className="bg-card/50 backdrop-blur-sm border-border">
@@ -119,7 +123,6 @@ export const HostAnalytics = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold font-display">{kpis.saves.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Past 30 days</p>
                     </CardContent>
                 </Card>
                 <Card className="bg-card/50 backdrop-blur-sm border-border">
@@ -129,7 +132,6 @@ export const HostAnalytics = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold font-display">{kpis.bookings.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Past 30 days</p>
                     </CardContent>
                 </Card>
             </div>
@@ -138,7 +140,7 @@ export const HostAnalytics = () => {
                 <Card className="bg-card/50 backdrop-blur-sm border-border">
                     <CardHeader>
                         <CardTitle className="font-display">Views & Engagement</CardTitle>
-                        <CardDescription>Daily views and likes over the last 30 days.</CardDescription>
+                        <CardDescription>Daily views, likes, and followers over the last 30 days.</CardDescription>
                     </CardHeader>
                     <CardContent className="h-72">
                         <ResponsiveContainer width="100%" height="100%">
@@ -158,6 +160,7 @@ export const HostAnalytics = () => {
                                 />
                                 <Area type="monotone" dataKey="views" stroke="#ec4899" fillOpacity={1} fill="url(#colorViews)" />
                                 <Area type="monotone" dataKey="likes" stroke="#a855f7" fillOpacity={0} strokeWidth={2} />
+                                <Area type="monotone" dataKey="followers" stroke="#3b82f6" fillOpacity={0} strokeWidth={2} />
                             </AreaChart>
                         </ResponsiveContainer>
                     </CardContent>
@@ -165,8 +168,8 @@ export const HostAnalytics = () => {
 
                 <Card className="bg-card/50 backdrop-blur-sm border-border">
                     <CardHeader>
-                        <CardTitle className="font-display">Bookings & Saves</CardTitle>
-                        <CardDescription>Conversion metrics over time.</CardDescription>
+                        <CardTitle className="font-display">Conversions & Reach</CardTitle>
+                        <CardDescription>Bookings, saves, and shares over time.</CardDescription>
                     </CardHeader>
                     <CardContent className="h-72">
                         <ResponsiveContainer width="100%" height="100%">
@@ -179,6 +182,7 @@ export const HostAnalytics = () => {
                                     cursor={{ fill: 'hsl(var(--muted))' }}
                                 />
                                 <Bar dataKey="saves" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="shares" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                                 <Bar dataKey="bookings" fill="#10b981" radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>

@@ -3,6 +3,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { HostReelsList } from "@/components/host/dashboard/HostReelsList";
 import { CreateReelDialog } from "@/components/host/dashboard/CreateReelDialog";
 import { EditEventDialog } from "@/components/host/dashboard/EditEventDialog";
+import { EditReelDialog } from "@/components/host/dashboard/EditReelDialog";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ const Listings = () => {
     const [reels, setReels] = useState<ReelData[]>([]);
     const [events, setEvents] = useState<any[]>([]);
     const [editingEvent, setEditingEvent] = useState<any | null>(null);
+    const [editingReel, setEditingReel] = useState<ReelData | null>(null);
     const [loading, setLoading] = useState(true);
     const { user } = useAuth();
 
@@ -36,6 +38,7 @@ const Listings = () => {
                     created_at,
                     expires_at,
                     experience:experiences (
+                        id,
                         title,
                         location,
                         current_price
@@ -66,6 +69,7 @@ const Listings = () => {
 
             const transformed: ReelData[] = (data || []).map((item: any) => ({
                 id: item.id,
+                experienceId: item.experience?.id || "",
                 title: item.experience?.title || "Untitled Experience",
                 location: item.experience?.location || "Unknown",
                 category: item.category,
@@ -169,7 +173,7 @@ const Listings = () => {
     };
 
     const handleEditReel = (reel: ReelData) => {
-        toast.info("Full edit functionality coming soon!");
+        setEditingReel(reel);
     };
 
     const publishedReels = reels.filter(r => r.status === "published");
@@ -277,6 +281,12 @@ const Listings = () => {
                 </div>
 
                 <CreateReelDialog open={isCreateOpen} onOpenChange={handleDialogChange} />
+                <EditReelDialog 
+                    open={!!editingReel} 
+                    onOpenChange={(open) => !open && setEditingReel(null)} 
+                    reel={editingReel}
+                    onSuccess={fetchReels}
+                />
                 <EditEventDialog 
                     open={!!editingEvent} 
                     onOpenChange={(open) => !open && setEditingEvent(null)} 
