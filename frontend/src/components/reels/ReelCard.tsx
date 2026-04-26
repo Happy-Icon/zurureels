@@ -1,5 +1,5 @@
 import { Heart, Share2, Bookmark, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw, Plus, Check, Loader2, Video, ChevronUp, ChevronDown } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,11 +38,12 @@ interface ReelCardProps {
   preloadNext?: boolean;
   onSave?: (id: string) => void;
   onBook?: (id: string) => void;
+  topOverlay?: React.ReactNode;
 }
 
 let globalMuted = true;
 
-export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCardProps) {
+export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverlay }: ReelCardProps) {
   // Unload video when not active or next
   // Adaptive streaming (HLS) with dynamic import
   useEffect(() => {
@@ -100,6 +101,17 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
     toggleSave,
     toggleFollow,
   } = useReelInteractions(reel.id, reel.hostUserId);
+  
+  const effectiveThumbnail = useMemo(() => {
+    if (reel.thumbnailUrl) return reel.thumbnailUrl;
+    
+    // Fallback: If it's a Cloudinary video, generate the first-frame thumbnail URL
+    const videoUrl = reel.processedVideoUrl || reel.videoUrl;
+    if (videoUrl?.includes('res.cloudinary.com')) {
+      return videoUrl.replace(/\.([a-z0-9]+)$/i, '.jpg').replace('/upload/', '/upload/so_0,w_400,h_600,c_fill,q_auto,f_jpg/');
+    }
+    return '';
+  }, [reel.thumbnailUrl, reel.processedVideoUrl, reel.videoUrl]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -364,7 +376,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             {/* Blurred poster while loading */}
             {!videoLoaded && (
               <img
-                src={reel.thumbnailUrl}
+                src={effectiveThumbnail}
                 alt="Preview"
                 className="absolute inset-0 h-full w-full object-cover blur-lg scale-105 z-10 transition-opacity duration-500"
                 style={{ opacity: videoLoaded ? 0 : 1 }}
@@ -373,7 +385,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             <video
               ref={videoRef}
               src={reel.processedVideoUrl || reel.videoUrl}
-              poster={reel.thumbnailUrl}
+              poster={effectiveThumbnail}
               className="h-full w-full object-cover"
               loop
               playsInline
@@ -390,6 +402,13 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook }: ReelCa
             />
           </div>
         </div>
+
+        {/* Custom Top Overlay (e.g. Tab Switchers) */}
+        {topOverlay && (
+          <div className="absolute top-0 left-0 right-0 z-50 pointer-events-none">
+            {topOverlay}
+          </div>
+        )}
 
         {/* Top Bar - Overlay */}
         <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20 md:flex hidden">

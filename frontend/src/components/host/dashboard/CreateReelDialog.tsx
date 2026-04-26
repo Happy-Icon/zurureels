@@ -255,7 +255,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                         price: parseFloat(price) || 0,
                         event_date: combinedDateTime.toISOString(),
                         category: "events",
-                        image_url: cloudinaryResult.secure_url, 
+                        image_url: thumbnailUrl || cloudinaryResult.secure_url, 
                         notification_intervals: reminderIntervals,
                         status: "active"
                     });

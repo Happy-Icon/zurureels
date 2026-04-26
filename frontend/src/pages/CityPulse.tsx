@@ -63,6 +63,7 @@ function TikTokFeed({
   loading: boolean;
   onBook: (id: string) => void;
   onInteraction?: () => void;
+  topOverlay?: React.ReactNode;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -134,6 +135,7 @@ function TikTokFeed({
             reel={reel}
             isActive={activeIndex === i}
             onBook={onBook}
+            topOverlay={topOverlay}
           />
         </div>
       ))}
@@ -225,48 +227,45 @@ const CityPulse = () => {
     <MainLayout hideMobileUI={isMobile && tab === "feed" && !showMobileUI}>
       {tab === "feed" ? (
         <div className="fixed inset-0 z-30 bg-black md:pl-64 overflow-hidden">
-          {/* Top bar overlaid on video */}
-          <div className="absolute top-[env(safe-area-inset-top,0.5rem)] md:top-3 left-0 right-0 z-50 px-4 pb-4">
-            <div className="flex items-center justify-center w-full">
-              {/* Tab switcher - Centered words style */}
-              <div className="pointer-events-auto flex items-center gap-8 px-6 py-2">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setTab("feed"); }}
-                  className={cn(
-                    "text-base font-extrabold transition-all duration-300 relative",
-                    tab === "feed" 
-                      ? "text-[#EE7D30] scale-110" 
-                      : "text-white/70 hover:text-[#EE7D30]"
-                  )}
-                >
-                  ZuruFlow
-                  {tab === "feed" && (
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#EE7D30]" />
-                  )}
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setTab("explore"); }}
-                  className={cn(
-                    "text-base font-extrabold transition-all duration-300 relative",
-                    tab === "explore" 
-                      ? "text-[#EE7D30] scale-110" 
-                      : "text-white/70 hover:text-[#EE7D30]"
-                  )}
-                >
-                  Explore
-                  {tab === "explore" && (
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#EE7D30]" />
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-
           <TikTokFeed
             reels={liveReels}
             loading={reelsLoading}
             onBook={(id) => setBookingReel(liveReels.find((r) => r.id === id) || null)}
             onInteraction={handleInteraction}
+            topOverlay={
+              <div className="flex items-center justify-center w-full p-4 pt-[env(safe-area-inset-top,0.5rem)] md:pt-3">
+                <div className="pointer-events-auto flex items-center gap-8 px-6 py-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setTab("feed"); }}
+                    className={cn(
+                      "text-base font-extrabold transition-all duration-300 relative",
+                      tab === "feed" 
+                        ? "text-[#EE7D30] scale-110" 
+                        : "text-white/70 hover:text-[#EE7D30]"
+                    )}
+                  >
+                    ZuruFlow
+                    {tab === "feed" && (
+                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#EE7D30]" />
+                    )}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setTab("explore"); }}
+                    className={cn(
+                      "text-base font-extrabold transition-all duration-300 relative",
+                      tab === "explore" 
+                        ? "text-[#EE7D30] scale-110" 
+                        : "text-white/70 hover:text-[#EE7D30]"
+                    )}
+                  >
+                    Explore
+                    {tab === "explore" && (
+                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#EE7D30]" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            }
           />
         </div>
       ) : (

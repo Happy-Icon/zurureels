@@ -53,8 +53,27 @@ FOR SELECT TO authenticated USING (
     EXISTS (SELECT 1 FROM public.reels WHERE id = reel_shares.reel_id AND user_id = auth.uid())
 );
 
+-- 3. Create host_profile_views table
+CREATE TABLE IF NOT EXISTS public.host_profile_views (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    host_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    viewer_id UUID REFERENCES auth.users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
 
--- 3. RPC to get daily stats for a host (used for the charts)
+CREATE INDEX IF NOT EXISTS idx_host_profile_views_host_id ON public.host_profile_views(host_id);
+ALTER TABLE public.host_profile_views ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can insert profile views" ON public.host_profile_views;
+CREATE POLICY "Anyone can insert profile views" ON public.host_profile_views 
+FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Hosts can read their own profile views" ON public.host_profile_views;
+CREATE POLICY "Hosts can read their own profile views" ON public.host_profile_views 
+FOR SELECT TO authenticated USING (host_id = auth.uid());
+
+
+-- 4. RPC to get daily stats for a host (used for the charts)
 CREATE OR REPLACE FUNCTION public.get_host_daily_stats(host_uuid UUID, days_back INT DEFAULT 30)
 RETURNS TABLE (
     date DATE,
@@ -63,7 +82,8 @@ RETURNS TABLE (
     saves BIGINT,
     bookings BIGINT,
     shares BIGINT,
-    followers BIGINT
+    followers BIGINT,
+    profile_views BIGINT
 ) LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
     RETURN QUERY
@@ -78,7 +98,8 @@ BEGIN
         COUNT(DISTINCT s.id) AS saves,
         COUNT(DISTINCT b.id) AS bookings,
         COUNT(DISTINCT sh.id) AS shares,
-        COUNT(DISTINCT f.id) AS followers
+        COUNT(DISTINCT f.id) AS followers,
+        COUNT(DISTINCT pv.id) AS profile_views
     FROM date_series ds
     LEFT JOIN public.reels r ON r.user_id = host_uuid
     LEFT JOIN public.reel_views v ON v.reel_id = r.id AND DATE(v.created_at) = ds.d
@@ -88,6 +109,7 @@ BEGIN
     LEFT JOIN public.experiences e ON e.user_id = host_uuid
     LEFT JOIN public.bookings b ON b.experience_id = e.id AND DATE(b.created_at) = ds.d
     LEFT JOIN public.user_follows f ON f.following_id = host_uuid AND DATE(f.created_at) = ds.d
+    LEFT JOIN public.host_profile_views pv ON pv.host_id = host_uuid AND DATE(pv.created_at) = ds.d
     GROUP BY ds.d
     ORDER BY ds.d ASC;
 END;
