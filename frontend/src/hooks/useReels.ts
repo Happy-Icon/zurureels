@@ -43,7 +43,8 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                     is_live,
                     lat,
                     lng,
-                    experience:experiences (title, location, current_price, price_unit, entity_name, metadata),
+                    user_id,
+                    experience:experiences (id, user_id, title, location, current_price, price_unit, entity_name, metadata),
                     host:profiles (full_name, metadata)
                 `)
                 .eq("status", "active")
@@ -91,7 +92,7 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                 return {
                     id: item.id,
                     experienceId: item.experience_id,
-                    hostUserId: item.user_id,
+                    hostUserId: item.user_id || item.experience?.user_id,
                     videoUrl: videoUrl,
                     thumbnailUrl: item.thumbnail_url || "/placeholder.svg",
                     title: item.experience?.title || "Untitled Experience",

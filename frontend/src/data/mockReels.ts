@@ -25,6 +25,8 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Watamu Marine",
     hostAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
+    hostUserId: "00000000-0000-0000-0000-000000000000",
+    experienceId: "exp-mock-1",
     postedAt: daysAgo(2),
   },
   {
@@ -41,6 +43,8 @@ export const mockReels: ReelData[] = [
     saved: true,
     hostName: "Safari Kings",
     hostAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop",
+    hostUserId: "00000000-0000-0000-0000-000000000000",
+    experienceId: "exp-mock-2",
     postedAt: daysAgo(5),
   },
   {
@@ -57,6 +61,8 @@ export const mockReels: ReelData[] = [
     saved: false,
     hostName: "Diani Reef Resort",
     hostAvatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop",
+    hostUserId: "00000000-0000-0000-0000-000000000000",
+    experienceId: "exp-mock-3",
     postedAt: daysAgo(10),
   },
 ];
