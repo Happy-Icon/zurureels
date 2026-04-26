@@ -1,4 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { 
+  mockBoatRentals, 
+  mockRestaurantSpecials, 
+  mockClubEvents, 
+  mockChefSpecials, 
+  mockBikeRentals, 
+  mockDailyActivities, 
+  mockDrinksOfTheDay 
+} from "@/data/mockCityPulse";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useReels } from "@/hooks/useReels";
 import { Search, MapPin, Sparkles, Filter, Play, Home, PartyPopper, Mountain, Calendar } from "lucide-react";
@@ -53,8 +62,28 @@ const Discover = () => {
 
   const { reels: allReels, loading: reelsLoading } = useReels(effectiveCategory, undefined, debouncedSearch);
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
-  const { experiences } = useExperiences(selectedCategory, undefined, debouncedSearch);
+  const { experiences: dbExperiences } = useExperiences(selectedCategory, undefined, debouncedSearch);
   const { role } = useAuth();
+
+  // Fallback to mock data for a rich experience even if DB is empty
+  const experiences = useMemo(() => {
+    if (dbExperiences && dbExperiences.length > 0) return dbExperiences;
+    
+    const mockData: any[] = [
+      ...mockBoatRentals.map(b => ({ id: b.id, category: 'boats', title: b.name, entity_name: 'Rental', location: b.location, current_price: b.price, image_url: b.imageUrl, metadata: { rating: b.rating } })),
+      ...mockRestaurantSpecials.map(r => ({ id: r.id, category: 'food', title: r.special, entity_name: r.restaurant, location: r.location, current_price: r.discountPrice, base_price: r.originalPrice, image_url: r.imageUrl, metadata: { valid_until: r.validUntil } })),
+      ...mockClubEvents.map(c => ({ id: c.id, category: 'nightlife', title: c.event, entity_name: c.venue, location: c.location, current_price: c.entryFee, image_url: c.imageUrl, metadata: { time: c.time, dj: c.dj } })),
+      ...mockChefSpecials.map(s => ({ id: s.id, category: 'food', title: s.dish, entity_name: s.restaurant, location: s.location, current_price: s.price, image_url: s.imageUrl, metadata: { chef: s.chef } })),
+      ...mockBikeRentals.map(b => ({ id: b.id, category: 'bikes', title: b.type, entity_name: b.provider, location: b.location, current_price: b.pricePerDay, image_url: b.imageUrl, metadata: { available_count: b.available } })),
+      ...mockDailyActivities.map(a => ({ id: a.id, category: 'activities', title: a.name, entity_name: 'Activity', location: a.location, current_price: a.price, image_url: a.imageUrl, metadata: { time: a.time, duration: a.duration, spots_left: a.spotsLeft, type: a.type } })),
+      ...mockDrinksOfTheDay.map(d => ({ id: d.id, category: 'drinks', title: d.name, entity_name: d.bar, location: d.location, current_price: d.specialPrice, base_price: d.originalPrice, image_url: d.imageUrl }))
+    ];
+
+    return mockData.filter(item => 
+      (selectedCategory === 'all' || item.category === selectedCategory) &&
+      (!debouncedSearch || item.title.toLowerCase().includes(debouncedSearch.toLowerCase()) || item.location.toLowerCase().includes(debouncedSearch.toLowerCase()))
+    );
+  }, [dbExperiences, selectedCategory, debouncedSearch]);
 
   // Events data (only fetched when in events view)
   const { events, loading: eventsLoading } = useEvents(
