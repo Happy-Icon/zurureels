@@ -15,10 +15,12 @@ import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-    MapPin, Users, CalendarDays, Loader2,
+    MapPin,    Users, CalendarDays, Loader2,
     Star, ChevronDown, ChevronUp, CheckCircle2,
+    CreditCard, ShieldCheck
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { usePaystackPayment } from "react-paystack";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -64,6 +66,9 @@ export function BookingSheet({
     const [showCalendar, setShowCalendar] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Paystack Reference
+    const [paystackRef] = useState(() => `zuru_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+
     const today = startOfDay(new Date());
     const nights =
         dateRange?.from && dateRange?.to
@@ -73,6 +78,60 @@ export function BookingSheet({
     const isNightBased = ["hotel", "villa", "apartment"].includes(category || "");
     const units = isNightBased ? nights : guests;
     const total = price * units;
+
+    // Paystack Config
+    const config = {
+        reference: paystackRef,
+        email: user?.email || "",
+        amount: Math.round(total * 100), // kobo/cents — must be integer
+        publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "",
+        currency: "KES",
+    };
+
+    const onPaystackSuccess = async (reference: any) => {
+        setIsSubmitting(true);
+        try {
+            const isUUID = (id?: string) =>
+                !!id &&
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+            if (isUUID(experienceId)) {
+                const { error: bookingError } = await supabase.from("bookings").insert({
+                    user_id: user?.id,
+                    experience_id: experienceId,
+                    trip_title: title,
+                    amount: total,
+                    guests,
+                    check_in: dateRange?.from?.toISOString() || new Date().toISOString(),
+                    check_out: (dateRange?.to || addDays(dateRange?.from || new Date(), 1)).toISOString(),
+                    status: "paid",
+                    payment_reference: reference.reference,
+                });
+
+                if (bookingError) throw bookingError;
+                
+                toast.success("Booking confirmed! Enjoy your trip 🎉");
+                handleClose();
+                onSuccess?.();
+            } else {
+                toast.success("Demo booking successful! (Mock Experience)");
+                handleClose();
+                onSuccess?.();
+            }
+        } catch (err: any) {
+            console.error("Booking recording error:", err);
+            toast.error("Payment successful but failed to record booking. Please contact support.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const onPaystackClose = () => {
+        toast.info("Payment cancelled");
+        setIsSubmitting(false);
+    };
+
+    const initializePayment = usePaystackPayment(config);
 
     const isDisabled = (date: Date) => {
         if (isBefore(date, today)) return true;
@@ -100,41 +159,15 @@ export function BookingSheet({
             return;
         }
 
-        setIsSubmitting(true);
-        try {
-            const isUUID = (id?: string) =>
-                !!id &&
-                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
-            if (isUUID(experienceId)) {
-                const { error: bookingError } = await supabase.from("bookings").insert({
-                    user_id: user.id,
-                    experience_id: experienceId,
-                    trip_title: title,
-                    amount: total,
-                    guests,
-                    check_in: dateRange.from.toISOString(),
-                    check_out: (dateRange.to || addDays(dateRange.from, 1)).toISOString(),
-                    status: "pending",
-                });
-
-                if (bookingError) throw bookingError;
-                
-                toast.success("Booking request sent! The host will contact you soon. 🎉");
-                handleClose();
-                onSuccess?.();
-            } else {
-                toast.success("Demo booking successful! (Mock Experience)");
-                handleClose();
-                onSuccess?.();
-            }
-
-        } catch (err: any) {
-            console.error("Booking error:", err);
-            toast.error(err.message || "Could not complete booking. Try again.");
-        } finally {
-            setIsSubmitting(false);
+        const paystackKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+        if (!paystackKey) {
+            toast.error("Payment system is being updated. Please try again in a few minutes.");
+            return;
         }
+
+        setIsSubmitting(true);
+        // @ts-ignore
+        initializePayment(onPaystackSuccess, onPaystackClose);
     };
 
     const handleClose = () => {
