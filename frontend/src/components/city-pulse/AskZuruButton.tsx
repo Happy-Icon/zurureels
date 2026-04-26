@@ -27,7 +27,7 @@ export function AskZuruButton({ onClick, isOpen }: AskZuruButtonProps) {
         <div className="absolute -inset-1 bg-primary blur-md opacity-20 animate-pulse -z-20" />
         
         <Sparkles className="h-5 w-5 text-white animate-pulse group-hover:scale-110 transition-transform duration-300" />
-        <span className="text-sm whitespace-nowrap drop-shadow-sm">Ask Zuru AI</span>
+        <span className="font-semibold tracking-wide uppercase text-[10px]">Zuru Agent</span>
         
         {/* Interactive light ray effect */}
         <div className="absolute top-0 -left-[100%] h-full w-1/2 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] group-hover:left-[150%] transition-all duration-1000 ease-in-out" />

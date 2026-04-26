@@ -11,7 +11,9 @@ import { ReelData } from "@/components/reels/ReelCard";
 
 const Saved = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [activeTab, setActiveTab] = useState<"reels" | "events">("reels");
   const [savedReels, setSavedReels] = useState<ReelData[]>([]);
+  const [savedEvents, setSavedEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -114,6 +116,20 @@ const Saved = () => {
 
         // Combine real + mocks, ensuring no duplicates and sorting by newest (real first for now)
         setSavedReels([...transformed, ...savedMocks]);
+
+        if (user) {
+          // Fetch saved events
+          const { data: eventSubs, error: eventSubsError } = await supabase
+            .from("event_subscribers")
+            .select("event_id, events(*)")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
+          
+          if (!eventSubsError && eventSubs) {
+            setSavedEvents(eventSubs.map((sub: any) => sub.events));
+          }
+        }
+
       } catch (err) {
         console.error("Error fetching saved reels:", err);
       } finally {
@@ -157,7 +173,27 @@ const Saved = () => {
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-display font-semibold">Saved</h1>
               <div className="flex items-center gap-2">
-                <div className="flex rounded-lg border border-border overflow-hidden">
+                <div className="flex bg-muted p-1 rounded-lg mr-2">
+                  <button
+                    onClick={() => setActiveTab("reels")}
+                    className={cn(
+                      "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
+                      activeTab === "reels" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Reels
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("events")}
+                    className={cn(
+                      "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
+                      activeTab === "events" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Events
+                  </button>
+                </div>
+                <div className="flex rounded-lg border border-border overflow-hidden hidden md:flex">
                   <button
                     onClick={() => setViewMode("grid")}
                     className={cn(
@@ -180,7 +216,7 @@ const Saved = () => {
               </div>
             </div>
             <p className="text-sm text-muted-foreground">
-              {savedReels.length} items saved
+              {activeTab === "reels" ? `${savedReels.length} reels saved` : `${savedEvents.length} events subscribed`}
             </p>
           </div>
         </div>
@@ -205,9 +241,30 @@ const Saved = () => {
               <Bookmark className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="font-semibold text-lg mb-2">Nothing saved yet</h3>
               <p className="text-muted-foreground text-sm mb-4">
-                Save hotels, tours, and experiences you love for easy access later.
+                Save hotels, tours, and events you love for easy access later.
               </p>
               <Button onClick={() => navigate("/discover")}>Start Exploring</Button>
+            </div>
+          ) : activeTab === "events" ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {savedEvents.map((event) => (
+                <div key={event.id} className="border border-border rounded-2xl overflow-hidden bg-card hover:shadow-md transition-shadow relative p-4 flex flex-col justify-between aspect-[4/3]">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                       <Badge variant="secondary">{event.category}</Badge>
+                       <span className="text-xs text-muted-foreground">{new Date(event.event_date).toLocaleDateString()}</span>
+                    </div>
+                    <h3 className="font-bold text-lg leading-tight line-clamp-2">{event.title}</h3>
+                    <p className="text-sm text-muted-foreground line-clamp-2">{event.description}</p>
+                  </div>
+                  <div className="mt-4 flex justify-between items-center">
+                    <span className="text-sm font-semibold">{event.price ? `KES ${event.price}` : "Free"}</span>
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/discover?event=${event.id}`)}>
+                      View Event
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

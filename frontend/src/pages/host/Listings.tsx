@@ -2,17 +2,21 @@ import { useState, useEffect, useCallback } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { HostReelsList } from "@/components/host/dashboard/HostReelsList";
 import { CreateReelDialog } from "@/components/host/dashboard/CreateReelDialog";
+import { EditEventDialog } from "@/components/host/dashboard/EditEventDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
+import { toast } from "sonner";
 import { ReelData } from "@/types/host";
 
 const Listings = () => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<"published" | "drafts">("published");
+    const [activeTab, setActiveTab] = useState<"published" | "drafts" | "events">("published");
     const [reels, setReels] = useState<ReelData[]>([]);
+    const [events, setEvents] = useState<any[]>([]);
+    const [editingEvent, setEditingEvent] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const { user } = useAuth();
 
@@ -73,8 +77,36 @@ const Listings = () => {
             }));
 
             setReels(transformed);
+
+            // Fetch Events
+            const { data: eventsData, error: eventsError } = await supabase
+                .from("events")
+                .select("*")
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: false });
+
+            if (!eventsError && eventsData) {
+                // Fetch subscriber counts
+                const eventIds = eventsData.map(e => e.id);
+                let subCounts: Record<string, number> = {};
+                
+                if (eventIds.length > 0) {
+                    const { data: subs } = await supabase
+                        .from("event_subscribers")
+                        .select("event_id")
+                        .in("event_id", eventIds);
+                    
+                    if (subs) {
+                        for (const sub of subs) {
+                            subCounts[sub.event_id] = (subCounts[sub.event_id] || 0) + 1;
+                        }
+                    }
+                }
+
+                setEvents(eventsData.map(e => ({ ...e, subscriberCount: subCounts[e.id] || 0 })));
+            }
         } catch (err) {
-            console.error("Error fetching host reels:", err);
+            console.error("Error fetching host listings:", err);
         } finally {
             setLoading(false);
         }
@@ -89,6 +121,55 @@ const Listings = () => {
         if (!open) {
             fetchReels(); // refetch when dialog closes
         }
+    };
+
+    const handleDeleteEvent = async (eventId: string) => {
+        if (!confirm("Are you sure you want to delete this event? All subscribers will be notified of cancellation.")) return;
+        
+        try {
+            // First update event status to cancelled (optional, for notifications)
+            await supabase.from("events").update({ status: "cancelled" }).eq("id", eventId);
+            
+            // Then delete it
+            const { error } = await supabase.from("events").delete().eq("id", eventId);
+            if (error) throw error;
+            
+            toast.success("Event deleted successfully");
+            setEvents(events.filter(e => e.id !== eventId));
+        } catch (error: any) {
+            console.error("Error deleting event:", error);
+            toast.error(error.message || "Failed to delete event");
+        }
+    };
+
+    const handleDeleteReel = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this listing?")) return;
+        try {
+            const { error } = await supabase.from("reels").delete().eq("id", id);
+            if (error) throw error;
+            toast.success("Listing deleted successfully");
+            setReels(reels.filter(r => r.id !== id));
+        } catch (error: any) {
+            console.error("Error deleting reel:", error);
+            toast.error(error.message || "Failed to delete listing");
+        }
+    };
+
+    const handleToggleReelStatus = async (id: string, currentStatus: string) => {
+        const newStatus = currentStatus === 'published' ? 'draft' : 'active';
+        try {
+            const { error } = await supabase.from("reels").update({ status: newStatus }).eq("id", id);
+            if (error) throw error;
+            toast.success(`Listing ${newStatus === 'active' ? 'published' : 'unpublished'}`);
+            fetchReels();
+        } catch (error: any) {
+            console.error("Error updating status:", error);
+            toast.error(error.message || "Failed to update listing status");
+        }
+    };
+
+    const handleEditReel = (reel: ReelData) => {
+        toast.info("Full edit functionality coming soon!");
     };
 
     const publishedReels = reels.filter(r => r.status === "published");
@@ -134,6 +215,17 @@ const Listings = () => {
                             >
                                 Drafts ({draftReels.length})
                             </button>
+                            <button
+                                onClick={() => setActiveTab("events")}
+                                className={cn(
+                                    "pb-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
+                                    activeTab === "events"
+                                        ? "border-primary text-foreground"
+                                        : "border-transparent text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                Events ({events.length})
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -143,15 +235,54 @@ const Listings = () => {
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                         </div>
+                    ) : activeTab === "events" ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {events.map((event) => (
+                                <div key={event.id} className="border border-border rounded-xl bg-card p-4 space-y-4">
+                                    <div className="flex justify-between items-start">
+                                        <h3 className="font-bold text-lg leading-tight line-clamp-1">{event.title}</h3>
+                                        <div className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-bold">
+                                            {event.subscriberCount} Subs
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1 text-sm text-muted-foreground">
+                                        <p>📅 {new Date(event.event_date).toLocaleDateString()}</p>
+                                        <p>📍 {event.location}</p>
+                                    </div>
+                                    <div className="pt-2 border-t flex justify-end gap-2">
+                                        <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDeleteEvent(event.id)}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                        <Button variant="outline" size="sm" onClick={() => setEditingEvent(event)}>
+                                            Edit
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                            {events.length === 0 && (
+                                <div className="col-span-full text-center py-12 text-muted-foreground">
+                                    <p>You haven't created any events yet.</p>
+                                </div>
+                            )}
+                        </div>
                     ) : (
                         <HostReelsList
                             reels={activeTab === "published" ? publishedReels : draftReels}
                             type={activeTab}
+                            onDelete={handleDeleteReel}
+                            onToggleStatus={handleToggleReelStatus}
+                            onEdit={handleEditReel}
                         />
                     )}
                 </div>
 
                 <CreateReelDialog open={isCreateOpen} onOpenChange={handleDialogChange} />
+                <EditEventDialog 
+                    open={!!editingEvent} 
+                    onOpenChange={(open) => !open && setEditingEvent(null)} 
+                    event={editingEvent}
+                    onSuccess={fetchReels}
+                />
             </div>
         </MainLayout>
     );

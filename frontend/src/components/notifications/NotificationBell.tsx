@@ -38,6 +38,14 @@ export const NotificationBell = () => {
             case "message":
                 navigate("/profile/messages");
                 break;
+            case "event_reminder":
+                // Navigate to Discover or a specific event modal if data link exists
+                if (notif.data?.event_id) {
+                    navigate(`/discover?event=${notif.data.event_id}`);
+                } else {
+                    navigate("/discover");
+                }
+                break;
             default:
                 // Default fallback if a custom data link exists
                 if (notif.data?.link) navigate(notif.data.link);
@@ -165,6 +173,7 @@ const NotificationItem = ({
         payout: "💰",
         system: "🔔",
         message: "💬",
+        event_reminder: "⏰",
     };
 
     const typeColors = {
@@ -174,6 +183,7 @@ const NotificationItem = ({
         payout: "bg-amber-500/10 text-amber-600",
         system: "bg-zinc-500/10 text-zinc-600",
         message: "bg-primary/10 text-primary",
+        event_reminder: "bg-purple-500/10 text-purple-600",
     };
 
     return (

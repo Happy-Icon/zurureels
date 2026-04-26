@@ -3,13 +3,18 @@ import { Button } from "@/components/ui/button";
 import { ReelData } from "@/types/host";
 import { differenceInDays, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Edit, Trash2, Eye, EyeOff } from "lucide-react";
 
 interface HostReelsListProps {
     reels: ReelData[];
     type: "published" | "drafts";
+    onDelete?: (id: string) => void;
+    onToggleStatus?: (id: string, currentStatus: string) => void;
+    onEdit?: (reel: ReelData) => void;
 }
 
-export const HostReelsList = ({ reels, type }: HostReelsListProps) => {
+export const HostReelsList = ({ reels, type, onDelete, onToggleStatus, onEdit }: HostReelsListProps) => {
     if (reels.length === 0) {
         return (
             <div className="text-center py-12">
@@ -74,9 +79,30 @@ export const HostReelsList = ({ reels, type }: HostReelsListProps) => {
                                         <span className="capitalize">{reel.location}</span>
                                     </div>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreVertical className="h-4 w-4" />
-                                </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                            <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => onEdit?.(reel)}>
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Edit Details
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => onToggleStatus?.(reel.id, reel.status)}>
+                                            {reel.status === 'published' ? (
+                                                <><EyeOff className="h-4 w-4 mr-2" /> Unpublish (Draft)</>
+                                            ) : (
+                                                <><Eye className="h-4 w-4 mr-2" /> Publish Now</>
+                                            )}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={() => onDelete?.(reel.id)}>
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete Listing
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
 
                             {/* Status / Expiry Row */}

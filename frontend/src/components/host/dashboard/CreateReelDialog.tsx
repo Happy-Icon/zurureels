@@ -103,7 +103,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                 .map((r: any) => {
                     // Generate Cloudinary thumbnail if we have a Cloudinary URL
                     const thumbnailUrl = r.videoUrl?.includes('res.cloudinary.com')
-                        ? r.videoUrl.replace('/upload/', '/upload/w_400,h_600,c_fill,q_auto,f_jpg/')
+                        ? r.videoUrl.replace(/\.([a-z0-9]+)$/i, '.jpg').replace('/upload/', '/upload/so_0,w_400,h_600,c_fill,q_auto,f_jpg/')
                         : null;
                     return {
                         user_id: user.id,
@@ -216,8 +216,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             // Step 3: Extract thumbnail (optional, can use Cloudinary transformations)
             let thumbnailUrl: string | null = null;
             try {
-                // Use Cloudinary auto-generated thumbnail
-                thumbnailUrl = cloudinaryResult.secure_url.replace("/upload/", "/upload/w_400,h_600,c_fill,q_auto,f_auto/");
+                // Use Cloudinary auto-generated thumbnail from the first frame
+                thumbnailUrl = cloudinaryResult.secure_url.replace(/\.([a-z0-9]+)$/i, '.jpg').replace("/upload/", "/upload/so_0,w_400,h_600,c_fill,q_auto,f_jpg/");
             } catch (thumbErr) {
                 thumbnailUrl = null;
             }
