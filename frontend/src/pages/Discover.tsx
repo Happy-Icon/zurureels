@@ -137,7 +137,7 @@ const Discover = () => {
   ];
 
   return (
-    <MainLayout hideMobileUI={isMobile}>
+    <MainLayout>
       <div className="pb-20 md:pb-8">
         {/* Search Header */}
         <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border p-4 pt-[calc(1rem+env(safe-area-inset-top))] space-y-4">

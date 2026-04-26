@@ -99,7 +99,7 @@ function TikTokFeed({
       },
       {
         root: container,
-        threshold: 0.6,
+        threshold: 0.5,
       }
     );
 
@@ -150,6 +150,7 @@ function TikTokFeed({
           <ReelCard
             reel={reel}
             isActive={activeIndex === i}
+            preloadNext={activeIndex === i - 1}
             onBook={onBook}
             topOverlay={topOverlay}
           />
@@ -268,7 +269,7 @@ const CityPulse = () => {
   );
 
   return (
-    <MainLayout hideMobileUI={isMobile && tab === "feed" && !showMobileUI}>
+    <MainLayout hideMobileUI={isMobile && (tab === "feed" || !showMobileUI)}>
       {tab === "feed" ? (
         <div className="fixed inset-0 z-30 bg-black md:pl-64 overflow-hidden">
           <TikTokFeed
