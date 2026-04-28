@@ -103,7 +103,7 @@ export const Host = () => {
         {/* Content */}
         <div className="p-4 space-y-8">
           {/* Payout Settings Banner */}
-          {profile?.verification_status === 'verified' && !profile?.metadata?.paystack_subaccount_code && (
+          {!profile?.metadata?.paystack_subaccount_code && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <h3 className="font-semibold text-amber-700">
