@@ -89,6 +89,7 @@ export function BookingSheet({
     };
 
     const onPaystackSuccess = async (reference: any) => {
+        console.log("Paystack Success Triggered:", reference);
         setIsSubmitting(true);
         try {
             const isUUID = (id?: string) =>
