@@ -515,18 +515,18 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
         </div>
 
         {/* Bottom Content - INSIDE THE FRAME */}
-        <div className="absolute bottom-20 md:bottom-8 left-0 right-20 md:right-24 p-5 md:p-6 space-y-4 z-30 pointer-events-auto">
+        <div className="absolute bottom-12 md:bottom-8 left-0 right-20 md:right-24 p-5 md:p-6 space-y-2.5 z-30 pointer-events-auto">
           {/* Category & Expiry Badges */}
           <div className="flex flex-col items-start gap-1.5 pb-1">
             {reel.postedAt && (
               <div 
                 className={cn(
                   "text-[10px] font-bold uppercase tracking-[0.1em] text-white/90 drop-shadow-md flex items-center gap-1",
-                  isReelExpiringSoon(new Date(reel.postedAt)) && "text-orange-400"
+                  isReelExpiringSoon(new Date(reel.postedAt!)) && "text-orange-400"
                 )}
               >
                 <Clock className="h-3 w-3" />
-                {getReelExpiryDisplay(new Date(reel.postedAt))}
+                {getReelExpiryDisplay(new Date(reel.postedAt!))}
               </div>
             )}
             <Badge className={cn("text-[11px] h-5 px-2 font-bold capitalize shadow-lg", categoryColors[reel.category])}>
@@ -535,22 +535,22 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
           </div>
 
           {/* Title & Location */}
-          <div className="space-y-1">
-            <h3 className="text-xl font-display font-semibold text-white line-clamp-2 drop-shadow-md">
+          <div className="space-y-0.5">
+            <h3 className="text-lg font-display font-semibold text-white line-clamp-1 drop-shadow-md">
               {reel.title}
             </h3>
-            <p className="text-sm text-white/80">{reel.location}</p>
+            <p className="text-xs text-white/80">{reel.location}</p>
           </div>
 
           {/* Price & Rating */}
           <div className="flex items-center gap-4">
-            <span className="text-lg font-semibold text-white">
+            <span className="text-base font-semibold text-white">
               KES {reel.price.toLocaleString()}
-              <span className="text-sm font-normal text-white/80">
+              <span className="text-xs font-normal text-white/80">
                 /{reel.priceUnit}
               </span>
             </span>
-            <span className="flex items-center gap-1 text-sm text-white">
+            <span className="flex items-center gap-1 text-xs text-white">
               ⭐ {reel.rating.toFixed(1)}
             </span>
           </div>
@@ -559,14 +559,14 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
           <div className="flex flex-col gap-2 w-full md:w-auto">
             <Button
               onClick={() => onBook?.(reel.id)}
-              className="w-full md:w-auto bg-[#EE7D30] hover:bg-[#EE7D30]/90 text-white font-semibold shadow-lg shadow-orange-500/20 px-8 h-11"
+              className="w-full md:w-auto bg-[#EE7D30] hover:bg-[#EE7D30]/90 text-white font-semibold shadow-lg shadow-orange-500/20 px-8 h-10 text-sm"
             >
               Book Now
             </Button>
             <Button
               onClick={handleEnquire}
               variant="outline"
-              className="w-full md:w-auto border-white/20 bg-white/5 hover:bg-white/10 text-white font-semibold backdrop-blur-sm px-8 h-11"
+              className="w-full md:w-auto border-white/20 bg-white/5 hover:bg-white/10 text-white font-semibold backdrop-blur-sm px-8 h-10 text-sm"
             >
               Enquire
             </Button>

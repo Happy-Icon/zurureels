@@ -17,6 +17,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { format } from "date-fns";
+import { Booking } from "@/hooks/useBookings";
 
 type BookingTab = "upcoming" | "history";
 
@@ -24,6 +27,7 @@ const Bookings = () => {
   const [activeTab, setActiveTab] = useState<BookingTab>("upcoming");
   const { bookings, loading, cancelBooking } = useBookings("guest");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
   const filteredBookings = bookings.filter((booking) => {
     if (activeTab === "upcoming") {
@@ -44,11 +48,11 @@ const Bookings = () => {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    try {
+      return format(new Date(dateStr), "MMM d, yyyy");
+    } catch (e) {
+      return dateStr;
+    }
   };
 
   const getDaysUntil = (dateStr: string) => {
@@ -201,7 +205,17 @@ const Bookings = () => {
                           <p className="text-sm text-muted-foreground">Total paid</p>
                           <p className="text-lg font-semibold">KES {booking.amount.toLocaleString()}</p>
                         </div>
-                        <Button variant={isCancelled ? "outline" : "default"} size="sm">
+                        <Button 
+                          variant={isCancelled ? "outline" : "default"} 
+                          size="sm"
+                          onClick={() => {
+                            if (isCancelled || activeTab === "history") {
+                              // Maybe navigate back to experience
+                            } else {
+                              setSelectedBooking(booking);
+                            }
+                          }}
+                        >
                           {isCancelled || activeTab === "history" ? "Book Again" : "View Details"}
                         </Button>
                       </div>
@@ -213,6 +227,110 @@ const Bookings = () => {
           )}
         </div>
       </div>
+
+      {/* Booking Details Sheet */}
+      <Sheet open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-[450px] overflow-y-auto">
+          {selectedBooking && (
+            <div className="space-y-6 py-4">
+              <SheetHeader>
+                <SheetTitle className="text-xl font-display">Booking Details</SheetTitle>
+                <SheetDescription>
+                  Reference: {selectedBooking.id.split('-')[0].toUpperCase()}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="rounded-xl overflow-hidden aspect-video border">
+                <img 
+                  src={selectedBooking.experience?.image_url || "/placeholder.svg"} 
+                  alt={selectedBooking.trip_title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold text-lg">{selectedBooking.trip_title}</h3>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5" />
+                    {selectedBooking.experience?.location || "Location TBD"}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 p-4 bg-secondary/20 rounded-xl border border-border">
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Check-in</p>
+                    <p className="font-medium">{formatDate(selectedBooking.check_in)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Check-out</p>
+                    <p className="font-medium">{formatDate(selectedBooking.check_out)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Guests</p>
+                    <p className="font-medium">{selectedBooking.guests} Person(s)</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Status</p>
+                    <Badge variant="outline" className="capitalize bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                      {selectedBooking.status}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm">Payment Summary</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Total Amount</span>
+                      <span>KES {selectedBooking.amount.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-base pt-2 border-t border-border">
+                      <span>Paid Total</span>
+                      <span className="text-primary">KES {selectedBooking.amount.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 space-y-3">
+                  <Button className="w-full" variant="outline" onClick={() => setSelectedBooking(null)}>
+                    Close
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" className="w-full text-destructive hover:bg-destructive/5">
+                        Cancel Booking
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel this booking?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to cancel your reservation for {selectedBooking?.trip_title}? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>No, keep it</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            if (selectedBooking) {
+                              handleCancel(selectedBooking.id);
+                              setSelectedBooking(null);
+                            }
+                          }}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Yes, cancel booking
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </MainLayout>
   );
 };
