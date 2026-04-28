@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format, addDays, differenceInDays, isBefore, startOfDay } from "date-fns";
 import { DateRange } from "react-day-picker";
 import {
@@ -80,13 +80,13 @@ export function BookingSheet({
     const total = price * units;
 
     // Paystack Config
-    const config = {
+    const config = useMemo(() => ({
         reference: paystackRef,
         email: user?.email || "",
         amount: Math.round(total * 100), // kobo/cents — must be integer
         publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "",
         currency: "KES",
-    };
+    }), [paystackRef, user?.email, total]);
 
     const onPaystackSuccess = async (reference: any) => {
         toast.info("1. Paystack Success Triggered!");

@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
     Dialog,
     DialogContent,
@@ -67,13 +67,13 @@ export const CheckOutDialog = ({
     const [paystackRef] = useState(() => `zuru_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 
     // Paystack Config
-    const config = {
+    const config = useMemo(() => ({
         reference: paystackRef,
         email: user?.email || "",
         amount: Math.round(amount * 100), // kobo/cents — must be integer
         publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "",
         currency: "KES",
-    };
+    }), [paystackRef, user?.email, amount]);
 
     const c_onSuccess = async (reference: any) => {
         setLoading(true);

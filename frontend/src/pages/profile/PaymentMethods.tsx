@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { ArrowLeft, CreditCard, Plus, Smartphone, Trash2, ShieldCheck, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -61,13 +61,13 @@ export const PaymentMethods = () => {
         fetchMethods();
     }, [user]);
 
-    const config = {
+    const config = useMemo(() => ({
         reference: (new Date()).getTime().toString(),
         email: email,
         amount: amount * 100, // Amount is in kobo/cents
         publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
         currency: 'KES',
-    };
+    }), [email, amount]);
 
     const c_onSuccess = async (reference: any) => {
         toast.success("Payment method verified!");
