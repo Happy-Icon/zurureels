@@ -89,6 +89,7 @@ export function BookingSheet({
     };
 
     const onPaystackSuccess = async (reference: any) => {
+        toast.info("1. Paystack Success Triggered!");
         console.log("Paystack Success Triggered:", reference);
         setIsSubmitting(true);
         try {
@@ -96,7 +97,9 @@ export function BookingSheet({
                 !!id &&
                 /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
+            toast.info("2. Checking UUID...");
             if (isUUID(experienceId)) {
+                toast.info("3. Attempting Supabase Insert...");
                 const { error: bookingError } = await supabase.from("bookings").insert({
                     user_id: user?.id,
                     experience_id: experienceId,
@@ -108,6 +111,7 @@ export function BookingSheet({
                     status: "paid",
                     payment_reference: reference.reference,
                 });
+                toast.info("4. Supabase Insert Finished!");
 
                 if (bookingError) throw bookingError;
                 
@@ -115,14 +119,16 @@ export function BookingSheet({
                 handleClose();
                 onSuccess?.();
             } else {
+                toast.info("3. Mock Booking Detected...");
                 toast.success("Demo booking successful! (Mock Experience)");
                 handleClose();
                 onSuccess?.();
             }
         } catch (err: any) {
             console.error("Booking recording error:", err);
-            toast.error("Payment successful but failed to record booking. Please contact support.");
+            toast.error("Payment successful but failed to record booking. Error: " + err.message);
         } finally {
+            toast.info("5. Releasing Loading State...");
             setIsSubmitting(false);
         }
     };
