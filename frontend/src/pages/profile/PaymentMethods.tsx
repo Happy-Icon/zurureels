@@ -220,7 +220,7 @@ export const PaymentMethods = () => {
                                             return;
                                         }
                                         // @ts-ignore
-                                        initializePayment(onSuccess, onClose);
+                                        initializePayment({ onSuccess: c_onSuccess, onClose: c_onClose });
                                     }}
                                     className="w-full mt-4 bg-[#0AA5DB] hover:bg-[#0AA5DB]/90 text-white"
                                 >

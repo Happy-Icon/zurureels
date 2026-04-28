@@ -173,8 +173,7 @@ export function BookingSheet({
         }
 
         setIsSubmitting(true);
-        // @ts-ignore
-        initializePayment(onPaystackSuccess, onPaystackClose);
+        initializePayment({ onSuccess: onPaystackSuccess, onClose: onPaystackClose });
     };
 
     const handleClose = () => {

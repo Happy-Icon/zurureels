@@ -176,8 +176,7 @@ export const CheckOutDialog = ({
         setLoading(true);
 
         if (selectedMethodId === "new") {
-            // @ts-ignore
-            initializePayment(onPaystackSuccess, onPaystackClose);
+            initializePayment({ onSuccess: onPaystackSuccess, onClose: onPaystackClose });
         } else {
             setTimeout(async () => {
                 const simulatedRef = { reference: "SIM_" + Date.now() };
