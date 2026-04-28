@@ -180,7 +180,7 @@ export function BookingSheet({
     };
 
     return (
-        <Sheet open={open} onOpenChange={handleClose}>
+        <Sheet open={open} onOpenChange={handleClose} modal={false}>
             <SheetContent
                 side={isMobile ? "bottom" : "right"}
                 className={cn(

@@ -187,7 +187,7 @@ export const PaymentMethods = () => {
                     </div>
 
                     {/* Add New Button */}
-                    <Dialog open={isAdding} onOpenChange={setIsAdding}>
+                    <Dialog open={isAdding} onOpenChange={setIsAdding} modal={false}>
                         <DialogTrigger asChild>
                             <Button className="w-full" variant="outline">
                                 <Plus className="mr-2 h-4 w-4" /> Add Payment Method

@@ -199,7 +199,7 @@ export const CheckOutDialog = ({
     }, [user, isOpen]);
 
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <Dialog open={isOpen} onOpenChange={setIsOpen} modal={false}>
             {/* Only render DialogTrigger when NOT in controlled mode */}
             {!isControlled && (
                 <DialogTrigger asChild>
