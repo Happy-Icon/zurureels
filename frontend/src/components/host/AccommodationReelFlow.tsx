@@ -59,6 +59,15 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
   const [showRecorder, setShowRecorder] = useState(false);
   const [optimizationProgress, setOptimizationProgress] = useState<number | null>(null);
   const currentReelIdRef = useRef<string | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith("video/")) {
+      await handleRecordingComplete(file);
+    }
+    if (e.target) e.target.value = '';
+  };
 
   // Warm up FFmpeg and Cloudinary
   useEffect(() => {
@@ -509,6 +518,20 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
                       </>
                     )}
                   </Button>
+                  {!reel.uploaded && uploadingId === null && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        currentReelIdRef.current = reel.id;
+                        galleryInputRef.current?.click();
+                      }}
+                      className="w-full"
+                    >
+                      <FolderOpen className="h-4 w-4 mr-1" />
+                      From Gallery
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -539,6 +562,15 @@ export const AccommodationReelFlow = ({ category, onComplete, onBack }: Accommod
           />
         </div>
       )}
+
+      {/* Hidden file input for gallery upload */}
+      <input
+        type="file"
+        accept="video/*"
+        className="hidden"
+        ref={galleryInputRef}
+        onChange={handleFileSelect}
+      />
     </div>
   );
 };
