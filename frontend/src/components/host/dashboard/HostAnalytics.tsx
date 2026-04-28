@@ -28,8 +28,7 @@ export const HostAnalytics = () => {
             try {
                 // Fetch daily stats from the RPC
                 const { data, error } = await supabase.rpc("get_host_daily_stats", {
-                    host_uuid: user.id,
-                    days_back: 30
+                    host_uuid: user.id
                 });
 
                 if (error) {
@@ -40,18 +39,28 @@ export const HostAnalytics = () => {
                 }
 
                 if (data) {
-                    const formattedData = data.map((d: any) => ({
-                        date: format(new Date(d.date), "MMM dd"),
-                        views: Number(d.views),
-                        likes: Number(d.likes),
-                        saves: Number(d.saves),
-                        bookings: Number(d.bookings),
-                        shares: Number(d.shares || 0),
-                        followers: Number(d.followers || 0),
-                        profile_views: Number(d.profile_views || 0),
-                        engagementRate: d.views > 0 ? (((Number(d.likes) + Number(d.saves) + Number(d.shares)) / Number(d.views)) * 100).toFixed(1) : 0,
-                        bookingRate: d.views > 0 ? ((Number(d.bookings) / Number(d.views)) * 100).toFixed(1) : 0
-                    }));
+                    const formattedData = data.map((d: any) => {
+                        let formattedDate = "Unknown";
+                        if (d.date) {
+                            const dateObj = new Date(d.date);
+                            if (!isNaN(dateObj.getTime())) {
+                                formattedDate = format(dateObj, "MMM dd");
+                            }
+                        }
+                        
+                        return {
+                            date: formattedDate,
+                            views: Number(d.views) || 0,
+                            likes: Number(d.likes) || 0,
+                            saves: Number(d.saves) || 0,
+                            bookings: Number(d.bookings) || 0,
+                            shares: Number(d.shares) || 0,
+                            followers: Number(d.followers) || 0,
+                            profile_views: Number(d.profile_views) || 0,
+                            engagementRate: Number(d.views) > 0 ? (((Number(d.likes) + Number(d.saves) + Number(d.shares)) / Number(d.views)) * 100).toFixed(1) : 0,
+                            bookingRate: Number(d.views) > 0 ? ((Number(d.bookings) / Number(d.views)) * 100).toFixed(1) : 0
+                        };
+                    });
                     setStats(formattedData);
 
                     setKpis({ 

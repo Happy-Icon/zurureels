@@ -16,7 +16,7 @@ const authGuestNavItems = [
   { icon: Zap, label: "Zuru Pulse", path: "/" },
   { icon: Compass, label: "Discover", path: "/discover" },
   { icon: Heart, label: "Saved", path: "/saved" },
-  { icon: Calendar, label: "Trips", path: "/bookings" },
+  { icon: Calendar, label: "Reservations", path: "/bookings" },
   { icon: User, label: "Profile", path: "/profile" },
 ];
 

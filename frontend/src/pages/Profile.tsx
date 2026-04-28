@@ -121,7 +121,7 @@ const Profile = () => {
             <div className="flex justify-center gap-8 mt-6 pt-6 border-t border-border">
               <div className="text-center">
                 <p className="text-2xl font-semibold">0</p>
-                <p className="text-sm text-muted-foreground">Trips</p>
+                <p className="text-sm text-muted-foreground">Reservations</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-semibold">0</p>

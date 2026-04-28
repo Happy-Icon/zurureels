@@ -33,7 +33,6 @@ interface CreateReelDialogProps {
 
 export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) => {
     const [selectedCategory, setSelectedCategory] = useState<string>("");
-    const [showAccommodationFlow, setShowAccommodationFlow] = useState(false);
     const [showVideoEditor, setShowVideoEditor] = useState(false);
     const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
     const [title, setTitle] = useState("");
@@ -61,17 +60,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         }
     }, [open]);
 
-    const isAccommodationCategory = (cat: string): cat is AccommodationType => {
-        return ["hotel", "villa", "apartment", "parks_camps"].includes(cat);
-    };
-
     const handleCategoryChange = (value: string) => {
         setSelectedCategory(value);
-        if (isAccommodationCategory(value)) {
-            setShowAccommodationFlow(true);
-        } else {
-            setShowAccommodationFlow(false);
-        }
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -139,13 +129,12 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         onOpenChange(newOpen);
         if (!newOpen) {
             setSelectedCategory("");
-            setShowAccommodationFlow(false);
             setSelectedVideoFile(null);
         }
     };
 
     const handleStartRecording = () => {
-        if (selectedCategory && !isAccommodationCategory(selectedCategory)) {
+        if (selectedCategory) {
             setShowVideoEditor(true);
         }
     };
@@ -306,10 +295,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl sm:rounded-3xl">
                 <DialogHeader>
                     <DialogTitle className="font-display">
-                        {showAccommodationFlow
-                            ? `${selectedCategory === "hotel" ? "Hotel" : selectedCategory === "villa" ? "Villa" : "Apartment"} Setup`
-                            : "Create New Reel"
-                        }
+                        Create New Reel
                     </DialogTitle>
                 </DialogHeader>
 
@@ -340,16 +326,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     </div>
                 )}
 
-                {showAccommodationFlow && isAccommodationCategory(selectedCategory) ? (
-                    <AccommodationReelFlow
-                        category={selectedCategory}
-                        onComplete={handleAccommodationComplete}
-                        onBack={() => {
-                            setShowAccommodationFlow(false);
-                            setSelectedCategory("");
-                        }}
-                    />
-                ) : (
+                {selectedCategory ? (
                     <form className="space-y-4 mt-4">
                         {/* Category Selection */}
                         <div className="space-y-2">
@@ -372,16 +349,9 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {selectedCategory && isAccommodationCategory(selectedCategory) && (
-                                <p className="text-xs text-muted-foreground">
-                                    You'll be guided through the accommodation reel setup
-                                </p>
-                            )}
                         </div>
 
-                        {selectedCategory && !isAccommodationCategory(selectedCategory) && (
-                            <>
-                                <div className="space-y-4 py-2 border-t border-b border-border/50">
+                        <div className="space-y-4 py-2 border-t border-b border-border/50">
                                     <div className="space-y-2">
                                         <Label htmlFor="title" className="flex items-center gap-1">
                                             Title <span className="text-destructive">*</span>
@@ -453,7 +423,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                             <Video className="h-6 w-6 text-primary" />
                                         </div>
                                         <p className="font-bold">
-                                            {selectedCategory === "rentals" ? "Step 2: Record Live" : "Step 2: Add Your Reel"}
+                                            Step 2: Add Your Reel
                                         </p>
                                         <p className="text-xs text-muted-foreground">
                                             {!title || !location || !price 
@@ -466,21 +436,17 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                                 Start Recording
                                             </Button>
 
-                                            {selectedCategory !== "rentals" && (
-                                                <>
-                                                    <input
-                                                        type="file"
-                                                        accept="video/*"
-                                                        className="hidden"
-                                                        ref={fileInputRef}
-                                                        onChange={handleFileSelect}
-                                                    />
-                                                    <Button type="button" variant="outline" size="sm" onClick={handleUploadFromGallery} disabled={!title || !location || !price}>
-                                                        <FolderOpen className="h-4 w-4 mr-2" />
-                                                        From Gallery
-                                                    </Button>
-                                                </>
-                                            )}
+                                            <input
+                                                type="file"
+                                                accept="video/*"
+                                                className="hidden"
+                                                ref={fileInputRef}
+                                                onChange={handleFileSelect}
+                                            />
+                                            <Button type="button" variant="outline" size="sm" onClick={handleUploadFromGallery} disabled={!title || !location || !price}>
+                                                <FolderOpen className="h-4 w-4 mr-2" />
+                                                From Gallery
+                                            </Button>
                                         </div>
                                     </div>
                                 </div>
@@ -579,16 +545,34 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                         {isSubmitting ? "Publishing..." : "Record & Publish"}
                                     </Button>
                                 </div>
-                            </>
-                        )}
-
-                        {!selectedCategory && (
-                            <div className="py-8 text-center text-muted-foreground">
-                                <Video className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                <p>Select a category to get started</p>
-                            </div>
-                        )}
                     </form>
+                ) : (
+                    <div className="py-8 text-center text-muted-foreground mt-4">
+                        {/* Category Selection for when empty */}
+                        <div className="space-y-2 mb-8 text-left">
+                            <Label>Category</Label>
+                            <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent
+                                    position="popper"
+                                    side="bottom"
+                                    align="center"
+                                    sideOffset={4}
+                                    className="max-h-60 overflow-y-auto"
+                                >
+                                    {categories.map((cat) => (
+                                        <SelectItem key={cat.value} value={cat.value}>
+                                            {cat.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <Video className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                        <p>Select a category to get started</p>
+                    </div>
                 )}
             </DialogContent>
         </Dialog>

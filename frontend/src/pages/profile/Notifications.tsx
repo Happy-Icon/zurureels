@@ -168,7 +168,7 @@ export const Notifications = () => {
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-lg font-medium">
                             <Calendar className="h-5 w-5 text-primary" />
-                            <h3>Trips & Hosting</h3>
+                            <h3>Reservations & Hosting</h3>
                         </div>
                         <div className="space-y-4 pl-7">
                             <div className="flex items-center justify-between">
