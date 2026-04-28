@@ -31,7 +31,7 @@ const Bookings = () => {
 
   const filteredBookings = bookings.filter((booking) => {
     if (activeTab === "upcoming") {
-      return booking.status === "paid" || booking.status === "pending";
+      return booking.status === "paid" || booking.status === "pending" || booking.status === "confirmed";
     } else {
       return booking.status === "completed" || booking.status === "cancelled";
     }
@@ -156,7 +156,20 @@ const Bookings = () => {
                     <div className="p-4 space-y-3">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="font-semibold text-lg">{booking.trip_title}</h3>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-lg">{booking.trip_title}</h3>
+                            <Badge 
+                              variant="outline" 
+                              className={cn(
+                                "text-[10px] uppercase font-bold py-0 h-4 px-1.5",
+                                booking.status === 'confirmed' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
+                                booking.status === 'paid' ? "bg-blue-500/10 text-blue-600 border-blue-500/20" :
+                                "bg-muted text-muted-foreground border-border"
+                              )}
+                            >
+                              {booking.status === 'paid' ? 'Pending Host' : booking.status}
+                            </Badge>
+                          </div>
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
                             <MapPin className="h-3.5 w-3.5" />
                             {booking.experience?.location || "Location TBD"}
@@ -272,8 +285,16 @@ const Bookings = () => {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Status</p>
-                    <Badge variant="outline" className="capitalize bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                      {selectedBooking.status}
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "capitalize",
+                        selectedBooking.status === 'confirmed' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
+                        selectedBooking.status === 'paid' ? "bg-blue-500/10 text-blue-600 border-blue-500/20" :
+                        "bg-muted text-muted-foreground border-border"
+                      )}
+                    >
+                      {selectedBooking.status === 'paid' ? 'Pending Host Approval' : selectedBooking.status}
                     </Badge>
                   </div>
                 </div>

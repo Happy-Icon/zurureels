@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Plus, Loader2 } from "lucide-react";
 
@@ -13,14 +14,18 @@ export const Host = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const { user } = useAuth();
   const [setupLoading, setSetupLoading] = useState(false);
-  const [profile, setProfile] = useState<{ verification_status: string, stripe_onboarded: boolean, stripe_account_id: string } | null>(null);
+  const [profile, setProfile] = useState<{ verification_status: string, stripe_onboarded: boolean, stripe_account_id: string, metadata: any } | null>(null);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
+  const [payoutBannerDismissed, setPayoutBannerDismissed] = useState(() => {
+    return localStorage.getItem('payout_banner_dismissed') === 'true';
+  });
+  const navigate = useNavigate();
 
   // Fetch profile for Stripe onboarding check
   const fetchProfile = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase.from('profiles')
-      .select('verification_status, stripe_onboarded, stripe_account_id')
+      .select('verification_status, stripe_onboarded, stripe_account_id, metadata')
       .eq('id', user.id)
       .single();
     setProfile(data as any);
@@ -66,20 +71,8 @@ export const Host = () => {
     }
   }, [profile, fetchProfile]);
 
-  const handleSetupPayouts = async () => {
-    try {
-      setSetupLoading(true);
-      const { data, error } = await supabase.functions.invoke('create-stripe-onboarding', {});
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data?.url) {
-        window.location.href = data.url;
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to initiate onboarding");
-    } finally {
-      setSetupLoading(false);
-    }
+  const handleSetupPayouts = () => {
+    navigate("/host/payouts");
   };
 
   // Refetch when dialog closes (new reel might have been created)
@@ -109,33 +102,46 @@ export const Host = () => {
 
         {/* Content */}
         <div className="p-4 space-y-8">
-          {/* Stripe Onboarding Banner */}
-          {profile?.verification_status === 'verified' && !profile?.stripe_onboarded && (
-            <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          {/* Payout Settings Banner */}
+          {profile?.verification_status === 'verified' && !profile?.metadata?.paystack_subaccount_code && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h3 className="font-semibold text-primary">
-                  {checkingOnboarding ? 'Checking Onboarding Status...' : 'Set Up Payouts'}
+                <h3 className="font-semibold text-amber-700">
+                  Set Up Payouts
                 </h3>
                 <p className="text-sm text-foreground/80 mt-1">
-                  {checkingOnboarding
-                    ? 'Please wait while we verify your Stripe account...'
-                    : 'You need to set up your payout method to receive earnings from your bookings.'}
+                  Connect your bank account or M-Pesa to receive earnings from your bookings.
                 </p>
               </div>
-              <Button onClick={handleSetupPayouts} disabled={setupLoading || checkingOnboarding} className="shrink-0">
-                {setupLoading || checkingOnboarding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {checkingOnboarding ? 'Checking...' : 'Connect Stripe Account'}
+              <Button onClick={handleSetupPayouts} className="shrink-0">
+                Connect Payout Method
               </Button>
             </div>
           )}
 
-          {/* Success Message After Onboarding */}
-          {profile?.stripe_onboarded && (
-            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
-              <h3 className="font-semibold text-green-600">✓ Payouts Enabled</h3>
-              <p className="text-sm text-foreground/80 mt-1">
-                Your Stripe account is connected and ready to receive payments.
-              </p>
+          {/* Success Message */}
+          {profile?.metadata?.paystack_subaccount_code && !payoutBannerDismissed && (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative">
+              <div>
+                <h3 className="font-semibold text-emerald-700">✓ Payouts Active</h3>
+                <p className="text-sm text-foreground/80 mt-1">
+                  Your settlement account is connected. Earnings will be automatically split.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Button variant="outline" size="sm" onClick={handleSetupPayouts} className="flex-1 sm:flex-none">
+                  Update Settings
+                </Button>
+                <button 
+                  onClick={() => {
+                    setPayoutBannerDismissed(true);
+                    localStorage.setItem('payout_banner_dismissed', 'true');
+                  }}
+                  className="p-1 hover:bg-emerald-500/20 rounded-full transition-colors text-emerald-700"
+                >
+                  <Plus className="h-4 w-4 rotate-45" />
+                </button>
+              </div>
             </div>
           )}
 

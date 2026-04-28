@@ -65,6 +65,36 @@ export function BookingSheet({
     const [guests, setGuests] = useState(1);
     const [showCalendar, setShowCalendar] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [subaccountCode, setSubaccountCode] = useState<string | null>(null);
+
+    // Fetch Host Subaccount
+    useEffect(() => {
+        if (!experienceId || !open) return;
+        
+        const fetchHostSubaccount = async () => {
+            const { data: experience } = await supabase
+                .from('experiences')
+                .select('user_id')
+                .eq('id', experienceId)
+                .single();
+            
+            if (experience?.user_id) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('metadata')
+                    .eq('id', experience.user_id)
+                    .single();
+                
+                if (profile?.metadata) {
+                    const metadata = profile.metadata as any;
+                    if (metadata.paystack_subaccount_code) {
+                        setSubaccountCode(metadata.paystack_subaccount_code);
+                    }
+                }
+            }
+        };
+        fetchHostSubaccount();
+    }, [experienceId, open]);
 
     // Paystack Reference
     const [paystackRef] = useState(() => `zuru_${Date.now()}_${Math.random().toString(36).slice(2)}`);
@@ -86,7 +116,8 @@ export function BookingSheet({
         amount: Math.round(total * 100), // kobo/cents — must be integer
         publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "",
         currency: "KES",
-    }), [paystackRef, user?.email, total]);
+        subaccount: subaccountCode || undefined, // Automatic split if host is onboarded
+    }), [paystackRef, user?.email, total, subaccountCode]);
 
     const onPaystackSuccess = async (reference: any) => {
         setIsSubmitting(true);
