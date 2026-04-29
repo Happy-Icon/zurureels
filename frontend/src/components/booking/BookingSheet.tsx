@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format, addDays, differenceInDays, isBefore, startOfDay } from "date-fns";
 import { DateRange } from "react-day-picker";
 import {
@@ -65,38 +65,6 @@ export function BookingSheet({
     const [guests, setGuests] = useState(1);
     const [showCalendar, setShowCalendar] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [subaccountCode, setSubaccountCode] = useState<string | null>(null);
-
-    // Fetch Host Subaccount
-    useEffect(() => {
-        if (!experienceId || !open) return;
-        
-        const fetchHostSubaccount = async () => {
-            const { data: experience } = await supabase
-                .from('experiences')
-                .select('user_id')
-                .eq('id', experienceId)
-                .single();
-            
-            if (experience?.user_id) {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('metadata')
-                    .eq('id', experience.user_id)
-                    .single();
-                
-                if (profile?.metadata) {
-                    const metadata = profile.metadata as any;
-                    if (metadata.paystack_subaccount_code) {
-                        setSubaccountCode(metadata.paystack_subaccount_code);
-                    }
-                }
-            }
-        };
-        fetchHostSubaccount();
-    }, [experienceId, open]);
-
-    // Paystack Reference
     const [paystackRef] = useState(() => `zuru_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 
     const today = startOfDay(new Date());
@@ -113,45 +81,48 @@ export function BookingSheet({
     const config = useMemo(() => ({
         reference: paystackRef,
         email: user?.email || "",
-        amount: Math.round(total * 100), // kobo/cents — must be integer
+        amount: Math.round(total * 100),
         publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "",
         currency: "KES",
-        subaccount: subaccountCode || undefined, // Automatic split if host is onboarded
-    }), [paystackRef, user?.email, total, subaccountCode]);
+    }), [paystackRef, user?.email, total]);
 
     const onPaystackSuccess = async (reference: any) => {
         setIsSubmitting(true);
         try {
-            const isUUID = (id?: string) =>
-                !!id &&
-                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+            // 1. Create Booking with 'pending' status first
+            const { data: booking, error: bookingError } = await supabase.from("bookings").insert({
+                user_id: user?.id,
+                experience_id: experienceId,
+                trip_title: title,
+                amount: total,
+                guests,
+                check_in: dateRange?.from?.toISOString() || new Date().toISOString(),
+                check_out: (dateRange?.to || addDays(dateRange?.from || new Date(), 1)).toISOString(),
+                status: "pending",
+                payment_reference: reference.reference,
+            }).select().single();
 
-            if (isUUID(experienceId)) {
-                const { error: bookingError } = await supabase.from("bookings").insert({
-                    user_id: user?.id,
-                    experience_id: experienceId,
-                    trip_title: title,
-                    amount: total,
-                    guests,
-                    check_in: dateRange?.from?.toISOString() || new Date().toISOString(),
-                    check_out: (dateRange?.to || addDays(dateRange?.from || new Date(), 1)).toISOString(),
-                    status: "paid",
-                    payment_reference: reference.reference,
-                });
+            if (bookingError) throw bookingError;
 
-                if (bookingError) throw bookingError;
-                
-                toast.success("Booking confirmed! Enjoy your trip 🎉");
-                handleClose();
-                onSuccess?.();
-            } else {
-                toast.success("Demo booking successful! (Mock Experience)");
-                handleClose();
-                onSuccess?.();
+            // 2. Verify Payment on Backend
+            const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-paystack-payment', {
+                body: { 
+                    reference: reference.reference,
+                    booking_id: booking.id
+                }
+            });
+
+            if (verifyError || verifyData?.error) {
+                throw new Error(verifyData?.error || "Payment verification failed");
             }
+
+            toast.success("Booking confirmed! Enjoy your trip 🎉");
+            handleClose();
+            onSuccess?.();
+            
         } catch (err: any) {
             console.error("Booking recording error:", err);
-            toast.error("Payment successful but failed to record booking. Please contact support.");
+            toast.error("Payment successful but failed to record booking: " + err.message);
         } finally {
             setIsSubmitting(false);
         }

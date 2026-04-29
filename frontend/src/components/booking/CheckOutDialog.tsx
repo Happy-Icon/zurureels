@@ -63,103 +63,59 @@ export const CheckOutDialog = ({
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [selectedMethodId, setSelectedMethodId] = useState<string>("new");
     const [saveCard, setSaveCard] = useState(true);
-    const [subaccountCode, setSubaccountCode] = useState<string | null>(null);
-
-    // Fetch Host Subaccount
-    useEffect(() => {
-        if (!experienceId || !isOpen) return;
-        
-        const fetchHostSubaccount = async () => {
-            const { data: experience } = await supabase
-                .from('experiences')
-                .select('user_id')
-                .eq('id', experienceId)
-                .single();
-            
-            if (experience?.user_id) {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('metadata')
-                    .eq('id', experience.user_id)
-                    .single();
-                
-                if (profile?.metadata) {
-                    const metadata = profile.metadata as any;
-                    if (metadata.paystack_subaccount_code) {
-                        setSubaccountCode(metadata.paystack_subaccount_code);
-                    }
-                }
-            }
-        };
-        fetchHostSubaccount();
-    }, [experienceId, isOpen]);
-
     const [paystackRef] = useState(() => `zuru_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 
     // Paystack Config
     const config = useMemo(() => ({
         reference: paystackRef,
         email: user?.email || "",
-        amount: Math.round(amount * 100), // kobo/cents — must be integer
+        amount: Math.round(amount * 100),
         publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "",
         currency: "KES",
-        subaccount: subaccountCode || undefined, // Automatic split if host is onboarded
-    }), [paystackRef, user?.email, amount, subaccountCode]);
+    }), [paystackRef, user?.email, amount]);
 
     const c_onSuccess = async (reference: any) => {
         setLoading(true);
 
-        // Support mock IDs (non-UUIDs)
-        const isUUID = (id?: string) => {
-            if (!id) return false;
-            const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            return regex.test(id);
-        };
-
         try {
-            // 1. Create Booking (Only if IDs are valid UUIDs)
-            if (isUUID(experienceId)) {
-                const { error: bookingError } = await supabase.from('bookings').insert({
-                    user_id: user?.id,
-                    experience_id: experienceId,
-                    trip_title: tripTitle,
-                    amount: amount,
-                    guests: guests,
-                    check_in: checkIn || new Date().toISOString(),
-                    check_out: checkOut || new Date(Date.now() + 86400000).toISOString(),
-                    status: 'paid',
-                    payment_reference: reference.reference
-                });
+            // 1. Create Booking with 'pending' status first
+            const { data: booking, error: bookingError } = await supabase.from('bookings').insert({
+                user_id: user?.id,
+                experience_id: experienceId,
+                trip_title: tripTitle,
+                amount: amount,
+                guests: guests,
+                check_in: checkIn || new Date().toISOString(),
+                check_out: checkOut || new Date(Date.now() + 86400000).toISOString(),
+                status: 'pending',
+                payment_reference: reference.reference
+            }).select().single();
 
-                if (bookingError) throw bookingError;
-            } else {
-                console.log("Mock booking detected, skipping DB insert.");
+            if (bookingError) throw bookingError;
+
+            // 2. Verify Payment on Backend
+            const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-paystack-payment', {
+                body: { 
+                    reference: reference.reference,
+                    booking_id: booking.id
+                }
+            });
+
+            if (verifyError || verifyData?.error) {
+                throw new Error(verifyData?.error || "Payment verification failed");
             }
 
-            // 2. Save Card (if requested and it's a new card)
+            // 3. Save Card (if requested and it's a new card)
             if (selectedMethodId === "new" && saveCard) {
                 const auth = reference.authorization || {};
-
-                try {
-                    // @ts-ignore
-                    const { error: saveError } = await supabase.from('payment_methods').insert({
-                        user_id: user?.id,
-                        provider: 'paystack',
-                        reference: reference.reference,
-                        authorization_code: auth.authorization_code || 'demo_auth_code_' + Date.now(),
-                        last4: auth.last4 || '0000',
-                        brand: auth.brand || 'Card'
-                    });
-
-                    if (saveError) {
-                        console.error("Supabase Save Error:", saveError);
-                        toast.error("Booking successful, but failed to save card: " + saveError.message);
-                    } else {
-                        toast.success("Card saved for future use!");
-                    }
-                } catch (innerError: any) {
-                    console.error("Save Card Exception:", innerError);
-                }
+                await supabase.from('payment_methods').insert({
+                    user_id: user?.id,
+                    provider: 'paystack',
+                    reference: reference.reference,
+                    authorization_code: auth.authorization_code,
+                    last4: auth.last4 || '0000',
+                    brand: auth.brand || 'Card'
+                });
             }
 
             toast.success("Booking confirmed! Enjoy your trip 🎉");
@@ -185,17 +141,11 @@ export const CheckOutDialog = ({
 
     const initializePayment = usePaystackPayment(config);
 
-    const handlePay = () => {
+    const handlePay = async () => {
         if (!user) {
             toast.error("Please sign in to book");
             setIsOpen(false);
             navigate("/auth");
-            return;
-        }
-
-        const paystackKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-        if (!paystackKey) {
-            toast.error("Payment is not configured yet. Please contact support.");
             return;
         }
 
@@ -207,12 +157,39 @@ export const CheckOutDialog = ({
         setLoading(true);
 
         if (selectedMethodId === "new") {
+            const paystackKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+            if (!paystackKey) {
+                toast.error("Payment is not configured yet. Please contact support.");
+                setLoading(false);
+                return;
+            }
             initializePayment({ onSuccess: onPaystackSuccess, onClose: onPaystackClose });
         } else {
-            setTimeout(async () => {
-                const simulatedRef = { reference: "SIM_" + Date.now() };
-                await c_onSuccess(simulatedRef);
-            }, 1500);
+            // Real Saved Card Charge
+            try {
+                const { data, error } = await supabase.functions.invoke('charge-saved-card', {
+                    body: {
+                        method_id: selectedMethodId,
+                        amount,
+                        experience_id: experienceId,
+                        trip_title: tripTitle,
+                        guests,
+                        check_in: checkIn || new Date().toISOString(),
+                        check_out: checkOut || new Date(Date.now() + 86400000).toISOString(),
+                    }
+                });
+
+                if (error || data?.error) throw new Error(data?.error || "Charge failed");
+
+                toast.success("Payment successful! Booking confirmed 🎉");
+                setIsOpen(false);
+                onSuccess?.();
+            } catch (err: any) {
+                console.error("Charge Error:", err);
+                toast.error(err.message || "Failed to charge saved card");
+            } finally {
+                setLoading(false);
+            }
         }
     };
 

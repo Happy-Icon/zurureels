@@ -9,6 +9,8 @@ import {
     getLoginAlert,
     getSecurityNotification,
     getSupportAcknowledgment,
+    getBookingReceipt,
+    getBookingNotification,
 } from "../_shared/email-templates.ts";
 
 serve(async (req) => {
@@ -62,6 +64,12 @@ serve(async (req) => {
                 break;
             case 'support':
                 emailContent = getSupportAcknowledgment(data?.ticketId || 'Pending');
+                break;
+            case 'booking_receipt':
+                emailContent = getBookingReceipt(data);
+                break;
+            case 'booking_notification':
+                emailContent = getBookingNotification(data);
                 break;
             default:
                 throw new Error("Invalid email type");

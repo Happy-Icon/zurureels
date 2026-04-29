@@ -38,8 +38,14 @@ create policy "Users can add own methods" on payment_methods for insert with che
 create table bookings (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users not null,
+  experience_id uuid references experiences not null,
   trip_title text not null,
   amount numeric not null,
+  platform_fee numeric default 0,
+  host_amount numeric default 0,
+  guests integer default 1,
+  check_in timestamp with time zone,
+  check_out timestamp with time zone,
   status text default 'pending', -- pending, paid, cancelled
   payment_reference text,
   created_at timestamp with time zone default now() not null

@@ -92,10 +92,31 @@ Deno.serve(async (req) => {
 
         const subaccountCode = result.data.subaccount_code;
 
-        // 6. Update Profile
+        // 6. Create Transfer Recipient for Escrow Payouts
+        console.log(`Creating transfer recipient for: ${business_name}`);
+        const recipientResponse = await fetch('https://api.paystack.co/transferrecipient', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                type: "nuban",
+                name: business_name,
+                account_number: account_number,
+                bank_code: settlement_bank,
+                currency: "KES"
+            }),
+        });
+
+        const recipientResult = await recipientResponse.json();
+        const recipientCode = recipientResult.status ? recipientResult.data.recipient_code : null;
+
+        // 7. Update Profile
         const updatedMetadata = {
             ...metadata,
             paystack_subaccount_code: subaccountCode,
+            paystack_recipient_code: recipientCode, // Used for automated payouts
             bank_code: settlement_bank,
             bank_account_number: account_number,
             payout_connected: true,
@@ -105,7 +126,7 @@ Deno.serve(async (req) => {
             .from('profiles')
             .update({ 
                 metadata: updatedMetadata,
-                business_name: business_name // Also update the top-level field
+                business_name: business_name 
             })
             .eq('id', user.id);
 

@@ -179,3 +179,54 @@ export const getSupportAcknowledgment = (ticketId: string) => {
         html: layouts(content)
     };
 };
+
+export const getBookingReceipt = (data: any) => {
+    const content = `
+    <h1 style="${styles.h1}">Booking Confirmed! 🎉</h1>
+    <p style="${styles.p}">Hi ${data.guestName}, your booking for <strong>${data.title}</strong> is confirmed.</p>
+    
+    <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+      <h3 style="margin: 0 0 12px; font-size: 16px; color: #111111;">Booking Details</h3>
+      <table style="width: 100%; font-size: 14px; color: #4b5563; border-collapse: collapse;">
+        <tr><td style="padding: 4px 0;">Reference:</td><td style="text-align: right; font-weight: 600;">${data.reference}</td></tr>
+        <tr><td style="padding: 4px 0;">Dates:</td><td style="text-align: right; font-weight: 600;">${data.dates}</td></tr>
+        <tr><td style="padding: 4px 0;">Guests:</td><td style="text-align: right; font-weight: 600;">${data.guests}</td></tr>
+      </table>
+      <div style="margin: 12px 0; border-top: 1px solid #e5e7eb;"></div>
+      <table style="width: 100%; font-size: 16px; color: #111111; font-weight: 700;">
+        <tr><td>Total Paid:</td><td style="text-align: right;">KES ${data.amount}</td></tr>
+      </table>
+    </div>
+
+    <p style="${styles.p}">Your payment is being held in secure escrow and will be released to the host after your trip.</p>
+    <a href="${appUrl}/bookings" style="${styles.button}">View Trip Details</a>
+  `;
+    return {
+        subject: `Receipt for ${data.title} - Zurusasa`,
+        html: layouts(content)
+    };
+};
+
+export const getBookingNotification = (data: any) => {
+    const content = `
+    <h1 style="${styles.h1}">New Booking Received! 💰</h1>
+    <p style="${styles.p}">Hi ${data.hostName}, you have a new booking for <strong>${data.title}</strong>.</p>
+    
+    <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+      <h3 style="margin: 0 0 12px; font-size: 16px; color: #111111;">Guest Details</h3>
+      <p style="margin: 0 0 4px; font-size: 14px;"><strong>${data.guestName}</strong></p>
+      <p style="margin: 0; font-size: 14px; color: #6b7280;">${data.guests} guest(s) • ${data.dates}</p>
+      <div style="margin: 12px 0; border-top: 1px solid #e5e7eb;"></div>
+      <table style="width: 100%; font-size: 14px; color: #4b5563;">
+        <tr><td>Your Payout:</td><td style="text-align: right; font-weight: 600; color: #059669;">KES ${data.payoutAmount}</td></tr>
+      </table>
+    </div>
+
+    <p style="${styles.p}">Funds are currently held in escrow and will be automatically transferred to your bank account after trip completion.</p>
+    <a href="${appUrl}/host" style="${styles.button}">Go to Host Dashboard</a>
+  `;
+    return {
+        subject: `New Booking: ${data.guestName} for ${data.title}`,
+        html: layouts(content)
+    };
+};
