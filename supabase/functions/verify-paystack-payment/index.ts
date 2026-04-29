@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
 
                     // Send Receipt to Guest
                     if (guestEmail) {
-                        supabaseClient.functions.invoke('send-email', {
+                        await supabaseClient.functions.invoke('send-email', {
                             body: {
                                 type: 'booking_receipt',
                                 email: guestEmail,
@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
 
                     // Send Notification to Host
                     if (hostEmail) {
-                        supabaseClient.functions.invoke('send-email', {
+                        await supabaseClient.functions.invoke('send-email', {
                             body: {
                                 type: 'booking_notification',
                                 email: hostEmail,
