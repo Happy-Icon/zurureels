@@ -44,7 +44,7 @@ interface ReelCardProps {
   isActive: boolean;
   preloadNext?: boolean;
   onSave?: (id: string) => void;
-  onBook?: (id: string) => void;
+  onBook?: (reel: ReelData) => void;
   onAskAI?: () => void;
   topOverlay?: React.ReactNode;
 }
@@ -663,7 +663,12 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
           {/* Action Buttons */}
           <div className="flex flex-row gap-2 w-full pt-1.5">
             <Button
-              onClick={() => reel.availabilityStatus !== 'booked_out' && onBook?.(reel.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (reel.availabilityStatus !== 'booked_out') {
+                  onBook?.(reel);
+                }
+              }}
               disabled={reel.availabilityStatus === 'booked_out'}
               className={cn(
                 "flex-1 font-semibold shadow-lg px-3 h-8 text-[12px]",

@@ -122,7 +122,7 @@ function ReelFeed({ reels, onBook, onAskAI, onInteraction, topOverlay }: ReelFee
             reel={reel}
             isActive={activeIndex === i}
             preloadNext={activeIndex === i - 1}
-            onBook={() => onBook(reel)}
+            onBook={onBook}
             onAskAI={onAskAI}
             topOverlay={topOverlay}
           />
