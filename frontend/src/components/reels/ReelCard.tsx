@@ -642,6 +642,12 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
 
         {/* Bottom Content - INSIDE THE FRAME */}
         <div className="absolute bottom-6 md:bottom-6 left-0 right-16 md:right-24 p-4 md:p-5 space-y-1.5 z-30 pointer-events-auto">
+          {onAskAI && (
+            <div className="mb-2">
+              <AskZuruButton onClick={onAskAI} isOpen={false} />
+            </div>
+          )}
+
           {/* Category & Expiry Badges */}
           <div className="flex flex-row items-center gap-2 pb-0.5">
             <Badge className={cn("text-[10px] h-5 px-2 font-bold capitalize shadow-lg", categoryColors[reel.category])}>
@@ -662,11 +668,6 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
 
           {/* Title and location */}
           <div className="space-y-1">
-            {onAskAI && (
-              <div className="mb-4">
-                <AskZuruButton onClick={onAskAI} isOpen={false} />
-              </div>
-            )}
             <h3 className="font-display text-xl font-bold text-white md:text-2xl line-clamp-1 drop-shadow-md">
               {reel.title}
             </h3>
