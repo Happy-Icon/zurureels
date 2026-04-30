@@ -74,7 +74,7 @@ export default function PublicProfile() {
                 // 1. Fetch Profile
                 const { data: profileData, error: profileError } = await supabase
                     .from('profiles')
-                    .select('id, full_name, username, verification_status, created_at, metadata')
+                    .select('id, full_name, username, verification_status, created_at, metadata, bio, rating, review_count')
                     .eq('id', id)
                     .single();
 
@@ -84,13 +84,13 @@ export default function PublicProfile() {
                     id: profileData.id,
                     full_name: profileData.full_name || "Zuru Host",
                     username: profileData.username || "host",
-                    bio: profileData.metadata?.bio || "Passionate host sharing unique experiences on ZuruSasa.",
+                    bio: profileData.bio || profileData.metadata?.bio || "",
                     avatar_url: profileData.metadata?.avatar_url,
                     verification_status: profileData.verification_status,
                     joined_at: profileData.created_at,
-                    rating: 4.9, // Hardcoded for now
-                    review_count: 128, // Hardcoded for now
-                    total_bookings: 450 // Hardcoded for now
+                    rating: Number(profileData.rating) || 0,
+                    review_count: profileData.review_count || 0,
+                    total_bookings: 0 // Will implement booking logic later
                 };
 
                 setProfile(hostProfile);
@@ -348,24 +348,26 @@ export default function PublicProfile() {
                 {/* About & Listings Section */}
                 <div className="px-5 mt-8 space-y-10">
                     {/* About Section */}
-                    <div className="space-y-3">
-                        <h3 className="text-lg font-display font-bold flex items-center gap-2">
-                            About {profile.full_name.split(' ')[0]}
-                        </h3>
-                        <div className="p-5 rounded-[1.5rem] bg-muted/30 border border-border/50 leading-relaxed text-foreground/80">
-                            {profile.bio}
-                        </div>
-                        
-                        {profile.verification_status === 'verified' && (
-                            <div className="flex items-center gap-3 p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10">
-                                <ShieldCheck className="h-5 w-5 text-blue-500" />
-                                <div className="text-xs">
-                                    <p className="font-bold text-blue-700">Verified Identity</p>
-                                    <p className="text-blue-600/70">ZuruSasa has verified this host's identity and professional credentials.</p>
-                                </div>
+                    {profile.bio && (
+                        <div className="space-y-3">
+                            <h3 className="text-lg font-display font-bold flex items-center gap-2">
+                                About {profile.full_name.split(' ')[0]}
+                            </h3>
+                            <div className="p-5 rounded-[1.5rem] bg-muted/30 border border-border/50 leading-relaxed text-foreground/80">
+                                {profile.bio}
                             </div>
-                        )}
-                    </div>
+                            
+                            {profile.verification_status === 'verified' && (
+                                <div className="flex items-center gap-3 p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10">
+                                    <ShieldCheck className="h-5 w-5 text-blue-500" />
+                                    <div className="text-xs">
+                                        <p className="font-bold text-blue-700">Verified Identity</p>
+                                        <p className="text-blue-600/70">ZuruSasa has verified this host's identity and professional credentials.</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Listings Grid */}
                     <div className="space-y-6">
