@@ -16,14 +16,8 @@ import {
     Loader2,
     ShieldCheck
 } from "lucide-react";
-import { 
-    Dialog, 
-    DialogContent, 
-    DialogHeader, 
-    DialogTitle, 
-    DialogDescription,
-    DialogFooter
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -64,6 +58,7 @@ export const MessagingSystem = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
     const [showSecurityModal, setShowSecurityModal] = useState(false);
+    const [role, setRole] = useState<"guest" | "host">("guest");
     const scrollRef = useRef<HTMLDivElement>(null);
 
     // Fetch conversations
@@ -71,6 +66,8 @@ export const MessagingSystem = () => {
         if (!user) return;
 
         const fetchConversations = async () => {
+            setIsLoading(true);
+            const columnToMatch = role === "guest" ? "participant_one" : "participant_two";
             const { data, error } = await supabase
                 .from("conversations")
                 .select(`
@@ -79,7 +76,7 @@ export const MessagingSystem = () => {
                     participant_two,
                     last_message_at
                 `)
-                .or(`participant_one.eq.${user.id},participant_two.eq.${user.id}`)
+                .eq(columnToMatch, user.id)
                 .order("last_message_at", { ascending: false });
 
             if (error) {
@@ -126,7 +123,7 @@ export const MessagingSystem = () => {
         };
 
         fetchConversations();
-    }, [user]);
+    }, [user, role]);
 
     // Fetch messages for selected conversation
     useEffect(() => {
@@ -231,6 +228,12 @@ export const MessagingSystem = () => {
             )}>
                 <div className="p-4 border-b border-border bg-background/50 backdrop-blur-sm sticky top-0 z-10">
                     <h2 className="text-lg font-display font-semibold mb-3">Messages</h2>
+                    <Tabs value={role} onValueChange={(val: any) => { setRole(val); setSelectedConv(null); }} className="w-full mb-3">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="guest">Traveler</TabsTrigger>
+                            <TabsTrigger value="host">Hosting</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input placeholder="Search people..." className="pl-9 bg-background/50 border-none focus-visible:ring-primary/20" />

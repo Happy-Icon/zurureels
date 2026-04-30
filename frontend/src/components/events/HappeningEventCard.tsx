@@ -2,6 +2,7 @@ import { MapPin, Calendar, Users, Zap } from "lucide-react";
 import { ZuruEvent } from "@/types/events";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
 
 interface HappeningEventCardProps {
     event: ZuruEvent;
@@ -13,6 +14,7 @@ interface HappeningEventCardProps {
  * Shows a pulsing LIVE badge and event details.
  */
 export const HappeningEventCard = ({ event, className }: HappeningEventCardProps) => {
+    const navigate = useNavigate();
     const formattedDate = format(new Date(event.event_date), "h:mm a");
 
     return (
@@ -69,6 +71,27 @@ export const HappeningEventCard = ({ event, className }: HappeningEventCardProps
                 <h3 className="font-bold text-base leading-tight line-clamp-1 group-hover:text-primary transition-colors">
                     {event.title}
                 </h3>
+
+                {/* Host Info */}
+                {event.host && (
+                    <div 
+                        className="flex items-center gap-2 pt-0.5 cursor-pointer group/host w-fit"
+                        onClick={() => navigate(`/profile/${event.user_id}`)}
+                    >
+                        <div className="relative">
+                            <img 
+                                src={event.host.avatar_url || "/placeholder.svg"} 
+                                alt={event.host.full_name} 
+                                className="h-5 w-5 rounded-full object-cover border border-border shadow-sm group-hover/host:scale-110 transition-transform"
+                            />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-bold text-muted-foreground group-hover/host:text-primary transition-colors truncate">
+                                {event.host.full_name}
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1">

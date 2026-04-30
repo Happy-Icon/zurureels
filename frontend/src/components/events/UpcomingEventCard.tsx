@@ -5,6 +5,7 @@ import { ZuruEvent } from "@/types/events";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 interface UpcomingEventCardProps {
     event: ZuruEvent;
@@ -20,6 +21,7 @@ interface UpcomingEventCardProps {
  */
 export const UpcomingEventCard = ({ event, className }: UpcomingEventCardProps) => {
     const { isSubscribed, subscriberCount, toggle, toggling, loading } = useEventSubscription(event.id);
+    const navigate = useNavigate();
 
     const eventDate = new Date(event.event_date);
     const formattedDate = format(eventDate, "EEE, MMM d · h:mm a");
@@ -79,6 +81,27 @@ export const UpcomingEventCard = ({ event, className }: UpcomingEventCardProps) 
                         <span className="text-xs truncate">{event.location}</span>
                     </div>
                 </div>
+
+                {/* Host Info */}
+                {event.host && (
+                    <div 
+                        className="flex items-center gap-2 pt-1 cursor-pointer group/host w-fit"
+                        onClick={() => navigate(`/profile/${event.user_id}`)}
+                    >
+                        <div className="relative">
+                            <img 
+                                src={event.host.avatar_url || "/placeholder.svg"} 
+                                alt={event.host.full_name} 
+                                className="h-6 w-6 rounded-full object-cover border border-border shadow-sm group-hover/host:scale-110 transition-transform"
+                            />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-bold text-muted-foreground group-hover/host:text-primary transition-colors truncate">
+                                {event.host.full_name}
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Date */}
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

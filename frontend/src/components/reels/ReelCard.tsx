@@ -1,5 +1,7 @@
-import { Heart, Share2, Bookmark, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw, Plus, Check, Loader2, Video, ChevronUp, ChevronDown } from "lucide-react";
+import { Heart, Share2, Bookmark, Play, Pause, Volume2, VolumeX, Clock, MapPin, ShieldCheck, Sparkle, AlertCircle, RefreshCw, Plus, Check, Loader2, Video, ChevronUp, ChevronDown, Info, Users, Star, User } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,11 +19,13 @@ export interface ReelData {
   videoUrl: string;
   thumbnailUrl: string;
   title: string;
+  description?: string;
   location: string;
   category: "hotel" | "villa" | "apartment" | "boats" | "food" | "drinks" | "rentals" | "adventure" | "parks_camps" | "tours" | "events";
   price: number;
   priceUnit: string;
   rating: number;
+  bookingsCount?: number;
   likes: number;
   saved: boolean;
   hostName: string;
@@ -93,6 +97,13 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
   const videoRef = useRef<HTMLVideoElement>(null);
   const navigate = useNavigate();
 
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' && window.innerWidth >= 768);
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Persistent interactions via Supabase
   const {
     isLiked,
@@ -125,13 +136,12 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
     }
 
     try {
-      // Find or create conversation
-      const participants = [user.id, reel.hostUserId].sort();
+      // Find or create conversation with participant_one as Guest and participant_two as Host
       const { data: conv, error } = await supabase
         .from("conversations")
         .select("id")
-        .eq("participant_one", participants[0])
-        .eq("participant_two", participants[1])
+        .eq("participant_one", user.id)
+        .eq("participant_two", reel.hostUserId)
         .maybeSingle();
 
       if (error) throw error;
@@ -142,8 +152,8 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
         const { data: newConv, error: createError } = await supabase
           .from("conversations")
           .insert({
-            participant_one: participants[0],
-            participant_two: participants[1]
+            participant_one: user.id,
+            participant_two: reel.hostUserId
           })
           .select("id")
           .single();
@@ -401,6 +411,100 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
         <span className="text-[10px] md:text-[9px] text-white font-bold drop-shadow-md uppercase tracking-tight">Share</span>
       </button>
 
+      {/* Info / Details */}
+      <Sheet>
+        <SheetTrigger asChild>
+          <button className="flex flex-col items-center gap-1 transition-transform active:scale-90">
+            <Info className="h-7 w-7 text-white drop-shadow-lg" />
+            <span className="text-[10px] md:text-[9px] text-white font-bold drop-shadow-md uppercase tracking-tight">Info</span>
+          </button>
+        </SheetTrigger>
+        <SheetContent side={isDesktop ? "right" : "bottom"} className="flex flex-col gap-0 p-0 overflow-hidden bg-background border-border/10 rounded-t-3xl md:rounded-l-3xl md:rounded-tr-none z-[100] h-[85vh] md:h-full md:max-w-[400px]">
+          <div className="relative h-56 w-full shrink-0 bg-muted">
+            <img src={effectiveThumbnail} alt="Preview" className="h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
+            <div className="absolute bottom-4 left-5 right-5">
+                 <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground drop-shadow-sm">{reel.title}</h2>
+                 <p className="flex items-center text-sm font-medium text-muted-foreground gap-1.5 mt-1"><MapPin className="h-4 w-4 text-primary" /> {reel.location}</p>
+            </div>
+          </div>
+          <ScrollArea className="flex-1 px-5 pt-6 pb-24">
+            <div className="space-y-6">
+              
+              {/* Host Info */}
+              <button 
+                onClick={handleAvatarClick}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-muted/30 border border-border/50 hover:bg-muted/50 transition-colors group"
+              >
+                <img src={reel.hostAvatar} alt={reel.hostName} className="h-14 w-14 rounded-full object-cover border-[3px] border-background shadow-md group-hover:scale-105 transition-transform" />
+                <div className="flex-1 text-left">
+                  <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest mb-0.5">Hosted By</p>
+                  <p className="text-base font-bold leading-tight group-hover:text-primary transition-colors">{reel.hostName}</p>
+                </div>
+              </button>
+
+              {/* Stats Row */}
+              <div className="flex gap-4">
+                <div className="flex-1 p-4 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-center space-y-1.5">
+                  <div className="flex justify-center items-center gap-2 text-orange-600 dark:text-orange-400">
+                    <Users className="h-5 w-5" />
+                    <span className="font-bold text-xl">{reel.bookingsCount || Math.floor(Math.random() * 50) + 10}</span>
+                  </div>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Booked</p>
+                </div>
+                <div className="flex-1 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-center space-y-1.5">
+                  <div className="flex justify-center items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <Star className="h-5 w-5 fill-current" />
+                    <span className="font-bold text-xl">{reel.rating.toFixed(1)}</span>
+                  </div>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Rating</p>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  <Info className="h-4 w-4" /> About this
+                </h3>
+                <p className="text-sm leading-relaxed text-foreground/80 bg-muted/20 p-4 rounded-2xl border border-border/50">
+                  {reel.description || "Experience the best of what this host has to offer. Book now to secure your spot and enjoy a wonderful time."}
+                </p>
+              </div>
+            </div>
+          </ScrollArea>
+          
+          {/* Sticky Bottom Actions inside Sheet */}
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-background/90 backdrop-blur-xl border-t border-border flex items-center gap-3 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+             <div className="flex flex-col justify-center shrink-0 pr-3 border-r border-border/50 min-w-[100px]">
+               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Price</p>
+               <p className="font-bold text-lg md:text-xl leading-none text-foreground">
+                 <span className="text-xs font-medium text-muted-foreground mr-1">KES</span>
+                 {reel.price.toLocaleString()}
+               </p>
+             </div>
+             <Button
+                onClick={() => reel.availabilityStatus !== 'booked_out' && onBook?.(reel.id)}
+                disabled={reel.availabilityStatus === 'booked_out'}
+                className={cn(
+                  "flex-1 font-bold h-12 shadow-lg",
+                  reel.availabilityStatus === 'booked_out' 
+                    ? "bg-muted text-muted-foreground shadow-none opacity-80 cursor-not-allowed" 
+                    : "bg-[#EE7D30] hover:bg-[#EE7D30]/90 text-white shadow-orange-500/20"
+                )}
+              >
+                {reel.availabilityStatus === 'booked_out' ? "Fully Booked" : "Book Now"}
+              </Button>
+              <Button
+                onClick={handleEnquire}
+                variant="outline"
+                className="flex-none px-4 h-12 border-border/50 hover:bg-muted text-foreground"
+              >
+                Enquire
+              </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* Mute/Unmute - Mobile specific placement */}
       <button 
         onClick={toggleMute} 
@@ -479,12 +583,6 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
                 <Play className="h-12 w-12 text-white fill-white" />
               </div>
             )}
-            {isPlaying && isMuted && showMuteHint && (
-              <div className="animate-in fade-in zoom-in duration-300 flex flex-col items-center gap-2 bg-black/40 backdrop-blur-sm px-6 py-3 rounded-full border border-white/10">
-                <VolumeX className="h-6 w-6 text-white" />
-                <span className="text-white text-xs font-bold uppercase tracking-widest">Tap for sound</span>
-              </div>
-            )}
           </button>
         )}
 
@@ -515,58 +613,64 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
         </div>
 
         {/* Bottom Content - INSIDE THE FRAME */}
-        <div className="absolute bottom-12 md:bottom-8 left-0 right-20 md:right-24 p-5 md:p-6 space-y-2.5 z-30 pointer-events-auto">
+        <div className="absolute bottom-6 md:bottom-6 left-0 right-16 md:right-24 p-4 md:p-5 space-y-1.5 z-30 pointer-events-auto">
           {/* Category & Expiry Badges */}
-          <div className="flex flex-col items-start gap-1.5 pb-1">
+          <div className="flex flex-row items-center gap-2 pb-0.5">
+            <Badge className={cn("text-[10px] h-5 px-2 font-bold capitalize shadow-lg", categoryColors[reel.category])}>
+              {reel.category}
+            </Badge>
             {reel.postedAt && (
               <div 
                 className={cn(
-                  "text-[10px] font-bold uppercase tracking-[0.1em] text-white/90 drop-shadow-md flex items-center gap-1",
+                  "text-[9px] font-bold uppercase tracking-[0.1em] text-white/90 drop-shadow-md flex items-center gap-1",
                   isReelExpiringSoon(new Date(reel.postedAt!)) && "text-orange-400"
                 )}
               >
-                <Clock className="h-3 w-3" />
+                <Clock className="h-2.5 w-2.5" />
                 {getReelExpiryDisplay(new Date(reel.postedAt!))}
               </div>
             )}
-            <Badge className={cn("text-[11px] h-5 px-2 font-bold capitalize shadow-lg", categoryColors[reel.category])}>
-              {reel.category}
-            </Badge>
           </div>
 
           {/* Title & Location */}
-          <div className="space-y-0.5">
-            <h3 className="text-lg font-display font-semibold text-white line-clamp-1 drop-shadow-md">
+          <div className="space-y-0">
+            <h3 className="text-base font-display font-bold text-white line-clamp-1 drop-shadow-md">
               {reel.title}
             </h3>
-            <p className="text-xs text-white/80">{reel.location}</p>
+            <p className="text-[11px] text-white/80">{reel.location}</p>
           </div>
 
           {/* Price & Rating */}
-          <div className="flex items-center gap-4">
-            <span className="text-base font-semibold text-white">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-white">
               KES {reel.price.toLocaleString()}
-              <span className="text-xs font-normal text-white/80">
+              <span className="text-[10px] font-normal text-white/80">
                 /{reel.priceUnit}
               </span>
             </span>
-            <span className="flex items-center gap-1 text-xs text-white">
+            <span className="flex items-center gap-1 text-[11px] text-white">
               ⭐ {reel.rating.toFixed(1)}
             </span>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col gap-2 w-full md:w-auto">
+          <div className="flex flex-row gap-2 w-full pt-1.5">
             <Button
-              onClick={() => onBook?.(reel.id)}
-              className="w-full md:w-auto bg-[#EE7D30] hover:bg-[#EE7D30]/90 text-white font-semibold shadow-lg shadow-orange-500/20 px-8 h-10 text-sm"
+              onClick={() => reel.availabilityStatus !== 'booked_out' && onBook?.(reel.id)}
+              disabled={reel.availabilityStatus === 'booked_out'}
+              className={cn(
+                "flex-1 font-semibold shadow-lg px-3 h-8 text-[12px]",
+                reel.availabilityStatus === 'booked_out' 
+                  ? "bg-muted text-muted-foreground shadow-none opacity-80" 
+                  : "bg-[#EE7D30] hover:bg-[#EE7D30]/90 text-white shadow-orange-500/20"
+              )}
             >
-              Book Now
+              {reel.availabilityStatus === 'booked_out' ? "Fully Booked" : "Book Now"}
             </Button>
             <Button
               onClick={handleEnquire}
               variant="outline"
-              className="w-full md:w-auto border-white/20 bg-white/5 hover:bg-white/10 text-white font-semibold backdrop-blur-sm px-8 h-10 text-sm"
+              className="flex-1 border-white/20 bg-white/5 hover:bg-white/10 text-white font-semibold backdrop-blur-sm px-3 h-8 text-[12px]"
             >
               Enquire
             </Button>

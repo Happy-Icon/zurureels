@@ -14,9 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AccommodationReelFlow } from "@/components/host/AccommodationReelFlow";
 import { MiniVideoEditor, VideoEditorSubmitData } from "@/components/video-editor";
-import { AccommodationType, AccommodationData } from "@/types/host";
 import { categories, locations } from "@/data/hostConstants";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -64,66 +62,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         setSelectedCategory(value);
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleAccommodationComplete = async (data: any) => {
-        if (!user) return;
-        setIsSubmitting(true);
-        try {
-            // 1. Create Experience
-            const { data: exp, error: expError } = await supabase
-                .from("experiences")
-                .insert({
-                    user_id: user.id,
-                    category: selectedCategory,
-                    entity_name: data.experienceDetails.entityName,
-                    title: data.experienceDetails.title,
-                    location: data.experienceDetails.location,
-                    current_price: data.experienceDetails.price,
-                })
-                .select()
-                .single();
 
-            if (expError) throw expError;
-
-            // 2. Create Reels
-            const reelsToInsert = data.reels
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                .filter((r: any) => r.uploaded && r.videoUrl)
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                .map((r: any) => {
-                    // Generate Cloudinary thumbnail if we have a Cloudinary URL
-                    const thumbnailUrl = r.videoUrl?.includes('res.cloudinary.com')
-                        ? r.videoUrl.replace(/\.([a-z0-9]+)$/i, '.jpg').replace('/upload/', '/upload/so_0,w_400,h_600,c_fill,q_auto,f_jpg/')
-                        : null;
-                    return {
-                        user_id: user.id,
-                        experience_id: exp.id,
-                        category: selectedCategory,
-                        video_url: r.videoUrl,
-                        thumbnail_url: thumbnailUrl,
-                        duration: r.maxDuration || 20,
-                        status: 'active'
-                    };
-                });
-
-            if (reelsToInsert.length > 0) {
-                const { error: reelsError } = await supabase
-                    .from("reels")
-                    .insert(reelsToInsert);
-                if (reelsError) throw reelsError;
-            }
-
-            toast.success("Accommodation and reels published!");
-            setShowAccommodationFlow(false);
-            onOpenChange(false);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (error: any) {
-            console.error("Save error:", error);
-            toast.error(error.message || "Failed to save data");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
 
     const handleDialogClose = (newOpen: boolean) => {
         onOpenChange(newOpen);
@@ -220,7 +159,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     category: selectedCategory,
                     video_url: cloudinaryResult.secure_url,
                     thumbnail_url: thumbnailUrl,
-                    duration: data.duration || 20,
+                    metadata: { duration: data.duration || 20 },
                     status: 'active'
                 });
 
@@ -537,14 +476,11 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                                     </div>
                                 )}
 
-                                <div className="flex gap-3 pt-4">
-                                    <Button type="button" variant="outline" className="flex-1" onClick={() => handleDialogClose(false)}>
-                                        Save as Draft
-                                    </Button>
-                                    <Button type="button" className="flex-1" onClick={handleEditorSubmit} disabled={isSubmitting}>
-                                        {isSubmitting ? "Publishing..." : "Record & Publish"}
-                                    </Button>
-                                </div>
+                                    <div className="flex gap-3 pt-4">
+                                        <Button type="button" variant="outline" className="flex-1" onClick={() => handleDialogClose(false)}>
+                                            Cancel
+                                        </Button>
+                                    </div>
                     </form>
                 ) : (
                     <div className="py-8 text-center text-muted-foreground mt-4">

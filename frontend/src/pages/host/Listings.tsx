@@ -41,7 +41,8 @@ const Listings = () => {
                         id,
                         title,
                         location,
-                        current_price
+                        current_price,
+                        availability_status
                     )
                 `)
                 .eq("user_id", user.id)
@@ -78,6 +79,7 @@ const Listings = () => {
                 status: item.status === "active" ? "published" : "draft",
                 thumbnail: item.thumbnail_url || "",
                 expiresAt: item.expires_at,
+                availabilityStatus: item.experience?.availability_status || 'available'
             }));
 
             setReels(transformed);
@@ -169,6 +171,20 @@ const Listings = () => {
         } catch (error: any) {
             console.error("Error updating status:", error);
             toast.error(error.message || "Failed to update listing status");
+        }
+    };
+
+    const handleToggleAvailability = async (experienceId: string, currentStatus: string | undefined) => {
+        if (!experienceId) return;
+        const newStatus = currentStatus === 'booked_out' ? 'available' : 'booked_out';
+        try {
+            const { error } = await supabase.from("experiences").update({ availability_status: newStatus }).eq("id", experienceId);
+            if (error) throw error;
+            toast.success(`Listing marked as ${newStatus === 'booked_out' ? 'Fully Booked' : 'Available'}`);
+            fetchReels();
+        } catch (error: any) {
+            console.error("Error updating availability:", error);
+            toast.error(error.message || "Failed to update availability");
         }
     };
 
@@ -276,6 +292,7 @@ const Listings = () => {
                             onDelete={handleDeleteReel}
                             onToggleStatus={handleToggleReelStatus}
                             onEdit={handleEditReel}
+                            onToggleAvailability={handleToggleAvailability}
                         />
                     )}
                 </div>

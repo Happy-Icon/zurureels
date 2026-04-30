@@ -55,4 +55,5 @@ export interface ReelData {
     status: "published" | "draft";
     thumbnail: string;
     expiresAt?: string;
+    availabilityStatus?: 'available' | 'booked_out' | 'limited';
 }

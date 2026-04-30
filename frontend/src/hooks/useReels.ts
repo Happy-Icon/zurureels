@@ -9,11 +9,14 @@ export interface ReelData {
     videoUrl: string;
     thumbnailUrl: string;
     title: string;
+    description?: string;
     location: string;
-    category: "boats" | "food" | "nightlife" | "activities" | "bikes" | "drinks";
+    category: "boats" | "food" | "nightlife" | "activities" | "bikes" | "drinks" | "hotel" | "villa" | "apartment" | "rentals" | "adventure" | "parks_camps" | "tours" | "events";
     price: number;
     priceUnit: string;
     rating: number;
+    bookingsCount?: number;
+    availabilityStatus?: 'available' | 'booked_out' | 'limited';
     likes: number;
     saved: boolean;
     hostName: string;
@@ -24,6 +27,7 @@ export interface ReelData {
     lng?: number;
     processingStatus?: string;
     processedVideoUrl?: string;
+    verificationStatus?: string;
 }
 
 const shuffleArray = <T>(array: T[]): T[] => {
@@ -52,8 +56,8 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 .from("reels")
                 .select(`
                     *,
-                    experience:experiences(id, title, location, current_price, price_unit, entity_name, metadata),
-                    host:profiles!reels_user_id_profiles_fkey(full_name, username, metadata)
+                    experience:experiences(id, title, description, location, current_price, price_unit, entity_name, metadata, availability_status),
+                    host:profiles!reels_user_id_profiles_fkey(full_name, username, metadata, verification_status)
                 `)
                 .eq("status", "active")
                 .order("created_at", { ascending: false });
@@ -73,11 +77,14 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 videoUrl: item.processed_video_url || item.video_url,
                 thumbnailUrl: item.thumbnail_url || "/placeholder.svg",
                 title: item.experience?.title || "Coastal Experience",
+                description: item.experience?.description || "Experience the best of ZuruSasa.",
                 location: item.experience?.location || "Mombasa",
                 category: item.category as ReelData["category"],
                 price: item.experience?.current_price || 0,
                 priceUnit: item.experience?.price_unit || "person",
                 rating: item.experience?.metadata?.rating || 5,
+                bookingsCount: Math.floor(Math.random() * 50) + 10,
+                availabilityStatus: item.experience?.availability_status || 'available',
                 likes: 0,
                 saved: false,
                 hostName: item.host?.full_name || item.host?.username || item.experience?.entity_name || "Zuru Host",
@@ -86,6 +93,7 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 isLive: item.is_live,
                 lat: item.lat,
                 lng: item.lng,
+                verificationStatus: item.host?.verification_status || 'none',
             }));
 
             // Combine with mocks

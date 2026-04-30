@@ -25,7 +25,8 @@ export const useHostReels = (status?: string) => {
                             location,
                             current_price,
                             price_unit,
-                            entity_name
+                            entity_name,
+                            availability_status
                         )
                     `)
                     .eq("user_id", user.id);
@@ -52,7 +53,8 @@ export const useHostReels = (status?: string) => {
                     status: item.status,
                     thumbnail: item.thumbnail_url || "/placeholder.svg",
                     expiresAt: item.expires_at,
-                    experience_id: item.experience_id
+                    experience_id: item.experience_id,
+                    availabilityStatus: item.experience?.availability_status || 'available'
                 }));
 
                 setReels(transformed);

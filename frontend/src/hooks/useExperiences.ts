@@ -16,6 +16,10 @@ export interface Experience {
     availability_status: string;
     metadata: any;
     created_at: string;
+    host?: {
+        full_name: string;
+        verification_status: string;
+    };
 }
 
 export const useExperiences = (category?: string, city?: string, search?: string) => {
@@ -27,7 +31,7 @@ export const useExperiences = (category?: string, city?: string, search?: string
         const fetchExperiences = async () => {
             setLoading(true);
             try {
-                let query = supabase.from("experiences").select("*");
+                let query = supabase.from("experiences").select("*, host:profiles(full_name, verification_status)");
 
                 if (category && category !== "all") {
                     query = query.eq("category", category);
@@ -45,7 +49,7 @@ export const useExperiences = (category?: string, city?: string, search?: string
 
                 if (fetchError) throw fetchError;
 
-                setExperiences(data || []);
+                setExperiences(data as unknown as Experience[] || []);
             } catch (err) {
                 console.error("Error fetching experiences:", err);
                 setError(err);

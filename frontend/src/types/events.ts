@@ -16,6 +16,11 @@ export interface ZuruEvent {
     notification_intervals: string[] | null;
     created_at: string | null;
     updated_at: string | null;
+    host?: {
+        full_name: string;
+        username: string;
+        avatar_url?: string;
+    };
 }
 
 export interface EventSubscription {
