@@ -39,6 +39,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
     const [price, setPrice] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [optimizationProgress, setOptimizationProgress] = useState<number | null>(null);
+    const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     
     // Event specific state
     const [eventDate, setEventDate] = useState<Date | undefined>(undefined);
@@ -100,6 +102,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             return;
         }
         setIsSubmitting(true);
+        setUploadStatus("uploading");
+        setErrorMessage(null);
         try {
             const finalVideoFile = data.videoFile;
 
@@ -159,7 +163,10 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     category: selectedCategory,
                     video_url: cloudinaryResult.secure_url,
                     thumbnail_url: thumbnailUrl,
-                    metadata: { duration: data.duration || 20 },
+                    duration: data.duration || 20,
+                    is_live: data.isLive || false,
+                    lat: data.lat,
+                    lng: data.lng,
                     status: 'active'
                 });
 
@@ -190,10 +197,10 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
 
                 if (eventError) {
                     console.error("Event creation failed, but reel was published:", eventError);
-                    toast.warning("Reel published, but event details could not be saved.");
                 }
             }
 
+            setUploadStatus("success");
             toast.success("Reel published successfully!");
             setShowVideoEditor(false);
             onOpenChange(false);
@@ -208,6 +215,8 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             setReminderIntervals(["24h", "1h"]);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
+            setUploadStatus("error");
+            setErrorMessage(error.message || "Something went wrong while publishing your reel.");
             toast.error(error.message || "Failed to publish reel");
         } finally {
             setIsSubmitting(false);
@@ -238,28 +247,101 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     </DialogTitle>
                 </DialogHeader>
 
-                {optimizationProgress !== null && (
-                    <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-md flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
-                        <div className="bg-card p-10 rounded-[2.5rem] shadow-2xl border border-primary/10 flex flex-col items-center gap-6 max-w-xs w-full text-center">
-                            <CircularProgress 
-                                value={optimizationProgress} 
-                                size={120} 
-                                strokeWidth={8} 
-                                className="text-primary shadow-sm" 
-                            />
+                {uploadStatus === "uploading" && optimizationProgress !== null && (
+                    <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
+                        <div className="bg-card/50 p-10 rounded-[3rem] shadow-2xl border border-primary/20 flex flex-col items-center gap-8 max-w-sm w-full text-center relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-50" />
                             
-                            <div className="space-y-2">
-                                <h3 className="text-lg font-bold tracking-tight">
-                                    {optimizationProgress < 100 ? "Uploading & Optimizing..." : "Finishing up..."}
+                            <div className="relative">
+                                <CircularProgress 
+                                    value={optimizationProgress} 
+                                    size={140} 
+                                    strokeWidth={10} 
+                                    className="text-primary drop-shadow-[0_0_15px_rgba(238,125,48,0.3)]" 
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-2xl font-bold tabular-nums">{optimizationProgress}%</span>
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-3 relative z-10">
+                                <h3 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+                                    {optimizationProgress < 40 ? "Analyzing pixels..." : 
+                                     optimizationProgress < 80 ? "Optimizing for mobile..." : 
+                                     "Wrapping up your reel..."}
                                 </h3>
-                                <p className="text-sm text-muted-foreground px-2">
-                                    We're preparing your reel for high-quality playback on all devices.
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                    Almost there! We're making sure your coastal adventure looks stunning on every screen.
                                 </p>
                             </div>
 
-                            <div className="flex items-center gap-2 px-4 py-2 bg-primary/5 rounded-full text-[10px] font-medium text-primary uppercase tracking-wider">
-                                <Sparkles className="h-3 w-3" />
-                                <span>Zuru Premium Processing</span>
+                            <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-[10px] font-bold text-primary uppercase tracking-widest animate-pulse">
+                                <Sparkles className="h-3.5 w-3.5" />
+                                <span>Zuru Engine Active</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {uploadStatus === "success" && (
+                    <div className="fixed inset-0 z-[101] bg-background/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
+                        <div className="bg-card p-12 rounded-[3.5rem] shadow-2xl border border-green-500/20 flex flex-col items-center gap-8 max-w-sm w-full text-center">
+                            <div className="h-24 w-24 rounded-full bg-green-500/10 flex items-center justify-center relative">
+                                <div className="absolute inset-0 rounded-full bg-green-500/20 animate-ping duration-1000" />
+                                <CheckCircle2 className="h-12 w-12 text-green-500 relative z-10" />
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <h3 className="text-2xl font-bold tracking-tight">Reel Published!</h3>
+                                <p className="text-muted-foreground">
+                                    Your story is now live in the <span className="text-[#EE7D30] font-semibold">ZuruFlow</span> for everyone to discover.
+                                </p>
+                            </div>
+
+                            <Button 
+                                className="w-full h-12 rounded-2xl bg-foreground text-background font-bold hover:scale-[1.02] transition-transform"
+                                onClick={() => {
+                                    setUploadStatus("idle");
+                                    onOpenChange(false);
+                                }}
+                            >
+                                Done
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {uploadStatus === "error" && (
+                    <div className="fixed inset-0 z-[101] bg-background/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
+                        <div className="bg-card p-12 rounded-[3.5rem] shadow-2xl border border-destructive/20 flex flex-col items-center gap-8 max-w-sm w-full text-center">
+                            <div className="h-20 w-20 rounded-full bg-destructive/10 flex items-center justify-center">
+                                <Bell className="h-10 w-10 text-destructive" />
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <h3 className="text-xl font-bold tracking-tight">Publication Paused</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    {errorMessage || "We hit a small snag. Don't worry, your work is safe."}
+                                </p>
+                            </div>
+
+                            <div className="flex flex-col gap-3 w-full">
+                                <Button 
+                                    className="w-full h-12 rounded-2xl bg-[#EE7D30] text-white font-bold"
+                                    onClick={() => setUploadStatus("idle")}
+                                >
+                                    Try Again
+                                </Button>
+                                <Button 
+                                    variant="ghost"
+                                    className="w-full"
+                                    onClick={() => {
+                                        setUploadStatus("idle");
+                                        onOpenChange(false);
+                                    }}
+                                >
+                                    Discard Draft
+                                </Button>
                             </div>
                         </div>
                     </div>
