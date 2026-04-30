@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
+import { RatingModal } from "@/components/profile/RatingModal";
+import { formatDistanceToNow } from "date-fns";
 
 interface HostProfile {
     id: string;
@@ -42,6 +44,18 @@ interface HostListing {
     rating: number;
 }
 
+interface Review {
+    id: string;
+    reviewer: {
+        full_name: string;
+        username: string;
+        avatar_url?: string;
+    };
+    rating: number;
+    comment: string;
+    created_at: string;
+}
+
 export default function PublicProfile() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -49,6 +63,8 @@ export default function PublicProfile() {
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState<HostProfile | null>(null);
     const [listings, setListings] = useState<HostListing[]>([]);
+    const [reviews, setReviews] = useState<Review[]>([]);
+    const [showRatingModal, setShowRatingModal] = useState(false);
 
     useEffect(() => {
         const fetchHostData = async () => {
@@ -107,6 +123,39 @@ export default function PublicProfile() {
                 }));
 
                 setListings(hostListings);
+
+                // 3. Fetch Reviews
+                const { data: reviewsData, error: reviewsError } = await supabase
+                    .from('host_reviews')
+                    .select(`
+                        id,
+                        rating,
+                        comment,
+                        created_at,
+                        reviewer:profiles!host_reviews_reviewer_id_fkey (
+                            full_name,
+                            username,
+                            metadata
+                        )
+                    `)
+                    .eq('host_id', id)
+                    .order('created_at', { ascending: false });
+
+                if (reviewsError) throw reviewsError;
+
+                const formattedReviews: Review[] = (reviewsData || []).map((item: any) => ({
+                    id: item.id,
+                    reviewer: {
+                        full_name: item.reviewer?.full_name || "Zuru User",
+                        username: item.reviewer?.username || "user",
+                        avatar_url: item.reviewer?.metadata?.avatar_url
+                    },
+                    rating: item.rating,
+                    comment: item.comment,
+                    created_at: item.created_at
+                }));
+
+                setReviews(formattedReviews);
             } catch (error) {
                 console.error("Error fetching host profile:", error);
                 toast.error("Could not load host profile");
@@ -245,7 +294,7 @@ export default function PublicProfile() {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-3 w-full md:w-auto">
+                                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
                                     <Button 
                                         onClick={handleMessage}
                                         className="flex-1 md:flex-none gap-2 rounded-2xl h-12 px-8 font-bold bg-primary hover:bg-primary/90"
@@ -254,9 +303,17 @@ export default function PublicProfile() {
                                         Message
                                     </Button>
                                     <Button 
+                                        onClick={() => setShowRatingModal(true)}
+                                        variant="outline"
+                                        className="flex-1 md:flex-none gap-2 rounded-2xl h-12 px-8 font-bold border-primary text-primary hover:bg-primary/5"
+                                    >
+                                        <Star className="h-5 w-5" />
+                                        Rate Host
+                                    </Button>
+                                    <Button 
                                         variant="outline"
                                         size="icon"
-                                        className="rounded-2xl h-12 w-12 border-border/50"
+                                        className="rounded-2xl h-12 w-12 border-border/50 hidden md:flex"
                                     >
                                         <Heart className="h-5 w-5" />
                                     </Button>
@@ -363,8 +420,75 @@ export default function PublicProfile() {
                             </div>
                         )}
                     </div>
+
+                    {/* Reviews Section */}
+                    <div className="space-y-8 pt-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xl font-display font-bold">What guests are saying</h3>
+                            <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-1.5 rounded-full text-primary font-bold text-sm">
+                                <Star className="h-4 w-4 fill-current" />
+                                {profile.rating} • {reviews.length} reviews
+                            </div>
+                        </div>
+
+                        {reviews.length > 0 ? (
+                            <div className="grid gap-6 md:grid-cols-2">
+                                {reviews.map((review) => (
+                                    <div key={review.id} className="p-6 rounded-[2rem] bg-card border border-border/50 space-y-4 shadow-sm">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-10 w-10 border border-primary/10">
+                                                    <AvatarImage src={review.reviewer.avatar_url} />
+                                                    <AvatarFallback>{review.reviewer.full_name[0]}</AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <p className="font-bold text-sm leading-none">{review.reviewer.full_name}</p>
+                                                    <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold tracking-wider">@{review.reviewer.username}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-0.5">
+                                                {[...Array(5)].map((_, i) => (
+                                                    <Star 
+                                                        key={i} 
+                                                        className={cn(
+                                                            "h-3 w-3",
+                                                            i < review.rating ? "fill-primary text-primary" : "text-muted-foreground/20"
+                                                        )} 
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <p className="text-sm leading-relaxed text-foreground/80 italic">"{review.comment}"</p>
+                                        <p className="text-[10px] text-muted-foreground font-medium">
+                                            Rated {formatDistanceToNow(new Date(review.created_at))} ago
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 bg-muted/20 rounded-[2rem] border border-dashed border-border/50">
+                                <MessageCircle className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                                <p className="text-muted-foreground font-medium">No reviews yet. Be the first to rate!</p>
+                                <Button 
+                                    variant="link" 
+                                    className="text-primary font-bold mt-2"
+                                    onClick={() => setShowRatingModal(true)}
+                                >
+                                    Leave a Review
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
+
+            <RatingModal 
+                isOpen={showRatingModal}
+                onClose={() => setShowRatingModal(false)}
+                hostId={profile.id}
+                hostName={profile.full_name}
+                onSuccess={() => window.location.reload()}
+            />
         </MainLayout>
     );
 }

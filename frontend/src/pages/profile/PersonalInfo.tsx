@@ -25,6 +25,7 @@ export const PersonalInfo = () => {
     // Basic Info
     const [fullName, setFullName] = useState("");
     const [phone, setPhone] = useState("");
+    const [bio, setBio] = useState("");
 
     // Digital Identity
     const [languages, setLanguages] = useState<string[]>([]);
@@ -69,7 +70,10 @@ export const PersonalInfo = () => {
                     if (data.metadata) {
                         const meta = data.metadata as any;
                         if (meta.avatar_url) setAvatarUrl(meta.avatar_url);
+                        if (meta.bio) setBio(meta.bio);
                     }
+                    // If bio exists at top level (from master migration)
+                    if (data.bio) setBio(data.bio);
                 }
             } catch (error) {
                 console.error("Error loading profile", error);
@@ -182,10 +186,11 @@ export const PersonalInfo = () => {
         let score = 0;
         if (fullName) score += 15;
         if (phone) score += 15;
+        if (bio) score += 10;
         if (user?.email) score += 10;
         if (languages.length > 0) score += 10;
-        if (emergencyContact.name) score += 15;
-        if (verificationBadges.identity) score += 35; // Big weight for ID
+        if (emergencyContact.name) score += 10;
+        if (verificationBadges.identity) score += 30; // Big weight for ID
 
         setCompleteness(Math.min(score, 100));
     }, [fullName, phone, languages, emergencyContact, verificationBadges, user]);
@@ -208,10 +213,15 @@ export const PersonalInfo = () => {
                 .update({
                     full_name: fullName,
                     phone: phone,
+                    bio: bio,
                     languages: languages,
                     emergency_contact: emergencyContact,
                     verification_badges: verificationBadges,
                     profile_completeness: completeness,
+                    metadata: {
+                        ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+                        bio: bio
+                    },
                     updated_at: new Date().toISOString(),
                 })
                 .eq('id', user.id);
@@ -335,6 +345,17 @@ export const PersonalInfo = () => {
                             <div className="space-y-2">
                                 <Label htmlFor="email">Email Address</Label>
                                 <Input value={user?.email || ""} disabled className="bg-muted" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="bio">Your Bio</Label>
+                                <textarea
+                                    id="bio"
+                                    value={bio}
+                                    onChange={(e) => setBio(e.target.value)}
+                                    placeholder="Tell the community about yourself..."
+                                    className="flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                                <p className="text-[10px] text-muted-foreground">Share your background, interests, and why you love ZuruSasa.</p>
                             </div>
                         </div>
 
