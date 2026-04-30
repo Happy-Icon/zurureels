@@ -67,20 +67,15 @@ const categories = [
 
 /**
  * TikTokFeed sub-component for full-screen immersive reel scrolling.
- */
-function TikTokFeed({
-  reels,
-  loading,
-  onBook,
-  onInteraction,
-  topOverlay,
-}: {
+interface ReelFeedProps {
   reels: ReelData[];
-  loading: boolean;
-  onBook: (id: string) => void;
+  onBook: (reel: ReelData) => void;
+  onAskAI: () => void;
   onInteraction?: () => void;
   topOverlay?: React.ReactNode;
-}) {
+}
+
+function ReelFeed({ reels, onBook, onAskAI, onInteraction, topOverlay }: ReelFeedProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -109,30 +104,6 @@ function TikTokFeed({
     return () => observer.disconnect();
   }, [reels]);
 
-  if (loading) {
-    return (
-      <div className="h-screen w-full bg-black flex items-center justify-center">
-        <SkeletonLoader />
-      </div>
-    );
-  }
-
-  if (reels.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-screen w-full bg-black text-white px-8 text-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="p-4 rounded-full bg-white/10 blur-[1px]">
-            <Sparkles className="h-12 w-12 opacity-40 text-primary animate-pulse" />
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-xl font-bold">No coastal reels found</h3>
-            <p className="text-sm text-white/50">Try choosing a different category or city!</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       ref={containerRef}
@@ -151,7 +122,8 @@ function TikTokFeed({
             reel={reel}
             isActive={activeIndex === i}
             preloadNext={activeIndex === i - 1}
-            onBook={onBook}
+            onBook={() => onBook(reel)}
+            onAskAI={onAskAI}
             topOverlay={topOverlay}
           />
         </div>
@@ -207,11 +179,9 @@ const CityPulse = () => {
   const { experiences: dbExperiences, loading: experiencesLoading } = useExperiences(selectedCategory, selectedCity);
   const { reels: liveReels, loading: reelsLoading } = useReels(selectedCategory);
 
-  // Fallback to mock data if DB is empty for the city explorer
   const experiences = useMemo(() => {
     if (dbExperiences && dbExperiences.length > 0) return dbExperiences;
     
-    // Convert mock data to Experience interface shape
     const mockData: any[] = [
       ...mockBoatRentals.map(b => ({ id: b.id, category: 'boats', title: b.name, entity_name: 'Rental', location: b.location, current_price: b.price, image_url: b.imageUrl, metadata: { rating: b.rating } })),
       ...mockRestaurantSpecials.map(r => ({ id: r.id, category: 'food', title: r.special, entity_name: r.restaurant, location: r.location, current_price: r.discountPrice, base_price: r.originalPrice, image_url: r.imageUrl, metadata: { valid_until: r.validUntil } })),
@@ -227,7 +197,6 @@ const CityPulse = () => {
       (selectedCity === 'Current Location' || item.location.toLowerCase().includes(selectedCity.toLowerCase()))
     );
 
-    // If no results for city, show everything in that category across the coast
     if (filtered.length === 0) {
       return mockData.filter(item => selectedCategory === 'all' || item.category === selectedCategory);
     }
@@ -279,10 +248,10 @@ const CityPulse = () => {
     <MainLayout hideMobileUI={isMobile && (tab === "feed" || !showMobileUI)}>
       {tab === "feed" ? (
         <div className="fixed inset-0 z-30 bg-black md:pl-64 overflow-hidden">
-          <TikTokFeed
+          <ReelFeed
             reels={liveReels}
-            loading={reelsLoading}
-            onBook={(id) => setBookingReel(liveReels.find((r) => r.id === id) || null)}
+            onBook={setBookingReel}
+            onAskAI={() => setShowAI(true)}
             onInteraction={handleInteraction}
             topOverlay={
               <div className="flex items-center justify-center w-full p-4 pt-[env(safe-area-inset-top,0.5rem)] md:pt-3">
@@ -577,7 +546,6 @@ const CityPulse = () => {
       )}
       {viewMode === "guest" && (
         <>
-          <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
           {showAI && (
             <AIChatBox
               messages={messages}

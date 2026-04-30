@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
 
 export interface ReelData {
   id: string;
@@ -44,12 +45,13 @@ interface ReelCardProps {
   preloadNext?: boolean;
   onSave?: (id: string) => void;
   onBook?: (id: string) => void;
+  onAskAI?: () => void;
   topOverlay?: React.ReactNode;
 }
 
 let globalMuted = true;
 
-export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverlay }: ReelCardProps) {
+export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI, topOverlay }: ReelCardProps) {
   // Unload video when not active or next
   // Adaptive streaming (HLS) with dynamic import
   useEffect(() => {
@@ -632,9 +634,14 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
             )}
           </div>
 
-          {/* Title & Location */}
-          <div className="space-y-0">
-            <h3 className="text-base font-display font-bold text-white line-clamp-1 drop-shadow-md">
+          {/* Title and location */}
+          <div className="space-y-1">
+            {onAskAI && (
+              <div className="mb-4">
+                <AskZuruButton onClick={onAskAI} isOpen={false} />
+              </div>
+            )}
+            <h3 className="font-display text-xl font-bold text-white md:text-2xl line-clamp-1 drop-shadow-md">
               {reel.title}
             </h3>
             <p className="text-[11px] text-white/80">{reel.location}</p>
