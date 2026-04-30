@@ -1,5 +1,6 @@
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { ArrowLeft, Search, Calendar, CreditCard, User, Shield, Phone, MessageCircle } from "lucide-react";
+import { ArrowLeft, Search, Calendar, CreditCard, User, Shield, Phone, MessageCircle, Loader2, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,14 +14,76 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
+import { toast } from "sonner";
+import { format } from "date-fns";
 
 const Support = () => {
-    // Mock Data
-    const recentTickets = [
-        { id: "T-10234", subject: "Refund request for cancelled trip", date: "Jan 15, 2024", status: "Open" },
-        { id: "T-09982", subject: "Question about hosting fees", date: "Dec 12, 2023", status: "Resolved" },
-        { id: "T-09112", subject: "Unable to update profile photo", date: "Nov 28, 2023", status: "Resolved" },
-    ];
+    const { user } = useAuth();
+    const [tickets, setTickets] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isAdding, setIsAdding] = useState(false);
+    
+    // New Ticket Form
+    const [subject, setSubject] = useState("");
+    const [message, setMessage] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (!user) return;
+        const fetchTickets = async () => {
+            const { data, error } = await supabase
+                .from('support_tickets')
+                .select('*')
+                .order('created_at', { ascending: false });
+            
+            if (data) setTickets(data);
+            setLoading(false);
+        };
+        fetchTickets();
+    }, [user]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!subject || !message) return;
+        
+        setSubmitting(true);
+        try {
+            const { data, error } = await supabase
+                .from('support_tickets')
+                .insert({
+                    user_id: user?.id,
+                    subject,
+                    message,
+                    status: 'open'
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            
+            setTickets([data, ...tickets]);
+            toast.success("Ticket submitted! Our team will get back to you soon.");
+            setIsAdding(false);
+            setSubject("");
+            setMessage("");
+        } catch (error: any) {
+            toast.error(error.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     const topics = [
         { icon: Calendar, label: "Bookings", desc: "Manage trips and reservations" },
@@ -105,37 +168,100 @@ const Support = () => {
                     <div>
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-semibold">Your Support Requests</h2>
-                            <Button variant="link" className="text-primary h-auto p-0">View All</Button>
+                            <Dialog open={isAdding} onOpenChange={setIsAdding}>
+                                <DialogTrigger asChild>
+                                    <Button className="gap-2">
+                                        <Plus className="h-4 w-4" />
+                                        Create Ticket
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <form onSubmit={handleSubmit}>
+                                        <DialogHeader>
+                                            <DialogTitle>New Support Request</DialogTitle>
+                                            <DialogDescription>
+                                                Describe your issue and we'll get back to you within 24 hours.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="space-y-4 py-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="subject">Subject</Label>
+                                                <Input 
+                                                    id="subject" 
+                                                    placeholder="What's the issue?" 
+                                                    value={subject}
+                                                    onChange={(e) => setSubject(e.target.value)}
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="message">Details</Label>
+                                                <Textarea 
+                                                    id="message" 
+                                                    placeholder="Provide more information..." 
+                                                    className="min-h-[100px]"
+                                                    value={message}
+                                                    onChange={(e) => setMessage(e.target.value)}
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+                                        <DialogFooter>
+                                            <Button type="submit" disabled={submitting}>
+                                                {submitting ? "Sending..." : "Submit Ticket"}
+                                            </Button>
+                                        </DialogFooter>
+                                    </form>
+                                </DialogContent>
+                            </Dialog>
                         </div>
 
                         <div className="border rounded-lg overflow-hidden bg-card">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Ticket ID</TableHead>
-                                        <TableHead>Subject</TableHead>
-                                        <TableHead className="hidden md:table-cell">Date</TableHead>
-                                        <TableHead className="text-right">Status</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {recentTickets.map((ticket) => (
-                                        <TableRow key={ticket.id}>
-                                            <TableCell className="font-medium">{ticket.id}</TableCell>
-                                            <TableCell>{ticket.subject}</TableCell>
-                                            <TableCell className="hidden md:table-cell text-muted-foreground">{ticket.date}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Badge
-                                                    variant={ticket.status === "Open" ? "default" : "secondary"}
-                                                    className={ticket.status === "Resolved" ? "bg-green-100 text-green-700 hover:bg-green-100 border-none" : "bg-blue-100 text-blue-700 hover:bg-blue-100 border-none"}
-                                                >
-                                                    {ticket.status}
-                                                </Badge>
-                                            </TableCell>
+                            {loading ? (
+                                <div className="p-8 text-center">
+                                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                                </div>
+                            ) : tickets.length === 0 ? (
+                                <div className="p-8 text-center text-muted-foreground italic">
+                                    No support tickets yet.
+                                </div>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Ticket ID</TableHead>
+                                            <TableHead>Subject</TableHead>
+                                            <TableHead className="hidden md:table-cell">Date</TableHead>
+                                            <TableHead className="text-right">Status</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {tickets.map((ticket) => (
+                                            <TableRow key={ticket.id}>
+                                                <TableCell className="font-mono text-[10px]">{ticket.id.split('-')[0].toUpperCase()}</TableCell>
+                                                <TableCell className="font-medium">{ticket.subject}</TableCell>
+                                                <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
+                                                    {format(new Date(ticket.created_at), "MMM d, yyyy")}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Badge
+                                                        variant={ticket.status === "open" ? "default" : "secondary"}
+                                                        className={
+                                                            ticket.status === "resolved" 
+                                                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none" 
+                                                                : ticket.status === "open"
+                                                                ? "bg-blue-100 text-blue-700 hover:bg-blue-100 border-none"
+                                                                : "bg-muted text-muted-foreground border-none"
+                                                        }
+                                                    >
+                                                        {ticket.status}
+                                                    </Badge>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
                         </div>
                     </div>
 

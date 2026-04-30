@@ -88,7 +88,21 @@ export const useBookings = (mode: "guest" | "host" = "guest") => {
     };
 
     const cancelBooking = async (bookingId: string) => {
-        return updateBookingStatus(bookingId, 'cancelled');
+        try {
+            const { data, error } = await supabase.functions.invoke('cancel-booking', {
+                body: { booking_id: bookingId }
+            });
+
+            if (error || data?.error) throw new Error(data?.error || "Failed to cancel booking");
+
+            setBookings(prev =>
+                prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b)
+            );
+            return { success: true };
+        } catch (err) {
+            console.error("Cancellation error:", err);
+            return { success: false, error: err };
+        }
     };
 
     return { bookings, loading, error, updateBookingStatus, cancelBooking };

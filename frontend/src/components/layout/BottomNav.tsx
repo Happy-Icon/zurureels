@@ -27,7 +27,7 @@ const hostNavItems = [
 
 export function BottomNav() {
   const location = useLocation();
-  const { viewMode, user } = useAuth();
+  const { viewMode, user, profile } = useAuth();
 
   const navItems = viewMode === "host"
     ? hostNavItems
@@ -51,13 +51,22 @@ export function BottomNav() {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <item.icon
-                className={cn(
-                  "h-5 w-5 transition-transform duration-200",
-                  isActive && "scale-110"
-                )}
-                strokeWidth={isActive ? 2.5 : 2}
-              />
+              {item.label === "Profile" && profile?.metadata?.avatar_url ? (
+                <div className={cn(
+                  "h-5 w-5 rounded-full overflow-hidden border border-border transition-transform duration-200",
+                  isActive && "scale-110 border-primary"
+                )}>
+                  <img src={profile.metadata.avatar_url} className="h-full w-full object-cover" alt="" />
+                </div>
+              ) : (
+                <item.icon
+                  className={cn(
+                    "h-5 w-5 transition-transform duration-200",
+                    isActive && "scale-110"
+                  )}
+                  strokeWidth={isActive ? 2.5 : 2}
+                />
+              )}
               <span className="text-[10px] font-medium">{item.label}</span>
             </Link>
           );

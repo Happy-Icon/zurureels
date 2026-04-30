@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { ArrowLeft, Loader2, Save, ShieldCheck, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, Save, ShieldCheck, AlertTriangle, Upload, FileText, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,10 @@ import { toast } from "sonner";
 import { VerificationBadge } from "@/components/profile/VerificationBadge";
 import { LanguageSelector } from "@/components/profile/LanguageSelector";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { User as UserIcon } from "lucide-react";
 
 export const PersonalInfo = () => {
     const { user } = useAuth();
@@ -28,6 +32,11 @@ export const PersonalInfo = () => {
     const [verificationBadges, setVerificationBadges] = useState({ email: false, phone: false, identity: false });
     const [completeness, setCompleteness] = useState(0);
 
+    const [uploading, setUploading] = useState(false);
+    const [avatarUploading, setAvatarUploading] = useState(false);
+    const [idUrl, setIdUrl] = useState<string | null>(null);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
     useEffect(() => {
         const fetchProfile = async () => {
             if (!user) return;
@@ -39,25 +48,27 @@ export const PersonalInfo = () => {
                 setVerificationBadges(prev => ({ ...prev, email: !!user.email_confirmed_at }));
 
                 // Fetch from Profiles Table
-                const { data, error } = await supabase
+                const { data } = await supabase
                     .from('profiles')
                     .select('*')
                     .eq('id', user.id)
                     .single();
 
-                if (error && error.code !== 'PGRST116') {
-                    console.error('Error fetching profile:', error);
-                }
-
                 if (data) {
                     if (data.languages) setLanguages(data.languages);
                     if (data.emergency_contact) setEmergencyContact(data.emergency_contact as any);
                     if (data.verification_badges) {
+                        const badges = data.verification_badges as any;
                         setVerificationBadges(prev => ({
                             ...prev,
-                            ...data.verification_badges as any,
-                            email: !!user.email_confirmed_at // Always trust auth status for email
+                            ...badges,
+                            email: !!user.email_confirmed_at 
                         }));
+                        if (badges.id_url) setIdUrl(badges.id_url);
+                    }
+                    if (data.metadata) {
+                        const meta = data.metadata as any;
+                        if (meta.avatar_url) setAvatarUrl(meta.avatar_url);
                     }
                 }
             } catch (error) {
@@ -69,6 +80,102 @@ export const PersonalInfo = () => {
 
         fetchProfile();
     }, [user]);
+
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !user) return;
+
+        setAvatarUploading(true);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const filePath = `${user.id}/avatar_${Math.random()}.${fileExt}`;
+
+            // Upload to Supabase Storage
+            const { error: uploadError } = await supabase.storage
+                .from('avatars')
+                .upload(filePath, file, {
+                    upsert: true
+                });
+
+            if (uploadError) {
+                if (uploadError.message.includes("bucket not found")) {
+                    throw new Error("The 'avatars' storage bucket was not found. Please go to Supabase Dashboard -> Storage -> New Bucket and create a PUBLIC bucket named 'avatars'.");
+                }
+                throw uploadError;
+            }
+
+            // Get Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(filePath);
+
+            setAvatarUrl(publicUrl);
+            
+            // Update profile metadata immediately
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('metadata')
+                .eq('id', user.id)
+                .single();
+
+            const newMetadata = {
+                ...(profile?.metadata as any || {}),
+                avatar_url: publicUrl
+            };
+
+            const { error: updateError } = await supabase
+                .from('profiles')
+                .update({ metadata: newMetadata })
+                .eq('id', user.id);
+
+            if (updateError) throw updateError;
+            toast.success("Profile picture updated!");
+        } catch (error: any) {
+            toast.error("Upload failed: " + error.message);
+        } finally {
+            setAvatarUploading(false);
+        }
+    };
+
+    const handleIdUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !user) return;
+
+        setUploading(true);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const filePath = `${user.id}/id_${Math.random()}.${fileExt}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('identity-documents')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const newIdUrl = filePath;
+            setIdUrl(newIdUrl);
+            
+            // Update profile with pending ID status
+            const newBadges = {
+                ...verificationBadges,
+                id_url: newIdUrl,
+                id_status: 'pending'
+            };
+
+            const { error: updateError } = await supabase
+                .from('profiles')
+                .update({ verification_badges: newBadges })
+                .eq('id', user.id);
+
+            if (updateError) throw updateError;
+            setVerificationBadges(newBadges);
+            toast.success("ID document uploaded! It is now pending review.");
+        } catch (error: any) {
+            toast.error("Upload failed: " + error.message);
+        } finally {
+            setUploading(false);
+        }
+    };
 
     // Calculate completeness on change
     useEffect(() => {
@@ -89,27 +196,25 @@ export const PersonalInfo = () => {
         setLoading(true);
 
         try {
-            // 1. Update Auth Metadata (for basic backward compatibility)
+            // 1. Update Auth Metadata
             const { error: authError } = await supabase.auth.updateUser({
                 data: { full_name: fullName, phone: phone }
             });
             if (authError) throw authError;
 
-            // 2. Update Profiles Table (Extended Data)
-            const updates = {
-                id: user.id,
-                full_name: fullName,
-                phone: phone,
-                languages: languages,
-                emergency_contact: emergencyContact,
-                verification_badges: verificationBadges,
-                profile_completeness: completeness,
-                updated_at: new Date().toISOString(),
-            };
-
+            // 2. Update Profiles Table
             const { error: profileError } = await supabase
                 .from('profiles')
-                .upsert(updates);
+                .update({
+                    full_name: fullName,
+                    phone: phone,
+                    languages: languages,
+                    emergency_contact: emergencyContact,
+                    verification_badges: verificationBadges,
+                    profile_completeness: completeness,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', user.id);
 
             if (profileError) throw profileError;
 
@@ -166,6 +271,40 @@ export const PersonalInfo = () => {
                                 <p>Add a government ID to reach 100% verified status.</p>
                             </div>
                         )}
+                    </div>
+
+                    {/* Profile Picture Section */}
+                    <div className="flex flex-col items-center gap-4 p-6 bg-card border rounded-xl shadow-sm">
+                        <div className="relative group">
+                            <Avatar className="h-24 w-24 border-2 border-primary/20">
+                                <AvatarImage src={avatarUrl || ""} />
+                                <AvatarFallback className="bg-primary/5">
+                                    <UserIcon className="h-10 w-10 text-muted-foreground" />
+                                </AvatarFallback>
+                            </Avatar>
+                            <label 
+                                htmlFor="avatar-upload" 
+                                className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            >
+                                {avatarUploading ? (
+                                    <Loader2 className="h-6 w-6 animate-spin text-white" />
+                                ) : (
+                                    <Upload className="h-6 w-6 text-white" />
+                                )}
+                                <input 
+                                    id="avatar-upload" 
+                                    type="file" 
+                                    className="hidden" 
+                                    accept="image/*" 
+                                    onChange={handleAvatarUpload}
+                                    disabled={avatarUploading}
+                                />
+                            </label>
+                        </div>
+                        <div className="text-center">
+                            <h3 className="font-medium">Profile Picture</h3>
+                            <p className="text-xs text-muted-foreground mt-1">Upload a clear photo for your profile</p>
+                        </div>
                     </div>
 
                     <form onSubmit={handleSave} className="space-y-8">
@@ -232,11 +371,65 @@ export const PersonalInfo = () => {
                                     status={!!phone && phone.length > 5}
                                     label="Phone Number"
                                 />
-                                <VerificationBadge
-                                    type="government_id"
-                                    status={verificationBadges.identity}
-                                    label="Government ID"
-                                />
+                                
+                                <div className="p-4 border rounded-xl bg-card space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                                "h-8 w-8 rounded-full flex items-center justify-center",
+                                                verificationBadges.identity ? "bg-emerald-100 text-emerald-600" : "bg-muted text-muted-foreground"
+                                            )}>
+                                                <FileText className="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium text-sm">Government ID</p>
+                                                <p className="text-xs text-muted-foreground">Passport, ID Card or Driving License</p>
+                                            </div>
+                                        </div>
+                                        {verificationBadges.identity ? (
+                                            <Badge className="bg-emerald-500 text-white border-none gap-1">
+                                                <CheckCircle2 className="h-3 w-3" />
+                                                Verified
+                                            </Badge>
+                                        ) : idUrl ? (
+                                            <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1">
+                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                                Pending Review
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="secondary" className="text-muted-foreground font-normal">
+                                                Not Provided
+                                            </Badge>
+                                        )}
+                                    </div>
+
+                                    {!verificationBadges.identity && !idUrl && (
+                                        <div className="pt-2">
+                                            <Label 
+                                                htmlFor="id-upload" 
+                                                className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/20 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                                            >
+                                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                                    {uploading ? (
+                                                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                                    ) : (
+                                                        <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                                                    )}
+                                                    <p className="text-sm text-muted-foreground">Click to upload ID (PDF, JPG, PNG)</p>
+                                                    <p className="text-[10px] text-muted-foreground/60 mt-1">Max file size: 5MB</p>
+                                                </div>
+                                                <Input 
+                                                    id="id-upload" 
+                                                    type="file" 
+                                                    className="hidden" 
+                                                    accept="image/*,.pdf"
+                                                    onChange={handleIdUpload}
+                                                    disabled={uploading}
+                                                />
+                                            </Label>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
 

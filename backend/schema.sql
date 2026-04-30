@@ -48,6 +48,8 @@ create table bookings (
   check_out timestamp with time zone,
   status text default 'pending', -- pending, paid, cancelled
   payment_reference text,
+  refund_id text,
+  refunded_at timestamp with time zone,
   created_at timestamp with time zone default now() not null
 );
 alter table bookings enable row level security;

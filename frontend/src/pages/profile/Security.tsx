@@ -21,27 +21,36 @@ export const Security = () => {
     const [twoFactor, setTwoFactor] = useState(false);
     const [loginAlerts, setLoginAlerts] = useState(true);
 
-    // Mock Sessions Data
-    const sessions = [
-        {
-            id: 1,
-            device: "Windows PC - Chrome",
-            location: "Nairobi, Kenya",
-            ip: "102.135.24.12",
-            current: true,
-            icon: Laptop,
-            lastActive: "Now"
-        },
-        {
-            id: 2,
-            device: "iPhone 14 Pro",
-            location: "Mombasa, Kenya",
-            ip: "197.234.12.55",
-            current: false,
-            icon: Smartphone,
-            lastActive: "2 days ago"
-        }
-    ];
+    // Real Session Detection
+    const [sessions, setSessions] = useState<any[]>([]);
+
+    useEffect(() => {
+        const detectSession = () => {
+            const ua = navigator.userAgent;
+            let device = "Unknown Device";
+            let browser = "Unknown Browser";
+
+            if (ua.includes("Windows")) device = "Windows PC";
+            else if (ua.includes("Macintosh")) device = "MacBook";
+            else if (ua.includes("iPhone")) device = "iPhone";
+            else if (ua.includes("Android")) device = "Android Phone";
+
+            if (ua.includes("Chrome")) browser = "Chrome";
+            else if (ua.includes("Firefox")) browser = "Firefox";
+            else if (ua.includes("Safari")) browser = "Safari";
+
+            setSessions([{
+                id: 'current',
+                device: `${device} - ${browser}`,
+                location: "Current Location",
+                ip: "Detected by Server",
+                current: true,
+                icon: device.includes("PC") || device.includes("Mac") ? Laptop : Smartphone,
+                lastActive: "Now"
+            }]);
+        };
+        detectSession();
+    }, []);
 
     useEffect(() => {
         const fetchSettings = async () => {

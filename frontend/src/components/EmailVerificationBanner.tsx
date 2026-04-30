@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "./AuthProvider";
+import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Mail, AlertCircle } from "lucide-react";
 import { toast } from "sonner";

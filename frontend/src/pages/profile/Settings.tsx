@@ -1,5 +1,5 @@
 import { MainLayout } from "@/components/layout/MainLayout";
-import { ArrowLeft, Globe, Zap, Accessibility, Trash2, Smartphone, Moon, Wifi } from "lucide-react";
+import { ArrowLeft, Globe, Zap, Accessibility, Trash2, Smartphone, Moon, Wifi, Loader2, Save } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,12 +14,68 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
 
 const Settings = () => {
+    const { user } = useAuth();
+    const [loading, setLoading] = useState(false);
+    const [pageLoading, setPageLoading] = useState(true);
+
+    const [language, setLanguage] = useState("en");
+    const [currency, setCurrency] = useState("kes");
     const [dataSaver, setDataSaver] = useState(false);
     const [highContrast, setHighContrast] = useState(false);
     const [textSize, setTextSize] = useState([16]);
+
+    useEffect(() => {
+        if (!user) return;
+        const fetchSettings = async () => {
+            const { data } = await supabase
+                .from('profiles')
+                .select('general_settings')
+                .eq('id', user.id)
+                .single();
+            
+            if (data?.general_settings) {
+                const s = data.general_settings as any;
+                setLanguage(s.language || "en");
+                setCurrency(s.currency || "kes");
+                setDataSaver(s.data_saver || false);
+                setHighContrast(s.high_contrast || false);
+                setTextSize(s.text_size || [16]);
+            }
+            setPageLoading(false);
+        };
+        fetchSettings();
+    }, [user]);
+
+    const handleSave = async () => {
+        if (!user) return;
+        setLoading(true);
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    general_settings: {
+                        language,
+                        currency,
+                        data_saver: dataSaver,
+                        high_contrast: highContrast,
+                        text_size: textSize
+                    }
+                })
+                .eq('id', user.id);
+
+            if (error) throw error;
+            toast.success("Settings saved successfully");
+        } catch (error: any) {
+            toast.error(error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleClearCache = () => {
         toast.info("Clearing app cache...", { duration: 1000 });
@@ -27,6 +83,16 @@ const Settings = () => {
             toast.success("Cache cleared successfully. App is optimized.");
         }, 1500);
     };
+
+    if (pageLoading) {
+        return (
+            <MainLayout>
+                <div className="flex items-center justify-center p-20">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </MainLayout>
+        );
+    }
 
     return (
         <MainLayout>
@@ -40,6 +106,9 @@ const Settings = () => {
                             <span>Back to Profile</span>
                         </Link>
                         <h1 className="font-semibold text-lg hidden md:block">General Settings</h1>
+                        <Button variant="ghost" size="sm" onClick={handleSave} disabled={loading} className="text-primary font-bold">
+                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                        </Button>
                     </div>
                 </div>
 
@@ -57,7 +126,7 @@ const Settings = () => {
                         <CardContent className="space-y-4">
                             <div className="space-y-2">
                                 <Label>Language</Label>
-                                <Select defaultValue="en">
+                                <Select value={language} onValueChange={setLanguage}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select Language" />
                                     </SelectTrigger>
@@ -70,7 +139,7 @@ const Settings = () => {
                             </div>
                             <div className="space-y-2">
                                 <Label>Currency</Label>
-                                <Select defaultValue="kes">
+                                <Select value={currency} onValueChange={setCurrency}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select Currency" />
                                     </SelectTrigger>
@@ -141,6 +210,13 @@ const Settings = () => {
                             </div>
                         </CardContent>
                     </Card>
+                    
+                    <div className="pt-4">
+                        <Button onClick={handleSave} className="w-full h-12" disabled={loading}>
+                            {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+                            Save All Preferences
+                        </Button>
+                    </div>
 
                     {/* System */}
                     <Card>

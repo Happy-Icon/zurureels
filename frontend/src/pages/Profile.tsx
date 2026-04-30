@@ -17,6 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/components/AuthProvider";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const menuItems = [
   { icon: ShieldCheck, label: "Digital Identity Center", path: "/profile/info" },
@@ -35,6 +36,7 @@ const Profile = () => {
   const [verificationStatus, setVerificationStatus] = useState<string>('none');
   const [shuftiStatus, setShuftiStatus] = useState<string>('pending');
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -46,7 +48,7 @@ const Profile = () => {
       console.log("Fetching profile for:", user.id);
       const { data, error } = await supabase
         .from('profiles')
-        .select('profile_completeness, role, verification_status')
+        .select('profile_completeness, role, verification_status, metadata')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -62,6 +64,9 @@ const Profile = () => {
         setCompleteness(profileData.profile_completeness || 20);
         setRole(profileData.role || 'guest');
         setVerificationStatus(profileData.verification_status || 'none');
+        if (profileData.metadata?.avatar_url) {
+          setAvatarUrl(profileData.metadata.avatar_url);
+        }
       }
       setLoadingProfile(false);
     };
@@ -92,12 +97,15 @@ const Profile = () => {
           {/* Avatar */}
           <div className="flex flex-col items-center text-center">
             <div className="relative">
-              <div className="h-24 w-24 rounded-full bg-secondary flex items-center justify-center overflow-hidden border-4 border-background shadow-lg">
-                <User className="h-12 w-12 text-muted-foreground" />
-              </div>
-              <button className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-md">
+              <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
+                <AvatarImage src={avatarUrl || ""} />
+                <AvatarFallback className="bg-secondary flex items-center justify-center">
+                  <User className="h-12 w-12 text-muted-foreground" />
+                </AvatarFallback>
+              </Avatar>
+              <Link to="/profile/info" className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-md">
                 <Camera className="h-4 w-4" />
-              </button>
+              </Link>
             </div>
             <h1 className="mt-4 text-xl font-display font-semibold">
               {user?.user_metadata?.full_name || user?.email}

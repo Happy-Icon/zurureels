@@ -1,9 +1,8 @@
-
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState, createContext, useContext } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-interface AuthContextType {
+export interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
@@ -12,22 +11,14 @@ interface AuthContextType {
   viewMode: "guest" | "host";
   switchViewMode: (mode: "guest" | "host") => void;
   hasPass: boolean;
+  profile: any | null;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  session: null,
-  user: null,
-  loading: true,
-  signOut: async () => { },
-  role: null,
-  viewMode: "guest",
-  switchViewMode: () => { },
-  hasPass: false,
-});
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
@@ -40,30 +31,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<any>(null);
 
   const [viewMode, setViewMode] = useState<"guest" | "host">(() => {
-    // Initialize from localStorage if available, otherwise default to "guest"
     return (localStorage.getItem("viewMode") as "guest" | "host") || "guest";
   });
 
   useEffect(() => {
-    // Get initial session
+    // Initial session check
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        supabase.from("profiles").select("*").eq("id", session.user.id).single()
+          .then(({ data }) => {
+            setProfile(data);
+            setLoading(false);
+          })
+          .catch(() => setLoading(false));
       } else {
         setLoading(false);
       }
     });
 
-    // Listen for changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        supabase.from("profiles").select("*").eq("id", session.user.id).single()
+          .then(({ data }) => setProfile(data))
+          .finally(() => setLoading(false));
       } else {
         setProfile(null);
         setLoading(false);
@@ -72,31 +66,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => subscription.unsubscribe();
   }, []);
-
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
-
-      if (error) {
-        // PGRST116: JSON object requested, multiple (or no) rows returned
-        if (error.code === 'PGRST116') {
-          console.warn("Profile not found - User might be deleted. Signing out.");
-          await signOut();
-          return;
-        }
-        throw error;
-      }
-      setProfile(data);
-    } catch (err) { // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      console.error("Error fetching profile:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -108,8 +77,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const hasPass = profile?.metadata?.has_pass === true;
 
-  // Effect to sync viewMode with Role. 
-  // If user is a Guest, they cannot be in Host viewMode.
   useEffect(() => {
     if ((role === "guest" || role === null) && viewMode === "host") {
       setViewMode("guest");
@@ -122,7 +89,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, signOut, role, viewMode, switchViewMode, hasPass }}>
+    <AuthContext.Provider value={{ session, user, loading, signOut, role, viewMode, switchViewMode, hasPass, profile }}>
       {children}
     </AuthContext.Provider>
   );

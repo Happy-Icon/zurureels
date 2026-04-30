@@ -37,6 +37,8 @@ const PayoutSettings = () => {
     const [bankCode, setBankCode] = useState("");
     const [accountNumber, setAccountNumber] = useState("");
     const [businessName, setBusinessName] = useState("");
+    const [resolvedName, setResolvedName] = useState<string | null>(null);
+    const [verifying, setVerifying] = useState(false);
 
     useEffect(() => {
         if (!user) return;
@@ -54,6 +56,7 @@ const PayoutSettings = () => {
                     setExistingSubaccount(metadata.paystack_subaccount_code);
                     setAccountNumber(metadata.bank_account_number || "");
                     setBankCode(metadata.bank_code || "");
+                    setResolvedName(data.business_name || "");
                 }
                 setBusinessName(data.business_name || "");
             }
@@ -61,6 +64,30 @@ const PayoutSettings = () => {
         };
         fetchPayoutInfo();
     }, [user]);
+
+    const handleVerify = async () => {
+        if (accountNumber.length < 8 || !bankCode) return;
+        if (bankCode === "744") return; // Skip M-Pesa for resolution
+
+        setVerifying(true);
+        setResolvedName(null);
+        try {
+            const { data, error } = await supabase.functions.invoke('resolve-bank-account', {
+                body: { account_number: accountNumber, bank_code: bankCode }
+            });
+
+            if (error || data?.error) throw new Error(data?.error || "Resolution failed");
+            
+            setResolvedName(data.account_name);
+            setBusinessName(data.account_name); // Auto-fill business name to match bank
+            toast.success(`Account Verified: ${data.account_name}`);
+        } catch (err: any) {
+            console.error("Bank Resolution error:", err);
+            toast.error("Could not verify account. Please check the details.");
+        } finally {
+            setVerifying(false);
+        }
+    };
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -175,17 +202,43 @@ const PayoutSettings = () => {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="accountNumber">Account Number</Label>
+                                <div className="flex justify-between items-center">
+                                    <Label htmlFor="accountNumber">Account Number</Label>
+                                    {accountNumber.length >= 8 && bankCode && bankCode !== "744" && !resolvedName && (
+                                        <button 
+                                            type="button"
+                                            onClick={handleVerify}
+                                            className="text-xs font-bold text-primary hover:underline"
+                                            disabled={verifying}
+                                        >
+                                            {verifying ? "Verifying..." : "Verify Account"}
+                                        </button>
+                                    )}
+                                </div>
                                 <div className="relative">
                                     <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
                                         id="accountNumber"
                                         placeholder={bankCode === "744" ? "Phone number (07XX...)" : "Your bank account number"}
-                                        className="pl-9"
+                                        className="pl-9 pr-10"
                                         value={accountNumber}
-                                        onChange={(e) => setAccountNumber(e.target.value)}
+                                        onChange={(e) => {
+                                            setAccountNumber(e.target.value);
+                                            setResolvedName(null);
+                                        }}
+                                        onBlur={() => {
+                                            if (!resolvedName && bankCode !== "744") handleVerify();
+                                        }}
                                     />
+                                    {resolvedName && (
+                                        <ShieldCheck className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                                    )}
                                 </div>
+                                {resolvedName && (
+                                    <p className="text-[10px] text-emerald-600 font-medium">
+                                        Verified: <span className="uppercase">{resolvedName}</span>
+                                    </p>
+                                )}
                                 {bankCode === "744" && (
                                     <p className="text-[10px] text-amber-600 font-medium italic">
                                         For M-Pesa, enter your phone number as the account number.

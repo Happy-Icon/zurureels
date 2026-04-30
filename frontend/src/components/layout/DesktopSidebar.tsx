@@ -30,7 +30,7 @@ const hostNavItems = [
 
 export function DesktopSidebar() {
   const location = useLocation();
-  const { viewMode, user } = useAuth();
+  const { viewMode, user, profile } = useAuth();
 
   const navItems = viewMode === "host"
     ? hostNavItems
@@ -77,10 +77,38 @@ export function DesktopSidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-border flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">© 2026 ZuruSasa</span>
-        <ThemeToggle />
+      {/* Footer & User Profile */}
+      <div className="mt-auto border-t border-border">
+        {user && (
+          <Link 
+            to="/profile" 
+            className="flex items-center gap-3 p-4 hover:bg-secondary transition-colors"
+          >
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-border">
+              {profile?.metadata?.avatar_url ? (
+                <img 
+                  src={profile.metadata.avatar_url} 
+                  alt={user.email || ""} 
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <User className="h-5 w-5 text-muted-foreground" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">
+                {user.user_metadata?.full_name || user.email?.split('@')[0]}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {viewMode === 'host' ? 'Host Mode' : 'Guest Mode'}
+              </p>
+            </div>
+          </Link>
+        )}
+        <div className="p-4 flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">© 2026 ZuruSasa</span>
+          <ThemeToggle />
+        </div>
       </div>
     </aside>
   );

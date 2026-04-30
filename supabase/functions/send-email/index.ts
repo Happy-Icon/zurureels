@@ -11,6 +11,8 @@ import {
     getSupportAcknowledgment,
     getBookingReceipt,
     getBookingNotification,
+    getRefundConfirmation,
+    getCancellationNotification,
 } from "../_shared/email-templates.ts";
 
 serve(async (req) => {
@@ -71,6 +73,12 @@ serve(async (req) => {
             case 'booking_notification':
                 emailContent = getBookingNotification(data);
                 break;
+            case 'refund_confirmation':
+                emailContent = getRefundConfirmation(data);
+                break;
+            case 'cancellation_notification':
+                emailContent = getCancellationNotification(data);
+                break;
             default:
                 throw new Error("Invalid email type");
         }
@@ -82,16 +90,19 @@ serve(async (req) => {
         });
 
         if (!result.success) {
-            throw result.error;
+            console.error("Resend API Error details:", JSON.stringify(result.error));
+            throw new Error(`Resend Error: ${JSON.stringify(result.error)}`);
         }
 
-        return new Response(JSON.stringify({ success: true, message: `Email sent: ${type}` }), {
+        console.log("Resend Success Response:", JSON.stringify(result.data));
+
+        return new Response(JSON.stringify({ success: true, message: `Email sent: ${type}`, data: result.data }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
 
-    } catch (error) {
-        console.error("Error sending email:", error);
-        return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+    } catch (error: any) {
+        console.error("Error in send-email function:", error.message);
+        return new Response(JSON.stringify({ error: error.message || "Unknown error" }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });

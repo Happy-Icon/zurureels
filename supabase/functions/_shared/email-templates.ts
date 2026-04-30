@@ -230,3 +230,44 @@ export const getBookingNotification = (data: any) => {
         html: layouts(content)
     };
 };
+export const getRefundConfirmation = (data: any) => {
+    const content = `
+    <h1 style="${styles.h1}">Booking Cancelled & Refunded 💸</h1>
+    <p style="${styles.p}">Hi ${data.guestName}, your booking for <strong>${data.title}</strong> has been cancelled.</p>
+    
+    <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+      <h3 style="margin: 0 0 12px; font-size: 16px; color: #111111;">Refund Details</h3>
+      <table style="width: 100%; font-size: 14px; color: #4b5563;">
+        <tr><td>Amount Refunded:</td><td style="text-align: right; font-weight: 600;">KES ${data.amount}</td></tr>
+        <tr><td>Refund Ref:</td><td style="text-align: right; font-size: 12px;">${data.refundId}</td></tr>
+      </table>
+    </div>
+
+    <p style="${styles.p}">The funds should appear in your account within 3-5 business days depending on your bank.</p>
+    <a href="${appUrl}/discover" style="${styles.button}">Book another experience</a>
+  `;
+    return {
+        subject: `Refund Confirmed: ${data.title}`,
+        html: layouts(content)
+    };
+};
+
+export const getCancellationNotification = (data: any) => {
+    const content = `
+    <h1 style="${styles.h1}">Trip Cancelled ⚠️</h1>
+    <p style="${styles.p}">Hi ${data.hostName}, the booking by <strong>${data.guestName}</strong> for <strong>${data.title}</strong> has been cancelled.</p>
+    
+    <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+      <h3 style="margin: 0 0 12px; font-size: 16px; color: #991b1b;">Cancellation Details</h3>
+      <p style="margin: 0; font-size: 14px; color: #7f1d1d;">Dates: ${data.dates}</p>
+      <p style="margin: 4px 0 0; font-size: 14px; color: #7f1d1d;">The dates have been reopened on your calendar.</p>
+    </div>
+
+    <p style="${styles.p}">Since the trip was cancelled before completion, no payout will be issued for this booking.</p>
+    <a href="${appUrl}/host" style="${styles.button}">View Dashboard</a>
+  `;
+    return {
+        subject: `Cancelled: Booking for ${data.title}`,
+        html: layouts(content)
+    };
+};
