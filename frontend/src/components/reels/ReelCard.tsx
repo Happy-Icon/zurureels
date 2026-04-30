@@ -136,12 +136,12 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
     }
 
     try {
-      // Find or create conversation with participant_one as Guest and participant_two as Host
+      const participants = [user.id, reel.hostUserId].sort();
       const { data: conv, error } = await supabase
         .from("conversations")
         .select("id")
-        .eq("participant_one", user.id)
-        .eq("participant_two", reel.hostUserId)
+        .eq("participant_one", participants[0])
+        .eq("participant_two", participants[1])
         .maybeSingle();
 
       if (error) throw error;
@@ -152,8 +152,8 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, topOverl
         const { data: newConv, error: createError } = await supabase
           .from("conversations")
           .insert({
-            participant_one: user.id,
-            participant_two: reel.hostUserId
+            participant_one: participants[0],
+            participant_two: participants[1]
           })
           .select("id")
           .single();

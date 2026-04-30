@@ -163,12 +163,22 @@ export default function PublicProfile() {
         }
     };
 
-    if (loading) {
+    if (loading && !profile) {
         return (
             <MainLayout>
-                <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    <p className="text-muted-foreground animate-pulse font-medium">Loading profile...</p>
+                <div className="pb-20 md:pb-8">
+                    <div className="h-32 bg-muted animate-pulse md:h-48 md:rounded-b-[2.5rem]" />
+                    <div className="px-5 -mt-16 md:-mt-24">
+                        <div className="bg-background rounded-[2rem] p-6 shadow-xl border border-border/50">
+                            <div className="flex flex-col md:flex-row gap-6">
+                                <div className="h-32 w-32 md:h-40 md:w-40 rounded-full bg-muted animate-pulse border-4 border-background" />
+                                <div className="flex-1 space-y-4 pt-4">
+                                    <div className="h-8 w-48 bg-muted animate-pulse rounded-lg" />
+                                    <div className="h-4 w-32 bg-muted animate-pulse rounded-md" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </MainLayout>
         );

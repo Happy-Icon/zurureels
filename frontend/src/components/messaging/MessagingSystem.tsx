@@ -67,7 +67,6 @@ export const MessagingSystem = () => {
 
         const fetchConversations = async () => {
             setIsLoading(true);
-            const columnToMatch = role === "guest" ? "participant_one" : "participant_two";
             const { data, error } = await supabase
                 .from("conversations")
                 .select(`
@@ -76,7 +75,7 @@ export const MessagingSystem = () => {
                     participant_two,
                     last_message_at
                 `)
-                .eq(columnToMatch, user.id)
+                .or(`participant_one.eq.${user.id},participant_two.eq.${user.id}`)
                 .order("last_message_at", { ascending: false });
 
             if (error) {
