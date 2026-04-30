@@ -5,7 +5,7 @@ import { DesktopSidebar } from "./DesktopSidebar";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EmailVerificationBanner } from "@/components/EmailVerificationBanner";
-import { UnifiedSearch } from "@/components/UnifiedSearch";
+import UnifiedSearch from "@/components/UnifiedSearch";
 
 interface MainLayoutProps {
   children: ReactNode;

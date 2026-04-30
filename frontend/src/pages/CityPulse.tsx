@@ -43,7 +43,7 @@ import {
   ChefHat,
   Calendar
 } from "lucide-react";
-import { UnifiedSearch } from "@/components/UnifiedSearch";
+import UnifiedSearch from "@/components/UnifiedSearch";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -66,7 +66,7 @@ const categories = [
 ];
 
 /**
- * TikTokFeed sub-component for full-screen immersive reel scrolling.
+ */
 interface ReelFeedProps {
   reels: ReelData[];
   onBook: (reel: ReelData) => void;
@@ -286,7 +286,7 @@ const CityPulse = () => {
                   </button>
                 </div>
                 
-                {/* Floating Search in Immersive Feed - Mobile Only */}
+                {/* Floating Search - Mobile Only */}
                 <div className="absolute top-0 right-4 h-full flex items-center pointer-events-auto md:hidden">
                   <UnifiedSearch variant="icon" />
                 </div>

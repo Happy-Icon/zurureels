@@ -32,7 +32,7 @@ interface SearchResult {
   metadata?: any;
 }
 
-export function UnifiedSearch({ variant = "default" }: { variant?: "default" | "icon" }) {
+export default function UnifiedSearch({ variant = "default" }: { variant?: "default" | "icon" }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
