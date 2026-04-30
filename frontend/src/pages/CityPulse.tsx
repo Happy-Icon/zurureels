@@ -243,7 +243,14 @@ const CityPulse = () => {
           setSelectedCity("Current Location");
           if (showToast) toast.success("Location updated");
         },
-        (error) => console.error("Error getting location:", error)
+        (error) => {
+          console.error("Error getting location:", error);
+          if (error.code === 1) {
+            toast.error("Location access denied. Please enable it in your settings.");
+          } else {
+            toast.error("Could not retrieve your location.");
+          }
+        }
       );
     }
   }, []);
