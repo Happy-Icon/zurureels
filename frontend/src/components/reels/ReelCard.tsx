@@ -37,6 +37,7 @@ export interface ReelData {
   lng?: number;
   processingStatus?: 'uploading' | 'processing' | 'ready' | 'failed';
   processedVideoUrl?: string;
+  metadata?: any;
 }
 
 interface ReelCardProps {
@@ -450,7 +451,7 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
                 <div className="flex-1 p-4 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-center space-y-1.5">
                   <div className="flex justify-center items-center gap-2 text-orange-600 dark:text-orange-400">
                     <Users className="h-5 w-5" />
-                    <span className="font-bold text-xl">{reel.bookingsCount || Math.floor(Math.random() * 50) + 10}</span>
+                    <span className="font-bold text-xl">{reel.bookingsCount || 0}</span>
                   </div>
                   <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Booked</p>
                 </div>
@@ -463,15 +464,40 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
                 </div>
               </div>
 
+              {/* Highlights/Features */}
+              {reel.metadata?.highlights && (
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Highlights</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(reel.metadata.highlights as string[]).map((highlight, idx) => (
+                      <Badge key={idx} variant="secondary" className="rounded-full px-3 py-1 bg-primary/5 text-primary border-primary/10">
+                        {highlight}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Description */}
               <div className="space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <Info className="h-4 w-4" /> About this
+                  <Info className="h-4 w-4" /> About this {reel.category}
                 </h3>
                 <p className="text-sm leading-relaxed text-foreground/80 bg-muted/20 p-4 rounded-2xl border border-border/50">
-                  {reel.description || "Experience the best of what this host has to offer. Book now to secure your spot and enjoy a wonderful time."}
+                  {reel.description || "No description provided for this experience."}
                 </p>
               </div>
+
+              {/* Safety/Verification */}
+              {reel.metadata?.verified && (
+                <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex items-start gap-3">
+                  <ShieldCheck className="h-5 w-5 text-blue-500 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-blue-700">Verified Listing</p>
+                    <p className="text-xs text-blue-600/70 leading-relaxed">This experience has been manually verified by ZuruSasa for quality and safety.</p>
+                  </div>
+                </div>
+              )}
             </div>
           </ScrollArea>
           

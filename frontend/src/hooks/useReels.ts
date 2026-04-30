@@ -94,6 +94,7 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 lat: item.lat,
                 lng: item.lng,
                 verificationStatus: item.host?.verification_status || 'none',
+                metadata: item.experience?.metadata || {},
             }));
 
             // Combine with mocks
