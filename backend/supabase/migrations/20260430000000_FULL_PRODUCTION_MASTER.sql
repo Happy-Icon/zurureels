@@ -222,10 +222,10 @@ BEGIN
     INSERT INTO public.profiles (id, full_name, username, metadata)
     VALUES (
         new.id,
-        COALESCE(new.raw_user_metadata->>'full_name', new.raw_user_metadata->>'name'),
-        COALESCE(new.raw_user_metadata->>'username', SPLIT_PART(new.email, '@', 1)),
+        COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name'),
+        COALESCE(new.raw_user_meta_data->>'username', SPLIT_PART(new.email, '@', 1)),
         jsonb_build_object(
-            'avatar_url', new.raw_user_metadata->>'avatar_url',
+            'avatar_url', new.raw_user_meta_data->>'avatar_url',
             'email', new.email
         )
     )
@@ -238,7 +238,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created AFTER INSERT OR UPDATE ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Anti-Disintermediation Filter
 CREATE OR REPLACE FUNCTION public.filter_contact_info()
