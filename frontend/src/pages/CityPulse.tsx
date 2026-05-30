@@ -22,6 +22,7 @@ import {
 } from "@/data/mockCityPulse";
 import { ReelCard } from "@/components/reels/ReelCard";
 import { SkeletonLoader } from "@/components/reels/ReelsFeed";
+import { DiscoverContent } from "@/components/city-pulse/DiscoverContent";
 import { 
   Search, 
   MapPin, 
@@ -303,7 +304,7 @@ const CityPulse = () => {
                         : "text-white/70 hover:text-[#EE7D30]"
                     )}
                   >
-                    Explore
+                    Discover
                     {tab === "explore" && (
                       <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#EE7D30]" />
                     )}
@@ -319,220 +320,60 @@ const CityPulse = () => {
           />
         </div>
       ) : (
-        <div className="relative pb-20 md:pb-8 min-h-screen">
-          <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border p-4 pt-[calc(0.25rem+env(safe-area-inset-top,0rem))] space-y-4">
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2 p-1 bg-secondary rounded-full border border-border">
-                  <button
-                    onClick={() => setTab("feed")}
-                    className={cn(
-                      "px-4 py-1.5 rounded-full text-sm font-bold transition-all",
-                      tab === "feed" ? "bg-[#EE7D30] text-white shadow-md" : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    ZuruFlow
-                  </button>
-                  <button
-                    onClick={() => setTab("explore")}
-                    className={cn(
-                      "px-4 py-1.5 rounded-full text-sm font-bold transition-all",
-                      tab === "explore" ? "bg-[#EE7D30] text-white shadow-md" : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    Explore
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 flex-1 justify-center px-4">
-                  <UnifiedSearch />
-                </div>
-
-                <div className="flex-shrink-0">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 text-foreground text-sm font-semibold bg-secondary px-3 py-2 rounded-full max-w-[140px]">
-                        <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
-                        <span className="truncate">{selectedCity}</span>
-                        <ChevronDown className="h-3.5 w-3.5 opacity-70 flex-shrink-0" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleUseLocation(true)} className="gap-2 cursor-pointer">
-                        <Navigation className="h-4 w-4 text-primary" />
-                        <span>Use My Location</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      {coastalCities.map((city) => (
-                        <DropdownMenuItem key={city} onClick={() => handleCitySelect(city)}>
-                          {city}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+        <DiscoverContent
+          showWeather={true}
+          weather={weather}
+          weatherLoading={weatherLoading}
+          selectedCity={selectedCity}
+          headerContent={
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2 p-1 bg-secondary rounded-full border border-border">
+                <button
+                  onClick={() => setTab("feed")}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-sm font-bold transition-all",
+                    tab === "feed" ? "bg-[#EE7D30] text-white shadow-md" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  ZuruFlow
+                </button>
+                <button
+                  onClick={() => setTab("explore")}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-sm font-bold transition-all",
+                    tab === "explore" ? "bg-[#EE7D30] text-white shadow-md" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Discover
+                </button>
               </div>
 
-              <div className="flex gap-2 overflow-x-auto hide-scrollbar py-1">
-                {categories.map((cat) => {
-                  const Icon = cat.icon;
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() => setSelectedCategory(cat.id)}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all",
-                        selectedCategory === cat.id
-                          ? "bg-[#EE7D30] text-white"
-                          : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      {cat.label}
+              <div className="flex-shrink-0">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-1.5 text-foreground text-sm font-semibold bg-secondary px-3 py-2 rounded-full max-w-[140px]">
+                      <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
+                      <span className="truncate">{selectedCity}</span>
+                      <ChevronDown className="h-3.5 w-3.5 opacity-70 flex-shrink-0" />
                     </button>
-                  );
-                })}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleUseLocation(true)} className="gap-2 cursor-pointer">
+                      <Navigation className="h-4 w-4 text-primary" />
+                      <span>Use My Location</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {coastalCities.map((city) => (
+                      <DropdownMenuItem key={city} onClick={() => handleCitySelect(city)}>
+                        {city}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
-
-            <div className="p-4 space-y-6">
-              <WeatherWidget weather={weather} loading={weatherLoading} city={selectedCity} />
-
-              {(selectedCategory === "all" || selectedCategory === "drinks") && (
-                <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Wine className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-display font-semibold">Drinks of the Day</h2>
-                  </div>
-                  <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
-                    {filteredDrinks.map((drink) => (
-                      <div key={drink.id} className="min-w-[160px] bg-card border border-border rounded-xl overflow-hidden">
-                        <img src={drink.image_url || "/placeholder.svg"} alt={drink.title} className="h-24 w-full object-cover" />
-                        <div className="p-2">
-                          <p className="font-medium text-sm truncate">{drink.title}</p>
-                          <p className="text-xs text-muted-foreground truncate">{drink.entity_name}</p>
-                          <div className="flex items-baseline gap-1 mt-1">
-                            {drink.base_price && <span className="text-xs line-through text-muted-foreground">{drink.base_price}</span>}
-                            <span className="text-sm font-semibold text-primary">KES {drink.current_price}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {selectedCategory === "all" && (
-                <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Calendar className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-display font-semibold">Today's Activities</h2>
-                  </div>
-                  <div className="space-y-2">
-                    {filteredActivities.slice(0, 3).map((activity) => (
-                      <div key={activity.id} className="w-full cursor-pointer" onClick={() => setBookingExperience(activity)}>
-                        <QuickListingCard
-                          title={activity.title}
-                          subtitle={`${activity.metadata?.time || ""} • ${activity.metadata?.duration || ""}`}
-                          location={activity.location}
-                          price={activity.current_price}
-                          priceUnit="person"
-                          imageUrl={activity.image_url || "/placeholder.svg"}
-                          badge={activity.metadata?.type}
-                          available={activity.metadata?.spots_left}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {(selectedCategory === "all" || selectedCategory === "boats") && (
-                <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Ship className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-display font-semibold">Boat Rentals</h2>
-                  </div>
-                  <div className="space-y-2">
-                    {filteredBoats.map((boat) => (
-                      <div key={boat.id} className="w-full cursor-pointer" onClick={() => setBookingExperience(boat)}>
-                        <QuickListingCard title={boat.title} subtitle={boat.metadata?.type || boat.entity_name}
-                          location={boat.location} price={boat.current_price} priceUnit={boat.price_unit}
-                          imageUrl={boat.image_url || "/placeholder.svg"} rating={boat.metadata?.rating}
-                          available={boat.availability_status === "available"} />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {(selectedCategory === "all" || selectedCategory === "food") && (
-                <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <UtensilsCrossed className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-display font-semibold">Restaurant Specials</h2>
-                  </div>
-                  <div className="space-y-2">
-                    {filteredFood.filter((f) => !f.metadata?.chef).map((rest) => (
-                      <QuickListingCard key={rest.id} title={rest.title} subtitle={rest.entity_name}
-                        location={rest.location} price={rest.current_price} originalPrice={rest.base_price || undefined}
-                        imageUrl={rest.image_url || "/placeholder.svg"} badge={rest.metadata?.valid_until} />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {(selectedCategory === "all" || selectedCategory === "food") && (
-                <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <ChefHat className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-display font-semibold">Chef's Specials</h2>
-                  </div>
-                  <div className="space-y-2">
-                    {filteredFood.filter((f) => f.metadata?.chef).map((chef) => (
-                      <QuickListingCard key={chef.id} title={chef.title}
-                        subtitle={`by ${chef.metadata?.chef} at ${chef.entity_name}`}
-                        location={chef.location} price={chef.current_price}
-                        imageUrl={chef.image_url || "/placeholder.svg"} />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {(selectedCategory === "all" || selectedCategory === "nightlife") && (
-                <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Music className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-display font-semibold">Tonight's Events</h2>
-                  </div>
-                  <div className="space-y-2">
-                    {filteredNightlife.map((club) => (
-                      <QuickListingCard key={club.id} title={club.title}
-                        subtitle={`${club.entity_name} • ${club.metadata?.time || ""}`}
-                        location={club.location} price={club.current_price} priceUnit="entry"
-                        imageUrl={club.image_url || "/placeholder.svg"} badge={club.metadata?.dj} />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {(selectedCategory === "all" || selectedCategory === "bikes") && (
-                <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Bike className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-display font-semibold">Bike Rentals</h2>
-                  </div>
-                  <div className="space-y-2">
-                    {filteredBikes.map((bike) => (
-                      <QuickListingCard key={bike.id} title={bike.metadata?.type || bike.title}
-                        subtitle={bike.entity_name} location={bike.location} price={bike.current_price}
-                        priceUnit="day" imageUrl={bike.image_url || "/placeholder.svg"}
-                        available={bike.metadata?.available_count} />
-                    ))}
-                  </div>
-                </section>
-              )}
-            </div>
-        </div>
+          }
+        />
       )}
 
       {bookingReel && (
@@ -568,7 +409,7 @@ const CityPulse = () => {
           onSuccess={() => setBookingExperience(null)}
         />
       )}
-      {viewMode === "guest" && (
+      {viewMode === "guest" && tab === "feed" && (
         <>
           <AskZuruButton onClick={() => setShowAI(true)} isOpen={showAI} />
           {showAI && (

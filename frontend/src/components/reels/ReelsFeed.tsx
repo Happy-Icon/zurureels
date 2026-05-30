@@ -12,13 +12,13 @@ interface ReelsFeedProps {
 }
 
 const sidebarLinks = [
-  { icon: Home, label: "Home", href: "/" },
-  { icon: Compass, label: "Explore", href: "/explore" },
-  { icon: MapPin, label: "Destinations", href: "/destinations" },
-  { icon: Bookmark, label: "Saved Reels", href: "/saved" },
-  { icon: PlusSquare, label: "Upload Reel", href: "/host/dashboard" },
-  { icon: User, label: "Profile", href: "/profile" },
-  { icon: Settings, label: "Settings", href: "/settings" },
+   { icon: Home, label: "Home", href: "/" },
+   { icon: Compass, label: "Discover", href: "/explore" },
+   { icon: MapPin, label: "Destinations", href: "/destinations" },
+   { icon: Bookmark, label: "Saved Reels", href: "/saved" },
+   { icon: PlusSquare, label: "Upload Reel", href: "/host/dashboard" },
+   { icon: User, label: "Profile", href: "/profile" },
+   { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
 export function ReelsFeed({ reels, onSave, onBook }: ReelsFeedProps) {

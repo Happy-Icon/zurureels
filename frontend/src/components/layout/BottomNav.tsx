@@ -4,17 +4,17 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
 
 const unauthGuestNavItems = [
-  { icon: Zap, label: "Pulse", path: "/" },
-  { icon: Compass, label: "Discover", path: "/discover" },
-  { icon: User, label: "Log In", path: "/auth" },
+   { icon: Zap, label: "Pulse", path: "/" },
+   { icon: Compass, label: "Discover", path: "/discover" },
+   { icon: User, label: "Log In", path: "/auth" },
 ];
 
 const authGuestNavItems = [
-  { icon: Zap, label: "Pulse", path: "/" },
-  { icon: Compass, label: "Discover", path: "/discover" },
-  { icon: Heart, label: "Saved", path: "/saved" },
-  { icon: Calendar, label: "Reservations", path: "/bookings" },
-  { icon: User, label: "Profile", path: "/profile" },
+   { icon: Zap, label: "Pulse", path: "/" },
+   { icon: Compass, label: "Discover", path: "/discover" },
+   { icon: Heart, label: "Saved", path: "/saved" },
+   { icon: Calendar, label: "Reservations", path: "/bookings" },
+   { icon: User, label: "Profile", path: "/profile" },
 ];
 
 const hostNavItems = [
