@@ -265,7 +265,7 @@ export default function Auth() {
                           type="tel"
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
-                          placeholder="0704447256"
+                          placeholder="0700000000"
                           className="border-none shadow-none p-0 h-auto focus-visible:ring-0 text-[16px] text-[#222] placeholder:text-[#B0B0B0]"
                         />
                       </div>
