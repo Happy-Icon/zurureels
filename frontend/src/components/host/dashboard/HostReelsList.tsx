@@ -12,9 +12,10 @@ interface HostReelsListProps {
     onDelete?: (id: string) => void;
     onToggleStatus?: (id: string, currentStatus: string) => void;
     onEdit?: (reel: ReelData) => void;
+    onToggleAvailability?: (experienceId: string, currentStatus: string | undefined) => void;
 }
 
-export const HostReelsList = ({ reels, type, onDelete, onToggleStatus, onEdit }: HostReelsListProps) => {
+export const HostReelsList = ({ reels, type, onDelete, onToggleStatus, onEdit, onToggleAvailability }: HostReelsListProps) => {
     if (reels.length === 0) {
         return (
             <div className="text-center py-12">
@@ -68,6 +69,11 @@ export const HostReelsList = ({ reels, type, onDelete, onToggleStatus, onEdit }:
                                     <span className="text-xs font-bold text-white bg-destructive px-2 py-1 rounded-md">EXPIRED</span>
                                 </div>
                             )}
+                            {!isExpired && reel.availabilityStatus === 'booked_out' && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg">
+                                    <span className="text-[10px] font-bold text-white bg-orange-500/90 px-2 py-1 rounded-md tracking-wider">FULLY BOOKED</span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -95,6 +101,13 @@ export const HostReelsList = ({ reels, type, onDelete, onToggleStatus, onEdit }:
                                                 <><EyeOff className="h-4 w-4 mr-2" /> Unpublish (Draft)</>
                                             ) : (
                                                 <><Eye className="h-4 w-4 mr-2" /> Publish Now</>
+                                            )}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => onToggleAvailability?.(reel.experienceId, reel.availabilityStatus)}>
+                                            {reel.availabilityStatus === 'booked_out' ? (
+                                                <><RefreshCcw className="h-4 w-4 mr-2 text-emerald-500" /> Mark as Available</>
+                                            ) : (
+                                                <><AlertTriangle className="h-4 w-4 mr-2 text-orange-500" /> Mark Fully Booked</>
                                             )}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={() => onDelete?.(reel.id)}>

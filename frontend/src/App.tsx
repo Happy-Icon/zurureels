@@ -9,6 +9,7 @@ import CityPulse from "./pages/CityPulse";
 import Bookings from "./pages/Bookings";
 import Saved from "./pages/Saved";
 import Profile from "./pages/Profile";
+import PublicProfile from "./pages/PublicProfile";
 import Host from "./pages/Host";
 import Listings from "./pages/host/Listings";
 import BookingsHost from "./pages/host/Bookings";
@@ -61,6 +62,7 @@ const App = () => (
               <Route path="/bookings" element={<Bookings />} />
               <Route path="/saved" element={<Saved />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/profile/:id" element={<PublicProfile />} />
               <Route path="/profile/info" element={<ProtectedRoute><PersonalInfo /></ProtectedRoute>} />
               <Route path="/profile/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
               <Route path="/profile/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />

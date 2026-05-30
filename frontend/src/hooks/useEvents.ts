@@ -32,7 +32,10 @@ export const useEvents = (
 
             let query = supabase
                 .from("events")
-                .select("*")
+                .select(`
+                    *,
+                    host:profiles(full_name, username, metadata)
+                `)
                 .eq("status", "active");
 
             if (timeFilter === "happening") {
@@ -54,8 +57,16 @@ export const useEvents = (
             const { data, error: fetchError } = await query.limit(50);
 
             if (fetchError) throw fetchError;
-
-            let results = (data || []) as ZuruEvent[];
+            
+            // Map results to include host data correctly
+            let results = (data || []).map((e: any) => ({
+                ...e,
+                host: e.host ? {
+                    full_name: e.host.full_name,
+                    username: e.host.username,
+                    avatar_url: e.host.metadata?.avatar_url
+                } : undefined
+            })) as ZuruEvent[];
 
             // Client-side search filter
             if (search && search.trim()) {

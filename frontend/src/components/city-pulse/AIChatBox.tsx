@@ -14,7 +14,28 @@ interface Recommendation {
   activity: string;
   why_it_fits: string;
   best_time: string;
+  is_verified?: boolean;
   tags: string[];
+}
+
+interface TripPlanBreakdown {
+  item: string;
+  cost: string;
+  status: "verified" | "unverified";
+}
+
+interface TripPlanResponse {
+  type: "trip_plan";
+  title: string;
+  total_estimated_cost: string;
+  breakdown: TripPlanBreakdown[];
+  advice: string;
+}
+
+interface SafetyWarningResponse {
+  type: "safety_warning";
+  level: "caution" | "alert";
+  message: string;
 }
 
 interface MoodDiscoveryResponse {
@@ -93,14 +114,14 @@ interface IntentSignalResponse {
   suggested_next_action: string;
 }
 
-type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse | ActivityScoreResponse | BudgetCheckResponse | FallbackSuggestionResponse | IntentSignalResponse;
+type ParsedResponse = ConciergeResponse | MoodDiscoveryResponse | ReelCaptionResponse | ReviewSummaryResponse | MicroItineraryResponse | SafetyNoteResponse | UserContextResponse | ActivityScoreResponse | BudgetCheckResponse | FallbackSuggestionResponse | IntentSignalResponse | TripPlanResponse | SafetyWarningResponse;
 
 // Try to parse JSON from content
 function parseAIResponse(content: string): ParsedResponse | null {
   try {
     // Try to find JSON in the content (might be wrapped in markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) ||
-      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score|budget_check|fallback_suggestion|intent_signal)"[\s\S]*\})/);
+      content.match(/(\{[\s\S]*"type"\s*:\s*"(?:city_concierge|mood_discovery|reel_caption|review_summary|micro_itinerary|safety_note|user_context|activity_score|budget_check|fallback_suggestion|intent_signal|trip_plan|safety_warning)"[\s\S]*\})/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
     const parsed = JSON.parse(jsonStr);
 
@@ -137,6 +158,12 @@ function parseAIResponse(content: string): ParsedResponse | null {
     if (parsed.type === "intent_signal" && parsed.readiness_level && parsed.suggested_next_action) {
       return parsed as IntentSignalResponse;
     }
+    if (parsed.type === "trip_plan" && parsed.total_estimated_cost) {
+      return parsed as TripPlanResponse;
+    }
+    if (parsed.type === "safety_warning" && parsed.message) {
+      return parsed as SafetyWarningResponse;
+    }
   } catch {
     // Not JSON or not a structured response
   }
@@ -146,7 +173,15 @@ function parseAIResponse(content: string): ParsedResponse | null {
 function RecommendationCard({ rec }: { rec: Recommendation }) {
   return (
     <div className="bg-background border border-border rounded-lg p-3 space-y-2">
-      <h4 className="font-semibold text-sm text-foreground">{rec.activity}</h4>
+      <div className="flex items-center justify-between">
+        <h4 className="font-semibold text-sm text-foreground">{rec.activity}</h4>
+        {rec.is_verified && (
+          <span className="flex items-center gap-1 text-[10px] font-bold text-blue-500 bg-blue-500/5 px-1.5 py-0.5 rounded-full border border-blue-500/10">
+            <Sparkles className="h-2.5 w-2.5" />
+            Verified
+          </span>
+        )}
+      </div>
       <p className="text-xs text-muted-foreground">{rec.why_it_fits}</p>
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
@@ -520,6 +555,63 @@ function FallbackSuggestionCard({ data }: { data: FallbackSuggestionResponse }) 
   );
 }
 
+function TripPlanCard({ data }: { data: TripPlanResponse }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🗺️</span>
+        <span className="font-medium text-sm">{data.title}</span>
+      </div>
+      <div className="bg-background border border-border rounded-lg overflow-hidden">
+        <div className="p-3 bg-primary/10 border-b border-border">
+          <p className="text-[10px] uppercase tracking-wide text-primary font-bold">Total Estimated Budget</p>
+          <p className="text-lg font-bold text-primary">{data.total_estimated_cost}</p>
+        </div>
+        <div className="p-3 space-y-2">
+          {data.breakdown.map((item, i) => (
+            <div key={i} className="flex items-center justify-between py-1 border-b border-border/50 last:border-0">
+              <div className="min-w-0">
+                <p className="text-xs font-medium truncate">{item.item}</p>
+                <p className={cn(
+                  "text-[9px] font-bold uppercase",
+                  item.status === "verified" ? "text-blue-500" : "text-amber-500"
+                )}>
+                  {item.status}
+                </p>
+              </div>
+              <p className="text-xs font-semibold whitespace-nowrap ml-2">{item.cost}</p>
+            </div>
+          ))}
+        </div>
+        {data.advice && (
+          <div className="p-3 bg-muted/30 border-t border-border">
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              <span className="font-bold">Zuru Tip:</span> {data.advice}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SafetyWarningCard({ data }: { data: SafetyWarningResponse }) {
+  return (
+    <div className={cn(
+      "rounded-lg p-3 border space-y-2",
+      data.level === "alert" 
+        ? "bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400" 
+        : "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400"
+    )}>
+      <div className="flex items-center gap-2">
+        <span className="text-lg">{data.level === "alert" ? "🚫" : "⚠️"}</span>
+        <span className="font-bold text-sm uppercase tracking-wide">Safety {data.level === "alert" ? "Alert" : "Caution"}</span>
+      </div>
+      <p className="text-sm font-medium leading-relaxed">{data.message}</p>
+    </div>
+  );
+}
+
 function IntentSignalCard({ data }: { data: IntentSignalResponse }) {
   const getReadinessInfo = (level: string) => {
     const normalized = level.toLowerCase().replace(/_/g, "");
@@ -635,6 +727,14 @@ function MessageContent({ content }: { content: string }) {
 
   if (parsed?.type === "intent_signal") {
     return <IntentSignalCard data={parsed} />;
+  }
+
+  if (parsed?.type === "trip_plan") {
+    return <TripPlanCard data={parsed} />;
+  }
+
+  if (parsed?.type === "safety_warning") {
+    return <SafetyWarningCard data={parsed} />;
   }
 
   return <>{content}</>;

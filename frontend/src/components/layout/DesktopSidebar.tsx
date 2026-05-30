@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { UnifiedSearch } from "@/components/UnifiedSearch";
+import UnifiedSearch from "@/components/UnifiedSearch";
 
 const unauthGuestNavItems = [
   { icon: Zap, label: "Zuru Pulse", path: "/" },

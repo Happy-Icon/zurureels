@@ -424,33 +424,37 @@ export const MiniVideoEditor = ({
 
       {/* ── Video Preview ───────────────────────────────────────────────── */}
       <div
-        className="flex-1 relative bg-black flex items-center justify-center cursor-pointer"
+        className="flex-1 relative bg-black/95 md:bg-black/40 flex items-center justify-center cursor-pointer overflow-hidden p-4 md:p-10"
         onClick={togglePlayback}
       >
-        {localVideoUrl ? (
-          <video
-            ref={videoRef}
-            src={localVideoUrl}
-            className="max-h-full max-w-full object-contain"
-            style={{ aspectRatio: "9/16" }}
-            onLoadedMetadata={handleLoadedMetadata}
-            onTimeUpdate={handleTimeUpdate}
-            onEnded={() => setIsPlaying(false)}
-            playsInline
-            muted
-          />
-        ) : (
-          <p className="text-white/40">No video loaded</p>
-        )}
-
-        {/* Play overlay (visible when paused) */}
-        {localVideoUrl && !isPlaying && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="h-16 w-16 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-              <Play className="h-7 w-7 text-white ml-1" />
+        <div className="relative h-full aspect-[9/16] bg-black shadow-[0_0_50px_rgba(0,0,0,0.5)] md:rounded-[3rem] overflow-hidden md:border-[8px] border-muted/20 flex items-center justify-center group">
+          {localVideoUrl ? (
+            <video
+              ref={videoRef}
+              src={localVideoUrl}
+              className="h-full w-full object-cover"
+              onLoadedMetadata={handleLoadedMetadata}
+              onTimeUpdate={handleTimeUpdate}
+              onEnded={() => setIsPlaying(false)}
+              playsInline
+              muted
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-4 text-white/20">
+              <Loader2 className="h-10 w-10 animate-spin" />
+              <p>Loading preview...</p>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Play overlay (visible when paused) */}
+          {localVideoUrl && !isPlaying && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20 transition-colors group-hover:bg-black/10">
+              <div className="h-20 w-20 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center shadow-2xl border border-white/10 transform transition-transform group-active:scale-90">
+                <Play className="h-9 w-9 text-white fill-white ml-1.5" />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Trim Bar (WhatsApp-style filmstrip with drag handles) ────── */}
@@ -530,21 +534,30 @@ export const MiniVideoEditor = ({
         </div>
       )}
       {isExporting && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="bg-background p-8 rounded-[2rem] shadow-2xl border border-primary/20 flex flex-col items-center gap-5 max-w-xs w-full text-center">
-            <CircularProgress 
-              value={exportProgress} 
-              size={100} 
-              strokeWidth={8} 
-              className="text-primary" 
-            />
-            <div className="space-y-1">
-              <h3 className="font-bold text-lg">Trimming Video</h3>
-              <p className="text-sm text-muted-foreground">Preparing your action-packed reel...</p>
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
+          <div className="bg-card p-10 rounded-[3rem] shadow-2xl border border-primary/20 flex flex-col items-center gap-6 max-w-sm w-full text-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-30" />
+            
+            <div className="relative">
+              <CircularProgress 
+                value={exportProgress} 
+                size={120} 
+                strokeWidth={8} 
+                className="text-primary drop-shadow-[0_0_10px_rgba(238,125,48,0.2)]" 
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-xl font-bold tabular-nums">{exportProgress}%</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full text-[10px] font-bold text-primary uppercase">
-              <Sparkles className="h-3 w-3" />
-              <span>Zuru Editor</span>
+            
+            <div className="space-y-2 relative z-10">
+              <h3 className="text-xl font-bold tracking-tight">Trimming Video</h3>
+              <p className="text-sm text-muted-foreground">Preparing your action-packed coastal reel...</p>
+            </div>
+
+            <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-[10px] font-bold text-primary uppercase tracking-widest animate-pulse">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Zuru Editor Active</span>
             </div>
           </div>
         </div>
