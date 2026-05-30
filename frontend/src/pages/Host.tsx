@@ -13,19 +13,17 @@ import { toast } from "sonner";
 export const Host = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const { user } = useAuth();
-  const [setupLoading, setSetupLoading] = useState(false);
-  const [profile, setProfile] = useState<{ verification_status: string, stripe_onboarded: boolean, stripe_account_id: string, metadata: any } | null>(null);
-  const [checkingOnboarding, setCheckingOnboarding] = useState(false);
+  const [profile, setProfile] = useState<{ verification_status: string, metadata: any } | null>(null);
   const [payoutBannerDismissed, setPayoutBannerDismissed] = useState(() => {
     return localStorage.getItem('payout_banner_dismissed') === 'true';
   });
   const navigate = useNavigate();
 
-  // Fetch profile for Stripe onboarding check
+  // Fetch profile details
   const fetchProfile = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase.from('profiles')
-      .select('verification_status, stripe_onboarded, stripe_account_id, metadata')
+      .select('verification_status, metadata')
       .eq('id', user.id)
       .single();
     setProfile(data as any);
@@ -35,41 +33,6 @@ export const Host = () => {
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
-
-  // Check if user just returned from Stripe onboarding
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const onboarded = urlParams.get('onboarded');
-
-    if (onboarded === 'true' && profile?.stripe_account_id && !profile?.stripe_onboarded) {
-      // Poll for onboarding completion
-      setCheckingOnboarding(true);
-      let attempts = 0;
-      const maxAttempts = 10;
-
-      const checkStatus = async () => {
-        attempts++;
-        const data = await fetchProfile();
-
-        if (data?.stripe_onboarded) {
-          toast.success("Stripe onboarding completed successfully!");
-          setCheckingOnboarding(false);
-          // Remove query param
-          window.history.replaceState({}, '', window.location.pathname);
-          return;
-        }
-
-        if (attempts < maxAttempts) {
-          setTimeout(checkStatus, 2000); // Check every 2 seconds
-        } else {
-          setCheckingOnboarding(false);
-          toast.info("Please refresh the page to check onboarding status");
-        }
-      };
-
-      checkStatus();
-    }
-  }, [profile, fetchProfile]);
 
   const handleSetupPayouts = () => {
     navigate("/host/payouts");

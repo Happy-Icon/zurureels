@@ -22,7 +22,7 @@ export interface ReelData {
   title: string;
   description?: string;
   location: string;
-  category: "hotel" | "villa" | "apartment" | "boats" | "food" | "drinks" | "rentals" | "adventure" | "parks_camps" | "tours" | "events";
+  category: "hotel" | "villa" | "apartment" | "boats" | "food" | "drinks" | "rentals" | "adventure" | "parks_camps" | "tours" | "events" | "land_adventure" | "air_adventure" | "water_adventure";
   price: number;
   priceUnit: string;
   rating: number;
@@ -346,6 +346,9 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
     rentals: "bg-teal-500/90",
     adventure: "bg-red-500/90",
     parks_camps: "bg-green-600/90",
+    land_adventure: "bg-amber-600/90",
+    air_adventure: "bg-sky-500/90",
+    water_adventure: "bg-blue-600/90",
   };
 
   const renderActions = () => (

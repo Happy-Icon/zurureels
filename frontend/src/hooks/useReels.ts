@@ -11,7 +11,7 @@ export interface ReelData {
     title: string;
     description?: string;
     location: string;
-    category: "boats" | "food" | "nightlife" | "activities" | "bikes" | "drinks" | "hotel" | "villa" | "apartment" | "rentals" | "adventure" | "parks_camps" | "tours" | "events";
+    category: "boats" | "food" | "nightlife" | "activities" | "bikes" | "drinks" | "hotel" | "villa" | "apartment" | "rentals" | "adventure" | "parks_camps" | "tours" | "events" | "land_adventure" | "air_adventure" | "water_adventure";
     price: number;
     priceUnit: string;
     rating: number;
@@ -39,7 +39,7 @@ const shuffleArray = <T>(array: T[]): T[] => {
     return newArray;
 };
 
-export const useReels = (category?: string, experienceId?: string, search?: string) => {
+export const useReels = (category?: string | string[], experienceId?: string, search?: string) => {
     const [reels, setReels] = useState<ReelData[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -63,10 +63,34 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
                 .order("created_at", { ascending: false });
 
             if (category && category !== "all") {
-                query = query.eq("category", category);
+                const categoriesArray = Array.isArray(category) ? category : [category];
+                const resolvedCategories: string[] = [];
+
+                categoriesArray.forEach(cat => {
+                    if (cat === "land_adventure") {
+                        resolvedCategories.push("land_adventure", "adventure", "tours", "rentals", "bikes");
+                    } else if (cat === "water_adventure") {
+                        resolvedCategories.push("water_adventure", "boats");
+                    } else if (cat === "air_adventure") {
+                        resolvedCategories.push("air_adventure");
+                    } else {
+                        resolvedCategories.push(cat);
+                    }
+                });
+
+                console.log("useReels query category in:", { category, resolvedCategories });
+                query = query.in("category", resolvedCategories);
+            } else {
+                console.log("useReels query category all: category is", category);
             }
 
             const { data, error: fetchError } = await query;
+
+            console.log("useReels result:", {
+                success: !fetchError,
+                count: data?.length,
+                error: fetchError
+            });
 
             if (fetchError) throw fetchError;
 
@@ -98,9 +122,25 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
             }));
 
             // Combine with mocks
-            const filteredMocks = mockReels.filter(m => 
-                (!category || category === "all" || m.category === category)
-            );
+            const filteredMocks = mockReels.filter(m => {
+                if (!category || category === "all") return true;
+                const categoriesArray = Array.isArray(category) ? category : [category];
+                const resolvedCategories: string[] = [];
+
+                categoriesArray.forEach(cat => {
+                    if (cat === "land_adventure") {
+                        resolvedCategories.push("land_adventure", "adventure", "tours", "rentals", "bikes");
+                    } else if (cat === "water_adventure") {
+                        resolvedCategories.push("water_adventure", "boats");
+                    } else if (cat === "air_adventure") {
+                        resolvedCategories.push("air_adventure");
+                    } else {
+                        resolvedCategories.push(cat);
+                    }
+                });
+
+                return resolvedCategories.includes(m.category);
+            });
 
             const combined = pageNum === 0 
                 ? [...transformedReels, ...filteredMocks]
@@ -111,9 +151,25 @@ export const useReels = (category?: string, experienceId?: string, search?: stri
             console.error("Error fetching reels:", err);
             setError(err);
             // Fallback to mocks
-            const filteredMocks = mockReels.filter(m => 
-                (!category || category === "all" || m.category === category)
-            );
+            const filteredMocks = mockReels.filter(m => {
+                if (!category || category === "all") return true;
+                const categoriesArray = Array.isArray(category) ? category : [category];
+                const resolvedCategories: string[] = [];
+
+                categoriesArray.forEach(cat => {
+                    if (cat === "land_adventure") {
+                        resolvedCategories.push("land_adventure", "adventure", "tours", "rentals", "bikes");
+                    } else if (cat === "water_adventure") {
+                        resolvedCategories.push("water_adventure", "boats");
+                    } else if (cat === "air_adventure") {
+                        resolvedCategories.push("air_adventure");
+                    } else {
+                        resolvedCategories.push(cat);
+                    }
+                });
+
+                return resolvedCategories.includes(m.category);
+            });
             setReels(shuffleArray(filteredMocks));
         } finally {
             setLoading(false);

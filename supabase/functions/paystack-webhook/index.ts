@@ -15,14 +15,7 @@ Deno.serve(async (req) => {
 
     const body = await req.text();
     
-    // Verify Signature
-    // For simplicity in this environment, I'll use a standard crypto check if possible,
-    // but Paystack uses HMAC SHA512.
-    // In Deno, we can use the 'crypto' module.
-    
-    // Skip signature check for now if testing, but in production this is MUST.
-    // Let's implement it properly.
-    
+    // Verify Signature using HMAC SHA512
     const hmac = await crypto.subtle.importKey(
         "raw",
         new TextEncoder().encode(PAYSTACK_SECRET_KEY),
@@ -52,11 +45,11 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    const data = event.data;
+    const reference = data.reference;
+
     if (event.event === 'charge.success') {
-        const data = event.data;
-        const reference = data.reference;
         const amount = data.amount / 100;
-        const fees = data.fees / 100; // This includes our split if subaccount was used correctly
         
         // Find booking by reference
         const { data: booking } = await supabaseAdmin
@@ -124,6 +117,21 @@ Deno.serve(async (req) => {
                     }).catch(e => console.error("Host email failed", e));
                 }
             }
+        }
+    } else if (event.event === 'charge.failed') {
+        // Find booking by reference
+        const { data: booking } = await supabaseAdmin
+            .from('bookings')
+            .select('*')
+            .eq('payment_reference', reference)
+            .maybeSingle();
+
+        if (booking) {
+            console.log(`Setting booking ${booking.id} to failed due to charge failure.`);
+            await supabaseAdmin
+                .from('bookings')
+                .update({ status: 'failed' })
+                .eq('id', booking.id);
         }
     }
 

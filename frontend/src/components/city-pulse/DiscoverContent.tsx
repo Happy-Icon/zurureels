@@ -36,7 +36,7 @@ const DiscoveryGroups = [
   { id: "all", label: "All", categories: ["all"], icon: Sparkles },
   { id: "accommodation", label: "Accommodation", categories: ["hotel", "villa", "apartment", "parks_camps"], icon: Home },
   { id: "events", label: "Events", categories: ["events", "food", "drinks"], icon: PartyPopper },
-  { id: "adventure", label: "Adventure", categories: ["adventure", "tours", "boats", "rentals"], icon: Mountain },
+  { id: "adventure", label: "Adventure", categories: ["land_adventure", "air_adventure", "water_adventure"], icon: Mountain },
 ];
 
 interface DiscoverContentProps {
@@ -78,7 +78,7 @@ export const DiscoverContent = ({
   const { reels: allReels, loading: reelsLoading } = useReels(effectiveCategory, undefined, debouncedSearch);
   const { messages, isLoading: aiLoading, sendMessage, clearMessages } = useCityPulseAI();
   const { experiences: dbExperiences } = useExperiences(
-    selectedCategory, 
+    effectiveCategory, 
     selectedCity && selectedCity !== "Current Location" ? selectedCity : undefined, 
     debouncedSearch
   );
@@ -95,21 +95,51 @@ export const DiscoverContent = ({
     if (dbExperiences && dbExperiences.length > 0) return dbExperiences;
     
     const mockData: any[] = [
-      ...mockBoatRentals.map(b => ({ id: b.id, category: 'boats', title: b.name, entity_name: 'Rental', location: b.location, current_price: b.price, image_url: b.imageUrl, metadata: { rating: b.rating } })),
+      ...mockBoatRentals.map(b => ({ id: b.id, category: 'water_adventure', title: b.name, entity_name: 'Rental', location: b.location, current_price: b.price, image_url: b.imageUrl, metadata: { rating: b.rating } })),
       ...mockRestaurantSpecials.map(r => ({ id: r.id, category: 'food', title: r.special, entity_name: r.restaurant, location: r.location, current_price: r.discountPrice, base_price: r.originalPrice, image_url: r.imageUrl, metadata: { valid_until: r.validUntil } })),
       ...mockClubEvents.map(c => ({ id: c.id, category: 'nightlife', title: c.event, entity_name: c.venue, location: c.location, current_price: c.entryFee, image_url: c.imageUrl, metadata: { time: c.time, dj: c.dj } })),
       ...mockChefSpecials.map(s => ({ id: s.id, category: 'food', title: s.dish, entity_name: s.restaurant, location: s.location, current_price: s.price, image_url: s.imageUrl, metadata: { chef: s.chef } })),
-      ...mockBikeRentals.map(b => ({ id: b.id, category: 'bikes', title: b.type, entity_name: b.provider, location: b.location, current_price: b.pricePerDay, image_url: b.imageUrl, metadata: { available_count: b.available } })),
-      ...mockDailyActivities.map(a => ({ id: a.id, category: 'activities', title: a.name, entity_name: 'Activity', location: a.location, current_price: a.price, image_url: a.imageUrl, metadata: { time: a.time, duration: a.duration, spots_left: a.spotsLeft, type: a.type } })),
-      ...mockDrinksOfTheDay.map(d => ({ id: d.id, category: 'drinks', title: d.name, entity_name: d.bar, location: d.location, current_price: d.specialPrice, base_price: d.originalPrice, image_url: d.imageUrl }))
+      ...mockBikeRentals.map(b => ({ id: b.id, category: 'land_adventure', title: b.type, entity_name: b.provider, location: b.location, current_price: b.pricePerDay, image_url: b.imageUrl, metadata: { available_count: b.available } })),
+      ...mockDailyActivities.map(a => {
+        let cat = 'land_adventure';
+        if (a.type.toLowerCase().includes('water') || a.name.toLowerCase().includes('dolphin') || a.name.toLowerCase().includes('snorkel')) {
+          cat = 'water_adventure';
+        }
+        return { id: a.id, category: cat, title: a.name, entity_name: 'Activity', location: a.location, current_price: a.price, image_url: a.imageUrl, metadata: { time: a.time, duration: a.duration, spots_left: a.spotsLeft, type: a.type } };
+      }),
+      ...mockDrinksOfTheDay.map(d => ({ id: d.id, category: 'drinks', title: d.name, entity_name: d.bar, location: d.location, current_price: d.specialPrice, base_price: d.originalPrice, image_url: d.imageUrl })),
+      {
+        id: "exp-air-1",
+        category: "air_adventure",
+        title: "Tandem Skydive over Diani",
+        entity_name: "Skydive Diani",
+        location: "Diani Beach",
+        current_price: 35000,
+        image_url: "https://images.unsplash.com/photo-1533664488202-6af66d26c44a?w=400&h=300&fit=crop",
+        metadata: { rating: 4.98, duration: "2 hours" }
+      },
+      {
+        id: "exp-air-2",
+        category: "air_adventure",
+        title: "Tsavo Hot Air Balloon Safari",
+        entity_name: "Balloon Safaris",
+        location: "Tsavo East",
+        current_price: 48000,
+        image_url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400&h=300&fit=crop",
+        metadata: { rating: 4.95, duration: "1 hour" }
+      }
     ];
 
-    return mockData.filter(item => 
-      (selectedCategory === 'all' || item.category === selectedCategory) &&
-      (!selectedCity || selectedCity === 'Current Location' || item.location.toLowerCase().includes(selectedCity.toLowerCase())) &&
-      (!debouncedSearch || item.title.toLowerCase().includes(debouncedSearch.toLowerCase()) || item.location.toLowerCase().includes(debouncedSearch.toLowerCase()))
-    );
-  }, [dbExperiences, selectedCategory, debouncedSearch, selectedCity]);
+    return mockData.filter(item => {
+      const matchCategory = selectedCategory === 'all' 
+        ? (selectedGroup === 'all' ? true : activeCategories.includes(item.category))
+        : item.category === selectedCategory;
+
+      return matchCategory &&
+        (!selectedCity || selectedCity === 'Current Location' || item.location.toLowerCase().includes(selectedCity.toLowerCase())) &&
+        (!debouncedSearch || item.title.toLowerCase().includes(debouncedSearch.toLowerCase()) || item.location.toLowerCase().includes(debouncedSearch.toLowerCase()));
+    });
+  }, [dbExperiences, selectedCategory, debouncedSearch, selectedCity, selectedGroup, activeCategories]);
 
   // Events data (only fetched when in events view)
   const { events, loading: eventsLoading } = useEvents(

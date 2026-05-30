@@ -3,7 +3,7 @@ import {
   User,
   Settings,
   Bell,
-  CreditCard,
+  Receipt,
   HelpCircle,
   Shield,
   LogOut,
@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate, Navigate } from "react-router-dom";
-import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/components/AuthProvider";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,7 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const menuItems = [
   { icon: ShieldCheck, label: "Digital Identity Center", path: "/profile/info" },
   { icon: Bell, label: "Notifications", path: "/profile/notifications" },
-  { icon: CreditCard, label: "Payment Methods", path: "/profile/payments" },
+  { icon: Receipt, label: "Transactions & Receipts", path: "/profile/payments" },
   { icon: Shield, label: "Privacy & Security", path: "/profile/security" },
   { icon: HelpCircle, label: "Help & Support", path: "/profile/support" },
   { icon: Settings, label: "Settings", path: "/profile/settings" },
@@ -31,7 +30,6 @@ const menuItems = [
 const Profile = () => {
   const { user, signOut, switchViewMode, viewMode, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [completeness, setCompleteness] = useState(0);
   const [role, setRole] = useState<string>('guest');
   const [verificationStatus, setVerificationStatus] = useState<string>('none');
   const [shuftiStatus, setShuftiStatus] = useState<string>('pending');
@@ -61,7 +59,6 @@ const Profile = () => {
       if (data) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const profileData = data as any;
-        setCompleteness(profileData.profile_completeness || 20);
         setRole(profileData.role || 'guest');
         setVerificationStatus(profileData.verification_status || 'none');
         if (profileData.metadata?.avatar_url) {
@@ -114,14 +111,7 @@ const Profile = () => {
               {user.email}
             </p>
 
-            {/* Progress Bar */}
-            <div className="w-full max-w-xs mt-4 space-y-2">
-              <div className="flex justify-between text-xs font-medium">
-                <span>Profile Completeness</span>
-                <span>{completeness}%</span>
-              </div>
-              <Progress value={completeness} className="h-2" />
-            </div>
+
           </div>
 
           {/* Stats - Only for Hosts */}

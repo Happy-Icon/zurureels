@@ -22,7 +22,7 @@ export interface Experience {
     };
 }
 
-export const useExperiences = (category?: string, city?: string, search?: string) => {
+export const useExperiences = (category?: string | string[], city?: string, search?: string) => {
     const [experiences, setExperiences] = useState<Experience[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any>(null);
@@ -34,7 +34,22 @@ export const useExperiences = (category?: string, city?: string, search?: string
                 let query = supabase.from("experiences").select("*, host:profiles(full_name, verification_status)");
 
                 if (category && category !== "all") {
-                    query = query.eq("category", category);
+                    const categoriesArray = Array.isArray(category) ? category : [category];
+                    const resolvedCategories: string[] = [];
+
+                    categoriesArray.forEach(cat => {
+                        if (cat === "land_adventure") {
+                            resolvedCategories.push("land_adventure", "adventure", "tours", "rentals", "bikes");
+                        } else if (cat === "water_adventure") {
+                            resolvedCategories.push("water_adventure", "boats");
+                        } else if (cat === "air_adventure") {
+                            resolvedCategories.push("air_adventure");
+                        } else {
+                            resolvedCategories.push(cat);
+                        }
+                    });
+
+                    query = query.in("category", resolvedCategories);
                 }
 
                 if (city && city !== "Current Location") {

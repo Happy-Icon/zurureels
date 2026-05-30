@@ -22,7 +22,7 @@ serve(async (req) => {
         // 1. Get Booking details
         const { data: booking, error: fetchError } = await supabaseClient
             .from('bookings')
-            .select('*, experiences(title, user_id)')
+            .select('*, experiences(title, user_id, metadata)')
             .eq('id', booking_id)
             .single();
 
@@ -34,32 +34,75 @@ serve(async (req) => {
         const { data: guestProfile } = await supabaseClient.from('profiles').select('email, full_name').eq('id', booking.user_id).single();
         const { data: hostProfile } = await supabaseClient.from('profiles').select('email, full_name').eq('id', booking.experiences?.user_id).single();
 
-        // 2. Process Refund via Paystack
-        const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY');
-        const refundResponse = await fetch('https://api.paystack.co/refund', {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                transaction: booking.payment_reference,
-            }),
-        });
+        // Calculate Refund Percentage based on time to check-in
+        const now = new Date();
+        const checkIn = new Date(booking.check_in);
+        const hoursToCheckIn = (checkIn.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-        const refundResult = await refundResponse.json();
+        let refundPercentage = 1.0; // Default 100% refund
+        let policyName = "Flexible (Full Refund > 24h)";
 
-        if (!refundResult.status) {
-            throw new Error(refundResult.message || "Refund failed");
+        // Read policy from metadata if present
+        const policy = booking.experiences?.metadata?.cancellation_policy || 'flexible';
+
+        if (policy === 'strict') {
+            policyName = "Strict (No refund < 7 days)";
+            if (hoursToCheckIn < 168) { // 7 days
+                refundPercentage = 0.0; // 0% refund
+            }
+        } else if (policy === 'moderate') {
+            policyName = "Moderate (50% refund < 5 days)";
+            if (hoursToCheckIn < 120) { // 5 days
+                refundPercentage = 0.5;
+            }
+        } else {
+            // Flexible policy (default)
+            if (hoursToCheckIn < 24) {
+                refundPercentage = 0.5; // 50% refund if cancelled late
+            }
         }
 
-        // 3. Update Booking Status
+        const refundAmount = booking.amount * refundPercentage;
+        console.log(`Cancelling booking ${booking_id}. Hours to check-in: ${hoursToCheckIn.toFixed(1)}. Policy: ${policyName}. Refund: KES ${refundAmount} (${refundPercentage * 100}%)`);
+
+        let refundResult = null;
+        if (refundAmount > 0) {
+            // Process Refund via Paystack
+            const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY');
+            const refundResponse = await fetch('https://api.paystack.co/refund', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    transaction: booking.payment_reference,
+                    amount: Math.round(refundAmount * 100), // in cents/kobo
+                }),
+            });
+
+            refundResult = await refundResponse.json();
+
+            if (!refundResult.status) {
+                throw new Error(refundResult.message || "Refund failed");
+            }
+        }
+
+        // Calculate updated host split & platform commission for the remaining balance
+        const remainingBalance = booking.amount - refundAmount;
+        const platformFee = remainingBalance * 0.10;
+        const hostAmount = remainingBalance - platformFee;
+
+        // 3. Update Booking Status & Financial Splits
         const { error: updateError } = await supabaseClient
             .from('bookings')
             .update({
                 status: 'cancelled',
-                refund_id: refundResult.data.id.toString(),
+                refund_id: refundResult ? refundResult.data.id.toString() : 'no_refund',
                 refunded_at: new Date().toISOString(),
+                refund_amount: refundAmount,
+                platform_fee: platformFee,
+                host_amount: hostAmount
             })
             .eq('id', booking_id);
 
@@ -79,8 +122,8 @@ serve(async (req) => {
                     data: {
                         guestName: guestProfile?.full_name || 'Guest',
                         title: tripTitle,
-                        amount: booking.amount.toLocaleString(),
-                        refundId: refundResult.data.id
+                        amount: refundAmount.toLocaleString(),
+                        refundId: refundResult ? refundResult.data.id : 'N/A'
                     }
                 }
             }).catch(e => console.error("Guest cancel email failed", e));
@@ -101,7 +144,7 @@ serve(async (req) => {
             }).catch(e => console.error("Host cancel email failed", e));
         }
 
-        return new Response(JSON.stringify({ status: 'success', refund: refundResult.data }), {
+        return new Response(JSON.stringify({ status: 'success', refund: refundResult ? refundResult.data : null }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         });

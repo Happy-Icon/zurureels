@@ -108,6 +108,9 @@ export const ReelGridCard = ({ reel, onBook, onSelect }: ReelGridCardProps) => {
         parks_camps: "bg-green-600/90",
         tours: "bg-amber-500/90",
         events: "bg-indigo-500/90",
+        land_adventure: "bg-amber-600/90",
+        air_adventure: "bg-sky-500/90",
+        water_adventure: "bg-blue-600/90",
     };
 
     return (

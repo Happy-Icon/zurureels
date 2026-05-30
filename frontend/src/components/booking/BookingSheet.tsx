@@ -17,12 +17,14 @@ import { toast } from "sonner";
 import {
     MapPin,    Users, CalendarDays, Loader2,
     Star, ChevronDown, ChevronUp, CheckCircle2,
-    CreditCard, ShieldCheck
+    CreditCard, ShieldCheck, Smartphone
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { usePaystackPayment } from "react-paystack";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export interface BookingSheetProps {
     open: boolean;
@@ -65,6 +67,9 @@ export function BookingSheet({
     const [guests, setGuests] = useState(1);
     const [showCalendar, setShowCalendar] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<"card" | "mpesa">("card");
+    const [mpesaPhone, setMpesaPhone] = useState("");
+    const [stkStatus, setStkStatus] = useState<string | null>(null);
     const [paystackRef] = useState(() => `zuru_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 
     const today = startOfDay(new Date());
@@ -167,8 +172,100 @@ export function BookingSheet({
             return;
         }
 
-        setIsSubmitting(true);
-        initializePayment({ onSuccess: onPaystackSuccess, onClose: onPaystackClose });
+        if (paymentMethod === "card") {
+            setIsSubmitting(true);
+            initializePayment({ onSuccess: onPaystackSuccess, onClose: onPaystackClose });
+        } else {
+            // M-Pesa STK Flow
+            let formattedPhone = mpesaPhone.trim().replace(/^\+/, '');
+            if (formattedPhone.startsWith('0')) {
+                formattedPhone = '254' + formattedPhone.substring(1);
+            } else if (formattedPhone && !formattedPhone.startsWith('254')) {
+                formattedPhone = '254' + formattedPhone;
+            }
+
+            if (!formattedPhone || !/^(254)(7|1)\d{8}$/.test(formattedPhone)) {
+                toast.error("Please enter a valid Safaricom M-Pesa phone number (e.g., 0712345678 or 254712345678)");
+                return;
+            }
+
+            setIsSubmitting(true);
+            setStkStatus("sending_stk");
+            toast.loading("Initiating M-Pesa STK Push prompt...", { id: "stk-payment" });
+
+            try {
+                const { data, error } = await supabase.functions.invoke('initiate-paystack-stk', {
+                    body: {
+                        phone: formattedPhone,
+                        amount: total,
+                        experience_id: experienceId,
+                        trip_title: title,
+                        guests,
+                        check_in: dateRange.from.toISOString(),
+                        check_out: (dateRange.to || addDays(dateRange.from, 1)).toISOString(),
+                    }
+                });
+
+                if (error || data?.error) {
+                    throw new Error(error?.message || data?.error || "Failed to initiate payment");
+                }
+
+                const bookingId = data.booking.id;
+                setStkStatus("pending_pin");
+                toast.loading("STK prompt sent! Please enter your M-Pesa PIN on your phone...", { id: "stk-payment" });
+
+                // Poll the database booking status
+                let attempts = 0;
+                const maxAttempts = 20; // 60 seconds
+                const pollInterval = setInterval(async () => {
+                    attempts++;
+                    try {
+                        const { data: bookingData, error: pollError } = await supabase
+                            .from('bookings')
+                            .select('status')
+                            .eq('id', bookingId)
+                            .single();
+
+                        if (pollError) {
+                            console.error("Error polling booking status:", pollError);
+                            return;
+                        }
+
+                        if (bookingData.status === 'paid') {
+                            clearInterval(pollInterval);
+                            toast.success("Booking confirmed! Payment received successfully 🎉", { id: "stk-payment" });
+                            setStkStatus(null);
+                            setIsSubmitting(false);
+                            handleClose();
+                            onSuccess?.();
+                        } else if (bookingData.status === 'failed') {
+                            clearInterval(pollInterval);
+                            toast.error("Payment failed or cancelled.", { id: "stk-payment" });
+                            setStkStatus(null);
+                            setIsSubmitting(false);
+                        } else if (attempts >= maxAttempts) {
+                            clearInterval(pollInterval);
+                            toast.info("Payment validation is taking longer than expected. We will update your booking status once the network confirms it. You can check its status in your Transaction History.", {
+                                id: "stk-payment",
+                                duration: 8000
+                            });
+                            setStkStatus(null);
+                            setIsSubmitting(false);
+                            handleClose();
+                            onSuccess?.();
+                        }
+                    } catch (pollErr) {
+                        console.error("Polling error:", pollErr);
+                    }
+                }, 3000);
+
+            } catch (err: any) {
+                console.error("STK request failed:", err);
+                toast.error(err.message || "Failed to start M-Pesa checkout. Please check the network.", { id: "stk-payment" });
+                setStkStatus(null);
+                setIsSubmitting(false);
+            }
+        }
     };
 
     const handleClose = () => {
@@ -289,19 +386,71 @@ export function BookingSheet({
                     </div>
 
                     {dateRange?.from && (
-                        <div className="bg-secondary/20 rounded-xl p-4 space-y-2 text-sm">
-                            <div className="flex justify-between text-muted-foreground">
-                                <span>
-                                    KES {price.toLocaleString()} × {isNightBased ? `${nights} night${nights > 1 ? "s" : ""}` : `${guests} guest${guests > 1 ? "s" : ""}`}
-                                </span>
-                                <span>KES {total.toLocaleString()}</span>
+                        <>
+                            {/* Payment Method Selector */}
+                            <div className="space-y-2">
+                                <p className="font-semibold text-sm">Payment Method</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPaymentMethod("card")}
+                                        className={cn(
+                                            "flex items-center justify-center gap-2 border rounded-xl p-3 text-sm font-medium transition-all active:scale-95",
+                                            paymentMethod === "card"
+                                                ? "border-primary bg-primary/5 text-primary font-semibold"
+                                                : "border-border hover:bg-secondary/20"
+                                        )}
+                                    >
+                                        <CreditCard className="h-4 w-4" />
+                                        Pay with Card
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPaymentMethod("mpesa")}
+                                        className={cn(
+                                            "flex items-center justify-center gap-2 border rounded-xl p-3 text-sm font-medium transition-all active:scale-95",
+                                            paymentMethod === "mpesa"
+                                                ? "border-primary bg-primary/5 text-primary font-semibold"
+                                                : "border-border hover:bg-secondary/20"
+                                        )}
+                                    >
+                                        <Smartphone className="h-4 w-4" />
+                                        Pay with M-Pesa
+                                    </button>
+                                </div>
                             </div>
-                            <Separator />
-                            <div className="flex justify-between font-bold text-base">
-                                <span>Total</span>
-                                <span className="text-primary">KES {total.toLocaleString()}</span>
+
+                            {paymentMethod === "mpesa" && (
+                                <div className="space-y-2 border rounded-xl p-4 bg-secondary/5">
+                                    <Label htmlFor="mpesaPhone" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">M-Pesa Phone Number</Label>
+                                    <Input
+                                        id="mpesaPhone"
+                                        type="tel"
+                                        placeholder="e.g. 0712345678"
+                                        value={mpesaPhone}
+                                        onChange={(e) => setMpesaPhone(e.target.value)}
+                                        className="h-11 rounded-xl bg-background border-border"
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">
+                                        An STK Push PIN prompt will be sent directly to your phone.
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="bg-secondary/20 rounded-xl p-4 space-y-2 text-sm">
+                                <div className="flex justify-between text-muted-foreground">
+                                    <span>
+                                        KES {price.toLocaleString()} × {isNightBased ? `${nights} night${nights > 1 ? "s" : ""}` : `${guests} guest${guests > 1 ? "s" : ""}`}
+                                    </span>
+                                    <span>KES {total.toLocaleString()}</span>
+                                </div>
+                                <Separator />
+                                <div className="flex justify-between font-bold text-base">
+                                    <span>Total</span>
+                                    <span className="text-primary">KES {total.toLocaleString()}</span>
+                                </div>
                             </div>
-                        </div>
+                        </>
                     )}
 
                     {/* Escrow Trust Notice */}
@@ -321,7 +470,7 @@ export function BookingSheet({
                         className="w-full h-12 text-base font-semibold rounded-xl"
                     >
                         {isSubmitting ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Confirming...</>
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {stkStatus === "pending_pin" ? "Waiting for PIN..." : stkStatus === "sending_stk" ? "Sending STK..." : "Confirming..."}</>
                         ) : (
                             <><CheckCircle2 className="mr-2 h-4 w-4" /> Confirm Booking</>
                         )}

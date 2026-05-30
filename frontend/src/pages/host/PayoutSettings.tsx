@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 const KENYAN_BANKS = [
     { code: "011", name: "Co-operative Bank of Kenya" },
@@ -40,6 +42,10 @@ const PayoutSettings = () => {
     const [resolvedName, setResolvedName] = useState<string | null>(null);
     const [verifying, setVerifying] = useState(false);
 
+    // Ledger State
+    const [ledgers, setLedgers] = useState<any[]>([]);
+    const [loadingLedger, setLoadingLedger] = useState(false);
+
     useEffect(() => {
         if (!user) return;
         const fetchPayoutInfo = async () => {
@@ -63,6 +69,44 @@ const PayoutSettings = () => {
             setLoading(false);
         };
         fetchPayoutInfo();
+    }, [user]);
+
+    useEffect(() => {
+        if (!user) return;
+        const fetchLedger = async () => {
+            setLoadingLedger(true);
+            try {
+                // 1. Get host's experiences
+                const { data: hostExperiences, error: expError } = await supabase
+                    .from('experiences')
+                    .select('id')
+                    .eq('user_id', user.id);
+
+                if (expError) throw expError;
+                if (!hostExperiences || hostExperiences.length === 0) {
+                    setLedgers([]);
+                    setLoadingLedger(false);
+                    return;
+                }
+
+                const expIds = hostExperiences.map((e) => e.id);
+
+                // 2. Fetch bookings for these experiences
+                const { data: bookings, error: bookingsError } = await supabase
+                    .from('bookings')
+                    .select('id, trip_title, host_amount, platform_fee, status, created_at, payment_reference, check_out')
+                    .in('experience_id', expIds)
+                    .order('created_at', { ascending: false });
+
+                if (bookingsError) throw bookingsError;
+                setLedgers(bookings || []);
+            } catch (error) {
+                console.error("Error fetching ledger:", error);
+            } finally {
+                setLoadingLedger(false);
+            }
+        };
+        fetchLedger();
     }, [user]);
 
     const handleVerify = async () => {
@@ -258,7 +302,7 @@ const PayoutSettings = () => {
                             </div>
                         </div>
 
-                        <Button type="submit" className="w-full h-12 text-base font-semibold shadow-lg" disabled={saving}>
+                        <Button type="submit" className="w-full h-12 text-base font-semibold shadow-lg border-0" disabled={saving}>
                             {saving ? (
                                 <>
                                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -271,6 +315,59 @@ const PayoutSettings = () => {
                             )}
                         </Button>
                     </form>
+
+                    {/* Disbursement Ledger */}
+                    <div className="space-y-4 pt-6 border-t border-border">
+                        <div className="space-y-1">
+                            <h2 className="text-lg font-display font-semibold">Disbursement Ledger</h2>
+                            <p className="text-xs text-muted-foreground">
+                                Track payouts and platform commission for your completed experiences.
+                            </p>
+                        </div>
+
+                        {loadingLedger ? (
+                            <div className="text-center py-6">
+                                <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                            </div>
+                        ) : ledgers.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground border border-dashed rounded-xl p-4 bg-muted/10">
+                                No payout records found yet.
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {ledgers.map((item) => (
+                                    <div key={item.id} className="p-4 bg-card border border-border rounded-xl space-y-2">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-semibold text-sm line-clamp-1 text-foreground">{item.trip_title}</p>
+                                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                    Check-out: {item.check_out ? format(new Date(item.check_out), "MMM d, yyyy") : "N/A"}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-bold text-sm text-emerald-600">
+                                                    + KES {item.host_amount?.toLocaleString() || "0"}
+                                                </p>
+                                                <span className={cn(
+                                                    "inline-block text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide mt-1",
+                                                    item.status === "disbursed" && "bg-emerald-500/10 text-emerald-600",
+                                                    item.status === "paid" && "bg-amber-500/10 text-amber-600",
+                                                    item.status === "refunded" && "bg-blue-500/10 text-blue-600",
+                                                    item.status === "cancelled" && "bg-destructive/10 text-destructive"
+                                                )}>
+                                                    {item.status === "disbursed" ? "Disbursed" : item.status === "paid" ? "Pending Release" : item.status}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-1.5 border-t border-border/60">
+                                            <span>Platform Fee (10%): KES {item.platform_fee?.toLocaleString() || "0"}</span>
+                                            <span className="font-mono">Ref: {item.payment_reference?.slice(-12) || "N/A"}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </MainLayout>
