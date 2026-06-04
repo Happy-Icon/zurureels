@@ -6,12 +6,14 @@ import { Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HostAnalytics } from "@/components/host/dashboard/HostAnalytics";
 import { CreateReelDialog } from "@/components/host/dashboard/CreateReelDialog";
+import { AddStatusDialog } from "@/components/status/AddStatusDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { toast } from "sonner";
 
 export const Host = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isStatusOpen, setIsStatusOpen] = useState(false);
   const { user } = useAuth();
   const [profile, setProfile] = useState<{ verification_status: string, metadata: any } | null>(null);
   const [payoutBannerDismissed, setPayoutBannerDismissed] = useState(() => {
@@ -55,10 +57,20 @@ export const Host = () => {
                 <p className="text-sm text-muted-foreground">Welcome back! Here's your overview.</p>
               </div>
 
-              <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Create Listing</span>
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => setIsStatusOpen(true)} 
+                  variant="outline" 
+                  className="gap-2 border-primary text-primary hover:bg-primary/5 rounded-xl"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add Status</span>
+                </Button>
+                <Button onClick={() => setIsCreateOpen(true)} className="gap-2 rounded-xl">
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Create Listing</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -112,6 +124,7 @@ export const Host = () => {
         </div>
 
         <CreateReelDialog open={isCreateOpen} onOpenChange={handleDialogChange} />
+        <AddStatusDialog open={isStatusOpen} onOpenChange={setIsStatusOpen} />
       </div>
     </MainLayout>
   );

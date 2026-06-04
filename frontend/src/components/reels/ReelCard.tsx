@@ -12,6 +12,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AskZuruButton } from "@/components/city-pulse/AskZuruButton";
+import { useHostStatuses } from "@/hooks/useHostStatuses";
+import { StatusViewer } from "@/components/status/StatusViewer";
 
 export interface ReelData {
   id: string;
@@ -99,6 +101,12 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
   const [videoLoaded, setVideoLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const navigate = useNavigate();
+
+  const hostId = reel.hostUserId || "";
+  const { statuses } = useHostStatuses(hostId ? [hostId] : []);
+  const hostStatuses = statuses[hostId] || [];
+  const hasActiveStatus = hostStatuses.length > 0;
+  const [statusViewerOpen, setStatusViewerOpen] = useState(false);
 
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' && window.innerWidth >= 768);
   useEffect(() => {
@@ -311,7 +319,9 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
 
   const handleAvatarClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (reel.hostUserId) {
+    if (hasActiveStatus) {
+      setStatusViewerOpen(true);
+    } else if (reel.hostUserId) {
       navigate(`/profile/${reel.hostUserId}`);
     }
   };
@@ -356,11 +366,21 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
       {/* Host Avatar + Follow */}
       <div className="relative">
         <button onClick={handleAvatarClick} className="block">
-          <img
-            src={reel.hostAvatar}
-            alt={reel.hostName}
-            className="h-12 w-12 rounded-full border-2 border-primary-foreground object-cover transition-transform hover:scale-105"
-          />
+          <div className={cn(
+            "rounded-full transition-transform hover:scale-105 p-[2px]",
+            hasActiveStatus 
+              ? "bg-gradient-to-tr from-[#EE7D30] via-pink-500 to-purple-600 animate-pulse" 
+              : ""
+          )}>
+            <img
+              src={reel.hostAvatar}
+              alt={reel.hostName}
+              className={cn(
+                "h-12 w-12 rounded-full object-cover border-2 border-black",
+                hasActiveStatus ? "border-transparent" : "border-primary-foreground"
+              )}
+            />
+          </div>
         </button>
         {/* Follow/Unfollow button */}
         <button
@@ -442,7 +462,21 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
                 onClick={handleAvatarClick}
                 className="w-full flex items-center gap-4 p-4 rounded-2xl bg-muted/30 border border-border/50 hover:bg-muted/50 transition-colors group"
               >
-                <img src={reel.hostAvatar} alt={reel.hostName} className="h-14 w-14 rounded-full object-cover border-[3px] border-background shadow-md group-hover:scale-105 transition-transform" />
+                <div className={cn(
+                  "rounded-full transition-transform group-hover:scale-105 p-[2px]",
+                  hasActiveStatus 
+                    ? "bg-gradient-to-tr from-[#EE7D30] via-pink-500 to-purple-600 animate-pulse" 
+                    : ""
+                )}>
+                  <img 
+                    src={reel.hostAvatar} 
+                    alt={reel.hostName} 
+                    className={cn(
+                      "h-14 w-14 rounded-full object-cover border-[3px] border-background shadow-md",
+                      hasActiveStatus ? "border-transparent" : "border-background"
+                    )} 
+                  />
+                </div>
                 <div className="flex-1 text-left">
                   <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest mb-0.5">Hosted By</p>
                   <p className="text-base font-bold leading-tight group-hover:text-primary transition-colors">{reel.hostName}</p>
@@ -752,7 +786,14 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
 
       </div>
 
-
+      <StatusViewer
+        statuses={hostStatuses}
+        hostName={reel.hostName}
+        hostAvatar={reel.hostAvatar}
+        hostUserId={reel.hostUserId || ""}
+        open={statusViewerOpen}
+        onClose={() => setStatusViewerOpen(false)}
+      />
     </div>
   );
 }

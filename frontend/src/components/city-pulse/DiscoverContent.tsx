@@ -9,6 +9,8 @@ import {
   mockDrinksOfTheDay 
 } from "@/data/mockCityPulse";
 import { useReels } from "@/hooks/useReels";
+import { supabase } from "@/integrations/supabase/client";
+import { mockReels } from "@/data/mockReels";
 import { Search, Sparkles, Filter, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,7 @@ import { BookingSheet } from "@/components/booking/BookingSheet";
 import { ReelGridCard } from "@/components/reels/ReelGridCard";
 import { ReelCard } from "@/components/reels/ReelCard";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSearchParams } from "react-router-dom";
 import { EventTimeToggle } from "@/components/events/EventTimeToggle";
 import { UpcomingEventCard } from "@/components/events/UpcomingEventCard";
 import { HappeningEventCard } from "@/components/events/HappeningEventCard";
@@ -63,6 +66,8 @@ export const DiscoverContent = ({
   const [selectedReelIndex, setSelectedReelIndex] = useState<number | null>(null);
   const [eventTimeFilter, setEventTimeFilter] = useState<EventTimeFilter>("upcoming");
   const isMobile = useIsMobile();
+  const [searchParams] = useSearchParams();
+  const reelIdParam = searchParams.get("id");
 
   // Are we currently in "Events" view mode?
   const isEventsView = selectedGroup === "events";
@@ -89,6 +94,21 @@ export const DiscoverContent = ({
     if (!selectedCity || selectedCity === "Current Location") return allReels;
     return allReels.filter(reel => reel.location.toLowerCase().includes(selectedCity.toLowerCase()));
   }, [allReels, selectedCity]);
+
+  // Handle specific URL reel loading
+  const [urlReel, setUrlReel] = useState<ReelData | null>(null);
+
+  // Combine filteredReels and urlReel to ensure the URL target reel is in the list
+  const finalReels = useMemo(() => {
+    const list = [...filteredReels];
+    if (urlReel) {
+      const exists = list.some(r => r.id === urlReel.id);
+      if (!exists) {
+        list.unshift(urlReel);
+      }
+    }
+    return list;
+  }, [filteredReels, urlReel]);
 
   // Fallback to mock data for a rich experience even if DB is empty
   const experiences = useMemo(() => {
@@ -162,10 +182,86 @@ export const DiscoverContent = ({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Load specific reel if requested via URL
+  useEffect(() => {
+    if (!reelIdParam) {
+      setUrlReel(null);
+      return;
+    }
+
+    // Check if it exists in mock reels first
+    const mockMatch = mockReels.find(m => m.id === reelIdParam);
+    if (mockMatch) {
+      setUrlReel(mockMatch);
+      return;
+    }
+
+    // Otherwise fetch it from Supabase
+    const fetchSpecificReel = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("reels")
+          .select(`
+              *,
+              experience:experiences(id, title, description, location, current_price, price_unit, entity_name, metadata, availability_status),
+              host:profiles!reels_user_id_profiles_fkey(full_name, username, metadata, verification_status)
+          `)
+          .eq("id", reelIdParam)
+          .eq("status", "active")
+          .maybeSingle();
+
+        if (error) throw error;
+        if (data) {
+          const transformed: ReelData = {
+            id: data.id,
+            experienceId: data.experience_id,
+            hostUserId: data.user_id,
+            videoUrl: data.processed_video_url || data.video_url,
+            thumbnailUrl: data.thumbnail_url || "/placeholder.svg",
+            title: data.experience?.title || "Coastal Experience",
+            description: data.experience?.description || "Experience the best of ZuruSasa.",
+            location: data.experience?.location || "Mombasa",
+            category: data.category as ReelData["category"],
+            price: data.experience?.current_price || 0,
+            priceUnit: data.experience?.price_unit || "person",
+            rating: data.experience?.metadata?.rating || 5,
+            bookingsCount: Math.floor(Math.random() * 50) + 10,
+            availabilityStatus: data.experience?.availability_status || 'available',
+            likes: 0,
+            saved: false,
+            hostName: data.host?.full_name || data.host?.username || data.experience?.entity_name || "Zuru Host",
+            hostAvatar: data.host?.metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
+            postedAt: data.created_at,
+            isLive: data.is_live,
+            lat: data.lat,
+            lng: data.lng,
+            verificationStatus: data.host?.verification_status || 'none',
+            metadata: data.experience?.metadata || {},
+          };
+          setUrlReel(transformed);
+        }
+      } catch (err) {
+        console.error("Error fetching specific url reel:", err);
+      }
+    };
+
+    fetchSpecificReel();
+  }, [reelIdParam]);
+
+  // Open clicked reel from public profile listings navigation
+  useEffect(() => {
+    if (reelIdParam && finalReels.length > 0) {
+      const idx = finalReels.findIndex(r => r.id === reelIdParam);
+      if (idx !== -1) {
+        setSelectedReelIndex(idx);
+      }
+    }
+  }, [reelIdParam, finalReels]);
+
   const handleSendMessage = (message: string) => {
     const context = {
       experiences: experiences,
-      reels: filteredReels,
+      reels: finalReels,
     };
     sendMessage(message, "Discover", context);
   };
@@ -310,9 +406,9 @@ export const DiscoverContent = ({
         ) : (
           /* Reels Grid (Non-events view) */
           <>
-            {!reelsLoading && filteredReels.length > 0 && (
+            {!reelsLoading && finalReels.length > 0 && (
               <p className="text-sm text-muted-foreground mb-3">
-                {filteredReels.length} reel{filteredReels.length !== 1 ? "s" : ""} found
+                {finalReels.length} reel{finalReels.length !== 1 ? "s" : ""} found
                 {selectedCategory !== "all" && ` in ${subCategories.find(c => c.id === selectedCategory)?.label || selectedCategory}`}
               </p>
             )}
@@ -322,8 +418,8 @@ export const DiscoverContent = ({
                 Array(4).fill(0).map((_, i) => (
                   <div key={i} className="aspect-[2/3] rounded-2xl bg-muted animate-pulse" />
                 ))
-              ) : filteredReels.length > 0 ? (
-                (isMobile ? filteredReels.slice(0, 4) : filteredReels).map((reel, index) => (
+              ) : finalReels.length > 0 ? (
+                (isMobile ? finalReels.slice(0, 4) : finalReels).map((reel, index) => (
                   <ReelGridCard
                     key={reel.id}
                     reel={reel}
@@ -344,7 +440,7 @@ export const DiscoverContent = ({
       </div>
 
       {/* Full Screen Reel View - Overlay */}
-      {selectedReelIndex !== null && filteredReels[selectedReelIndex] && (
+      {selectedReelIndex !== null && finalReels[selectedReelIndex] && (
         <div className="fixed inset-0 z-[60] bg-black">
           {/* Back Button */}
           <button 
@@ -356,9 +452,9 @@ export const DiscoverContent = ({
           
           <div className="h-full w-full">
             <ReelCard 
-              reel={filteredReels[selectedReelIndex]}
+              reel={finalReels[selectedReelIndex]}
               isActive={true}
-              onBook={(id) => setBookingReel(filteredReels.find(r => r.id === id) || null)}
+              onBook={(id) => setBookingReel(finalReels.find(r => r.id === id) || null)}
             />
           </div>
         </div>
