@@ -47,6 +47,43 @@ export const HostLiveDialog = ({ open, onOpenChange, eventId, eventTitle, onSucc
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+
+    // Swipe down to close on mobile preview
+    const touchStartY = useRef(0);
+    const [dragOffsetY, setDragOffsetY] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        touchStartY.current = e.touches[0].clientY;
+        setIsDragging(true);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (!isDragging) return;
+        const currentY = e.touches[0].clientY;
+        const diff = currentY - touchStartY.current;
+        if (diff > 0) {
+            setDragOffsetY(diff);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (!isDragging) return;
+        setIsDragging(false);
+        if (dragOffsetY > 150) {
+            if (isLive) {
+                if (window.confirm("Are you sure you want to end your live stream and close?")) {
+                    handleEndBroadcast().then(() => {
+                        onOpenChange(false);
+                    });
+                }
+            } else {
+                onOpenChange(false);
+            }
+        }
+        setDragOffsetY(0);
+    };
     
     const [isLive, setIsLive] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -171,7 +208,7 @@ export const HostLiveDialog = ({ open, onOpenChange, eventId, eventTitle, onSucc
         };
     }, [isLive]);
 
-    // Setup Supabase Realtime Channels for chat & viewers count sync (using Presence)
+    // Setup Supabase Realtime Channels for chat & viewers count sync (using Presence) + WebRTC Signaling
     useEffect(() => {
         if (isLive && open) {
             const channelId = `event_chat_${eventId}`;
@@ -187,6 +224,76 @@ export const HostLiveDialog = ({ open, onOpenChange, eventId, eventTitle, onSucc
                         timestamp: new Date()
                     };
                     setChatMessages(prev => [...prev, receivedMsg]);
+                })
+                .on("broadcast", { event: "webrtc_signal" }, async (payload) => {
+                    const { target, sender, type, desc, candidate } = payload.payload;
+                    
+                    // Only process signals targeted at the host
+                    if (target !== "host") return;
+
+                    if (type === "join") {
+                        console.log("Guest joined and requested WebRTC stream:", sender);
+                        
+                        // Clean up existing peer connection if any
+                        if (peerConnectionsRef.current.has(sender)) {
+                            peerConnectionsRef.current.get(sender)?.close();
+                        }
+
+                        const pc = new RTCPeerConnection({
+                            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+                        });
+
+                        peerConnectionsRef.current.set(sender, pc);
+
+                        // Attach local webcam camera tracks
+                        if (streamRef.current) {
+                            streamRef.current.getTracks().forEach((track) => {
+                                pc.addTrack(track, streamRef.current!);
+                            });
+                        }
+
+                        // Send local ICE candidates to guest
+                        pc.onicecandidate = (e) => {
+                            if (e.candidate && channelRef.current) {
+                                channelRef.current.send({
+                                    type: "broadcast",
+                                    event: "webrtc_signal",
+                                    payload: {
+                                        target: sender,
+                                        sender: "host",
+                                        type: "candidate",
+                                        candidate: e.candidate
+                                    }
+                                });
+                            }
+                        };
+
+                        // Create WebRTC Offer
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+
+                        // Broadcast SDP Offer to guest
+                        channelRef.current.send({
+                            type: "broadcast",
+                            event: "webrtc_signal",
+                            payload: {
+                                target: sender,
+                                sender: "host",
+                                type: "offer",
+                                desc: offer
+                            }
+                        });
+                    } else if (type === "answer") {
+                        const pc = peerConnectionsRef.current.get(sender);
+                        if (pc) {
+                            await pc.setRemoteDescription(new RTCSessionDescription(desc));
+                        }
+                    } else if (type === "candidate") {
+                        const pc = peerConnectionsRef.current.get(sender);
+                        if (pc) {
+                            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                        }
+                    }
                 })
                 .on("presence", { event: "sync" }, () => {
                     const state = channel.presenceState();
@@ -207,6 +314,9 @@ export const HostLiveDialog = ({ open, onOpenChange, eventId, eventTitle, onSucc
             return () => {
                 supabase.removeChannel(channel);
                 channelRef.current = null;
+                // Close all peer connections
+                peerConnectionsRef.current.forEach((pc) => pc.close());
+                peerConnectionsRef.current.clear();
             };
         }
     }, [isLive, eventId, open, user]);
@@ -257,6 +367,15 @@ export const HostLiveDialog = ({ open, onOpenChange, eventId, eventTitle, onSucc
         if (!isLive) return;
         setLoading(true);
         try {
+            // Send stream_ended event to all connected guests before database update
+            if (channelRef.current) {
+                channelRef.current.send({
+                    type: "broadcast",
+                    event: "stream_ended",
+                    payload: {}
+                });
+            }
+
             const { error } = await supabase
                 .from("events")
                 .update({ 
@@ -297,7 +416,7 @@ export const HostLiveDialog = ({ open, onOpenChange, eventId, eventTitle, onSucc
             event: "chat_msg",
             payload: {
                 id: myMsg.id,
-                user_name: myMsg.user_name,
+                user_name: "Host", // Broadcast as "Host" instead of "Host (You)" so guests see it correctly
                 text: myMsg.text
             }
         });
@@ -333,10 +452,21 @@ export const HostLiveDialog = ({ open, onOpenChange, eventId, eventTitle, onSucc
 
     return (
         <Dialog open={open} onOpenChange={(val) => { if (!isLive) onOpenChange(val); else toast.warning("Please end your live stream before closing."); }}>
-            <DialogContent className="w-full h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-4xl rounded-none md:rounded-3xl bg-black text-white border-none md:border-white/10 shadow-2xl p-0 overflow-hidden grid grid-cols-1 md:grid-cols-3 aspect-auto max-h-[100dvh]">
+            <DialogContent 
+                style={{ 
+                    transform: dragOffsetY > 0 ? `translateY(${dragOffsetY}px)` : undefined, 
+                    transition: isDragging ? 'none' : 'transform 0.2s ease-out' 
+                }}
+                className="w-full h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-4xl rounded-none md:rounded-3xl bg-black text-white border-none md:border-white/10 shadow-2xl p-0 overflow-hidden grid grid-cols-1 md:grid-cols-3 aspect-auto max-h-[100dvh]"
+            >
                 
                 {/* Left Stream Area (Webcam preview + overlay indicators) */}
-                <div className="md:col-span-2 relative bg-zinc-950 flex flex-col justify-between p-4 h-full min-h-0 md:min-h-[500px]">
+                <div 
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    className="md:col-span-2 relative bg-zinc-950 flex flex-col justify-between p-4 h-full min-h-0 md:min-h-[500px]"
+                >
                     
                     {/* Top Overlay Stats */}
                     <div className="flex justify-between items-center z-10 w-full">

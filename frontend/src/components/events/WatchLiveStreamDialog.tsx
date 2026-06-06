@@ -34,7 +34,7 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
     const chatEndRef = useRef<HTMLDivElement>(null);
     const hlsRef = useRef<any>(null);
 
-    const [isMuted, setIsMuted] = useState(true);
+    const [isMuted, setIsMuted] = useState(false); // Play unmuted by default
     const [isPlaying, setIsPlaying] = useState(true);
     const [viewers, setViewers] = useState(0);
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -44,6 +44,40 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
     
     const channelRef = useRef<any>(null);
     const [isHlsActive, setIsHlsActive] = useState(false);
+
+    // WebRTC connection refs for real-time webcam streaming from host
+    const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+    const guestIdRef = useRef(Math.random().toString(36).substring(7));
+
+    // Swipe down to close on mobile
+    const touchStartY = useRef(0);
+    const [dragOffsetY, setDragOffsetY] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        touchStartY.current = e.touches[0].clientY;
+        setIsDragging(true);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (!isDragging) return;
+        const currentY = e.touches[0].clientY;
+        const diff = currentY - touchStartY.current;
+        if (diff > 0) {
+            setDragOffsetY(diff);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (!isDragging) return;
+        setIsDragging(false);
+        if (dragOffsetY > 150) {
+            if (window.confirm("Are you sure you want to leave the live stream?")) {
+                onOpenChange(false);
+            }
+        }
+        setDragOffsetY(0);
+    };
 
     // Setup Video Player (HLS or Fallback MP4)
     useEffect(() => {
@@ -59,6 +93,9 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
         const isHls = streamUrl.endsWith(".m3u8");
         setIsHlsActive(isHls);
 
+        // Reset video muted state
+        video.muted = isMuted;
+
         if (isHls) {
             // Load HLS dynamically
             import("hls.js").then((HlsModule) => {
@@ -69,16 +106,31 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
                     hlsRef.current = hls;
                     hls.loadSource(streamUrl);
                     hls.attachMedia(video);
-                    video.play().catch(err => console.error("HLS play failed:", err));
+                    video.play().catch(err => {
+                        console.warn("HLS autoplay unmuted blocked, falling back to muted:", err);
+                        video.muted = true;
+                        setIsMuted(true);
+                        video.play().catch(e => console.error("Muted HLS autoplay failed:", e));
+                    });
                 } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
                     video.src = streamUrl;
-                    video.play().catch(err => console.error("Native HLS play failed:", err));
+                    video.play().catch(err => {
+                        console.warn("Native HLS autoplay unmuted blocked, falling back to muted:", err);
+                        video.muted = true;
+                        setIsMuted(true);
+                        video.play().catch(e => console.error("Muted native HLS autoplay failed:", e));
+                    });
                 }
             });
         } else {
             video.src = streamUrl;
             video.loop = true;
-            video.play().catch(err => console.error("Video play failed:", err));
+            video.play().catch(err => {
+                console.warn("Autoplay unmuted blocked, falling back to muted:", err);
+                video.muted = true;
+                setIsMuted(true);
+                video.play().catch(e => console.error("Muted fallback autoplay failed:", e));
+            });
         }
 
         return () => {
@@ -89,12 +141,13 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
             if (video) {
                 video.pause();
                 video.removeAttribute("src");
+                video.srcObject = null; // Clean up WebRTC stream object
                 video.load();
             }
         };
     }, [open, event]);
 
-    // Setup Supabase Realtime Channels for chat & viewers count sync (using Presence)
+    // Setup Supabase Realtime Channels for chat & viewers count sync (using Presence) + WebRTC Signaling
     useEffect(() => {
         if (open && event) {
             const channelId = `event_chat_${event.id}`;
@@ -111,6 +164,82 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
                     };
                     setChatMessages(prev => [...prev, receivedMsg]);
                 })
+                .on("broadcast", { event: "stream_ended" }, () => {
+                    console.log("Stream ended by host");
+                    toast.info("The host has ended the live stream.");
+                    onOpenChange(false);
+                })
+                .on("broadcast", { event: "webrtc_signal" }, async (payload) => {
+                    const { target, sender, type, desc, candidate } = payload.payload;
+                    
+                    // Only process signals intended for this guest
+                    if (target !== guestIdRef.current) return;
+
+                    if (type === "offer") {
+                        console.log("Guest received WebRTC SDP offer from host");
+
+                        if (peerConnectionRef.current) {
+                            peerConnectionRef.current.close();
+                        }
+
+                        const pc = new RTCPeerConnection({
+                            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+                        });
+                        peerConnectionRef.current = pc;
+
+                        // Send local candidate to host
+                        pc.onicecandidate = (e) => {
+                            if (e.candidate && channelRef.current) {
+                                channelRef.current.send({
+                                    type: "broadcast",
+                                    event: "webrtc_signal",
+                                    payload: {
+                                        target: "host",
+                                        sender: guestIdRef.current,
+                                        type: "candidate",
+                                        candidate: e.candidate
+                                    }
+                                });
+                            }
+                        };
+
+                        // When remote track (host webcam) is received, attach to player
+                        pc.ontrack = (e) => {
+                            console.log("Guest received remote video/audio track from host webcam");
+                            if (videoRef.current) {
+                                videoRef.current.srcObject = e.streams[0];
+                                // Force play the new stream
+                                videoRef.current.play().catch(err => {
+                                    console.warn("WebRTC stream autoplay unmuted blocked, playing muted:", err);
+                                    if (videoRef.current) {
+                                        videoRef.current.muted = true;
+                                        setIsMuted(true);
+                                        videoRef.current.play().catch(e => console.error("WebRTC muted play failed:", e));
+                                    }
+                                });
+                            }
+                        };
+
+                        await pc.setRemoteDescription(new RTCSessionDescription(desc));
+                        const answer = await pc.createAnswer();
+                        await pc.setLocalDescription(answer);
+
+                        channelRef.current.send({
+                            type: "broadcast",
+                            event: "webrtc_signal",
+                            payload: {
+                                target: "host",
+                                sender: guestIdRef.current,
+                                type: "answer",
+                                desc: answer
+                            }
+                        });
+                    } else if (type === "candidate") {
+                        if (peerConnectionRef.current) {
+                            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+                        }
+                    }
+                })
                 .on("presence", { event: "sync" }, () => {
                     const state = channel.presenceState();
                     const activeCount = Object.keys(state).length;
@@ -124,12 +253,27 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
                             user_id: user?.id || "anonymous",
                             online_at: new Date().toISOString()
                         });
+
+                        // Notify host that guest has joined, asking for WebRTC stream
+                        channel.send({
+                            type: "broadcast",
+                            event: "webrtc_signal",
+                            payload: {
+                                sender: guestIdRef.current,
+                                type: "join",
+                                target: "host"
+                            }
+                        });
                     }
                 });
 
             return () => {
                 supabase.removeChannel(channel);
                 channelRef.current = null;
+                if (peerConnectionRef.current) {
+                    peerConnectionRef.current.close();
+                    peerConnectionRef.current = null;
+                }
             };
         }
     }, [open, event, user]);
@@ -203,10 +347,21 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-full h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-4xl rounded-none md:rounded-3xl bg-black text-white border-none md:border-white/10 shadow-2xl p-0 overflow-hidden grid grid-cols-1 md:grid-cols-3 aspect-auto max-h-[100dvh]">
+            <DialogContent 
+                style={{ 
+                    transform: dragOffsetY > 0 ? `translateY(${dragOffsetY}px)` : undefined, 
+                    transition: isDragging ? 'none' : 'transform 0.2s ease-out' 
+                }}
+                className="w-full h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-4xl rounded-none md:rounded-3xl bg-black text-white border-none md:border-white/10 shadow-2xl p-0 overflow-hidden grid grid-cols-1 md:grid-cols-3 aspect-auto max-h-[100dvh]"
+            >
                 
                 {/* Left Stream Area */}
-                <div className="md:col-span-2 relative bg-zinc-950 flex flex-col justify-between p-4 h-full min-h-0 md:min-h-[500px]">
+                <div 
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    className="md:col-span-2 relative bg-zinc-950 flex flex-col justify-between p-4 h-full min-h-0 md:min-h-[500px]"
+                >
                     
                     {/* Top Overlay HUD */}
                     <div className="flex justify-between items-start z-10 w-full">
