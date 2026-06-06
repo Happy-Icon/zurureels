@@ -104,6 +104,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
         setIsSubmitting(true);
         setUploadStatus("uploading");
         setErrorMessage(null);
+        let createdExperienceId: string | null = null;
         try {
             const finalVideoFile = data.videoFile;
 
@@ -125,6 +126,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             if (expError) {
                 throw new Error(`Experience creation failed: ${expError.message}`);
             }
+            createdExperienceId = exp.id;
 
             // Step 2: Upload video to Cloudinary
             setOptimizationProgress(0);
@@ -135,7 +137,7 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
                     folder: "reels",
                     onProgress: (percent) => setOptimizationProgress(percent)
                 });
-            } catch (err) {
+            } catch (err: any) {
                 setOptimizationProgress(null);
                 throw new Error("Cloudinary upload failed: " + (err?.message || err));
             }
@@ -215,6 +217,11 @@ export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) 
             setReminderIntervals(["24h", "1h"]);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
+            // Rollback/cleanup: Delete the experience row we just created if later steps failed
+            if (createdExperienceId) {
+                console.log("Rolling back experience creation due to later-stage failure, id:", createdExperienceId);
+                await supabase.from("experiences").delete().eq("id", createdExperienceId);
+            }
             setUploadStatus("error");
             setErrorMessage(error.message || "Something went wrong while publishing your reel.");
             toast.error(error.message || "Failed to publish reel");

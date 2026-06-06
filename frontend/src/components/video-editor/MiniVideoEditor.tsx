@@ -17,6 +17,8 @@ import { LiveVideoRecorder } from "./LiveVideoRecorder";
 import { toast } from "sonner";
 import { CircularProgress } from "@/components/ui/CircularProgress";
 import { Sparkles } from "lucide-react";
+import { loadFFmpeg } from "@/utils/videoTranscoder";
+import { fetchFile } from "@ffmpeg/util";
 
 // ─── Public Types ──────────────────────────────────────────────────────────────
 
@@ -317,18 +319,18 @@ export const MiniVideoEditor = ({
       return;
     }
 
-    // Trim via captureStream + MediaRecorder
-    if (!videoRef.current) return;
     setIsExporting(true);
     setExportProgress(0);
 
     try {
-      const trimmed = await trimVideo(
-        videoRef.current,
+      console.log("[VideoEditor] Attempting fast client-side trim via FFmpeg WebAssembly...");
+      const trimmed = await trimVideoFFmpeg(
+        sourceFile,
         trimStart,
         trimEnd,
         (p) => setExportProgress(p)
       );
+      console.log("[VideoEditor] FFmpeg transcode trim successful");
       onSubmit({
         category,
         videoFile: trimmed,
@@ -337,17 +339,41 @@ export const MiniVideoEditor = ({
         lng: capturedLocation?.lng,
         isLive: !!recordedFile,
       });
-    } catch (err) {
-      console.error("Trim failed, uploading original:", err);
-      // Graceful fallback: upload original file with the trim metadata
-      onSubmit({
-        category,
-        videoFile: sourceFile,
-        duration: Math.round(selectedDuration),
-        lat: capturedLocation?.lat,
-        lng: capturedLocation?.lng,
-        isLive: !!recordedFile,
-      });
+    } catch (ffmpegErr) {
+      console.warn("[VideoEditor] FFmpeg Wasm trim failed, falling back to real-time playback recording:", ffmpegErr);
+      
+      if (!videoRef.current) {
+        setIsExporting(false);
+        return;
+      }
+
+      try {
+        const trimmed = await trimVideoRealTime(
+          videoRef.current,
+          trimStart,
+          trimEnd,
+          (p) => setExportProgress(p)
+        );
+        onSubmit({
+          category,
+          videoFile: trimmed,
+          duration: Math.round(selectedDuration),
+          lat: capturedLocation?.lat,
+          lng: capturedLocation?.lng,
+          isLive: !!recordedFile,
+        });
+      } catch (err) {
+        console.error("Trim fallback failed, uploading original:", err);
+        // Final fallback: upload original file with metadata
+        onSubmit({
+          category,
+          videoFile: sourceFile,
+          duration: Math.round(selectedDuration),
+          lat: capturedLocation?.lat,
+          lng: capturedLocation?.lng,
+          isLive: !!recordedFile,
+        });
+      }
     } finally {
       setIsExporting(false);
     }
@@ -576,10 +602,67 @@ function formatTime(seconds: number): string {
 }
 
 /**
+ * Trim a video file using WebAssembly-based FFmpeg.
+ * Slices the video programmatically in milliseconds.
+ */
+async function trimVideoFFmpeg(
+  videoFile: File,
+  start: number,
+  end: number,
+  onProgress?: (pct: number) => void
+): Promise<File> {
+  const ffmpeg = await loadFFmpeg();
+
+  const fileExt = videoFile.name.substring(videoFile.name.lastIndexOf('.')) || '.mp4';
+  const inputName = `input${fileExt}`;
+  const outputName = 'output.mp4';
+
+  // Write file to virtual FS
+  await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
+
+  if (onProgress) {
+    ffmpeg.on('progress', ({ progress }) => {
+      onProgress(Math.min(99, Math.round(progress * 100)));
+    });
+  }
+
+  try {
+    // Slice/trim the video. We re-encode to h264/aac to ensure web-safety and keyframe accuracy.
+    await ffmpeg.exec([
+      '-ss', start.toFixed(2),
+      '-to', end.toFixed(2),
+      '-i', inputName,
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '28',
+      '-c:a', 'aac',
+      '-movflags', '+faststart',
+      outputName
+    ]);
+
+    // Read result
+    const data = await ffmpeg.readFile(outputName);
+    const blob = new Blob([data as any], { type: 'video/mp4' });
+
+    return new File([blob], 'reel-trimmed.mp4', { type: 'video/mp4' });
+  } finally {
+    // Cleanup virtual files
+    try {
+      await ffmpeg.deleteFile(inputName);
+      await ffmpeg.deleteFile(outputName);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+    // Remove listener to prevent memory leak
+    ffmpeg.off('progress');
+  }
+}
+
+/**
  * Trim a video element's playback range to a new File using captureStream.
  * Falls back by rejecting if captureStream is unavailable.
  */
-function trimVideo(
+function trimVideoRealTime(
   video: HTMLVideoElement,
   start: number,
   end: number,

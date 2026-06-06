@@ -39,7 +39,7 @@ export const HappeningEventCard = ({ event, className }: HappeningEventCardProps
                 )}
 
                 {/* LIVE Badge */}
-                <div className="absolute top-3 left-3">
+                <div className="absolute top-3 left-3 flex gap-1.5 items-center">
                     <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-500 text-white shadow-lg">
                         <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
@@ -47,6 +47,12 @@ export const HappeningEventCard = ({ event, className }: HappeningEventCardProps
                         </span>
                         Live
                     </span>
+                    {event.is_live && event.viewer_count !== undefined && event.viewer_count > 0 && (
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-black/60 backdrop-blur-md text-white border border-white/10 shadow-lg">
+                            <Users className="h-3 w-3 text-primary animate-pulse" />
+                            {event.viewer_count} watching
+                        </span>
+                    )}
                 </div>
 
                 {/* Category Badge */}
@@ -75,8 +81,8 @@ export const HappeningEventCard = ({ event, className }: HappeningEventCardProps
                 {/* Host Info */}
                 {event.host && (
                     <div 
-                        className="flex items-center gap-2 pt-0.5 cursor-pointer group/host w-fit"
-                        onClick={() => navigate(`/profile/${event.user_id}`)}
+                        className="flex items-center gap-2 pt-0.5 cursor-pointer group/host w-fit relative z-10"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/profile/${event.user_id}`); }}
                     >
                         <div className="relative">
                             <img 

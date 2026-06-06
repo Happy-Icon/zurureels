@@ -32,21 +32,17 @@ export const useEvents = (
 
             let query = supabase
                 .from("events")
-                .select(`
-                    *,
-                    host:profiles(full_name, username, metadata)
-                `)
+                .select("*")
                 .eq("status", "active");
 
             if (timeFilter === "happening") {
-                // Events that have started but not ended
-                query = query
-                    .lte("event_date", now)
-                    .or(`end_date.is.null,end_date.gte.${now}`);
+                // Fetch events that have started OR are marked as live
+                query = query.or(`event_date.lte.${now},is_live.eq.true`);
             } else {
-                // Events in the future, soonest first
+                // Events in the future that are not currently live, soonest first
                 query = query
                     .gt("event_date", now)
+                    .neq("is_live", true)
                     .order("event_date", { ascending: true });
             }
 
@@ -57,16 +53,50 @@ export const useEvents = (
             const { data, error: fetchError } = await query.limit(50);
 
             if (fetchError) throw fetchError;
+
+            // Fetch host profiles in a second stage to avoid database relationship cache issues
+            const hostIds = Array.from(new Set((data || []).map((e: any) => e.user_id).filter(Boolean)));
+            const hostProfilesMap: Record<string, any> = {};
+
+            if (hostIds.length > 0) {
+                const { data: profilesData } = await supabase
+                    .from("profiles")
+                    .select("id, full_name, username, metadata")
+                    .in("id", hostIds);
+
+                if (profilesData) {
+                    profilesData.forEach(p => {
+                        hostProfilesMap[p.id] = p;
+                    });
+                }
+            }
             
             // Map results to include host data correctly
-            let results = (data || []).map((e: any) => ({
-                ...e,
-                host: e.host ? {
-                    full_name: e.host.full_name,
-                    username: e.host.username,
-                    avatar_url: e.host.metadata?.avatar_url
-                } : undefined
-            })) as ZuruEvent[];
+            let results = (data || []).map((e: any) => {
+                const hostProfile = hostProfilesMap[e.user_id];
+                return {
+                    ...e,
+                    host: hostProfile ? {
+                        full_name: hostProfile.full_name,
+                        username: hostProfile.username,
+                        avatar_url: hostProfile.metadata?.avatar_url
+                    } : undefined
+                };
+            }) as ZuruEvent[];
+
+            // Client-side filtering for "happening" events (currently live, or started and not ended / within 3 hour fallback)
+            if (timeFilter === "happening") {
+                const nowTime = Date.now();
+                const defaultDurationMs = 3 * 60 * 60 * 1000; // 3 hours fallback
+                results = results.filter(e => {
+                    if (e.is_live) return true; // Actively live events are always happening now
+                    if (e.end_date) {
+                        return new Date(e.end_date).getTime() >= nowTime;
+                    }
+                    const startTime = new Date(e.event_date).getTime();
+                    return startTime + defaultDurationMs >= nowTime;
+                });
+            }
 
             // Client-side search filter
             if (search && search.trim()) {

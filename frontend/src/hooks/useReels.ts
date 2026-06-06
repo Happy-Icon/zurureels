@@ -46,19 +46,19 @@ export const useReels = (category?: string | string[], experienceId?: string, se
     const [error, setError] = useState<any>(null);
     const [page, setPage] = useState(0);
 
-    const fetchReels = useCallback(async (pageNum: number = 0) => {
+    const fetchReels = useCallback(async (pageNum: number = 0, signal?: AbortSignal) => {
         try {
             if (pageNum === 0) setLoading(true);
             else setLoadingMore(true);
 
-            // Optimized query with relations
+            // Optimized query with relations and abort signal option
             let query = supabase
                 .from("reels")
                 .select(`
                     *,
                     experience:experiences(id, title, description, location, current_price, price_unit, entity_name, metadata, availability_status),
                     host:profiles!reels_user_id_profiles_fkey(full_name, username, metadata, verification_status)
-                `)
+                `, { abortSignal: signal })
                 .eq("status", "active")
                 .order("created_at", { ascending: false });
 
@@ -84,7 +84,18 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                 console.log("useReels query category all: category is", category);
             }
 
+            if (experienceId) {
+                query = query.eq("experience_id", experienceId);
+            }
+
+            if (search && search.trim() !== "") {
+                const searchPattern = `%${search.trim()}%`;
+                query = query.or(`title.ilike.${searchPattern},description.ilike.${searchPattern}`, { foreignTable: 'experience' });
+            }
+
             const { data, error: fetchError } = await query;
+
+            if (signal?.aborted) return;
 
             console.log("useReels result:", {
                 success: !fetchError,
@@ -123,23 +134,36 @@ export const useReels = (category?: string | string[], experienceId?: string, se
 
             // Combine with mocks
             const filteredMocks = mockReels.filter(m => {
-                if (!category || category === "all") return true;
-                const categoriesArray = Array.isArray(category) ? category : [category];
-                const resolvedCategories: string[] = [];
+                let matchesCategory = true;
+                if (category && category !== "all") {
+                    const categoriesArray = Array.isArray(category) ? category : [category];
+                    const resolvedCategories: string[] = [];
 
-                categoriesArray.forEach(cat => {
-                    if (cat === "land_adventure") {
-                        resolvedCategories.push("land_adventure", "adventure", "tours", "rentals", "bikes");
-                    } else if (cat === "water_adventure") {
-                        resolvedCategories.push("water_adventure", "boats");
-                    } else if (cat === "air_adventure") {
-                        resolvedCategories.push("air_adventure");
-                    } else {
-                        resolvedCategories.push(cat);
-                    }
-                });
+                    categoriesArray.forEach(cat => {
+                        if (cat === "land_adventure") {
+                            resolvedCategories.push("land_adventure", "adventure", "tours", "rentals", "bikes");
+                        } else if (cat === "water_adventure") {
+                            resolvedCategories.push("water_adventure", "boats");
+                        } else if (cat === "air_adventure") {
+                            resolvedCategories.push("air_adventure");
+                        } else {
+                            resolvedCategories.push(cat);
+                        }
+                    });
 
-                return resolvedCategories.includes(m.category);
+                    matchesCategory = resolvedCategories.includes(m.category);
+                }
+
+                let matchesSearch = true;
+                if (search && search.trim() !== "") {
+                    const searchLower = search.toLowerCase().trim();
+                    const titleMatch = m.title?.toLowerCase().includes(searchLower);
+                    const descMatch = m.description?.toLowerCase().includes(searchLower);
+                    const locMatch = m.location?.toLowerCase().includes(searchLower);
+                    matchesSearch = titleMatch || descMatch || locMatch;
+                }
+
+                return matchesCategory && matchesSearch;
             });
 
             const combined = pageNum === 0 
@@ -147,38 +171,58 @@ export const useReels = (category?: string | string[], experienceId?: string, se
                 : transformedReels;
 
             setReels(shuffleArray(combined));
-        } catch (err) {
+        } catch (err: any) {
+            if (signal?.aborted || err?.name === 'AbortError') return;
             console.error("Error fetching reels:", err);
             setError(err);
             // Fallback to mocks
             const filteredMocks = mockReels.filter(m => {
-                if (!category || category === "all") return true;
-                const categoriesArray = Array.isArray(category) ? category : [category];
-                const resolvedCategories: string[] = [];
+                let matchesCategory = true;
+                if (category && category !== "all") {
+                    const categoriesArray = Array.isArray(category) ? category : [category];
+                    const resolvedCategories: string[] = [];
 
-                categoriesArray.forEach(cat => {
-                    if (cat === "land_adventure") {
-                        resolvedCategories.push("land_adventure", "adventure", "tours", "rentals", "bikes");
-                    } else if (cat === "water_adventure") {
-                        resolvedCategories.push("water_adventure", "boats");
-                    } else if (cat === "air_adventure") {
-                        resolvedCategories.push("air_adventure");
-                    } else {
-                        resolvedCategories.push(cat);
-                    }
-                });
+                    categoriesArray.forEach(cat => {
+                        if (cat === "land_adventure") {
+                            resolvedCategories.push("land_adventure", "adventure", "tours", "rentals", "bikes");
+                        } else if (cat === "water_adventure") {
+                            resolvedCategories.push("water_adventure", "boats");
+                        } else if (cat === "air_adventure") {
+                            resolvedCategories.push("air_adventure");
+                        } else {
+                            resolvedCategories.push(cat);
+                        }
+                    });
 
-                return resolvedCategories.includes(m.category);
+                    matchesCategory = resolvedCategories.includes(m.category);
+                }
+
+                let matchesSearch = true;
+                if (search && search.trim() !== "") {
+                    const searchLower = search.toLowerCase().trim();
+                    const titleMatch = m.title?.toLowerCase().includes(searchLower);
+                    const descMatch = m.description?.toLowerCase().includes(searchLower);
+                    const locMatch = m.location?.toLowerCase().includes(searchLower);
+                    matchesSearch = titleMatch || descMatch || locMatch;
+                }
+
+                return matchesCategory && matchesSearch;
             });
             setReels(shuffleArray(filteredMocks));
         } finally {
-            setLoading(false);
-            setLoadingMore(false);
+            if (!signal?.aborted) {
+                setLoading(false);
+                setLoadingMore(false);
+            }
         }
-    }, [category]);
+    }, [category, experienceId, search]);
 
     useEffect(() => {
-        fetchReels(0);
+        const controller = new AbortController();
+        fetchReels(0, controller.signal);
+        return () => {
+            controller.abort();
+        };
     }, [fetchReels]);
 
     return { reels, loading, loadingMore, error, fetchMore: () => fetchReels(page + 1) };

@@ -16,6 +16,9 @@ export interface ZuruEvent {
     notification_intervals: string[] | null;
     created_at: string | null;
     updated_at: string | null;
+    is_live?: boolean | null;
+    live_stream_url?: string | null;
+    viewer_count?: number | null;
     host?: {
         full_name: string;
         username: string;

@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-body bg-white text-slate-900 antialiased overflow-x-hidden;
+    scroll-behavior: smooth;
+  }
+  
+  h1, h2, h3, h4 {
+    @apply font-title tracking-tight;
+  }
+}
+
+/* Custom smooth transitions and animations */
+.smooth-transition {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(130px);
+  z-index: -1;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.8; }
+}
+
+.animate-pulse-slow {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Typing animation */
+@keyframes typing {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.typing-dot {
+  animation: typing 1.4s infinite;
+}

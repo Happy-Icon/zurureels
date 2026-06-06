@@ -78,10 +78,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const hasPass = profile?.metadata?.has_pass === true;
 
   useEffect(() => {
+    if (loading) return; // Prevent resetting viewMode while profile/role is loading
     if ((role === "guest" || role === null) && viewMode === "host") {
       setViewMode("guest");
     }
-  }, [role, viewMode]);
+  }, [role, viewMode, loading]);
 
   const switchViewMode = (mode: "guest" | "host") => {
     setViewMode(mode);

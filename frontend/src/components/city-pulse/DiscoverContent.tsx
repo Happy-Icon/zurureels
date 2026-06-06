@@ -34,6 +34,8 @@ import { useEvents } from "@/hooks/useEvents";
 import { EventTimeFilter } from "@/types/events";
 import { WeatherWidget } from "@/components/city-pulse/WeatherWidget";
 import { Home, PartyPopper, Mountain } from "lucide-react";
+import { WatchLiveStreamDialog } from "@/components/events/WatchLiveStreamDialog";
+import { ZuruEvent } from "@/types/events";
 
 const DiscoveryGroups = [
   { id: "all", label: "All", categories: ["all"], icon: Sparkles },
@@ -63,6 +65,7 @@ export const DiscoverContent = ({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [bookingReel, setBookingReel] = useState<ReelData | null>(null);
+  const [watchingEvent, setWatchingEvent] = useState<ZuruEvent | null>(null);
   const [selectedReelIndex, setSelectedReelIndex] = useState<number | null>(null);
   const [eventTimeFilter, setEventTimeFilter] = useState<EventTimeFilter>("upcoming");
   const isMobile = useIsMobile();
@@ -385,7 +388,9 @@ export const DiscoverContent = ({
                   eventTimeFilter === "upcoming" ? (
                     <UpcomingEventCard key={event.id} event={event} />
                   ) : (
-                    <HappeningEventCard key={event.id} event={event} />
+                    <div key={event.id} onClick={() => setWatchingEvent(event)} className="cursor-pointer">
+                      <HappeningEventCard event={event} />
+                    </div>
                   )
                 )
               ) : (
@@ -419,7 +424,7 @@ export const DiscoverContent = ({
                   <div key={i} className="aspect-[2/3] rounded-2xl bg-muted animate-pulse" />
                 ))
               ) : finalReels.length > 0 ? (
-                (isMobile ? finalReels.slice(0, 4) : finalReels).map((reel, index) => (
+                finalReels.map((reel, index) => (
                   <ReelGridCard
                     key={reel.id}
                     reel={reel}
@@ -493,6 +498,36 @@ export const DiscoverContent = ({
           onSuccess={() => setBookingReel(null)}
         />
       )}
+
+      <WatchLiveStreamDialog
+        open={!!watchingEvent}
+        onOpenChange={(open) => !open && setWatchingEvent(null)}
+        event={watchingEvent}
+        onBook={(evt) => {
+          setWatchingEvent(null);
+          setBookingReel({
+            id: evt.id,
+            experienceId: evt.id,
+            hostUserId: evt.user_id || "",
+            title: evt.title,
+            location: evt.location,
+            price: evt.price || 0,
+            priceUnit: "person",
+            rating: 5,
+            thumbnailUrl: evt.image_url || "/placeholder.svg",
+            category: "events",
+            videoUrl: "",
+            likes: 0,
+            saved: false,
+            hostName: evt.host?.full_name || "Host",
+            hostAvatar: evt.host?.avatar_url || "",
+            postedAt: evt.created_at || "",
+            isLive: evt.is_live || false,
+            bookingsCount: 0,
+            availabilityStatus: "available"
+          });
+        }}
+      />
     </div>
   );
 };

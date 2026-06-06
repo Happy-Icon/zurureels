@@ -326,6 +326,19 @@ const getVerificationSuccessEmail = (name: string) => {
     };
 };
 
+const getSupportAcknowledgment = (ticketId: string) => {
+    const content = `
+    <h1 style="${styles.h1}">Support Ticket Received</h1>
+    <p style="${styles.p}">Thank you for reaching out to Zurusasa Support.</p>
+    <p style="${styles.p}">We have received your request and opened ticket <strong>#${ticketId}</strong>.</p>
+    <p style="${styles.p}">Our support team is reviewing your ticket and will respond as soon as possible.</p>
+  `;
+    return {
+        subject: `Support Ticket Received - #${ticketId}`,
+        html: layouts(content)
+    };
+};
+
 // --------------------------------------------------------------------------
 // MAIN SERVER HANDLER
 // --------------------------------------------------------------------------

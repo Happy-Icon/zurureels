@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { HostReelsList } from "@/components/host/dashboard/HostReelsList";
 import { CreateReelDialog } from "@/components/host/dashboard/CreateReelDialog";
+import { CreateEventDialog } from "@/components/host/dashboard/CreateEventDialog";
+import { HostLiveDialog } from "@/components/host/dashboard/HostLiveDialog";
 import { EditEventDialog } from "@/components/host/dashboard/EditEventDialog";
 import { EditReelDialog } from "@/components/host/dashboard/EditReelDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2, Trash2 } from "lucide-react";
+import { Plus, Loader2, Trash2, Radio, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
@@ -14,6 +16,8 @@ import { ReelData } from "@/types/host";
 
 const Listings = () => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
+    const [liveStreamEvent, setLiveStreamEvent] = useState<any | null>(null);
     const [activeTab, setActiveTab] = useState<"published" | "drafts" | "events">("published");
     const [reels, setReels] = useState<ReelData[]>([]);
     const [events, setEvents] = useState<any[]>([]);
@@ -129,6 +133,20 @@ const Listings = () => {
         }
     };
 
+    const handleStopLiveStream = async (eventId: string) => {
+        try {
+            const { error } = await supabase
+                .from("events")
+                .update({ is_live: false, viewer_count: 0 })
+                .eq("id", eventId);
+            if (error) throw error;
+            toast.success("Live stream stopped");
+            fetchReels();
+        } catch (error: any) {
+            toast.error(error.message || "Failed to stop live stream");
+        }
+    };
+
     const handleDeleteEvent = async (eventId: string) => {
         if (!confirm("Are you sure you want to delete this event? All subscribers will be notified of cancellation.")) return;
         
@@ -205,10 +223,18 @@ const Listings = () => {
                                 <h1 className="text-2xl font-display font-semibold">Your Listings</h1>
                                 <p className="text-sm text-muted-foreground">Manage your properties and experiences</p>
                             </div>
-                            <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
-                                <Plus className="h-4 w-4" />
-                                <span className="hidden sm:inline">Add New</span>
-                            </Button>
+                            <div className="flex gap-2">
+                                {activeTab === "events" && (
+                                    <Button onClick={() => setIsCreateEventOpen(true)} variant="outline" className="gap-2 border-primary/20 hover:bg-primary/5">
+                                        <Plus className="h-4 w-4 text-primary" />
+                                        <span>Schedule Event</span>
+                                    </Button>
+                                )}
+                                <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
+                                    <Plus className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Add New Reel</span>
+                                </Button>
+                            </div>
                         </div>
 
                         {/* Tabs */}
@@ -257,10 +283,20 @@ const Listings = () => {
                         </div>
                     ) : activeTab === "events" ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {events.map((event) => (
-                                <div key={event.id} className="border border-border rounded-xl bg-card p-4 space-y-4">
+                             {events.map((event) => (
+                                <div key={event.id} className="border border-border rounded-xl bg-card p-4 space-y-4 relative overflow-hidden">
+                                    {event.is_live && (
+                                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-orange-500 to-red-500 animate-pulse" />
+                                    )}
                                     <div className="flex justify-between items-start">
-                                        <h3 className="font-bold text-lg leading-tight line-clamp-1">{event.title}</h3>
+                                        <div className="space-y-1">
+                                            <h3 className="font-bold text-lg leading-tight line-clamp-1">{event.title}</h3>
+                                            {event.is_live && (
+                                                <span className="inline-flex items-center gap-1 bg-red-500 text-white font-bold text-[9px] uppercase px-2 py-0.5 rounded-full animate-pulse">
+                                                    ● LIVE
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-bold">
                                             {event.subscriberCount} Subs
                                         </div>
@@ -268,14 +304,42 @@ const Listings = () => {
                                     <div className="space-y-1 text-sm text-muted-foreground">
                                         <p>📅 {new Date(event.event_date).toLocaleDateString()}</p>
                                         <p>📍 {event.location}</p>
+                                        {event.is_live && event.viewer_count !== undefined && (
+                                            <p className="text-red-500 font-medium text-xs flex items-center gap-1">
+                                                👥 {event.viewer_count} watching now
+                                            </p>
+                                        )}
                                     </div>
-                                    <div className="pt-2 border-t flex justify-end gap-2">
+                                    <div className="pt-2 border-t flex justify-between items-center">
                                         <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDeleteEvent(event.id)}>
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
-                                        <Button variant="outline" size="sm" onClick={() => setEditingEvent(event)}>
-                                            Edit
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            {event.is_live ? (
+                                                <Button 
+                                                    variant="destructive" 
+                                                    size="sm" 
+                                                    onClick={() => handleStopLiveStream(event.id)}
+                                                    className="gap-1.5 rounded-xl font-semibold h-8"
+                                                >
+                                                    <Square size={12} className="fill-white" />
+                                                    End Live
+                                                </Button>
+                                            ) : (
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={() => setLiveStreamEvent(event)}
+                                                    className="gap-1.5 border-red-500/20 text-red-500 hover:bg-red-500/5 rounded-xl font-semibold h-8"
+                                                >
+                                                    <Radio size={12} className="animate-pulse" />
+                                                    Go Live
+                                                </Button>
+                                            )}
+                                            <Button variant="outline" size="sm" className="rounded-xl h-8 animate-fade-in" onClick={() => setEditingEvent(event)}>
+                                                Edit
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -298,6 +362,18 @@ const Listings = () => {
                 </div>
 
                 <CreateReelDialog open={isCreateOpen} onOpenChange={handleDialogChange} />
+                <CreateEventDialog 
+                    open={isCreateEventOpen} 
+                    onOpenChange={setIsCreateEventOpen} 
+                    onSuccess={fetchReels} 
+                />
+                <HostLiveDialog 
+                    open={!!liveStreamEvent} 
+                    onOpenChange={(open) => !open && setLiveStreamEvent(null)} 
+                    eventId={liveStreamEvent?.id || ""} 
+                    eventTitle={liveStreamEvent?.title || ""} 
+                    onSuccess={fetchReels} 
+                />
                 <EditReelDialog 
                     open={!!editingReel} 
                     onOpenChange={(open) => !open && setEditingReel(null)} 
