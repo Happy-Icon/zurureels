@@ -203,10 +203,10 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-4xl rounded-3xl bg-black text-white border-white/10 shadow-2xl p-0 overflow-hidden grid grid-cols-1 md:grid-cols-3 aspect-auto max-h-[90vh]">
+            <DialogContent className="w-full h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-4xl rounded-none md:rounded-3xl bg-black text-white border-none md:border-white/10 shadow-2xl p-0 overflow-hidden grid grid-cols-1 md:grid-cols-3 aspect-auto max-h-[100dvh]">
                 
                 {/* Left Stream Area */}
-                <div className="md:col-span-2 relative bg-zinc-950 flex flex-col justify-between p-4 min-h-[400px] md:min-h-[500px]">
+                <div className="md:col-span-2 relative bg-zinc-950 flex flex-col justify-between p-4 h-full min-h-0 md:min-h-[500px]">
                     
                     {/* Top Overlay HUD */}
                     <div className="flex justify-between items-start z-10 w-full">
@@ -218,7 +218,7 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
                                 </span>
                                 Live Stream
                             </span>
-                            <h2 className="text-sm font-bold bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 truncate max-w-[260px] drop-shadow-md">
+                            <h2 className="text-sm font-bold bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 truncate max-w-[200px] sm:max-w-[260px] drop-shadow-md">
                                 {event.title}
                             </h2>
                         </div>
@@ -249,6 +249,7 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
                             autoPlay
                             playsInline
                             muted={isMuted}
+                            crossOrigin="anonymous"
                             className="w-full h-full object-cover"
                         />
                         
@@ -262,50 +263,90 @@ export const WatchLiveStreamDialog = ({ open, onOpenChange, event, onBook }: Wat
                         )}
                     </div>
 
+                    {/* Mobile Chat Overlay (Only visible on mobile) */}
+                    <div className="md:hidden flex flex-col justify-end z-10 w-full max-w-[85%] absolute bottom-28 left-4 space-y-2 pointer-events-none">
+                        <div className="max-h-[160px] overflow-y-auto space-y-2 no-scrollbar flex flex-col justify-end pointer-events-auto">
+                            {chatMessages.slice(-8).map((msg) => (
+                                <div key={msg.id} className="text-xs bg-black/45 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-white/5 w-fit break-words shadow-md max-w-full">
+                                    <span className={cn(
+                                        "font-bold mr-1.5",
+                                        msg.user_name.includes("Host") ? "text-primary" : "text-orange-400"
+                                    )}>
+                                        @{msg.user_name}:
+                                    </span>
+                                    <span className="text-zinc-200">{msg.text}</span>
+                                </div>
+                            ))}
+                            <div ref={chatEndRef} />
+                        </div>
+                    </div>
+
                     {/* Hearts animation overlay */}
                     {showHeartAnimation && (
-                        <div className="absolute bottom-16 right-4 z-20 pointer-events-none animate-bounce">
+                        <div className="absolute bottom-28 right-4 z-20 pointer-events-none animate-bounce">
                             <Heart size={36} className="text-red-500 fill-red-500 drop-shadow-lg" />
                         </div>
                     )}
 
                     {/* Bottom controls HUD */}
-                    <div className="w-full flex justify-between items-center z-10 pt-4 bg-gradient-to-t from-black/80 to-transparent p-4 absolute bottom-0 left-0">
-                        {/* Sound Toggle */}
-                        <Button
-                            size="icon"
-                            variant="outline"
-                            onClick={() => setIsMuted(!isMuted)}
-                            className="rounded-xl h-10 w-10 border-white/10 bg-black/40 text-white hover:bg-white/10"
-                        >
-                            {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-                        </Button>
-
-                        {/* Interactive Hearts Trigger & Booking Link */}
-                        <div className="flex gap-2">
+                    <div className="w-full flex flex-col gap-3 z-10 pt-4 bg-gradient-to-t from-black/90 to-transparent p-4 absolute bottom-0 left-0">
+                        {/* Mobile input field (only visible on mobile) */}
+                        <div className="md:hidden flex gap-2 w-full">
+                            <Input
+                                placeholder="Say something..."
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleSendMessage(); }}
+                                className="bg-black/50 border-white/10 rounded-xl h-9 text-xs focus:ring-primary backdrop-blur-sm text-white placeholder-zinc-400 flex-1"
+                            />
                             <Button
-                                onClick={handleLikeClick}
-                                className="rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 font-bold flex items-center gap-1.5 h-10 px-4 hover:bg-red-500/30 active:scale-95 transition-transform"
+                                size="icon"
+                                disabled={!newMessage.trim()}
+                                onClick={handleSendMessage}
+                                className="rounded-xl bg-primary hover:bg-primary/90 text-white h-9 w-9 shrink-0"
                             >
-                                <Heart size={16} className="fill-current text-red-500" />
-                                <span>{likesCount > 0 ? likesCount : "Like"}</span>
+                                <Send size={14} />
+                            </Button>
+                        </div>
+
+                        {/* Control buttons */}
+                        <div className="w-full flex justify-between items-center">
+                            {/* Sound Toggle */}
+                            <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => setIsMuted(!isMuted)}
+                                className="rounded-xl h-10 w-10 border-white/10 bg-black/40 text-white hover:bg-white/10"
+                            >
+                                {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
                             </Button>
 
-                            {onBook && (
+                            {/* Interactive Hearts Trigger & Booking Link */}
+                            <div className="flex gap-2">
                                 <Button
-                                    onClick={() => onBook(event)}
-                                    className="rounded-xl bg-primary hover:bg-primary/90 text-white font-bold flex items-center gap-1.5 h-10 px-5 shadow-lg shadow-primary/20 active:scale-95 transition-transform"
+                                    onClick={handleLikeClick}
+                                    className="rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 font-bold flex items-center gap-1.5 h-10 px-4 hover:bg-red-500/30 active:scale-95 transition-transform"
                                 >
-                                    <ShoppingBag size={16} />
-                                    <span>Book Spot</span>
+                                    <Heart size={16} className="fill-current text-red-500" />
+                                    <span>{likesCount > 0 ? likesCount : "Like"}</span>
                                 </Button>
-                            )}
+
+                                {onBook && (
+                                    <Button
+                                        onClick={() => onBook(event)}
+                                        className="rounded-xl bg-primary hover:bg-primary/95 text-white font-bold flex items-center gap-1.5 h-10 px-5 shadow-lg shadow-primary/20 active:scale-95 transition-transform"
+                                    >
+                                        <ShoppingBag size={16} />
+                                        <span>Book Spot</span>
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Right Chat Panel */}
-                <div className="border-t md:border-t-0 md:border-l border-white/10 bg-zinc-950 flex flex-col h-[300px] md:h-full">
+                {/* Right Chat Panel (Desktop only) */}
+                <div className="hidden md:flex border-l border-white/10 bg-zinc-950 flex-col h-full overflow-hidden">
                     <div className="p-4 border-b border-white/10 flex justify-between items-center bg-black/40">
                         <div>
                             <h4 className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Live Chat</h4>

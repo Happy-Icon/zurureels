@@ -333,10 +333,10 @@ export const HostLiveDialog = ({ open, onOpenChange, eventId, eventTitle, onSucc
 
     return (
         <Dialog open={open} onOpenChange={(val) => { if (!isLive) onOpenChange(val); else toast.warning("Please end your live stream before closing."); }}>
-            <DialogContent className="sm:max-w-4xl rounded-3xl bg-black text-white border-white/10 shadow-2xl p-0 overflow-hidden grid grid-cols-1 md:grid-cols-3 aspect-auto max-h-[90vh]">
+            <DialogContent className="w-full h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-4xl rounded-none md:rounded-3xl bg-black text-white border-none md:border-white/10 shadow-2xl p-0 overflow-hidden grid grid-cols-1 md:grid-cols-3 aspect-auto max-h-[100dvh]">
                 
                 {/* Left Stream Area (Webcam preview + overlay indicators) */}
-                <div className="md:col-span-2 relative bg-zinc-950 flex flex-col justify-between p-4 min-h-[400px] md:min-h-[500px]">
+                <div className="md:col-span-2 relative bg-zinc-950 flex flex-col justify-between p-4 h-full min-h-0 md:min-h-[500px]">
                     
                     {/* Top Overlay Stats */}
                     <div className="flex justify-between items-center z-10 w-full">
@@ -367,7 +367,7 @@ export const HostLiveDialog = ({ open, onOpenChange, eventId, eventTitle, onSucc
                     </div>
 
                     {/* Camera Video Feed */}
-                    <div className="absolute inset-0 z-0">
+                    <div className="absolute inset-0 z-0 bg-black">
                         <video
                             ref={videoRef}
                             autoPlay
@@ -386,68 +386,112 @@ export const HostLiveDialog = ({ open, onOpenChange, eventId, eventTitle, onSucc
                         )}
                     </div>
 
-                    {/* Bottom Action Controls */}
-                    <div className="w-full flex justify-between items-center z-10 pt-4 bg-gradient-to-t from-black/80 to-transparent p-4 absolute bottom-0 left-0">
-                        <div className="flex gap-2">
-                            <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={toggleAudio}
-                                className={cn(
-                                    "rounded-xl h-10 w-10 border-white/10 hover:bg-white/10",
-                                    isMuted ? "bg-red-500/20 text-red-500 border-red-500" : "bg-black/40 text-white"
-                                )}
-                            >
-                                {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
-                            </Button>
-                            <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={toggleVideo}
-                                className={cn(
-                                    "rounded-xl h-10 w-10 border-white/10 hover:bg-white/10",
-                                    isVideoOff ? "bg-red-500/20 text-red-500 border-red-500" : "bg-black/40 text-white"
-                                )}
-                            >
-                                {isVideoOff ? <VideoOff size={18} /> : <Video size={18} />}
-                            </Button>
-                            <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={switchCamera}
-                                title="Switch Camera"
-                                className="rounded-xl h-10 w-10 border-white/10 hover:bg-white/10 bg-black/40 text-white"
-                            >
-                                <RefreshCw size={18} />
-                            </Button>
+                    {/* Mobile Chat Overlay (Only visible on mobile during live stream) */}
+                    {isLive && (
+                        <div className="md:hidden flex flex-col justify-end z-10 w-full max-w-[85%] absolute bottom-28 left-4 space-y-2 pointer-events-none">
+                            <div className="max-h-[160px] overflow-y-auto space-y-2 no-scrollbar flex flex-col justify-end pointer-events-auto">
+                                {chatMessages.slice(-8).map((msg) => (
+                                    <div key={msg.id} className="text-xs bg-black/45 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-white/5 w-fit break-words shadow-md max-w-full">
+                                        <span className={cn(
+                                            "font-bold mr-1.5",
+                                            msg.user_name === "Host (You)" ? "text-primary" : "text-orange-400"
+                                        )}>
+                                            @{msg.user_name}:
+                                        </span>
+                                        <span className="text-zinc-200">{msg.text}</span>
+                                    </div>
+                                ))}
+                                <div ref={chatEndRef} />
+                            </div>
                         </div>
+                    )}
 
-                        <div>
-                            {isLive ? (
+                    {/* Bottom Action Controls */}
+                    <div className="w-full flex flex-col gap-3 z-10 pt-4 bg-gradient-to-t from-black/90 to-transparent p-4 absolute bottom-0 left-0">
+                        {/* Mobile input field (only visible on mobile during live stream) */}
+                        {isLive && (
+                            <div className="md:hidden flex gap-2 w-full">
+                                <Input
+                                    placeholder="Type a stream message..."
+                                    value={newMessage}
+                                    onChange={(e) => setNewMessage(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleSendMessage(); }}
+                                    className="bg-black/50 border-white/10 rounded-xl h-9 text-xs focus:ring-primary backdrop-blur-sm text-white placeholder-zinc-400 flex-1"
+                                />
                                 <Button
-                                    onClick={handleEndBroadcast}
-                                    disabled={loading}
-                                    className="rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold flex items-center gap-1.5 shadow-lg shadow-red-600/20"
+                                    size="icon"
+                                    disabled={!newMessage.trim()}
+                                    onClick={handleSendMessage}
+                                    className="rounded-xl bg-primary hover:bg-primary/90 text-white h-9 w-9 shrink-0"
                                 >
-                                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Square size={16} />}
-                                    End Broadcast
+                                    <Send size={14} />
                                 </Button>
-                            ) : (
+                            </div>
+                        )}
+
+                        {/* Buttons HUD */}
+                        <div className="w-full flex justify-between items-center">
+                            <div className="flex gap-2">
                                 <Button
-                                    onClick={handleStartBroadcast}
-                                    disabled={loading}
-                                    className="rounded-xl bg-primary hover:bg-primary/95 text-white font-bold flex items-center gap-1.5 shadow-lg shadow-primary/20"
+                                    size="icon"
+                                    variant="outline"
+                                    onClick={toggleAudio}
+                                    className={cn(
+                                        "rounded-xl h-10 w-10 border-white/10 hover:bg-white/10",
+                                        isMuted ? "bg-red-500/20 text-red-500 border-red-500" : "bg-black/40 text-white"
+                                    )}
                                 >
-                                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} className="fill-white" />}
-                                    Start Live Stream
+                                    {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
                                 </Button>
-                            )}
+                                <Button
+                                    size="icon"
+                                    variant="outline"
+                                    onClick={toggleVideo}
+                                    className={cn(
+                                        "rounded-xl h-10 w-10 border-white/10 hover:bg-white/10",
+                                        isVideoOff ? "bg-red-500/20 text-red-500 border-red-500" : "bg-black/40 text-white"
+                                    )}
+                                >
+                                    {isVideoOff ? <VideoOff size={18} /> : <Video size={18} />}
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="outline"
+                                    onClick={switchCamera}
+                                    title="Switch Camera"
+                                    className="rounded-xl h-10 w-10 border-white/10 hover:bg-white/10 bg-black/40 text-white"
+                                >
+                                    <RefreshCw size={18} />
+                                </Button>
+                            </div>
+
+                            <div>
+                                {isLive ? (
+                                    <Button
+                                        onClick={handleEndBroadcast}
+                                        disabled={loading}
+                                        className="rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold flex items-center gap-1.5 shadow-lg shadow-red-600/20"
+                                    >
+                                        {loading ? <Loader2 size={16} className="animate-spin" /> : <Square size={16} />}
+                                        End Broadcast
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        onClick={handleStartBroadcast}
+                                        disabled={loading}
+                                        className="rounded-xl bg-primary hover:bg-primary/95 text-white font-bold flex items-center gap-1.5 shadow-lg shadow-primary/20"
+                                    >
+                                        {loading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} className="fill-white" />}
+                                        Start Live Stream
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Right Chat Panel */}
-                <div className="border-t md:border-t-0 md:border-l border-white/10 bg-zinc-950 flex flex-col h-[300px] md:h-full">
+                {/* Right Chat Panel (Desktop only) */}
+                <div className="hidden md:flex border-l border-white/10 bg-zinc-950 flex-col h-full overflow-hidden">
                     <div className="p-4 border-b border-white/10 flex justify-between items-center bg-black/40">
                         <div>
                             <h4 className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Event Stream</h4>
