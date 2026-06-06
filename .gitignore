@@ -29,3 +29,6 @@ dist-ssr
 
 # Large files 
 *.exe
+
+# Sub-projects
+website/
