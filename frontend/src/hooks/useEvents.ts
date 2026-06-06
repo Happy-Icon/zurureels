@@ -109,6 +109,25 @@ export const useEvents = (
                 );
             }
 
+            // Custom priority sorting: pinned (1) -> boosted (2) -> free (3)
+            results = results.sort((a, b) => {
+                const priorityA = a.promotion_type === "pinned" ? 1 : (a.promotion_type === "boosted" ? 2 : 3);
+                const priorityB = b.promotion_type === "pinned" ? 1 : (b.promotion_type === "boosted" ? 2 : 3);
+                
+                if (priorityA !== priorityB) {
+                    return priorityA - priorityB;
+                }
+                
+                // Fallback secondary sorts
+                if (timeFilter === "happening") {
+                    if (a.is_live && !b.is_live) return -1;
+                    if (!a.is_live && b.is_live) return 1;
+                    return (b.viewer_count || 0) - (a.viewer_count || 0);
+                } else {
+                    return new Date(a.event_date).getTime() - new Date(b.event_date).getTime();
+                }
+            });
+
             setEvents(results);
         } catch (err) {
             console.error("Error fetching events:", err);

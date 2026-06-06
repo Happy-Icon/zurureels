@@ -166,3 +166,12 @@
     backdrop-filter: blur(12px);
   }
 }
+
+/* Prevent Radix Dialog pointer-event lock from disabling interactions with Paystack Popup elements injected in body */
+iframe[id*="paystack"],
+iframe[name*="paystack"],
+iframe[src*="paystack.com"],
+iframe[src*="paystack.co"],
+.paystack_pop {
+  pointer-events: auto !important;
+}

@@ -4,6 +4,7 @@ import { HostReelsList } from "@/components/host/dashboard/HostReelsList";
 import { CreateReelDialog } from "@/components/host/dashboard/CreateReelDialog";
 import { CreateEventDialog } from "@/components/host/dashboard/CreateEventDialog";
 import { HostLiveDialog } from "@/components/host/dashboard/HostLiveDialog";
+import { LivePromotionDialog } from "@/components/host/dashboard/LivePromotionDialog";
 import { EditEventDialog } from "@/components/host/dashboard/EditEventDialog";
 import { EditReelDialog } from "@/components/host/dashboard/EditReelDialog";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ const Listings = () => {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
     const [liveStreamEvent, setLiveStreamEvent] = useState<any | null>(null);
+    const [promotionEvent, setPromotionEvent] = useState<any | null>(null);
     const [activeTab, setActiveTab] = useState<"published" | "drafts" | "events">("published");
     const [reels, setReels] = useState<ReelData[]>([]);
     const [events, setEvents] = useState<any[]>([]);
@@ -329,7 +331,7 @@ const Listings = () => {
                                                 <Button 
                                                     variant="outline" 
                                                     size="sm" 
-                                                    onClick={() => setLiveStreamEvent(event)}
+                                                    onClick={() => setPromotionEvent(event)}
                                                     className="gap-1.5 border-red-500/20 text-red-500 hover:bg-red-500/5 rounded-xl font-semibold h-8"
                                                 >
                                                     <Radio size={12} className="animate-pulse" />
@@ -367,12 +369,24 @@ const Listings = () => {
                     onOpenChange={setIsCreateEventOpen} 
                     onSuccess={fetchReels} 
                 />
-                <HostLiveDialog 
+                 <HostLiveDialog 
                     open={!!liveStreamEvent} 
                     onOpenChange={(open) => !open && setLiveStreamEvent(null)} 
                     eventId={liveStreamEvent?.id || ""} 
                     eventTitle={liveStreamEvent?.title || ""} 
                     onSuccess={fetchReels} 
+                />
+                <LivePromotionDialog
+                    open={!!promotionEvent}
+                    onOpenChange={(open) => !open && setPromotionEvent(null)}
+                    eventId={promotionEvent?.id || ""}
+                    eventTitle={promotionEvent?.title || ""}
+                    onSuccess={(promoType) => {
+                        const eventObj = promotionEvent;
+                        setPromotionEvent(null);
+                        setLiveStreamEvent(eventObj);
+                        fetchReels();
+                    }}
                 />
                 <EditReelDialog 
                     open={!!editingReel} 

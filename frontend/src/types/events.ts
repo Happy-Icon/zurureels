@@ -19,6 +19,9 @@ export interface ZuruEvent {
     is_live?: boolean | null;
     live_stream_url?: string | null;
     viewer_count?: number | null;
+    promotion_type?: "free" | "boosted" | "pinned" | null;
+    is_paid?: boolean | null;
+    paystack_reference?: string | null;
     host?: {
         full_name: string;
         username: string;
