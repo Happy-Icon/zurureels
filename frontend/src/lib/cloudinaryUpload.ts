@@ -109,12 +109,12 @@ export async function uploadToCloudinary(
 }
 
 /**
- * Build an optimized Cloudinary video URL with auto optimization
+ * Build an optimized Cloudinary video URL with HLS streaming
  */
 export function buildVideoUrl(publicId: string): string {
   if (!CLOUDINARY_CLOUD_NAME) return '';
-  // Apply auto quality and format optimization
-  return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/upload/q_auto,f_auto/${publicId}`;
+  // Use HLS streaming profile (sp_auto) and .m3u8 extension for robust playback
+  return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/upload/sp_auto/${publicId}.m3u8`;
 }
 
 /**

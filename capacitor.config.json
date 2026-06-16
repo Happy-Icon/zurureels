@@ -1,0 +1,9 @@
+{
+  "appId": "com.zurureels.app",
+  "appName": "Zuru Reels",
+  "webDir": "frontend/dist",
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": []
+  }
+}

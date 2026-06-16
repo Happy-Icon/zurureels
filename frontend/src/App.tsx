@@ -41,6 +41,37 @@ import { VerifiedRoute } from "@/components/VerifiedRoute";
 
 const queryClient = new QueryClient();
 
+import MobileOnboarding from "./pages/MobileOnboarding";
+import { useEffect } from "react";
+import { useIsNative } from "./hooks/useIsNative";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+import { StatusBar, Style } from "@capacitor/status-bar";
+import { SplashScreen } from "@capacitor/splash-screen";
+
+const NativeAppWrapper = ({ children }: { children: React.ReactNode }) => {
+  const { isNative } = useIsNative();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (isNative) {
+      // Configure Native Status bar
+      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+      
+      const hasSeenOnboarding = localStorage.getItem("hasSeenMobileOnboarding");
+      if (!hasSeenOnboarding && location.pathname !== "/mobile-onboarding") {
+        navigate("/mobile-onboarding", { replace: true });
+      } else if (location.pathname !== "/mobile-onboarding") {
+        // Hide splash screen once we reach the main app routes
+        SplashScreen.hide().catch(() => {});
+      }
+    }
+  }, [isNative, navigate, location.pathname]);
+
+  return <>{children}</>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -49,36 +80,39 @@ const App = () => (
       <AuthProvider>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<CityPulse />} />
-              <Route path="/discover" element={<Discover />} />
-              <Route path="/host" element={<VerifiedRoute><Host /></VerifiedRoute>} />
-              <Route path="/host/listings" element={<VerifiedRoute><Listings /></VerifiedRoute>} />
-              <Route path="/host/bookings" element={<VerifiedRoute><BookingsHost /></VerifiedRoute>} />
-              <Route path="/host/payouts" element={<VerifiedRoute><PayoutSettings /></VerifiedRoute>} />
-              <Route path="/host/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
-              <Route path="/become-host" element={<ProtectedRoute><BecomeHost /></ProtectedRoute>} />
-              <Route path="/home" element={<Home />} />
-              <Route path="/bookings" element={<Bookings />} />
-              <Route path="/saved" element={<Saved />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/profile/:id" element={<PublicProfile />} />
-              <Route path="/profile/info" element={<ProtectedRoute><PersonalInfo /></ProtectedRoute>} />
-              <Route path="/profile/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
-              <Route path="/profile/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-              <Route path="/profile/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
-              <Route path="/profile/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
-              <Route path="/profile/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              <Route path="/profile/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+            <NativeAppWrapper>
+              <Routes>
+                <Route path="/mobile-onboarding" element={<MobileOnboarding />} />
+                <Route path="/" element={<CityPulse />} />
+                <Route path="/discover" element={<Discover />} />
+                <Route path="/host" element={<VerifiedRoute><Host /></VerifiedRoute>} />
+                <Route path="/host/listings" element={<VerifiedRoute><Listings /></VerifiedRoute>} />
+                <Route path="/host/bookings" element={<VerifiedRoute><BookingsHost /></VerifiedRoute>} />
+                <Route path="/host/payouts" element={<VerifiedRoute><PayoutSettings /></VerifiedRoute>} />
+                <Route path="/host/verification" element={<ProtectedRoute><Verification /></ProtectedRoute>} />
+                <Route path="/become-host" element={<ProtectedRoute><BecomeHost /></ProtectedRoute>} />
+                <Route path="/home" element={<Home />} />
+                <Route path="/bookings" element={<Bookings />} />
+                <Route path="/saved" element={<Saved />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/profile/:id" element={<PublicProfile />} />
+                <Route path="/profile/info" element={<ProtectedRoute><PersonalInfo /></ProtectedRoute>} />
+                <Route path="/profile/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
+                <Route path="/profile/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                <Route path="/profile/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
+                <Route path="/profile/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+                <Route path="/profile/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                <Route path="/profile/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
 
-              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-              <Route path="/admin/broadcasts" element={<AdminRoute><Broadcasts /></AdminRoute>} />
+                <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+                <Route path="/admin/broadcasts" element={<AdminRoute><Broadcasts /></AdminRoute>} />
 
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </NativeAppWrapper>
           </BrowserRouter>
         </ThemeProvider>
       </AuthProvider>
