@@ -12,7 +12,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Notifications = () => {
-    const { user } = useAuth();
+    const { user, viewMode } = useAuth();
     const [loading, setLoading] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
 
@@ -168,19 +168,19 @@ export const Notifications = () => {
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-lg font-medium">
                             <Calendar className="h-5 w-5 text-primary" />
-                            <h3>Reservations & Hosting</h3>
+                            <h3>{viewMode === "host" ? "Hosting Notifications" : "Trip Notifications"}</h3>
                         </div>
                         <div className="space-y-4 pl-7">
                             <div className="flex items-center justify-between">
-                                <Label>Booking Requests</Label>
+                                <Label>{viewMode === "host" ? "New Booking Requests" : "Booking Status Updates"}</Label>
                                 <Switch checked={settings.trips.bookings} onCheckedChange={(v) => updateTrips('bookings', v)} />
                             </div>
                             <div className="flex items-center justify-between">
-                                <Label>Check-in Reminders</Label>
+                                <Label>{viewMode === "host" ? "Guest Check-in & Check-out Alerts" : "Trip Check-in Reminders"}</Label>
                                 <Switch checked={settings.trips.checkin} onCheckedChange={(v) => updateTrips('checkin', v)} />
                             </div>
                             <div className="flex items-center justify-between">
-                                <Label>Guest Messages</Label>
+                                <Label>{viewMode === "host" ? "Guest Messages" : "Host Messages"}</Label>
                                 <Switch checked={settings.trips.messages} onCheckedChange={(v) => updateTrips('messages', v)} />
                             </div>
                         </div>

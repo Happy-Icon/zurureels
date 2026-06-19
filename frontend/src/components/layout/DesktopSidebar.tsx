@@ -17,6 +17,7 @@ const authGuestNavItems = [
   { icon: Compass, label: "Discover", path: "/discover" },
   { icon: Heart, label: "Saved", path: "/saved" },
   { icon: Calendar, label: "Reservations", path: "/bookings" },
+  { icon: MessageSquare, label: "Inbox", path: "/profile/messages" },
   { icon: User, label: "Profile", path: "/profile" },
 ];
 

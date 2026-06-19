@@ -29,6 +29,10 @@ export const RatingModal = ({ isOpen, onClose, hostId, hostName, onSuccess }: Ra
             toast.error("Please login to rate");
             return;
         }
+        if (user.id === hostId) {
+            toast.error("You cannot rate yourself!");
+            return;
+        }
         if (rating === 0) {
             toast.error("Please select a star rating");
             return;

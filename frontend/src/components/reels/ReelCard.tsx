@@ -80,6 +80,37 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
           hls = new Hls();
           hls.loadSource(videoUrl);
           hls.attachMedia(video);
+          
+          hls.on(Hls.Events.ERROR, (event: any, data: any) => {
+            if (data.fatal) {
+              console.warn("[Hls.js] Fatal error encountered:", data);
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  console.warn("[Hls.js] Network error, falling back to original MP4:", reel.videoUrl);
+                  hls.destroy();
+                  hls = null;
+                  video.src = reel.videoUrl;
+                  if (isActive) {
+                    video.play().catch(() => {});
+                  }
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  console.warn("[Hls.js] Media error, trying to recover...");
+                  hls.recoverMediaError();
+                  break;
+                default:
+                  console.error("[Hls.js] Unrecoverable error, falling back to original MP4:", reel.videoUrl);
+                  hls.destroy();
+                  hls = null;
+                  video.src = reel.videoUrl;
+                  if (isActive) {
+                    video.play().catch(() => {});
+                  }
+                  break;
+              }
+            }
+          });
+
           video.oncanplay = () => hls && hls.startLoad();
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
           video.src = videoUrl;
@@ -258,6 +289,19 @@ export function ReelCard({ reel, isActive, preloadNext, onSave, onBook, onAskAI,
   const handleVideoError = (e: any) => {
     const videoElement = e.target as HTMLVideoElement;
     console.error("Video playback error:", videoElement.error);
+
+    // Fallback to MP4 if HLS playlist fails to load (native HLS fallback)
+    const currentSrc = videoElement.src || '';
+    if (currentSrc.includes('.m3u8')) {
+      console.warn("HLS stream failed (native HLS). Falling back to original MP4:", reel.videoUrl);
+      videoElement.src = reel.videoUrl;
+      videoElement.load();
+      if (isActive) {
+        videoElement.play().catch(() => {});
+      }
+      return;
+    }
+
     if (retryCount < 3) {
       setRetryCount(retryCount + 1);
       setTimeout(() => {

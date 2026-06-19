@@ -32,6 +32,7 @@ interface Conversation {
         id: string;
         full_name: string;
         username: string;
+        role?: string;
         avatar_url?: string;
     };
 }
@@ -47,7 +48,7 @@ interface Message {
 }
 
 export const MessagingSystem = () => {
-    const { user } = useAuth();
+    const { user, viewMode } = useAuth();
     const [searchParams] = useSearchParams();
     const convIdFromUrl = searchParams.get("convId");
 
@@ -58,8 +59,15 @@ export const MessagingSystem = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
     const [showSecurityModal, setShowSecurityModal] = useState(false);
-    const [role, setRole] = useState<"guest" | "host">("guest");
     const scrollRef = useRef<HTMLDivElement>(null);
+
+    const filteredConversations = conversations.filter(conv => {
+        if (viewMode === "guest") {
+            return conv.other_participant.role === "host";
+        } else {
+            return conv.other_participant.role !== "host";
+        }
+    });
 
     // Fetch conversations
     useEffect(() => {
@@ -88,7 +96,7 @@ export const MessagingSystem = () => {
                 const otherId = conv.participant_one === user.id ? conv.participant_two : conv.participant_one;
                 const { data: profile } = await supabase
                     .from("profiles")
-                    .select("id, full_name, username, metadata")
+                    .select("id, full_name, username, role, metadata")
                     .eq("id", otherId)
                     .single();
 
@@ -98,6 +106,7 @@ export const MessagingSystem = () => {
                         id: profile?.id || otherId,
                         full_name: profile?.full_name || "Zuru User",
                         username: profile?.username || "user",
+                        role: profile?.role || "guest",
                         avatar_url: profile?.metadata?.avatar_url
                     }
                 };
@@ -122,7 +131,7 @@ export const MessagingSystem = () => {
         };
 
         fetchConversations();
-    }, [user, role]);
+    }, [user, viewMode]);
 
     // Fetch messages for selected conversation
     useEffect(() => {
@@ -227,12 +236,6 @@ export const MessagingSystem = () => {
             )}>
                 <div className="p-4 border-b border-border bg-background/50 backdrop-blur-sm sticky top-0 z-10">
                     <h2 className="text-lg font-display font-semibold mb-3">Messages</h2>
-                    <Tabs value={role} onValueChange={(val: any) => { setRole(val); setSelectedConv(null); }} className="w-full mb-3">
-                        <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="guest">Traveler</TabsTrigger>
-                            <TabsTrigger value="host">Hosting</TabsTrigger>
-                        </TabsList>
-                    </Tabs>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input placeholder="Search people..." className="pl-9 bg-background/50 border-none focus-visible:ring-primary/20" />
@@ -240,17 +243,21 @@ export const MessagingSystem = () => {
                 </div>
                 
                 <ScrollArea className="flex-1">
-                    {conversations.length === 0 ? (
+                    {filteredConversations.length === 0 ? (
                         <div className="p-8 text-center space-y-3">
                             <div className="h-12 w-12 bg-secondary rounded-full flex items-center justify-center mx-auto">
                                 <MessageCircle className="h-6 w-6 text-muted-foreground" />
                             </div>
                             <p className="text-sm text-muted-foreground font-medium">No conversations yet</p>
-                            <p className="text-xs text-muted-foreground/60">Start chatting with hosts to plan your trips!</p>
+                            <p className="text-xs text-muted-foreground/60">
+                                {viewMode === "guest" 
+                                    ? "Start chatting with hosts to plan your trips!" 
+                                    : "No messages from travelers yet."}
+                            </p>
                         </div>
                     ) : (
                         <div className="p-2 space-y-1">
-                            {conversations.map((conv) => (
+                            {filteredConversations.map((conv) => (
                                 <button
                                     key={conv.id}
                                     onClick={() => setSelectedConv(conv)}

@@ -16,7 +16,8 @@ export interface CloudinaryUploadResult {
 }
 
 /**
- * Uploads a file to Cloudinary using unsigned upload preset
+ * Uploads a file to Cloudinary using unsigned upload preset.
+ * Automatically delegates to chunked upload for videos larger than 10MB.
  * @param file - File to upload (video or image)
  * @param options - Upload options
  * @returns CloudinaryUploadResult with secure_url and public_id
@@ -30,6 +31,14 @@ export async function uploadToCloudinary(
     retries?: number;
   }
 ): Promise<CloudinaryUploadResult> {
+  const TEN_MB = 10 * 1024 * 1024;
+  const isVideo = file.type.startsWith('video/') || options?.resourceType === 'video';
+
+  if (file.size > TEN_MB && isVideo) {
+    console.log(`[Cloudinary] Video size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 10MB limit. Using chunked upload.`);
+    return uploadLargeToCloudinary(file, options);
+  }
+
   const maxRetries = options?.retries ?? 2; // Default to 2 retries (3 total attempts)
   let attempt = 0;
 
@@ -109,12 +118,126 @@ export async function uploadToCloudinary(
 }
 
 /**
- * Build an optimized Cloudinary video URL with auto optimization
+ * Uploads large videos in chunks of 5MB sequentially to avoid network timeout issues
+ */
+export async function uploadLargeToCloudinary(
+  file: File,
+  options?: {
+    resourceType?: 'video' | 'image' | 'auto';
+    folder?: string;
+    onProgress?: (percent: number) => void;
+    retries?: number;
+  }
+): Promise<CloudinaryUploadResult> {
+  const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+  const totalSize = file.size;
+  const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
+  const resourceType = options?.resourceType || 'video';
+
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+    throw new Error('Cloudinary configuration missing.');
+  }
+
+  // Generate a unique upload ID for this file
+  const uniqueUploadId = 'zuru_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+
+  let currentChunk = 0;
+  let lastResponse: any = null;
+
+  while (currentChunk < totalChunks) {
+    const start = currentChunk * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, totalSize);
+    const chunk = file.slice(start, end);
+
+    const formData = new FormData();
+    formData.append('file', chunk);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    if (options?.folder) {
+      formData.append('folder', options.folder);
+    }
+    formData.append('tags', 'zurureels');
+
+    const maxRetries = options?.retries ?? 2;
+    let attempt = 0;
+    let success = false;
+    let chunkResText = '';
+
+    while (attempt <= maxRetries && !success) {
+      try {
+        const xhr = new XMLHttpRequest();
+        const responsePromise = new Promise<{ status: number; text: string }>((resolve, reject) => {
+          xhr.timeout = 180000; // 3 minutes per chunk
+          
+          if (options?.onProgress) {
+            xhr.upload.addEventListener('progress', (e) => {
+              if (e.lengthComputable) {
+                const uploadedBefore = start;
+                const totalUploaded = uploadedBefore + e.loaded;
+                const percent = Math.min(Math.round((totalUploaded / totalSize) * 100), 99);
+                options.onProgress?.(percent);
+              }
+            });
+          }
+
+          xhr.addEventListener('load', () => {
+            resolve({ status: xhr.status, text: xhr.responseText });
+          });
+          xhr.addEventListener('error', () => reject(new Error('Chunk upload network error')));
+          xhr.addEventListener('timeout', () => reject(new Error('Chunk upload timed out')));
+          xhr.addEventListener('abort', () => reject(new Error('Chunk upload aborted')));
+        });
+
+        const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
+        xhr.open('POST', url);
+        xhr.setRequestHeader('X-Unique-Upload-Id', uniqueUploadId);
+        xhr.setRequestHeader('Content-Range', `bytes ${start}-${end - 1}/${totalSize}`);
+        xhr.send(formData);
+
+        const res = await responsePromise;
+        if (res.status === 200 || res.status === 201) {
+          success = true;
+          chunkResText = res.text;
+        } else {
+          throw new Error(`Status ${res.status}: ${res.text}`);
+        }
+      } catch (err) {
+        attempt++;
+        if (attempt > maxRetries) {
+          throw err;
+        }
+        console.warn(`Chunk ${currentChunk} upload attempt ${attempt} failed, retrying...`, err);
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+      }
+    }
+
+    lastResponse = JSON.parse(chunkResText);
+    currentChunk++;
+  }
+
+  if (options?.onProgress) {
+    options.onProgress(100);
+  }
+
+  if (!lastResponse || !lastResponse.secure_url) {
+    throw new Error('Upload completed but secure URL not found in Cloudinary response');
+  }
+
+  return {
+    secure_url: lastResponse.secure_url,
+    public_id: lastResponse.public_id,
+    width: lastResponse.width,
+    height: lastResponse.height,
+    duration: lastResponse.duration,
+    format: lastResponse.format,
+  };
+}
+
+/**
+ * Build an optimized Cloudinary video URL with HLS adaptive bitrate streaming (m3u8)
  */
 export function buildVideoUrl(publicId: string): string {
   if (!CLOUDINARY_CLOUD_NAME) return '';
-  // Apply auto quality and format optimization
-  return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/upload/q_auto,f_auto/${publicId}`;
+  return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/upload/sp_auto/${publicId}.m3u8`;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { 
@@ -373,21 +373,31 @@ export default function PublicProfile() {
                                     </div>
                                 </div>
                                 <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                                    <Button 
-                                        onClick={handleMessage}
-                                        className="flex-1 md:flex-none gap-2 rounded-2xl h-12 px-8 font-bold bg-primary hover:bg-primary/90"
-                                    >
-                                        <MessageCircle className="h-5 w-5" />
-                                        Message
-                                    </Button>
-                                    <Button 
-                                        onClick={() => setShowRatingModal(true)}
-                                        variant="outline"
-                                        className="flex-1 md:flex-none gap-2 rounded-2xl h-12 px-8 font-bold border-primary text-primary hover:bg-primary/5"
-                                    >
-                                        <Star className="h-5 w-5" />
-                                        Rate Host
-                                    </Button>
+                                    {user?.id === profile.id ? (
+                                        <Link to="/profile/info" className="flex-1 md:flex-none">
+                                            <Button className="w-full gap-2 rounded-2xl h-12 px-8 font-bold bg-primary hover:bg-primary/90">
+                                                Edit Profile
+                                            </Button>
+                                        </Link>
+                                    ) : (
+                                        <>
+                                            <Button 
+                                                onClick={handleMessage}
+                                                className="flex-1 md:flex-none gap-2 rounded-2xl h-12 px-8 font-bold bg-primary hover:bg-primary/90"
+                                            >
+                                                <MessageCircle className="h-5 w-5" />
+                                                Message
+                                            </Button>
+                                            <Button 
+                                                onClick={() => setShowRatingModal(true)}
+                                                variant="outline"
+                                                className="flex-1 md:flex-none gap-2 rounded-2xl h-12 px-8 font-bold border-primary text-primary hover:bg-primary/5"
+                                            >
+                                                <Star className="h-5 w-5" />
+                                                Rate Host
+                                            </Button>
+                                        </>
+                                    )}
                                     <Button 
                                         variant="outline"
                                         size="icon"
@@ -549,13 +559,15 @@ export default function PublicProfile() {
                             <div className="text-center py-12 bg-muted/20 rounded-[2rem] border border-dashed border-border/50">
                                 <MessageCircle className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
                                 <p className="text-muted-foreground font-medium">No reviews yet. Be the first to rate!</p>
-                                <Button 
-                                    variant="link" 
-                                    className="text-primary font-bold mt-2"
-                                    onClick={() => setShowRatingModal(true)}
-                                >
-                                    Leave a Review
-                                </Button>
+                                {user?.id !== profile.id && (
+                                    <Button 
+                                        variant="link" 
+                                        className="text-primary font-bold mt-2"
+                                        onClick={() => setShowRatingModal(true)}
+                                    >
+                                        Leave a Review
+                                    </Button>
+                                )}
                             </div>
                         )}
                     </div>

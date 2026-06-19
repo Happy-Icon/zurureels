@@ -76,7 +76,7 @@ serve(async (req) => {
             cloudinaryFormData.append('public_id', publicId)
             cloudinaryFormData.append('resource_type', 'video')
             cloudinaryFormData.append('type', 'upload')
-            cloudinaryFormData.append('eager', 'q_auto,f_auto')
+            cloudinaryFormData.append('eager', 'sp_auto')
             cloudinaryFormData.append('eager_async', 'true') // Process in background!
 
             const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/explicit`, {
@@ -98,8 +98,8 @@ serve(async (req) => {
             console.warn('[transcode-video] Cloudinary credentials missing in Edge env. Skipping eager transform.')
         }
 
-        // Generate the optimized URL locally while Cloudinary processes it
-        const optimizedUrl = videoUrl.replace('/upload/', '/upload/q_auto,f_auto/')
+        // Generate the optimized URL locally while Cloudinary processes it (HLS master playlist format)
+        const optimizedUrl = videoUrl.replace('/upload/', '/upload/sp_auto/').replace(/\.[^/.]+$/, '.m3u8')
 
         // Mark as ready using the optimized URL
         // Cloudinary will serve the "Video Processing" spinner for a few seconds until the eager transform finishes

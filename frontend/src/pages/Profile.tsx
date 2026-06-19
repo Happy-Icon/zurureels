@@ -18,17 +18,25 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const menuItems = [
-  { icon: ShieldCheck, label: "Digital Identity Center", path: "/profile/info" },
-  { icon: Bell, label: "Notifications", path: "/profile/notifications" },
-  { icon: Receipt, label: "Transactions & Receipts", path: "/profile/payments" },
-  { icon: Shield, label: "Privacy & Security", path: "/profile/security" },
-  { icon: HelpCircle, label: "Help & Support", path: "/profile/support" },
-  { icon: Settings, label: "Settings", path: "/profile/settings" },
-];
-
 const Profile = () => {
   const { user, signOut, switchViewMode, viewMode, loading: authLoading } = useAuth();
+
+  const menuItems = [
+    { icon: ShieldCheck, label: "Digital Identity Center", path: "/profile/info" },
+    { icon: Bell, label: "Notifications", path: "/profile/notifications" },
+    { 
+      icon: Receipt, 
+      label: viewMode === "host" ? "Payouts & Earnings" : "Transactions & Receipts", 
+      path: viewMode === "host" ? "/host/payouts" : "/profile/payments" 
+    },
+    { icon: Shield, label: "Privacy & Security", path: "/profile/security" },
+    { 
+      icon: HelpCircle, 
+      label: viewMode === "host" ? "Host Help & Support" : "Help & Support", 
+      path: "/profile/support" 
+    },
+    { icon: Settings, label: "Settings", path: "/profile/settings" },
+  ];
   const navigate = useNavigate();
   const [role, setRole] = useState<string>('guest');
   const [verificationStatus, setVerificationStatus] = useState<string>('none');
