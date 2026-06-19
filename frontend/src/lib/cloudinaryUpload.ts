@@ -234,6 +234,7 @@ export async function uploadLargeToCloudinary(
 
 /**
  * Build an optimized Cloudinary video URL with HLS adaptive bitrate streaming (m3u8)
+ * Use HLS streaming profile (sp_auto) and .m3u8 extension for robust playback
  */
 export function buildVideoUrl(publicId: string): string {
   if (!CLOUDINARY_CLOUD_NAME) return '';

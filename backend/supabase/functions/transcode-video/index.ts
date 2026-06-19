@@ -76,6 +76,7 @@ serve(async (req) => {
             cloudinaryFormData.append('public_id', publicId)
             cloudinaryFormData.append('resource_type', 'video')
             cloudinaryFormData.append('type', 'upload')
+            // Request HLS streaming profile format
             cloudinaryFormData.append('eager', 'sp_auto')
             cloudinaryFormData.append('eager_async', 'true') // Process in background!
 
@@ -98,7 +99,7 @@ serve(async (req) => {
             console.warn('[transcode-video] Cloudinary credentials missing in Edge env. Skipping eager transform.')
         }
 
-        // Generate the optimized URL locally while Cloudinary processes it (HLS master playlist format)
+        // Generate the HLS stream URL locally while Cloudinary processes it (HLS master playlist format)
         const optimizedUrl = videoUrl.replace('/upload/', '/upload/sp_auto/').replace(/\.[^/.]+$/, '.m3u8')
 
         // Mark as ready using the optimized URL
