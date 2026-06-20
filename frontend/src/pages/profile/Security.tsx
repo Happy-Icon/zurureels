@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { ArrowLeft, Shield, Smartphone, Laptop, MapPin, Loader2, Save, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Shield, Smartphone, Laptop, MapPin, Loader2, Save, AlertTriangle, Fingerprint } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -11,11 +11,41 @@ import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Mail } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 export const Security = () => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
+
+    // Passkeys State
+    const [passkeyName, setPasskeyName] = useState("");
+    const [passkeyRegistering, setPasskeyRegistering] = useState(false);
+
+    const handleRegisterPasskey = async () => {
+        if (!user) return;
+        if (!passkeyName.trim()) {
+            toast.error("Please enter a device name for the passkey");
+            return;
+        }
+
+        setPasskeyRegistering(true);
+        try {
+            const { error } = await (supabase.auth as any).passkey.register({
+                name: passkeyName.trim(),
+            });
+
+            if (error) throw error;
+
+            toast.success(`Passkey "${passkeyName}" successfully registered!`);
+            setPasskeyName("");
+        } catch (error: any) {
+            console.error("Error registering passkey:", error);
+            toast.error(error.message || "Failed to register passkey. Make sure biometrics are supported and enabled.");
+        } finally {
+            setPasskeyRegistering(false);
+        }
+    };
 
     // Settings
     const [twoFactor, setTwoFactor] = useState(false);
@@ -258,6 +288,45 @@ export const Security = () => {
                             <Mail className="h-4 w-4" />
                             Send Test Alert
                         </Button>
+                    </div>
+
+                    <Separator />
+
+                    {/* Passkeys Section */}
+                    <div className="space-y-4">
+                        <div className="space-y-1">
+                            <Label className="text-base flex items-center gap-2">
+                                <Fingerprint className="h-5 w-5 text-primary" />
+                                Passkeys (WebAuthn)
+                            </Label>
+                            <p className="text-sm text-muted-foreground">
+                                Use biometrics (Touch ID, Face ID, Windows Hello) or security keys to sign in instantly without password/codes.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2 max-w-md">
+                            <Input
+                                placeholder="Device name (e.g. My Phone, Work Laptop)"
+                                value={passkeyName}
+                                onChange={(e) => setPasskeyName(e.target.value)}
+                                disabled={passkeyRegistering}
+                            />
+                            <Button
+                                variant="outline"
+                                onClick={handleRegisterPasskey}
+                                disabled={passkeyRegistering || !passkeyName.trim()}
+                                className="shrink-0"
+                            >
+                                {passkeyRegistering ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Registering...
+                                    </>
+                                ) : (
+                                    "Add Passkey"
+                                )}
+                            </Button>
+                        </div>
                     </div>
 
                     {/* Action Buttons */}
