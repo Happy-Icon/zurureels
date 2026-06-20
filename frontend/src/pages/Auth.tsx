@@ -17,7 +17,7 @@ export default function Auth() {
   const returnTo = searchParams.get("return_to") || location.state?.from?.pathname;
 
   // Flow State
-  const [step, setStep] = useState<"phone" | "otp" | "profile" | "commitment" | "email_sent">("phone");
+  const [step, setStep] = useState<"phone" | "otp" | "profile" | "commitment" | "email_sent" | "email">("phone");
   const [loading, setLoading] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
 
@@ -35,7 +35,7 @@ export default function Auth() {
   useEffect(() => {
     const checkRedirect = async () => {
       // If the user is actively filling out the profile, commitment, or viewing the email screen, do not interrupt them.
-      if (step === "profile" || step === "commitment" || step === "email_sent") return;
+      if (step === "profile" || step === "commitment" || step === "email_sent" || step === "email") return;
 
       if (user) {
         const { data } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
@@ -227,6 +227,50 @@ export default function Auth() {
     }
   };
 
+  const handleFacebookLogin = async () => {
+    try {
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+      const redirectUrl = returnTo ? `${appUrl}/auth?return_to=${encodeURIComponent(returnTo)}` : `${appUrl}/`;
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "facebook",
+        options: { redirectTo: redirectUrl },
+      });
+
+      if (error) throw error;
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleSendEmailOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+      const redirectUrl = returnTo ? `${appUrl}/auth?return_to=${encodeURIComponent(returnTo)}` : `${appUrl}/`;
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: redirectUrl,
+        }
+      });
+
+      if (error) throw error;
+      setStep("email_sent");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send login link.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- RENDER HELPERS ---
 
   return (
@@ -237,7 +281,7 @@ export default function Auth() {
           {/* Header */}
           <div className="h-16 border-b border-border flex items-center justify-between px-4 sm:px-6 relative shrink-0">
             <div className="absolute left-4">
-              {step === "otp" && (
+              {(step === "otp" || step === "email") && (
                 <button onClick={() => setStep("phone")} className="p-2 hover:bg-secondary rounded-full transition-colors">
                   <ChevronLeft className="h-5 w-5" />
                 </button>
@@ -317,11 +361,6 @@ export default function Auth() {
                   </Button>
                 </form>
 
-                <div className="relative py-6">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#EBEBEB]"></div></div>
-                  <div className="relative flex justify-center"><span className="bg-background px-4 text-[12px] text-[#222]">or</span></div>
-                </div>
-
                 <div className="space-y-4">
                   <Button variant="outline" onClick={handlePasskeyLogin} disabled={loading} className="w-full h-[48px] text-[15px] font-medium border-[#222] text-[#222] relative justify-center bg-white hover:bg-gray-50 rounded-lg">
                     <Fingerprint className="absolute left-5 h-[20px] w-[20px] text-[#222]" />
@@ -333,23 +372,65 @@ export default function Auth() {
                     </div>
                     Continue with Google
                   </Button>
-                  <Button variant="outline" className="w-full h-[48px] text-[15px] font-medium border-[#222] text-[#222] relative justify-center bg-white hover:bg-gray-50 rounded-lg">
-                    <svg className="absolute left-5 h-[20px] w-[20px]" viewBox="0 0 24 24" fill="currentColor"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.126 3.804 3.07 1.517-.058 2.096-.983 3.931-.983 1.815 0 2.339.983 3.931.956 1.636-.027 2.651-1.492 3.642-2.956 1.144-1.674 1.611-3.296 1.631-3.38-.035-.015-3.176-1.22-3.199-4.851-.019-3.047 2.483-4.512 2.597-4.577-1.428-2.096-3.641-2.385-4.437-2.42-1.928-.152-3.606 1.077-4.498 1.077ZM15.589 3.016A4.545 4.545 0 0 0 16.634.301c-1.554.062-3.328 1.034-4.225 3.001-.844 1.85-.989 3.655-.952 3.654 1.612.124 3.228-1.527 4.132-3.94Z" /></svg>
-                    Continue with Apple
-                  </Button>
-                  <Button variant="outline" className="w-full h-[48px] text-[15px] font-medium border-[#222] text-[#222] relative justify-center bg-white hover:bg-gray-50 rounded-lg">
-                    <Mail className="absolute left-5 h-[20px] w-[20px] text-[#222]" /> Continue with email
-                  </Button>
-                  <Button variant="outline" className="w-full h-[48px] text-[15px] font-medium border-[#222] text-[#222] relative justify-center bg-white hover:bg-gray-50 rounded-lg pb-1">
+                  <Button variant="outline" onClick={handleFacebookLogin} disabled={loading} className="w-full h-[48px] text-[15px] font-medium border-[#222] text-[#222] relative justify-center bg-white hover:bg-gray-50 rounded-lg">
                     <div className="absolute left-5 top-1/2 -translate-y-1/2 pt-1">
                       <svg className="h-[20px] w-[20px] text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
                     </div>
                     Continue with Facebook
                   </Button>
+                  <Button variant="outline" onClick={() => setStep("email")} disabled={loading} className="w-full h-[48px] text-[15px] font-medium border-[#222] text-[#222] relative justify-center bg-white hover:bg-gray-50 rounded-lg">
+                    <Mail className="absolute left-5 h-[20px] w-[20px] text-[#222]" /> Continue with email
+                  </Button>
                 </div>
 
                 <div className="mt-8 text-center pb-8">
                   <button type="button" className="text-[15px] font-semibold underline text-[#222]">Need help?</button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP: EMAIL */}
+            {step === "email" && (
+              <div className="flex flex-col h-full">
+                <h1 className="text-[22px] font-semibold tracking-tight text-[#222] mb-6">Continue with email</h1>
+
+                <form onSubmit={handleSendEmailOtp} className="space-y-4">
+                  <div className="border border-[#B0B0B0] rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-[#222] focus-within:border-transparent transition-all">
+                    <div className="px-3 py-3 bg-white relative">
+                      <Label className="text-xs text-[#717171] font-normal mb-1">Email address</Label>
+                      <Input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="name@example.com"
+                        className="border-none shadow-none p-0 h-auto focus-visible:ring-0 text-[16px] text-[#222] placeholder:text-[#B0B0B0]"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-[12px] text-[#222] leading-[1.3] pt-1">
+                    We'll email you a secure login link to confirm your email address.
+                  </p>
+
+                  <Button
+                    type="submit"
+                    disabled={loading || !email}
+                    className="w-full h-[48px] bg-[#EE7D30] hover:bg-[#D96B23] text-white text-[16px] font-semibold rounded-lg mt-2"
+                  >
+                    {loading ? "Sending..." : "Send link"}
+                  </Button>
+                </form>
+
+                <div className="mt-8 pt-4">
+                  <button
+                    type="button"
+                    className="underline font-semibold text-[#222] text-[15px] hover:text-black"
+                    onClick={() => setStep("phone")}
+                    disabled={loading}
+                  >
+                    Back to phone login
+                  </button>
                 </div>
               </div>
             )}
