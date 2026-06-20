@@ -17,7 +17,7 @@ export default function Auth() {
   const returnTo = searchParams.get("return_to") || location.state?.from?.pathname;
 
   // Flow State
-  const [step, setStep] = useState<"phone" | "otp" | "profile" | "commitment" | "email_sent" | "email">("phone");
+  const [step, setStep] = useState<"phone" | "otp" | "profile" | "commitment" | "email_sent" | "email" | "email_otp">("phone");
   const [loading, setLoading] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
 
@@ -25,6 +25,7 @@ export default function Auth() {
   const [phone, setPhone] = useState("");
   const [countryCode, setCountryCode] = useState("+254"); // Default Kenya
   const [otp, setOtp] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -228,18 +229,53 @@ export default function Auth() {
   };
 
   const handleFacebookLogin = async () => {
-    try {
-      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-      const redirectUrl = returnTo ? `${appUrl}/auth?return_to=${encodeURIComponent(returnTo)}` : `${appUrl}/`;
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+    const redirectUrl = returnTo
+      ? `${appUrl}/auth?return_to=${encodeURIComponent(returnTo)}`
+      : `${appUrl}/`;
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "facebook",
-        options: { redirectTo: redirectUrl },
-      });
+    if (isMobile) {
+      // Try to open the native Facebook app first via deep link
+      // The FB app will redirect back via the OAuth flow once authenticated
+      const fbDeepLink = `fb://facewebmodal/auth?client_id=${import.meta.env.VITE_FACEBOOK_APP_ID || ""}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email,public_profile`;
+      const fallbackTimeout = setTimeout(async () => {
+        // FB app not installed or deep link failed — fall back to web OAuth
+        try {
+          const { error } = await supabase.auth.signInWithOAuth({
+            provider: "facebook",
+            options: {
+              redirectTo: redirectUrl,
+              queryParams: { display: "touch" },
+            },
+          });
+          if (error) throw error;
+        } catch (err: any) {
+          toast.error(err.message);
+        }
+      }, 1500);
 
-      if (error) throw error;
-    } catch (error: any) {
-      toast.error(error.message);
+      // Attempt FB app deep link
+      window.location.href = fbDeepLink;
+
+      // If the page is still visible after 1.5s the app didn't open
+      const handleVisibilityChange = () => {
+        if (!document.hidden) {
+          clearTimeout(fallbackTimeout);
+          document.removeEventListener("visibilitychange", handleVisibilityChange);
+        }
+      };
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    } else {
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "facebook",
+          options: { redirectTo: redirectUrl },
+        });
+        if (error) throw error;
+      } catch (error: any) {
+        toast.error(error.message);
+      }
     }
   };
 
@@ -252,20 +288,55 @@ export default function Auth() {
 
     setLoading(true);
     try {
-      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-      const redirectUrl = returnTo ? `${appUrl}/auth?return_to=${encodeURIComponent(returnTo)}` : `${appUrl}/`;
-
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: redirectUrl,
+          shouldCreateUser: true,
         }
       });
 
       if (error) throw error;
-      setStep("email_sent");
+      setEmailOtp("");
+      setStep("email_otp");
     } catch (error: any) {
-      toast.error(error.message || "Failed to send login link.");
+      toast.error(error.message || "Failed to send code.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyEmailOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (emailOtp.length < 6) return;
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token: emailOtp,
+        type: "email",
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        const { data: profileResponse } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", data.user.id)
+          .single();
+
+        const pData = profileResponse as { full_name: string | null } | null;
+
+        if (!pData?.full_name) {
+          setStep("profile");
+        } else {
+          toast.success("Welcome back!");
+          navigate(returnTo || "/", { replace: true });
+        }
+      }
+    } catch (error: any) {
+      toast.error("Invalid or expired code. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -281,8 +352,8 @@ export default function Auth() {
           {/* Header */}
           <div className="h-16 border-b border-border flex items-center justify-between px-4 sm:px-6 relative shrink-0">
             <div className="absolute left-4">
-              {(step === "otp" || step === "email") && (
-                <button onClick={() => setStep("phone")} className="p-2 hover:bg-secondary rounded-full transition-colors">
+              {(step === "otp" || step === "email" || step === "email_otp") && (
+                <button onClick={() => setStep(step === "email_otp" ? "email" : "phone")} className="p-2 hover:bg-secondary rounded-full transition-colors">
                   <ChevronLeft className="h-5 w-5" />
                 </button>
               )}
@@ -300,6 +371,8 @@ export default function Auth() {
               <h2 className="text-[17px] font-semibold tracking-tight">
                 {step === "phone" && "Log in or sign up"}
                 {step === "otp" && "Confirm your number"}
+                {step === "email" && "Continue with email"}
+                {step === "email_otp" && "Confirm your email"}
                 {step === "profile" && "Finish signing up"}
                 {step === "commitment" && "Community commitment"}
               </h2>
@@ -410,7 +483,7 @@ export default function Auth() {
                   </div>
 
                   <p className="text-[12px] text-[#222] leading-[1.3] pt-1">
-                    We'll email you a secure login link to confirm your email address.
+                    We'll send a 6-digit code to your email address.
                   </p>
 
                   <Button
@@ -418,7 +491,7 @@ export default function Auth() {
                     disabled={loading || !email}
                     className="w-full h-[48px] bg-[#EE7D30] hover:bg-[#D96B23] text-white text-[16px] font-semibold rounded-lg mt-2"
                   >
-                    {loading ? "Sending..." : "Send link"}
+                    {loading ? "Sending..." : "Send code"}
                   </Button>
                 </form>
 
@@ -432,6 +505,48 @@ export default function Auth() {
                     Back to phone login
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* STEP: EMAIL OTP */}
+            {step === "email_otp" && (
+              <div className="space-y-6">
+                <p className="text-[15px] text-[#222]">
+                  Enter the 6-digit code we sent to <span className="font-semibold">{email}</span>:
+                </p>
+
+                <form onSubmit={handleVerifyEmailOtp} className="space-y-6">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={emailOtp}
+                    onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ''))}
+                    className="h-[52px] text-xl tracking-[0.5em] font-medium text-center border-input focus-visible:ring-primary rounded-lg"
+                    placeholder="------"
+                    autoFocus
+                  />
+
+                  <p className="text-sm font-medium text-[#222]">
+                    Didn't get a code?{" "}
+                    <button
+                      type="button"
+                      className="underline cursor-pointer hover:text-black font-semibold"
+                      onClick={handleSendEmailOtp as any}
+                      disabled={loading}
+                    >
+                      Resend
+                    </button>
+                  </p>
+
+                  <Button
+                    type="submit"
+                    disabled={loading || emailOtp.length < 6}
+                    className="w-full h-[52px] bg-[#EE7D30] hover:bg-[#D96B23] text-white text-base font-semibold rounded-lg"
+                  >
+                    {loading ? "Verifying..." : "Continue"}
+                  </Button>
+                </form>
               </div>
             )}
 
