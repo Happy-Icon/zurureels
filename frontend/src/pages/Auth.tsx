@@ -198,7 +198,7 @@ export default function Auth() {
   const handlePasskeyLogin = async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase.auth as any).passkey.signIn();
+      const { data, error } = await (supabase.auth as any).signInWithPasskey();
       if (error) throw error;
       
       if (data?.user) {

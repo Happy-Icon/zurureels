@@ -31,11 +31,16 @@ export const Security = () => {
 
         setPasskeyRegistering(true);
         try {
-            const { error } = await (supabase.auth as any).passkey.register({
-                name: passkeyName.trim(),
-            });
+            const { data, error } = await (supabase.auth as any).registerPasskey();
 
             if (error) throw error;
+
+            if (data?.id && passkeyName.trim()) {
+                await (supabase.auth as any).passkey.update({
+                    passkeyId: data.id,
+                    friendlyName: passkeyName.trim(),
+                }).catch((err: any) => console.warn("Failed to rename passkey:", err));
+            }
 
             toast.success(`Passkey "${passkeyName}" successfully registered!`);
             setPasskeyName("");
