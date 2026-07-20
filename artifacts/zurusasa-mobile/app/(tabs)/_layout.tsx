@@ -14,7 +14,7 @@ function NativeTabLayout() {
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'play.rectangle', selected: 'play.rectangle.fill' }} />
-        <Label>Pulse</Label>
+        <Label>ZuruFlow</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="discover">
         <Icon sf={{ default: 'safari', selected: 'safari.fill' }} />
@@ -69,7 +69,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Pulse',
+          title: 'ZuruFlow',
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="play.rectangle" tintColor={color} size={24} />

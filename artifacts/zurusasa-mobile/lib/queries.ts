@@ -14,8 +14,8 @@ export function useReels() {
         .from('reels')
         .select(
           `*,
-          experience:experiences(id, title, location, current_price, price_unit),
-          host:profiles!reels_user_id_profiles_fkey(full_name, verification_status)`,
+          experience:experiences(id, title, description, location, current_price, price_unit, metadata),
+          host:profiles!reels_user_id_profiles_fkey(full_name, verification_status, metadata)`,
         )
         .eq('status', 'active')
         .order('created_at', { ascending: false })
@@ -90,6 +90,253 @@ export function useCreateBooking() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    },
+  });
+}
+
+// ---- Reel interactions (mirrors web useReelInteractions: reel_likes / reel_saves / user_follows) ----
+
+export interface ReelInteractions {
+  likeCount: number;
+  liked: boolean;
+  saved: boolean;
+  following: boolean;
+}
+
+const interactionsKey = (reelId: string, userId: string | undefined) => [
+  'reel-interactions',
+  reelId,
+  userId ?? 'anon',
+];
+
+export function useReelInteractions(
+  reelId: string,
+  hostId: string | null | undefined,
+  userId: string | undefined,
+  enabled: boolean,
+) {
+  return useQuery<ReelInteractions>({
+    queryKey: interactionsKey(reelId, userId),
+    enabled,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const countRes = await supabase
+        .from('reel_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('reel_id', reelId);
+      if (countRes.error) throw new Error(countRes.error.message);
+
+      let liked = false;
+      let saved = false;
+      let following = false;
+
+      if (userId) {
+        const likedRes = await supabase
+          .from('reel_likes')
+          .select('reel_id')
+          .eq('reel_id', reelId)
+          .eq('user_id', userId)
+          .limit(1);
+        if (likedRes.error) throw new Error(likedRes.error.message);
+        liked = (likedRes.data ?? []).length > 0;
+
+        const savedRes = await supabase
+          .from('reel_saves')
+          .select('reel_id')
+          .eq('reel_id', reelId)
+          .eq('user_id', userId)
+          .limit(1);
+        if (savedRes.error) throw new Error(savedRes.error.message);
+        saved = (savedRes.data ?? []).length > 0;
+
+        if (hostId && hostId !== userId) {
+          const followRes = await supabase
+            .from('user_follows')
+            .select('follower_id')
+            .eq('follower_id', userId)
+            .eq('following_id', hostId)
+            .limit(1);
+          if (followRes.error) throw new Error(followRes.error.message);
+          following = (followRes.data ?? []).length > 0;
+        }
+      }
+
+      return { likeCount: countRes.count ?? 0, liked, saved, following };
+    },
+  });
+}
+
+interface ToggleInput {
+  reelId: string;
+  userId: string;
+}
+
+export function useToggleLike() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      reelId,
+      userId,
+      liked,
+    }: ToggleInput & { liked: boolean }) => {
+      if (liked) {
+        const { error } = await supabase
+          .from('reel_likes')
+          .delete()
+          .eq('reel_id', reelId)
+          .eq('user_id', userId);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await supabase
+          .from('reel_likes')
+          .insert({ reel_id: reelId, user_id: userId });
+        if (error) throw new Error(error.message);
+      }
+    },
+    onMutate: async ({ reelId, userId, liked }) => {
+      const key = interactionsKey(reelId, userId);
+      const prev = queryClient.getQueryData<ReelInteractions>(key);
+      if (prev) {
+        queryClient.setQueryData<ReelInteractions>(key, {
+          ...prev,
+          liked: !liked,
+          likeCount: Math.max(0, prev.likeCount + (liked ? -1 : 1)),
+        });
+      }
+      return { key, prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(ctx.key, ctx.prev);
+    },
+    onSettled: (_data, _err, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ['reel-interactions', vars.reelId],
+      });
+    },
+  });
+}
+
+export function useToggleSave() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      reelId,
+      userId,
+      saved,
+    }: ToggleInput & { saved: boolean }) => {
+      if (saved) {
+        const { error } = await supabase
+          .from('reel_saves')
+          .delete()
+          .eq('reel_id', reelId)
+          .eq('user_id', userId);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await supabase
+          .from('reel_saves')
+          .insert({ reel_id: reelId, user_id: userId });
+        if (error) throw new Error(error.message);
+      }
+    },
+    onMutate: async ({ reelId, userId, saved }) => {
+      const key = interactionsKey(reelId, userId);
+      const prev = queryClient.getQueryData<ReelInteractions>(key);
+      if (prev) {
+        queryClient.setQueryData<ReelInteractions>(key, { ...prev, saved: !saved });
+      }
+      return { key, prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(ctx.key, ctx.prev);
+    },
+    onSettled: (_data, _err, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ['reel-interactions', vars.reelId],
+      });
+    },
+  });
+}
+
+export function useToggleFollow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      hostId,
+      userId,
+      following,
+    }: {
+      reelId: string;
+      hostId: string;
+      userId: string;
+      following: boolean;
+    }) => {
+      if (following) {
+        const { error } = await supabase
+          .from('user_follows')
+          .delete()
+          .eq('follower_id', userId)
+          .eq('following_id', hostId);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await supabase
+          .from('user_follows')
+          .insert({ follower_id: userId, following_id: hostId });
+        if (error) throw new Error(error.message);
+      }
+    },
+    onMutate: async ({ reelId, userId, following }) => {
+      const key = interactionsKey(reelId, userId);
+      const prev = queryClient.getQueryData<ReelInteractions>(key);
+      if (prev) {
+        queryClient.setQueryData<ReelInteractions>(key, {
+          ...prev,
+          following: !following,
+        });
+      }
+      return { key, prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(ctx.key, ctx.prev);
+    },
+    onSettled: (_data, _err, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ['reel-interactions', vars.reelId],
+      });
+    },
+  });
+}
+
+// ---- Enquire: find or create the buyer<->host conversation (mirrors web handleEnquire) ----
+
+export function useEnquire() {
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      hostId,
+    }: {
+      userId: string;
+      hostId: string;
+    }) => {
+      const [participantOne, participantTwo] = [userId, hostId].sort();
+      const found = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('participant_one', participantOne)
+        .eq('participant_two', participantTwo)
+        .maybeSingle();
+      if (found.error) throw new Error(found.error.message);
+      if (found.data?.id) return found.data.id as string;
+
+      const created = await supabase
+        .from('conversations')
+        .insert({
+          participant_one: participantOne,
+          participant_two: participantTwo,
+        })
+        .select('id')
+        .single();
+      if (created.error) throw new Error(created.error.message);
+      return created.data.id as string;
     },
   });
 }

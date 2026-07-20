@@ -56,11 +56,21 @@ export interface ReelRow {
   duration: number | null;
   is_live: boolean | null;
   status: string | null;
+  created_at?: string | null;
   experience?: Pick<
     ExperienceRow,
-    'id' | 'title' | 'location' | 'current_price' | 'price_unit'
+    | 'id'
+    | 'title'
+    | 'description'
+    | 'location'
+    | 'current_price'
+    | 'price_unit'
+    | 'metadata'
   > | null;
-  host?: Pick<ProfileRow, 'full_name' | 'verification_status'> | null;
+  host?: Pick<
+    ProfileRow,
+    'full_name' | 'verification_status' | 'metadata'
+  > | null;
 }
 
 export interface BookingRow {
