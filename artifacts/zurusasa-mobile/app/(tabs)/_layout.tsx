@@ -1,6 +1,7 @@
 import React from 'react';
 import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
+import { useAuth } from '@/context/AuthContext';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
@@ -10,11 +11,12 @@ import { SymbolView } from 'expo-symbols';
 
 // iOS 26 liquid glass tabs. Brand colors only apply on the classic path.
 function NativeTabLayout() {
+  const { user } = useAuth();
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: 'play.rectangle', selected: 'play.rectangle.fill' }} />
-        <Label>ZuruFlow</Label>
+        <Icon sf={{ default: 'bolt', selected: 'bolt.fill' }} />
+        <Label>Pulse</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="discover">
         <Icon sf={{ default: 'safari', selected: 'safari.fill' }} />
@@ -22,7 +24,7 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: 'person', selected: 'person.fill' }} />
-        <Label>Profile</Label>
+        <Label>{user ? 'Profile' : 'Log In'}</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -30,6 +32,7 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colors = useColors();
+  const { user } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const isIOS = Platform.OS === 'ios';
@@ -69,15 +72,15 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'ZuruFlow',
+          title: 'Pulse',
           // Web parity: the ZuruFlow feed is immersive — the bottom nav is
           // hidden there and reappears on Discover/Profile.
           tabBarStyle: { display: 'none' },
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="play.rectangle" tintColor={color} size={24} />
+              <SymbolView name="bolt" tintColor={color} size={24} />
             ) : (
-              <Feather name="play-circle" size={22} color={color} />
+              <Feather name="zap" size={22} color={color} />
             ),
         }}
       />
@@ -96,7 +99,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: user ? 'Profile' : 'Log In',
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="person" tintColor={color} size={24} />

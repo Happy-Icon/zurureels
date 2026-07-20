@@ -27,16 +27,29 @@ export interface ReelSummary {
 interface ZuruAgentChatProps {
   visible: boolean;
   onClose: () => void;
-  reelSummary: ReelSummary | null;
+  reelSummary?: ReelSummary | null;
+  /** Multi-listing context (Discover grid). Takes precedence over reelSummary. */
+  reels?: ReelSummary[];
+  /** Override the city sent to the agent (defaults to the reel's location). */
+  city?: string;
+  placeholder?: string;
 }
 
-export function ZuruAgentChat({ visible, onClose, reelSummary }: ZuruAgentChatProps) {
+export function ZuruAgentChat({
+  visible,
+  onClose,
+  reelSummary,
+  reels,
+  city: cityOverride,
+  placeholder,
+}: ZuruAgentChatProps) {
   const insets = useSafeAreaInsets();
   const { messages, isLoading, sendMessage, clearMessages } = useZuruAI();
   const [input, setInput] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
-  const city = reelSummary?.location?.trim() || 'Mombasa';
+  const city = cityOverride ?? (reelSummary?.location?.trim() || 'Mombasa');
+  const contextReels = reels ?? (reelSummary ? [reelSummary] : []);
 
   const handleClose = () => {
     clearMessages();
@@ -47,7 +60,7 @@ export function ZuruAgentChat({ visible, onClose, reelSummary }: ZuruAgentChatPr
     const text = input.trim();
     if (!text || isLoading) return;
     setInput('');
-    sendMessage(text, city, { reels: reelSummary ? [reelSummary] : [] });
+    sendMessage(text, city, { reels: contextReels });
   };
 
   const waiting =
@@ -99,8 +112,9 @@ export function ZuruAgentChat({ visible, onClose, reelSummary }: ZuruAgentChatPr
             >
               {messages.length === 0 ? (
                 <Text style={styles.intro}>
-                  Ask me anything about the coast — boats, food, stays, plans
-                  for today in {city}.
+                  {city === 'Discover'
+                    ? 'Ask me anything about these listings — stays, boats, food, events and plans.'
+                    : `Ask me anything about the coast — boats, food, stays, plans for today in ${city}.`}
                 </Text>
               ) : null}
               {messages.map((m, i) => (
@@ -134,7 +148,7 @@ export function ZuruAgentChat({ visible, onClose, reelSummary }: ZuruAgentChatPr
                 testID="zuru-chat-input"
                 value={input}
                 onChangeText={setInput}
-                placeholder={`What should I do in ${city} today?`}
+                placeholder={placeholder ?? `What should I do in ${city} today?`}
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 style={styles.input}
                 returnKeyType="send"
