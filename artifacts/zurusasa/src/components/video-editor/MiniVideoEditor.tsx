@@ -1,0 +1,759 @@
+/**
+ * MiniVideoEditor — Clean video recorder + trimmer.
+ *
+ * Two modes:
+ *  1. RECORD: Opens LiveVideoRecorder (20s max, front/back camera, auto-stops).
+ *  2. TRIM:   Shows the recorded/uploaded video with a WhatsApp-style trim bar
+ *             so users can crop to ≤ 20 seconds before uploading.
+ *
+ * No scores. No emojis. No fake audio cues. Just record → trim → upload.
+ */
+
+import { useState, useRef, useCallback, useEffect } from "react";
+import { cn } from "@/lib/utils";
+import { ChevronLeft, Upload, Play, Pause, Scissors, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { LiveVideoRecorder } from "./LiveVideoRecorder";
+import { toast } from "sonner";
+import { CircularProgress } from "@/components/ui/CircularProgress";
+import { Sparkles } from "lucide-react";
+import { loadFFmpeg } from "@/utils/videoTranscoder";
+import { fetchFile } from "@ffmpeg/util";
+
+// ─── Public Types ──────────────────────────────────────────────────────────────
+
+interface MiniVideoEditorProps {
+  category: string;
+  videoFile?: File | null;
+  onBack: () => void;
+  onSubmit: (data: VideoEditorSubmitData) => void;
+}
+
+export interface VideoEditorSubmitData {
+  category: string;
+  videoFile: File;
+  duration: number;
+  lat?: number;
+  lng?: number;
+  isLive?: boolean;
+}
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+const MAX_REEL_DURATION = 20; // seconds — hard limit
+const THUMBNAIL_COUNT = 12;   // frames in the filmstrip
+
+// ─── Component ─────────────────────────────────────────────────────────────────
+
+export const MiniVideoEditor = ({
+  category,
+  videoFile,
+  onBack,
+  onSubmit,
+}: MiniVideoEditorProps) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const trimBarRef = useRef<HTMLDivElement>(null);
+
+  // Mutable ref to avoid stale closures in drag handlers
+  const trimRef = useRef({ start: 0, end: MAX_REEL_DURATION, duration: 0 });
+
+  // ── State ──────────────────────────────────────────────────────────────────
+
+  const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(MAX_REEL_DURATION);
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
+
+  const [showRecorder, setShowRecorder] = useState(!videoFile);
+  const [recordedFile, setRecordedFile] = useState<File | null>(null);
+  const [capturedLocation, setCapturedLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+
+  // Fallback duration from the recorder timer (used when WebM reports Infinity)
+  const [durationFromRecorder, setDurationFromRecorder] = useState(0);
+
+  // Keep the ref in sync with state (prevents stale closures in pointer events)
+  useEffect(() => {
+    trimRef.current = { start: trimStart, end: trimEnd, duration: videoDuration };
+  }, [trimStart, trimEnd, videoDuration]);
+
+  // ── Create object URL for the source video ────────────────────────────────
+
+  useEffect(() => {
+    if (videoFile) {
+      const url = URL.createObjectURL(videoFile);
+      setLocalVideoUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [videoFile]);
+
+  // ── Recording complete handler ────────────────────────────────────────────
+
+  const handleRecordingComplete = useCallback(
+    (file: File, loc?: { lat: number; lng: number }, recordingDuration?: number) => {
+      setRecordedFile(file);
+      if (loc) setCapturedLocation(loc);
+      if (recordingDuration && recordingDuration > 0) {
+        console.log("[VideoEditor] Received recorder duration fallback:", recordingDuration);
+        setDurationFromRecorder(recordingDuration);
+      }
+      const url = URL.createObjectURL(file);
+      setLocalVideoUrl(url);
+      setShowRecorder(false);
+    },
+    []
+  );
+
+  // ── Chrome WebM Infinity duration workaround ──────────────────────────────
+  // Chrome's MediaRecorder produces WebM with unknown duration. The trick is
+  // to seek past the end, which forces Chrome to calculate the real duration.
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !localVideoUrl) return;
+
+    const handleDurationFix = () => {
+      if (!isFinite(video.duration) || video.duration === 0) {
+        console.log("[VideoEditor] Duration is Infinity/0, seeking to fix…");
+        video.currentTime = 1e101; // seek past end
+      }
+    };
+
+    const handleSeeked = () => {
+      if (isFinite(video.duration) && video.duration > 0) {
+        console.log("[VideoEditor] Duration resolved after seek:", video.duration);
+        video.currentTime = 0; // reset to start
+      }
+    };
+
+    video.addEventListener("loadedmetadata", handleDurationFix);
+    video.addEventListener("seeked", handleSeeked);
+
+    return () => {
+      video.removeEventListener("loadedmetadata", handleDurationFix);
+      video.removeEventListener("seeked", handleSeeked);
+    };
+  }, [localVideoUrl]);
+
+  // ── Video metadata ready → set duration + extract filmstrip ───────────────
+
+  const handleLoadedMetadata = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    let dur = video.duration;
+
+    // If duration is Infinity (Chrome WebM bug), use fallback from recorder
+    if (!isFinite(dur) || dur === 0) {
+      console.warn("[VideoEditor] video.duration is", dur, "— using recorder fallback", durationFromRecorder);
+      if (durationFromRecorder > 0) {
+        dur = durationFromRecorder;
+      } else {
+        // Not ready yet — the seeked workaround will call handleDurationChange
+        return;
+      }
+    }
+
+    console.log("[VideoEditor] Duration set:", dur);
+    setVideoDuration(dur);
+    setTrimStart(0);
+    setTrimEnd(Math.min(dur, MAX_REEL_DURATION));
+    extractThumbnails(video, dur);
+  }, [durationFromRecorder]);
+
+  // Listen for durationchange — this fires when Chrome resolves the actual duration
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onDurationChange = () => {
+      if (isFinite(video.duration) && video.duration > 0 && videoDuration === 0) {
+        console.log("[VideoEditor] durationchange fired, duration:", video.duration);
+        const dur = video.duration;
+        setVideoDuration(dur);
+        setTrimStart(0);
+        setTrimEnd(Math.min(dur, MAX_REEL_DURATION));
+        extractThumbnails(video, dur);
+      }
+    };
+
+    video.addEventListener("durationchange", onDurationChange);
+    return () => video.removeEventListener("durationchange", onDurationChange);
+  }, [localVideoUrl, videoDuration]);
+
+  // ── Extract thumbnail frames for the filmstrip ────────────────────────────
+
+  const extractThumbnails = async (video: HTMLVideoElement, duration: number) => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = 56;
+    canvas.height = 96;
+    const frames: string[] = [];
+
+    for (let i = 0; i < THUMBNAIL_COUNT; i++) {
+      const time = (duration / THUMBNAIL_COUNT) * (i + 0.5);
+      video.currentTime = time;
+      await new Promise<void>((r) =>
+        video.addEventListener("seeked", () => r(), { once: true })
+      );
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      frames.push(canvas.toDataURL("image/jpeg", 0.35));
+    }
+
+    video.currentTime = 0;
+    setThumbnails(frames);
+  };
+
+  // ── Time update — loop playback within trim bounds ────────────────────────
+
+  const handleTimeUpdate = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    setCurrentTime(video.currentTime);
+
+    if (video.currentTime >= trimRef.current.end) {
+      video.pause();
+      video.currentTime = trimRef.current.start;
+      setIsPlaying(false);
+    }
+  }, []);
+
+  // ── Play / Pause ──────────────────────────────────────────────────────────
+
+  const togglePlayback = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      // If cursor is outside trim range, reset to start
+      if (video.currentTime < trimRef.current.start || video.currentTime >= trimRef.current.end) {
+        video.currentTime = trimRef.current.start;
+      }
+      video.play();
+      setIsPlaying(true);
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  }, []);
+
+  // ── Trim-handle drag logic (uses ref → never stale) ───────────────────────
+
+  const handleDragStart = useCallback(
+    (handle: "start" | "end") => (e: React.PointerEvent) => {
+      e.preventDefault();
+      const bar = trimBarRef.current;
+      if (!bar) return;
+
+      const onMove = (ev: PointerEvent) => {
+        const rect = bar.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+        const { duration, start, end } = trimRef.current;
+        const time = ratio * duration;
+
+        if (handle === "start") {
+          const ns = Math.max(0, Math.min(time, end - 1));
+          if (end - ns <= MAX_REEL_DURATION) {
+            setTrimStart(ns);
+            trimRef.current.start = ns;
+          }
+        } else {
+          const ne = Math.min(duration, Math.max(time, start + 1));
+          if (ne - start <= MAX_REEL_DURATION) {
+            setTrimEnd(ne);
+            trimRef.current.end = ne;
+          }
+        }
+      };
+
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+      };
+
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+    },
+    []
+  );
+
+  // ── Submit — trim if needed, then hand file to parent ─────────────────────
+  const handleSubmit = async () => {
+    const sourceFile = recordedFile || videoFile;
+    if (!sourceFile) {
+      toast.error("No video found. Please record or upload a video first.");
+      return;
+    }
+
+    // Use the best available duration estimate
+    const effectiveDuration = videoDuration > 0 ? videoDuration : (durationFromRecorder || MAX_REEL_DURATION);
+    const selectedDuration = videoDuration > 0 ? (trimEnd - trimStart) : effectiveDuration;
+
+    // If duration is unknown or within limit → upload original directly
+    // Be slightly more lenient with the limit (0.5s buffer)
+    const fullRange =
+      videoDuration === 0 || (
+        effectiveDuration <= MAX_REEL_DURATION + 0.5 &&
+        trimStart < 0.5 &&
+        trimEnd >= effectiveDuration - 0.5
+      );
+
+    if (fullRange) {
+      console.log("[VideoEditor] Uploading original file, duration:", effectiveDuration);
+      onSubmit({
+        category,
+        videoFile: sourceFile,
+        duration: Math.round(effectiveDuration),
+        lat: capturedLocation?.lat,
+        lng: capturedLocation?.lng,
+        isLive: !!recordedFile,
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    try {
+      console.log("[VideoEditor] Attempting fast client-side trim via FFmpeg WebAssembly...");
+      const trimmed = await trimVideoFFmpeg(
+        sourceFile,
+        trimStart,
+        trimEnd,
+        (p) => setExportProgress(p)
+      );
+      console.log("[VideoEditor] FFmpeg transcode trim successful");
+      onSubmit({
+        category,
+        videoFile: trimmed,
+        duration: Math.round(selectedDuration),
+        lat: capturedLocation?.lat,
+        lng: capturedLocation?.lng,
+        isLive: !!recordedFile,
+      });
+    } catch (ffmpegErr) {
+      console.warn("[VideoEditor] FFmpeg Wasm trim failed, falling back to real-time playback recording:", ffmpegErr);
+      
+      if (!videoRef.current) {
+        setIsExporting(false);
+        return;
+      }
+
+      try {
+        const trimmed = await trimVideoRealTime(
+          videoRef.current,
+          trimStart,
+          trimEnd,
+          (p) => setExportProgress(p)
+        );
+        onSubmit({
+          category,
+          videoFile: trimmed,
+          duration: Math.round(selectedDuration),
+          lat: capturedLocation?.lat,
+          lng: capturedLocation?.lng,
+          isLive: !!recordedFile,
+        });
+      } catch (err) {
+        console.error("Trim fallback failed, uploading original:", err);
+        // Final fallback: upload original file with metadata
+        onSubmit({
+          category,
+          videoFile: sourceFile,
+          duration: Math.round(selectedDuration),
+          lat: capturedLocation?.lat,
+          lng: capturedLocation?.lng,
+          isLive: !!recordedFile,
+        });
+      }
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // ── Derived layout values ─────────────────────────────────────────────────
+
+  const trimmedDuration = trimEnd - trimStart;
+  const leftPct = videoDuration > 0 ? (trimStart / videoDuration) * 100 : 0;
+  const rightPct = videoDuration > 0 ? ((videoDuration - trimEnd) / videoDuration) * 100 : 0;
+  const playheadPct = videoDuration > 0 ? (currentTime / videoDuration) * 100 : 0;
+  const needsTrimming = videoDuration > MAX_REEL_DURATION;
+  // Allow upload if: (1) we have a video file (even if duration is unknown), OR (2) normal trim range
+  const hasVideoFile = !!(recordedFile || videoFile);
+  const canUpload = hasVideoFile && !isExporting && (
+    videoDuration === 0 || (trimmedDuration >= 1 && trimmedDuration <= MAX_REEL_DURATION)
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: Recording mode
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (showRecorder) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black">
+        <LiveVideoRecorder
+          onRecordingComplete={handleRecordingComplete}
+          onCancel={onBack}
+        />
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: Trim + Preview mode
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+      {/* ── Top Bar ─────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
+        <Button variant="ghost" size="sm" onClick={onBack}>
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Back
+        </Button>
+
+        <div className="flex items-center gap-1.5 text-sm">
+          <Scissors className="h-4 w-4 text-muted-foreground" />
+          <span
+            className={cn(
+              "font-semibold tabular-nums",
+              trimmedDuration > MAX_REEL_DURATION ? "text-destructive" : "text-foreground"
+            )}
+          >
+            {trimmedDuration.toFixed(1)}s
+          </span>
+          <span className="text-muted-foreground">/ {MAX_REEL_DURATION}s</span>
+        </div>
+
+        <Button size="sm" onClick={handleSubmit} disabled={!canUpload}>
+          {isExporting ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              {exportProgress > 0 ? `${exportProgress}%` : "Trimming…"}
+            </>
+          ) : (
+            <>
+              <Upload className="h-4 w-4 mr-1" />
+              Upload
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* ── Video Preview ───────────────────────────────────────────────── */}
+      <div
+        className="flex-1 relative bg-black/95 md:bg-black/40 flex items-center justify-center cursor-pointer overflow-hidden p-4 md:p-10"
+        onClick={togglePlayback}
+      >
+        <div className="relative h-full aspect-[9/16] bg-black shadow-[0_0_50px_rgba(0,0,0,0.5)] md:rounded-[3rem] overflow-hidden md:border-[8px] border-muted/20 flex items-center justify-center group">
+          {localVideoUrl ? (
+            <video
+              ref={videoRef}
+              src={localVideoUrl}
+              className="h-full w-full object-cover"
+              onLoadedMetadata={handleLoadedMetadata}
+              onTimeUpdate={handleTimeUpdate}
+              onEnded={() => setIsPlaying(false)}
+              playsInline
+              muted
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-4 text-white/20">
+              <Loader2 className="h-10 w-10 animate-spin" />
+              <p>Loading preview...</p>
+            </div>
+          )}
+
+          {/* Play overlay (visible when paused) */}
+          {localVideoUrl && !isPlaying && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20 transition-colors group-hover:bg-black/10">
+              <div className="h-20 w-20 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center shadow-2xl border border-white/10 transform transition-transform group-active:scale-90">
+                <Play className="h-9 w-9 text-white fill-white ml-1.5" />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Trim Bar (WhatsApp-style filmstrip with drag handles) ────── */}
+      {videoDuration > 0 && (
+        <div className="px-4 pt-3 pb-5 bg-background border-t border-border space-y-2">
+          {needsTrimming && (
+            <p className="text-xs text-center text-amber-500 font-medium">
+              Video is {videoDuration.toFixed(1)}s — drag handles to select up to {MAX_REEL_DURATION}s
+            </p>
+          )}
+
+          <div className="relative h-14 touch-none" ref={trimBarRef}>
+            {/* Filmstrip thumbnails */}
+            <div className="absolute inset-0 flex rounded-lg overflow-hidden">
+              {thumbnails.length > 0
+                ? thumbnails.map((src, i) => (
+                  <img
+                    key={i}
+                    src={src}
+                    alt=""
+                    className="h-full flex-1 object-cover"
+                    draggable={false}
+                  />
+                ))
+                : <div className="h-full w-full bg-muted animate-pulse rounded-lg" />
+              }
+            </div>
+
+            {/* Dimmed regions outside trim range */}
+            <div
+              className="absolute top-0 bottom-0 left-0 bg-black/60 rounded-l-lg pointer-events-none"
+              style={{ width: `${leftPct}%` }}
+            />
+            <div
+              className="absolute top-0 bottom-0 right-0 bg-black/60 rounded-r-lg pointer-events-none"
+              style={{ width: `${rightPct}%` }}
+            />
+
+            {/* Selected region border */}
+            <div
+              className="absolute top-0 bottom-0 border-2 border-primary pointer-events-none"
+              style={{ left: `${leftPct}%`, right: `${rightPct}%` }}
+            />
+
+            {/* Left trim handle */}
+            <div
+              className="absolute top-0 bottom-0 z-10 flex items-center justify-center cursor-ew-resize"
+              style={{ left: `${leftPct}%`, width: 20, transform: "translateX(-10px)" }}
+              onPointerDown={handleDragStart("start")}
+            >
+              <div className="h-8 w-1.5 bg-primary rounded-full shadow-lg" />
+            </div>
+
+            {/* Right trim handle */}
+            <div
+              className="absolute top-0 bottom-0 z-10 flex items-center justify-center cursor-ew-resize"
+              style={{ left: `${100 - rightPct}%`, width: 20, transform: "translateX(-10px)" }}
+              onPointerDown={handleDragStart("end")}
+            >
+              <div className="h-8 w-1.5 bg-primary rounded-full shadow-lg" />
+            </div>
+
+            {/* Playhead */}
+            {isPlaying && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-white z-20 pointer-events-none shadow"
+                style={{ left: `${playheadPct}%` }}
+              />
+            )}
+          </div>
+
+          {/* Time labels */}
+          <div className="flex justify-between text-[11px] text-muted-foreground tabular-nums px-0.5">
+            <span>{formatTime(trimStart)}</span>
+            <span>{formatTime(trimEnd)}</span>
+          </div>
+        </div>
+      )}
+      {isExporting && (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
+          <div className="bg-card p-10 rounded-[3rem] shadow-2xl border border-primary/20 flex flex-col items-center gap-6 max-w-sm w-full text-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-30" />
+            
+            <div className="relative">
+              <CircularProgress 
+                value={exportProgress} 
+                size={120} 
+                strokeWidth={8} 
+                className="text-primary drop-shadow-[0_0_10px_rgba(238,125,48,0.2)]" 
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-xl font-bold tabular-nums">{exportProgress}%</span>
+              </div>
+            </div>
+            
+            <div className="space-y-2 relative z-10">
+              <h3 className="text-xl font-bold tracking-tight">Trimming Video</h3>
+              <p className="text-sm text-muted-foreground">Preparing your action-packed coastal reel...</p>
+            </div>
+
+            <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-[10px] font-bold text-primary uppercase tracking-widest animate-pulse">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Zuru Editor Active</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Format seconds to M:SS */
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Trim a video file using WebAssembly-based FFmpeg.
+ * Slices the video programmatically in milliseconds.
+ */
+async function trimVideoFFmpeg(
+  videoFile: File,
+  start: number,
+  end: number,
+  onProgress?: (pct: number) => void
+): Promise<File> {
+  const ffmpeg = await loadFFmpeg();
+
+  const fileExt = videoFile.name.substring(videoFile.name.lastIndexOf('.')) || '.mp4';
+  const inputName = `input${fileExt}`;
+  const outputName = 'output.mp4';
+
+  // Write file to virtual FS
+  await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
+
+  if (onProgress) {
+    ffmpeg.on('progress', ({ progress }) => {
+      onProgress(Math.min(99, Math.round(progress * 100)));
+    });
+  }
+
+  try {
+    // Slice/trim the video. We re-encode to h264/aac to ensure web-safety and keyframe accuracy.
+    await ffmpeg.exec([
+      '-ss', start.toFixed(2),
+      '-to', end.toFixed(2),
+      '-i', inputName,
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '28',
+      '-c:a', 'aac',
+      '-movflags', '+faststart',
+      outputName
+    ]);
+
+    // Read result
+    const data = await ffmpeg.readFile(outputName);
+    const blob = new Blob([data as any], { type: 'video/mp4' });
+
+    return new File([blob], 'reel-trimmed.mp4', { type: 'video/mp4' });
+  } finally {
+    // Cleanup virtual files
+    try {
+      await ffmpeg.deleteFile(inputName);
+      await ffmpeg.deleteFile(outputName);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+    // Remove listener to prevent memory leak
+    // @ts-ignore - ffmpeg.off accepts one arg at runtime
+    ffmpeg.off('progress');
+  }
+}
+
+/**
+ * Trim a video element's playback range to a new File using captureStream.
+ * Falls back by rejecting if captureStream is unavailable.
+ */
+function trimVideoRealTime(
+  video: HTMLVideoElement,
+  start: number,
+  end: number,
+  onProgress?: (pct: number) => void
+): Promise<File> {
+  return new Promise((resolve, reject) => {
+    // captureStream may not exist in all browsers
+    const captureStream =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (video as any).captureStream || (video as any).mozCaptureStream;
+    if (!captureStream) {
+      reject(new Error("captureStream not supported"));
+      return;
+    }
+
+    const stream: MediaStream = captureStream.call(video);
+    const mimeTypes = [
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm",
+    ];
+    const mimeType =
+      mimeTypes.find((t) => MediaRecorder.isTypeSupported(t)) || "video/webm";
+
+    const recorder = new MediaRecorder(stream, { mimeType });
+    const chunks: Blob[] = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: mimeType });
+      const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+      resolve(new File([blob], `reel-trimmed.${ext}`, { type: mimeType }));
+    };
+
+    recorder.onerror = () => reject(new Error("MediaRecorder error"));
+
+    // Seek to start, then play + record until end
+    video.currentTime = start;
+
+    const onSeeked = async () => {
+      video.removeEventListener("seeked", onSeeked);
+
+      // Disable high playback rate; it causes dropped frames and stalls on mobile browsers
+      video.playbackRate = 1.0;
+      video.muted = true; // Ensure muted for autoplay policies
+
+      try {
+        await video.play();
+      } catch (err) {
+        console.error("Playback failed during trim:", err);
+        reject(new Error("Could not play video for trimming."));
+        return;
+      }
+
+      recorder.start();
+
+      const durationToRecord = end - start;
+      const MAX_TRIM_TIME_MS = (durationToRecord * 1000) + 5000; // 5s buffer
+      const startTimeMs = Date.now();
+
+      const poll = () => {
+        const elapsed = video.currentTime - start;
+        const progress = Math.min(99, Math.round((elapsed / durationToRecord) * 100));
+
+        if (onProgress) onProgress(progress);
+
+        const realTimeElapsed = Date.now() - startTimeMs;
+        const timedOut = realTimeElapsed > MAX_TRIM_TIME_MS;
+
+        if (video.currentTime >= end || timedOut) {
+          if (timedOut) {
+            console.warn("[VideoEditor] Trimming timed out, stopping early.");
+          }
+          video.pause();
+          if (recorder.state === "recording") recorder.stop();
+        } else {
+          // If video paused unexpectedly (buffering), try to resume
+          if (video.paused && video.currentTime < end) {
+            video.play().catch(() => {});
+          }
+          requestAnimationFrame(poll);
+        }
+      };
+      
+      poll();
+    };
+
+    video.addEventListener("seeked", onSeeked, { once: true });
+  });
+}

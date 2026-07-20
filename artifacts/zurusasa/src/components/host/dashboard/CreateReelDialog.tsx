@@ -1,0 +1,605 @@
+import { useEffect, useState, useRef } from "react";
+import { format } from "date-fns";
+import { 
+    Plus, Video, Image, DollarSign, FolderOpen, 
+    Calendar as CalendarIcon, Clock, Bell, CheckCircle2, 
+    Loader2, Sparkles 
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { MiniVideoEditor, VideoEditorSubmitData } from "@/components/video-editor";
+import { categories, locations } from "@/data/hostConstants";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useAuth } from "@/components/AuthProvider";
+import { uploadToCloudinary } from "@/lib/cloudinaryUpload";
+import { CircularProgress } from "@/components/ui/CircularProgress";
+import { REMINDER_INTERVAL_OPTIONS, ReminderInterval } from "@/types/events";
+import { cn } from "@/lib/utils";
+
+interface CreateReelDialogProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}
+
+export const CreateReelDialog = ({ open, onOpenChange }: CreateReelDialogProps) => {
+    const [selectedCategory, setSelectedCategory] = useState<string>("");
+    const [showVideoEditor, setShowVideoEditor] = useState(false);
+    const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [location, setLocation] = useState("");
+    const [price, setPrice] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [optimizationProgress, setOptimizationProgress] = useState<number | null>(null);
+    const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    
+    // Event specific state
+    const [eventDate, setEventDate] = useState<Date | undefined>(undefined);
+    const [eventTime, setEventTime] = useState("12:00");
+    const [reminderIntervals, setReminderIntervals] = useState<ReminderInterval[]>(["24h", "1h"]);
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const { user } = useAuth();
+
+    // Warm up Supabase and Cloudinary
+    useEffect(() => {
+        if (open) {
+            // Lightweight query to "wake up" the Supabase session
+            supabase.from("experiences").select("id").limit(1).then(() => {
+                console.log("[CreateReelDialog] Supabase connection warmed up");
+            });
+        }
+    }, [open]);
+
+    const handleCategoryChange = (value: string) => {
+        setSelectedCategory(value);
+    };
+
+
+
+    const handleDialogClose = (newOpen: boolean) => {
+        onOpenChange(newOpen);
+        if (!newOpen) {
+            setSelectedCategory("");
+            setSelectedVideoFile(null);
+        }
+    };
+
+    const handleStartRecording = () => {
+        if (selectedCategory) {
+            setShowVideoEditor(true);
+        }
+    };
+
+    const handleUploadFromGallery = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && file.type.startsWith("video/")) {
+            setSelectedVideoFile(file);
+            setShowVideoEditor(true);
+        }
+    };
+
+    const handleEditorSubmit = async (data: VideoEditorSubmitData) => {
+        if (!user) {
+            toast.error("You must be signed in to publish a reel");
+            return;
+        }
+        if (!data.videoFile) {
+            toast.error("No video to upload. Please record or select a video.");
+            return;
+        }
+        setIsSubmitting(true);
+        setUploadStatus("uploading");
+        setErrorMessage(null);
+        let createdExperienceId: string | null = null;
+        try {
+            const finalVideoFile = data.videoFile;
+
+            // Step 1: Create Experience record
+            const { data: exp, error: expError } = await supabase
+                .from("experiences")
+                .insert({
+                    user_id: user.id,
+                    category: selectedCategory,
+                    entity_name: user.user_metadata?.full_name || "Local Experience",
+                    title: title.trim(),
+                    location: location.trim(),
+                    current_price: parseFloat(price) || 0,
+                    description: description.trim()
+                })
+                .select()
+                .single();
+
+            if (expError) {
+                throw new Error(`Experience creation failed: ${expError.message}`);
+            }
+            createdExperienceId = exp.id;
+
+            // Step 2: Upload video to Cloudinary
+            setOptimizationProgress(0);
+            let cloudinaryResult;
+            try {
+                cloudinaryResult = await uploadToCloudinary(finalVideoFile, {
+                    resourceType: "video",
+                    folder: "reels",
+                    onProgress: (percent) => setOptimizationProgress(percent)
+                });
+            } catch (err: any) {
+                setOptimizationProgress(null);
+                throw new Error("Cloudinary upload failed: " + (err?.message || err));
+            }
+            setOptimizationProgress(null);
+
+            if (!cloudinaryResult?.secure_url) {
+                throw new Error("Failed to upload video to Cloudinary");
+            }
+
+            // Step 3: Extract thumbnail (optional, can use Cloudinary transformations)
+            let thumbnailUrl: string | null = null;
+            try {
+                // Use Cloudinary auto-generated thumbnail from the first frame
+                thumbnailUrl = cloudinaryResult.secure_url.replace(/\.([a-z0-9]+)$/i, '.jpg').replace("/upload/", "/upload/so_0,w_400,h_600,c_fill,q_auto,f_jpg/");
+            } catch (thumbErr) {
+                thumbnailUrl = null;
+            }
+
+            // Step 4: Create Reel record
+            const { error: reelError } = await supabase
+                .from("reels")
+                .insert({
+                    user_id: user.id,
+                    experience_id: exp.id,
+                    category: selectedCategory,
+                    video_url: cloudinaryResult.secure_url,
+                    thumbnail_url: thumbnailUrl,
+                    duration: data.duration || 20,
+                    is_live: data.isLive || false,
+                    lat: data.lat,
+                    lng: data.lng,
+                    status: 'active'
+                });
+
+            if (reelError) {
+                throw new Error(`Reel creation failed: ${reelError.message}`);
+            }
+
+            // Step 5: If category is "events", create Event record
+            if (selectedCategory === "events" && eventDate) {
+                const combinedDateTime = new Date(eventDate);
+                const [hours, minutes] = eventTime.split(":");
+                combinedDateTime.setHours(parseInt(hours), parseInt(minutes));
+
+                const { error: eventError } = await supabase
+                    .from("events")
+                    .insert({
+                        user_id: user.id,
+                        title: title.trim(),
+                        description: description.trim(),
+                        location: location.trim(),
+                        price: parseFloat(price) || 0,
+                        event_date: combinedDateTime.toISOString(),
+                        category: "events",
+                        image_url: thumbnailUrl || cloudinaryResult.secure_url, 
+                        notification_intervals: reminderIntervals,
+                        status: "active"
+                    });
+
+                if (eventError) {
+                    console.error("Event creation failed, but reel was published:", eventError);
+                }
+            }
+
+            setUploadStatus("success");
+            toast.success("Reel published successfully!");
+            setShowVideoEditor(false);
+            onOpenChange(false);
+            setSelectedVideoFile(null);
+            setSelectedCategory("");
+            setTitle("");
+            setDescription("");
+            setLocation("");
+            setPrice("");
+            setEventDate(undefined);
+            setEventTime("12:00");
+            setReminderIntervals(["24h", "1h"]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (error: any) {
+            // Rollback/cleanup: Delete the experience row we just created if later steps failed
+            if (createdExperienceId) {
+                console.log("Rolling back experience creation due to later-stage failure, id:", createdExperienceId);
+                await supabase.from("experiences").delete().eq("id", createdExperienceId);
+            }
+            setUploadStatus("error");
+            setErrorMessage(error.message || "Something went wrong while publishing your reel.");
+            toast.error(error.message || "Failed to publish reel");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Render Video Editor Fullscreen if active
+    if (showVideoEditor && selectedCategory) {
+        return (
+            <MiniVideoEditor
+                category={selectedCategory}
+                videoFile={selectedVideoFile}
+                onBack={() => {
+                    setShowVideoEditor(false);
+                    setSelectedVideoFile(null);
+                }}
+                onSubmit={handleEditorSubmit}
+            />
+        );
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={handleDialogClose}>
+            <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl sm:rounded-3xl">
+                <DialogHeader>
+                    <DialogTitle className="font-display">
+                        Create New Reel
+                    </DialogTitle>
+                </DialogHeader>
+
+                {uploadStatus === "uploading" && optimizationProgress !== null && (
+                    <div className="fixed inset-0 z-[100] bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
+                        <div className="bg-card/50 p-10 rounded-[3rem] shadow-2xl border border-primary/20 flex flex-col items-center gap-8 max-w-sm w-full text-center relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-50" />
+                            
+                            <div className="relative">
+                                <CircularProgress 
+                                    value={optimizationProgress} 
+                                    size={140} 
+                                    strokeWidth={10} 
+                                    className="text-primary drop-shadow-[0_0_15px_rgba(238,125,48,0.3)]" 
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-2xl font-bold tabular-nums">{optimizationProgress}%</span>
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-3 relative z-10">
+                                <h3 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+                                    {optimizationProgress < 40 ? "Analyzing pixels..." : 
+                                     optimizationProgress < 80 ? "Optimizing for mobile..." : 
+                                     "Wrapping up your reel..."}
+                                </h3>
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                    Almost there! We're making sure your coastal adventure looks stunning on every screen.
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-[10px] font-bold text-primary uppercase tracking-widest animate-pulse">
+                                <Sparkles className="h-3.5 w-3.5" />
+                                <span>Zuru Engine Active</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {uploadStatus === "success" && (
+                    <div className="fixed inset-0 z-[101] bg-background/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
+                        <div className="bg-card p-12 rounded-[3.5rem] shadow-2xl border border-green-500/20 flex flex-col items-center gap-8 max-w-sm w-full text-center">
+                            <div className="h-24 w-24 rounded-full bg-green-500/10 flex items-center justify-center relative">
+                                <div className="absolute inset-0 rounded-full bg-green-500/20 animate-ping duration-1000" />
+                                <CheckCircle2 className="h-12 w-12 text-green-500 relative z-10" />
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <h3 className="text-2xl font-bold tracking-tight">Reel Published!</h3>
+                                <p className="text-muted-foreground">
+                                    Your story is now live in the <span className="text-[#EE7D30] font-semibold">ZuruFlow</span> for everyone to discover.
+                                </p>
+                            </div>
+
+                            <Button 
+                                className="w-full h-12 rounded-2xl bg-foreground text-background font-bold hover:scale-[1.02] transition-transform"
+                                onClick={() => {
+                                    setUploadStatus("idle");
+                                    onOpenChange(false);
+                                }}
+                            >
+                                Done
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {uploadStatus === "error" && (
+                    <div className="fixed inset-0 z-[101] bg-background/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-500">
+                        <div className="bg-card p-12 rounded-[3.5rem] shadow-2xl border border-destructive/20 flex flex-col items-center gap-8 max-w-sm w-full text-center">
+                            <div className="h-20 w-20 rounded-full bg-destructive/10 flex items-center justify-center">
+                                <Bell className="h-10 w-10 text-destructive" />
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <h3 className="text-xl font-bold tracking-tight">Publication Paused</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    {errorMessage || "We hit a small snag. Don't worry, your work is safe."}
+                                </p>
+                            </div>
+
+                            <div className="flex flex-col gap-3 w-full">
+                                <Button 
+                                    className="w-full h-12 rounded-2xl bg-[#EE7D30] text-white font-bold"
+                                    onClick={() => setUploadStatus("idle")}
+                                >
+                                    Try Again
+                                </Button>
+                                <Button 
+                                    variant="ghost"
+                                    className="w-full"
+                                    onClick={() => {
+                                        setUploadStatus("idle");
+                                        onOpenChange(false);
+                                    }}
+                                >
+                                    Discard Draft
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {selectedCategory ? (
+                    <form className="space-y-4 mt-4">
+                        {/* Category Selection */}
+                        <div className="space-y-2">
+                            <Label>Category</Label>
+                            <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent
+                                    position="popper"
+                                    side="bottom"
+                                    align="center"
+                                    sideOffset={4}
+                                    className="max-h-60 overflow-y-auto"
+                                >
+                                    {categories.map((cat) => (
+                                        <SelectItem key={cat.value} value={cat.value}>
+                                            {cat.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-4 py-2 border-t border-b border-border/50">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="title" className="flex items-center gap-1">
+                                            Title <span className="text-destructive">*</span>
+                                        </Label>
+                                        <Input
+                                            id="title"
+                                            placeholder="e.g., Sunset Dhow Cruise"
+                                            value={title}
+                                            onChange={(e) => setTitle(e.target.value)}
+                                            className={cn(!title && "border-orange-500/50")}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label className="flex items-center gap-1">
+                                                Location <span className="text-destructive">*</span>
+                                            </Label>
+                                            <Select value={location} onValueChange={setLocation}>
+                                                <SelectTrigger className={cn(!location && "border-orange-500/50")}>
+                                                    <SelectValue placeholder="Select" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {locations.map((loc) => (
+                                                        <SelectItem key={loc} value={loc.toLowerCase()}>
+                                                            {loc}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="price" className="flex items-center gap-1">
+                                                Price (KES) <span className="text-destructive">*</span>
+                                            </Label>
+                                            <div className="relative">
+                                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    id="price"
+                                                    type="number"
+                                                    placeholder="0"
+                                                    className={cn("pl-10", !price && "border-orange-500/50")}
+                                                    value={price}
+                                                    onChange={(e) => setPrice(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="description">Description (Optional)</Label>
+                                        <Textarea
+                                            id="description"
+                                            placeholder="Describe your listing..."
+                                            rows={2}
+                                            value={description}
+                                            onChange={(e) => setDescription(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className={cn(
+                                    "border-2 border-dashed border-border rounded-xl p-6 text-center transition-all",
+                                    (!title || !location || !price) ? "opacity-50 pointer-events-none grayscale" : "hover:border-primary/50"
+                                )}>
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                                            <Video className="h-6 w-6 text-primary" />
+                                        </div>
+                                        <p className="font-bold">
+                                            Step 2: Add Your Reel
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {!title || !location || !price 
+                                                ? "Fill in the details above to unlock recording" 
+                                                : "Ready to capture your experience!"}
+                                        </p>
+                                        <div className="flex flex-wrap justify-center gap-2 mt-2">
+                                            <Button type="button" variant="default" size="sm" onClick={handleStartRecording} disabled={!title || !location || !price}>
+                                                <Video className="h-4 w-4 mr-2" />
+                                                Start Recording
+                                            </Button>
+
+                                            <input
+                                                type="file"
+                                                accept="video/*"
+                                                className="hidden"
+                                                ref={fileInputRef}
+                                                onChange={handleFileSelect}
+                                            />
+                                            <Button type="button" variant="outline" size="sm" onClick={handleUploadFromGallery} disabled={!title || !location || !price}>
+                                                <FolderOpen className="h-4 w-4 mr-2" />
+                                                From Gallery
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {selectedCategory === "events" && (
+                                    <div className="space-y-6 pt-2 pb-2">
+                                        <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 space-y-4">
+                                            <div className="flex items-center gap-2 text-primary">
+                                                <CalendarIcon className="h-4 w-4" />
+                                                <h4 className="text-sm font-bold uppercase tracking-wider">Event Schedule</h4>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs">Date</Label>
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    "w-full justify-start text-left font-normal h-10 rounded-xl bg-background",
+                                                                    !eventDate && "text-muted-foreground"
+                                                                )}
+                                                            >
+                                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                                {eventDate ? format(eventDate, "PPP") : <span>Pick a date</span>}
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0" align="start">
+                                                            <Calendar
+                                                                mode="single"
+                                                                selected={eventDate}
+                                                                onSelect={setEventDate}
+                                                                initialFocus
+                                                                disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs">Time</Label>
+                                                    <div className="relative">
+                                                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                        <Input
+                                                            type="time"
+                                                            className="pl-10 h-10 rounded-xl bg-background"
+                                                            value={eventTime}
+                                                            onChange={(e) => setEventTime(e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-3 pt-2">
+                                                <div className="flex items-center gap-2 text-primary">
+                                                    <Bell className="h-4 w-4" />
+                                                    <h4 className="text-sm font-bold uppercase tracking-wider">Reminder Schedule</h4>
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Subscribers will be notified at these intervals before the event starts.
+                                                </p>
+                                                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                                    {REMINDER_INTERVAL_OPTIONS.map((option) => (
+                                                        <div key={option.value} className="flex items-center space-x-2">
+                                                            <Checkbox 
+                                                                id={`interval-${option.value}`} 
+                                                                checked={reminderIntervals.includes(option.value)}
+                                                                onCheckedChange={(checked) => {
+                                                                    if (checked) {
+                                                                        setReminderIntervals([...reminderIntervals, option.value]);
+                                                                    } else {
+                                                                        setReminderIntervals(reminderIntervals.filter(i => i !== option.value));
+                                                                    }
+                                                                }}
+                                                            />
+                                                            <label
+                                                                htmlFor={`interval-${option.value}`}
+                                                                className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                                            >
+                                                                {option.label}
+                                                            </label>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                    <div className="flex gap-3 pt-4">
+                                        <Button type="button" variant="outline" className="flex-1" onClick={() => handleDialogClose(false)}>
+                                            Cancel
+                                        </Button>
+                                    </div>
+                    </form>
+                ) : (
+                    <div className="py-8 text-center text-muted-foreground mt-4">
+                        {/* Category Selection for when empty */}
+                        <div className="space-y-2 mb-8 text-left">
+                            <Label>Category</Label>
+                            <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent
+                                    position="popper"
+                                    side="bottom"
+                                    align="center"
+                                    sideOffset={4}
+                                    className="max-h-60 overflow-y-auto"
+                                >
+                                    {categories.map((cat) => (
+                                        <SelectItem key={cat.value} value={cat.value}>
+                                            {cat.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <Video className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                        <p>Select a category to get started</p>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+};

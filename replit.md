@@ -1,45 +1,48 @@
-# [Project name]
+# ZuruSasa
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
-
-## Run & Operate
-
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+A travel-booking platform that lets users discover and book coastal Kenya experiences through TikTok-style video reels. Hosts create listings (hotels, villas, boats, tours, events); guests browse vertical reel feeds, save favorites, and book or enquire.
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- **Frontend**: React 18 + Vite + TypeScript, ported from Vercel → Replit pnpm workspace
+- **Backend**: Supabase (PostgreSQL + Auth + Storage + Edge Functions)
+- **Payments**: Paystack (KES payments), Stripe (additional payment support)
+- **Media**: Cloudinary (video/image uploads), HLS.js (adaptive video playback), @ffmpeg (client-side trimming)
+- **UI**: Tailwind CSS v3, Radix UI, Shadcn components
 
-## Where things live
+## Artifact
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/zurusasa/` — main web app (`@workspace/zurusasa`)
+  - Preview path: `/`
+  - Workflow: `artifacts/zurusasa: web`
 
-## Architecture decisions
+## Environment Secrets Required
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+| Key | Purpose |
+|-----|---------|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public key |
+| `VITE_CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name for media uploads |
+| `VITE_CLOUDINARY_UPLOAD_PRESET` | Cloudinary unsigned upload preset |
 
-## Product
+## Key Routes
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+| Path | Page |
+|------|------|
+| `/` | CityPulse (reel feed home) |
+| `/discover` | Discover listings |
+| `/home` | Home |
+| `/bookings` | User bookings |
+| `/saved` | Saved listings |
+| `/profile` | User profile |
+| `/host` | Host dashboard |
+| `/host/listings` | Host listings management |
+| `/host/bookings` | Host booking management |
+| `/host/payouts` | Host payout settings |
+| `/admin` | Admin dashboard |
+| `/auth` | Login / signup |
 
-## User preferences
+## User Preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- Preserve original app features and visual design — orange brand (#E86817), warm neutrals, Instrument Serif + DM Sans fonts
+- No Next.js — this is a Vite + React app

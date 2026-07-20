@@ -1,0 +1,23 @@
+kind = "mobile"
+previewPath = "/zurusasa-mobile/"
+title = "ZuruSasa Mobile"
+version = "1.0.0"
+id = "artifacts/zurusasa-mobile"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/zurusasa-mobile/" ]
+localPort = 19108
+
+[services.development]
+run = "pnpm --filter @workspace/zurusasa-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/zurusasa-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/zurusasa-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "19108"
+BASE_PATH = "/zurusasa-mobile/"

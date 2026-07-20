@@ -1,0 +1,78 @@
+import { Home, Compass, Heart, Calendar, User, LayoutDashboard, ListVideo, MessageSquare, Zap, ShieldCheck } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/AuthProvider";
+
+const unauthGuestNavItems = [
+   { icon: Zap, label: "Pulse", path: "/" },
+   { icon: Compass, label: "Discover", path: "/discover" },
+   { icon: User, label: "Log In", path: "/auth" },
+];
+
+const authGuestNavItems = [
+   { icon: Zap, label: "Pulse", path: "/" },
+   { icon: Compass, label: "Discover", path: "/discover" },
+   { icon: Heart, label: "Saved", path: "/saved" },
+   { icon: Calendar, label: "Reservations", path: "/bookings" },
+   { icon: MessageSquare, label: "Inbox", path: "/profile/messages" },
+   { icon: User, label: "Profile", path: "/profile" },
+];
+
+const hostNavItems = [
+  { icon: LayoutDashboard, label: "Dashboard", path: "/host" },
+  { icon: ListVideo, label: "Listings", path: "/host/listings" },
+  { icon: Calendar, label: "Bookings", path: "/host/bookings" },
+  { icon: MessageSquare, label: "Inbox", path: "/profile/messages" },
+  { icon: User, label: "Profile", path: "/profile" },
+];
+
+export function BottomNav() {
+  const location = useLocation();
+  const { viewMode, user, profile } = useAuth();
+
+  const navItems = viewMode === "host"
+    ? hostNavItems
+    : user
+      ? authGuestNavItems
+      : unauthGuestNavItems;
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-border/50 md:hidden pb-[env(safe-area-inset-bottom)]">
+      <div className="flex items-center justify-around py-2 px-2">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <Link
+              key={item.label}
+              to={item.path}
+              className={cn(
+                "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-all duration-200",
+                isActive
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {item.label === "Profile" && profile?.metadata?.avatar_url ? (
+                <div className={cn(
+                  "h-5 w-5 rounded-full overflow-hidden border border-border transition-transform duration-200",
+                  isActive && "scale-110 border-primary"
+                )}>
+                  <img src={profile.metadata.avatar_url} className="h-full w-full object-cover" alt="" />
+                </div>
+              ) : (
+                <item.icon
+                  className={cn(
+                    "h-5 w-5 transition-transform duration-200",
+                    isActive && "scale-110"
+                  )}
+                  strokeWidth={isActive ? 2.5 : 2}
+                />
+              )}
+              <span className="text-[10px] font-medium">{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
