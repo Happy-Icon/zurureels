@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@capacitor/android": "^8.4.0",
+    "cloudinary": "^2.9.0"
+  }
+}
