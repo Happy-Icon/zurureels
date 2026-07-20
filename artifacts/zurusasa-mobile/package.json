@@ -59,7 +59,7 @@
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo-google-fonts/instrument-serif": "^0.4.1",
     "@supabase/supabase-js": "^2.110.7",
-    "expo-video": "^57.0.1",
+    "expo-video": "^3.0.16",
     "react-native-url-polyfill": "^4.0.0"
   }
 }
