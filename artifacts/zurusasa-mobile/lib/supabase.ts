@@ -65,6 +65,7 @@ export interface ReelRow {
     | 'location'
     | 'current_price'
     | 'price_unit'
+    | 'availability_status'
     | 'metadata'
   > | null;
   host?: Pick<

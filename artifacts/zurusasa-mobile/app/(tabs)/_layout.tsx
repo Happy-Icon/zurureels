@@ -70,6 +70,9 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: 'ZuruFlow',
+          // Web parity: the ZuruFlow feed is immersive — the bottom nav is
+          // hidden there and reappears on Discover/Profile.
+          tabBarStyle: { display: 'none' },
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="play.rectangle" tintColor={color} size={24} />

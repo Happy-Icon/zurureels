@@ -1,2 +1,2 @@
 - [ZuruSasa Supabase app port](zurusasa-port.md) — Vite+React app (not Next.js); frontend was in frontend/ subdir, not root src/; uses Supabase for all backend
-- [ZuruSasa mobile Supabase wiring](zurusasa-mobile.md) — Expo app maps VITE_ Supabase secrets to EXPO_PUBLIC_* in dev/build scripts; email OTP auth; no api-server
+- [ZuruSasa mobile Supabase wiring](zurusasa-mobile.md) — Expo maps VITE_ secrets to EXPO_PUBLIC_*; email OTP; AI chat via city-pulse-ai edge fn; e2e testers need the literal Expo dev URL

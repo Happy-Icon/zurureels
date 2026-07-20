@@ -13,13 +13,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { RAIL_WIDTH, ReelCard, ZURU_ORANGE } from '@/components/ReelCard';
+import { ReelCard, ZURU_ORANGE } from '@/components/ReelCard';
 import { CenteredState } from '@/components/Skeleton';
 import { useColors } from '@/hooks/useColors';
 import { useReels } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
-
-const TAB_BAR_HEIGHT = Platform.OS === 'web' ? 84 : 50;
 
 export default function ZuruFlowScreen() {
   const colors = useColors();
@@ -28,7 +26,6 @@ export default function ZuruFlowScreen() {
   const { height } = useWindowDimensions();
   const { data: reels, isLoading, isError, refetch } = useReels();
   const [activeIndex, setActiveIndex] = useState<number>(0);
-  const listRef = useRef<FlatList<ReelRow>>(null);
 
   const pageHeight = height;
   const topInset = Platform.OS === 'web' ? 14 : insets.top;
@@ -42,36 +39,19 @@ export default function ZuruFlowScreen() {
     },
   );
 
-  const scrollToIndex = useCallback(
-    (index: number) => {
-      const total = reels?.length ?? 0;
-      if (total === 0) return;
-      const clamped = Math.max(0, Math.min(total - 1, index));
-      listRef.current?.scrollToIndex({ index: clamped, animated: true });
-    },
-    [reels?.length],
-  );
-
   const renderItem = useCallback(
     ({ item, index }: { item: ReelRow; index: number }) => (
       <ReelCard
         reel={item}
         isActive={index === activeIndex}
         height={pageHeight}
-        tabBarHeight={TAB_BAR_HEIGHT}
-        index={index}
-        count={reels?.length ?? 0}
-        onScrollToIndex={scrollToIndex}
       />
     ),
-    [activeIndex, pageHeight, reels?.length, scrollToIndex],
+    [activeIndex, pageHeight],
   );
 
-  const topTabs = (
-    <View
-      pointerEvents="box-none"
-      style={[styles.topTabs, { top: topInset + 8, right: RAIL_WIDTH }]}
-    >
+  const topOverlay = (
+    <View pointerEvents="box-none" style={[styles.topBar, { top: topInset + 6 }]}>
       <View style={styles.tabsRow}>
         <View style={styles.tabItem}>
           <Text style={styles.tabActive}>ZuruFlow</Text>
@@ -85,6 +65,17 @@ export default function ZuruFlowScreen() {
           <Text style={styles.tabInactive}>Discover</Text>
         </Pressable>
       </View>
+      <Pressable
+        testID="top-search"
+        onPress={() => router.navigate('/discover')}
+        hitSlop={8}
+        style={({ pressed }) => [
+          styles.searchButton,
+          { opacity: pressed ? 0.75 : 1 },
+        ]}
+      >
+        <Feather name="search" size={19} color="rgba(255,255,255,0.92)" />
+      </Pressable>
     </View>
   );
 
@@ -97,7 +88,7 @@ export default function ZuruFlowScreen() {
             Loading reels…
           </Text>
         </CenteredState>
-        {topTabs}
+        {topOverlay}
       </View>
     );
   }
@@ -121,7 +112,7 @@ export default function ZuruFlowScreen() {
             <Text style={styles.retryText}>Try again</Text>
           </Pressable>
         </CenteredState>
-        {topTabs}
+        {topOverlay}
       </View>
     );
   }
@@ -135,7 +126,7 @@ export default function ZuruFlowScreen() {
             No reels yet — check back soon
           </Text>
         </CenteredState>
-        {topTabs}
+        {topOverlay}
       </View>
     );
   }
@@ -143,7 +134,6 @@ export default function ZuruFlowScreen() {
   return (
     <View style={[styles.fill, { backgroundColor: '#000000' }]}>
       <FlatList
-        ref={listRef}
         testID="reels-feed"
         data={reels}
         keyExtractor={(item) => item.id}
@@ -152,7 +142,6 @@ export default function ZuruFlowScreen() {
         showsVerticalScrollIndicator={false}
         snapToInterval={pageHeight}
         decelerationRate="fast"
-        scrollEnabled={reels.length > 0}
         onViewableItemsChanged={onViewableItemsChanged.current}
         viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
         getItemLayout={(_, index) => ({
@@ -164,7 +153,7 @@ export default function ZuruFlowScreen() {
         maxToRenderPerBatch={2}
         initialNumToRender={1}
       />
-      {topTabs}
+      {topOverlay}
     </View>
   );
 }
@@ -173,23 +162,26 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
   },
-  topTabs: {
+  topBar: {
     position: 'absolute',
     left: 0,
-    zIndex: 20,
+    right: 0,
+    height: 44,
+    zIndex: 30,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   tabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 22,
+    gap: 26,
   },
   tabItem: {
     alignItems: 'center',
   },
   tabActive: {
     color: ZURU_ORANGE,
-    fontSize: 17,
+    fontSize: 16,
     fontFamily: 'DMSans_700Bold',
   },
   tabDot: {
@@ -200,9 +192,19 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   tabInactive: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 17,
-    fontFamily: 'DMSans_500Medium',
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 16,
+    fontFamily: 'DMSans_700Bold',
+  },
+  searchButton: {
+    position: 'absolute',
+    right: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(58,53,48,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stateText: {
     fontSize: 14,

@@ -14,7 +14,7 @@ export function useReels() {
         .from('reels')
         .select(
           `*,
-          experience:experiences(id, title, description, location, current_price, price_unit, metadata),
+          experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
           host:profiles!reels_user_id_profiles_fkey(full_name, verification_status, metadata)`,
         )
         .eq('status', 'active')
