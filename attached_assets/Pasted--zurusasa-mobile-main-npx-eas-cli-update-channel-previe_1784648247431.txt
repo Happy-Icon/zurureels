@@ -1,0 +1,28 @@
+/zurusasa-mobile (main)
+$ npx eas-cli update --channel preview
+√ Provide an update message: ... new book modal
+[expo-cli] React Compiler enabled
+[expo-cli] Starting Metro Bundler
+[expo-cli] iOS node_modules\.pnpm\expo-router@6.0.24_@types+r_fdb348e3fa81840b33cbb7dec3670e5a\node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[expo-cli] Android node_modules\.pnpm\expo-router@6.0.24_@types+r_fdb348e3fa81840b33cbb7dec3670e5a\node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[expo-cli] iOS Bundling failed 801ms node_modules\.pnpm\expo-router@6.0.24_@types+r_fdb348e3fa81840b33cbb7dec3670e5a\node_modules\expo-router\entry.js (1 module)
+[expo-cli] SyntaxError: ..\..\node_modules\.pnpm\expo-router@6.0.24_@types+r_fdb348e3fa81840b33cbb7dec3670e5a\node_modules\expo-router\entry.js: Cannot find module 'babel-preset-expo'
+[expo-cli] Require stack:
+[expo-cli] - C:\Users\ADMIN\Desktop\projects\replit\zurureels\node_modules\.pnpm\@babel+core@7.29.7\node_modules\@babel\core\lib\config\files\plugins.js
+[expo-cli] - C:\Users\ADMIN\Desktop\projects\replit\zurureels\node_modules\.pnpm\@babel+core@7.29.7\node_modules\@babel\core\lib\config\files\index.js
+[expo-cli] - C:\Users\ADMIN\Desktop\projects\replit\zurureels\node_modules\.pnpm\@babel+core@7.29.7\node_modules\@babel\core\lib\index.js
+[expo-cli] - C:\Users\ADMIN\Desktop\projects\replit\zurureels\node_modules\.pnpm\@expo+metro-config@54.0.17_expo@54.0.36\node_modules\@expo\metro-config\build\transform-worker\metro-transform-worker.js
+[expo-cli] - C:\Users\ADMIN\Desktop\projects\replit\zurureels\node_modules\.pnpm\@expo+metro-config@54.0.17_expo@54.0.36\node_modules\@expo\metro-config\build\transform-worker\transform-worker.js
+[expo-cli] - C:\Users\ADMIN\Desktop\projects\replit\zurureels\node_modules\.pnpm\metro@0.83.3\node_modules\metro\src\DeltaBundler\Worker.flow.js
+[expo-cli] - C:\Users\ADMIN\Desktop\projects\replit\zurureels\node_modules\.pnpm\metro@0.83.3\node_modules\metro\src\DeltaBundler\Worker.js
+[expo-cli] - C:\Users\ADMIN\Desktop\projects\replit\zurureels\node_modules\.pnpm\jest-worker@29.7.0\node_modules\jest-worker\build\workers\processChild.js
+[expo-cli]
+[expo-cli] Make sure that all the Babel plugins and presets you are using
+[expo-cli] are defined as dependencies or devDependencies in your package.json
+[expo-cli] file. It's possible that the missing plugin is loaded by a preset
+[expo-cli] you are using that forgot to add the plugin to its dependencies: you
+[expo-cli] can workaround this problem by explicitly adding the missing package
+[expo-cli] to your top-level package.json.
+× Export failed
+C:\Users\ADMIN\Desktop\projects\replit\zurureels\node_modules\.pnpm\expo@54.0.36_@babel+core@7._c2556b824755906c98e8c13d6e06bcc5\node_modules\expo\bin\cli export --output-dir dist --source-maps --dump-assetmap --platform ios --platform android exited with non-zero code: 1
+    Error: update command failed.
