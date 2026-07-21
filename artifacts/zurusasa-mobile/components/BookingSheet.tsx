@@ -303,6 +303,7 @@ export function BookingSheet({
         userId: user.id,
         experienceId: exp.id,
         reelId: reel.id,
+        tripTitle: title,
         amount: price != null ? total : null,
         guests,
         checkIn: from.toISOString(),

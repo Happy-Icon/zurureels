@@ -72,6 +72,7 @@ interface CreateBookingInput {
   userId: string;
   experienceId: string;
   reelId?: string | null;
+  tripTitle: string;
   amount: number | null;
   guests: number;
   checkIn?: string;
@@ -86,7 +87,9 @@ export function useCreateBooking() {
         user_id: input.userId,
         experience_id: input.experienceId,
         reel_id: input.reelId ?? null,
-        amount: input.amount,
+        trip_title: input.tripTitle,
+        // amount + trip_title are NOT NULL in the bookings schema
+        amount: input.amount ?? 0,
         guests: input.guests,
         check_in: input.checkIn ?? new Date().toISOString(),
         check_out:

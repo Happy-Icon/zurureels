@@ -25,3 +25,4 @@ description: How the Expo app reaches the shared Supabase backend and auth choic
 - Paystack card popup is web-only JS → mobile offers "Reserve" (pending booking insert) instead of a card option.
 - Calendar is hand-rolled (no date-fns / react-native-calendars) to stay JS-only and OTA-safe.
 - OTA export trap: `eas update` failed on user's Windows pnpm checkout with "Cannot find module 'babel-preset-expo'" — it was only a transitive dep of expo. Any package referenced in babel.config.js must be a direct devDependency of the mobile package; "bundles on Replit" does not prove a fresh pnpm install elsewhere resolves it.
+- Supabase `bookings` schema: `trip_title` and `amount` are NOT NULL — every direct insert must send both. Schema source of truth = generated types in the web app's integrations/supabase/types.ts (hosted DB, no local migrations).
