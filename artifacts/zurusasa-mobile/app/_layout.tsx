@@ -30,6 +30,7 @@ function RootLayoutNav() {
         options={{ headerShown: false, presentation: 'formSheet' }}
       />
       <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="profile" options={{ headerShown: false }} />
     </Stack>
   );
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -8,25 +9,42 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter, type Href } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/context/AuthContext';
-import { useMyBookings } from '@/lib/queries';
-import { Skeleton } from '@/components/Skeleton';
 import { useColors } from '@/hooks/useColors';
+
+const WEB_APP_URL = 'https://zurusasa.com';
+
+type MenuItem = {
+  key: string;
+  label: string;
+  route: Href;
+  render: (color: string) => React.ReactNode;
+};
 
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile, signOut, loading } = useAuth();
-  const { data: bookings, isLoading: bookingsLoading } = useMyBookings(user?.id);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const bottomPad = Platform.OS === 'web' ? 100 : 80;
 
-  if (!loading && !user) {
+  if (loading) {
+    return (
+      <View style={[styles.fill, styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!user) {
     return (
       <View
         style={[
@@ -61,141 +79,214 @@ export default function ProfileScreen() {
     );
   }
 
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   const displayName =
-    profile?.full_name ?? user?.email?.split('@')[0] ?? 'Traveler';
+    (typeof meta.full_name === 'string' && meta.full_name) || user.email || 'Traveler';
+  const avatarUrl =
+    ((profile?.metadata as { avatar_url?: string } | null)?.avatar_url as string | undefined) ??
+    undefined;
+  const isHost = profile?.role === 'host' || meta.role === 'host';
+
+  const menuItems: MenuItem[] = [
+    {
+      key: 'identity',
+      label: 'Digital Identity Center',
+      route: '/profile/info',
+      render: (c) => (
+        <MaterialCommunityIcons name="shield-check-outline" size={21} color={c} />
+      ),
+    },
+    {
+      key: 'notifications',
+      label: 'Notifications',
+      route: '/profile/notifications',
+      render: (c) => <Feather name="bell" size={20} color={c} />,
+    },
+    {
+      key: 'payments',
+      label: 'Transactions & Receipts',
+      route: '/profile/payments',
+      render: (c) => <Ionicons name="receipt-outline" size={20} color={c} />,
+    },
+    {
+      key: 'security',
+      label: 'Privacy & Security',
+      route: '/profile/security',
+      render: (c) => <Feather name="shield" size={20} color={c} />,
+    },
+    {
+      key: 'support',
+      label: 'Help & Support',
+      route: '/profile/support',
+      render: (c) => <Feather name="help-circle" size={20} color={c} />,
+    },
+    {
+      key: 'settings',
+      label: 'Settings',
+      route: '/profile/settings',
+      render: (c) => <Feather name="settings" size={20} color={c} />,
+    },
+  ];
 
   return (
-    <ScrollView
-      style={[styles.fill, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ paddingTop: topPad + 12, paddingBottom: bottomPad }}
-    >
-      <View style={styles.profileHeader}>
-        <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-          <Text style={styles.avatarText}>
-            {displayName.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <View style={styles.profileInfo}>
-          <View style={styles.nameRow}>
-            <Text style={[styles.name, { color: colors.foreground }]}>
-              {displayName}
-            </Text>
-            {profile?.verification_status === 'verified' ? (
-              <MaterialCommunityIcons
-                name="check-decagram"
-                size={18}
-                color={colors.primary}
-              />
-            ) : null}
-          </View>
-          {user?.email ? (
-            <Text style={[styles.email, { color: colors.mutedForeground }]}>
-              {user.email}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-
-      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-        Reservations
-      </Text>
-
-      {bookingsLoading ? (
-        <View style={styles.bookingList}>
-          <Skeleton style={styles.bookingSkeleton} />
-          <Skeleton style={styles.bookingSkeleton} />
-        </View>
-      ) : !bookings || bookings.length === 0 ? (
-        <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: colors.radius }]}>
-          <Feather name="calendar" size={22} color={colors.mutedForeground} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-            No reservations yet. Find something on the Pulse feed.
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.bookingList}>
-          {bookings.map((b) => (
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
+      <ScrollView
+        style={styles.fill}
+        contentContainerStyle={{ paddingBottom: bottomPad + 24 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <LinearGradient
+          colors={[`${colors.primary}1A`, colors.background]}
+          style={[styles.header, { paddingTop: topPad + 32 }]}
+        >
+          <View style={styles.avatarWrap}>
             <View
-              key={b.id}
               style={[
-                styles.bookingCard,
+                styles.avatar,
                 {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  borderRadius: colors.radius,
+                  backgroundColor: colors.secondary,
+                  borderColor: colors.background,
                 },
               ]}
             >
-              <View style={styles.bookingInfo}>
-                <Text
-                  style={[styles.bookingTitle, { color: colors.foreground }]}
-                  numberOfLines={1}
-                >
-                  {b.experience?.title ?? 'Experience'}
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.avatarImage}
+                  contentFit="cover"
+                  transition={150}
+                />
+              ) : (
+                <Feather name="user" size={44} color={colors.mutedForeground} />
+              )}
+            </View>
+            <Pressable
+              testID="avatar-camera-button"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/profile/info');
+              }}
+              style={({ pressed }) => [
+                styles.cameraBadge,
+                {
+                  backgroundColor: colors.primary,
+                  borderColor: colors.background,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Feather name="camera" size={15} color="#ffffff" />
+            </Pressable>
+          </View>
+          <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
+            {displayName}
+          </Text>
+          {user.email ? (
+            <Text style={[styles.email, { color: colors.mutedForeground }]} numberOfLines={1}>
+              {user.email}
+            </Text>
+          ) : null}
+
+          {/* Stats — hosts only, mirrors web */}
+          {profile?.role === 'host' ? (
+            <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
+              <View style={styles.stat}>
+                <Text style={[styles.statValue, { color: colors.foreground }]}>0</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+                  Reservations
                 </Text>
-                {b.experience?.location ? (
-                  <Text
-                    style={[styles.bookingLoc, { color: colors.mutedForeground }]}
-                    numberOfLines={1}
-                  >
-                    {b.experience.location}
-                  </Text>
-                ) : null}
-                {b.amount != null ? (
-                  <Text style={[styles.bookingAmount, { color: colors.primary }]}>
-                    KSh {Number(b.amount).toLocaleString()}
-                  </Text>
-                ) : null}
               </View>
-              <View
-                style={[
-                  styles.statusPill,
-                  {
-                    backgroundColor:
-                      b.status === 'confirmed' ? '#2e7d3220' : colors.secondary,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusText,
-                    {
-                      color:
-                        b.status === 'confirmed'
-                          ? '#2e7d32'
-                          : colors.secondaryForeground,
-                    },
-                  ]}
-                >
-                  {b.status ?? 'pending'}
+              <View style={styles.stat}>
+                <Text style={[styles.statValue, { color: colors.foreground }]}>0</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+                  Reviews
+                </Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={[styles.statValue, { color: colors.foreground }]}>2</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+                  Saved
                 </Text>
               </View>
             </View>
-          ))}
-        </View>
-      )}
+          ) : null}
+        </LinearGradient>
 
+        {/* Menu */}
+        <View style={styles.menu}>
+          {menuItems.map((item) => (
+            <Pressable
+              key={item.key}
+              testID={`menu-${item.key}`}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push(item.route);
+              }}
+              style={({ pressed }) => [
+                styles.menuRow,
+                { backgroundColor: pressed ? colors.secondary : 'transparent' },
+              ]}
+            >
+              <View style={styles.menuLeft}>
+                {item.render(colors.mutedForeground)}
+                <Text style={[styles.menuLabel, { color: colors.foreground }]}>
+                  {item.label}
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+            </Pressable>
+          ))}
+
+          {/* Sign Out */}
+          <Pressable
+            testID="signout-button"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              signOut();
+            }}
+            style={({ pressed }) => [
+              styles.menuRow,
+              styles.signOutRow,
+              {
+                backgroundColor: pressed ? `${colors.destructive}14` : 'transparent',
+              },
+            ]}
+          >
+            <View style={styles.menuLeft}>
+              <Feather name="log-out" size={20} color={colors.destructive} />
+              <Text style={[styles.menuLabel, { color: colors.destructive }]}>Sign Out</Text>
+            </View>
+          </Pressable>
+        </View>
+
+        {/* Footer */}
+        <Text style={[styles.footer, { color: colors.mutedForeground }]}>ZuruSasa v1.0.0</Text>
+      </ScrollView>
+
+      {/* Floating switch/become host button */}
       <Pressable
-        testID="signout-button"
+        testID="host-mode-button"
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          signOut();
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          WebBrowser.openBrowserAsync(
+            isHost ? `${WEB_APP_URL}/host` : `${WEB_APP_URL}/become-host`,
+          );
         }}
         style={({ pressed }) => [
-          styles.signOutButton,
+          styles.floatingButton,
           {
-            borderColor: colors.border,
-            borderRadius: colors.radius,
-            opacity: pressed ? 0.7 : 1,
+            backgroundColor: colors.primary,
+            bottom: bottomPad + 16,
+            transform: [{ scale: pressed ? 0.97 : 1 }],
           },
         ]}
       >
-        <Feather name="log-out" size={16} color={colors.destructive} />
-        <Text style={[styles.signOutText, { color: colors.destructive }]}>
-          Sign out
+        <Text style={styles.floatingButtonText}>
+          {isHost ? 'Switch to Hosting' : 'Become a Host'}
         </Text>
       </Pressable>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -235,105 +326,115 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'DMSans_700Bold',
   },
-  profileHeader: {
-    flexDirection: 'row',
+  header: {
     alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 16,
-    marginBottom: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 28,
   },
+  avatarWrap: { position: 'relative' },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 4,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
-  avatarText: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontFamily: 'DMSans_700Bold',
-  },
-  profileInfo: { flex: 1, gap: 2 },
-  nameRow: {
-    flexDirection: 'row',
+  avatarImage: { width: '100%', height: '100%' },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
   name: {
+    marginTop: 16,
     fontSize: 24,
     fontFamily: 'InstrumentSerif_400Regular',
+    textAlign: 'center',
   },
   email: {
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'DMSans_600SemiBold',
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  bookingList: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  bookingSkeleton: {
-    height: 76,
-  },
-  bookingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    gap: 10,
-  },
-  bookingInfo: { flex: 1, gap: 2 },
-  bookingTitle: {
-    fontSize: 15,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  bookingLoc: {
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-  },
-  bookingAmount: {
-    fontSize: 13,
-    fontFamily: 'DMSans_700Bold',
-  },
-  statusPill: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  statusText: {
-    fontSize: 12,
-    fontFamily: 'DMSans_500Medium',
-    textTransform: 'capitalize',
-  },
-  emptyCard: {
-    marginHorizontal: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 20,
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 13,
+    marginTop: 4,
+    fontSize: 14,
     fontFamily: 'DMSans_400Regular',
     textAlign: 'center',
   },
-  signOutButton: {
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 48,
+    marginTop: 24,
+    paddingTop: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+  },
+  stat: { alignItems: 'center' },
+  statValue: {
+    fontSize: 22,
+    fontFamily: 'DMSans_600SemiBold',
+  },
+  statLabel: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    marginTop: 2,
+  },
+  menu: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    marginHorizontal: 16,
-    marginTop: 28,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
   },
-  signOutText: {
+  menuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuLabel: {
+    fontSize: 16,
+    fontFamily: 'DMSans_500Medium',
+  },
+  signOutRow: { marginTop: 16 },
+  footer: {
+    textAlign: 'center',
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    padding: 16,
+  },
+  floatingButton: {
+    position: 'absolute',
+    right: 24,
+    borderRadius: 999,
+    paddingHorizontal: 24,
+    paddingVertical: 13,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  floatingButtonText: {
+    color: '#ffffff',
     fontSize: 14,
     fontFamily: 'DMSans_600SemiBold',
   },
