@@ -39,3 +39,8 @@ yarn-error.*
 .vercel
 
 .env
+
+# EAS local signing credentials must ship with this (private) repo
+!credentials/
+!credentials/android/
+!credentials/android/release.keystore
