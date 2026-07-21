@@ -74,6 +74,8 @@ interface CreateBookingInput {
   reelId?: string | null;
   amount: number | null;
   guests: number;
+  checkIn?: string;
+  checkOut?: string;
 }
 
 export function useCreateBooking() {
@@ -86,6 +88,9 @@ export function useCreateBooking() {
         reel_id: input.reelId ?? null,
         amount: input.amount,
         guests: input.guests,
+        check_in: input.checkIn ?? new Date().toISOString(),
+        check_out:
+          input.checkOut ?? new Date(Date.now() + 86_400_000).toISOString(),
         status: 'pending',
       });
       if (error) throw new Error(error.message);

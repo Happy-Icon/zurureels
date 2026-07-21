@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
   Pressable,
   Share,
   StyleSheet,
@@ -15,12 +13,12 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import {
-  useCreateBooking,
   useReelInteractions,
   useToggleFollow,
   useToggleLike,
   useToggleSave,
 } from '@/lib/queries';
+import { BookingSheet } from '@/components/BookingSheet';
 import type { ReelRow } from '@/lib/supabase';
 
 const ZURU_ORANGE = '#EE7D30';
@@ -58,11 +56,11 @@ interface ReelGridCardProps {
 export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
   const router = useRouter();
   const { user } = useAuth();
-  const createBooking = useCreateBooking();
   const toggleLike = useToggleLike();
   const toggleSave = useToggleSave();
   const toggleFollow = useToggleFollow();
   const [booked, setBooked] = useState(false);
+  const [bookingOpen, setBookingOpen] = useState(false);
 
   const hostId = reel.user_id ?? null;
   const { data: inter } = useReelInteractions(reel.id, hostId, user?.id, true);
@@ -125,28 +123,10 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
     }
   };
 
-  const onBook = async () => {
+  const onBook = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (bookedOut) return;
-    if (!requireAuth() || !user) return;
-    if (!exp?.id || booked || createBooking.isPending) return;
-    try {
-      await createBooking.mutateAsync({
-        userId: user.id,
-        experienceId: exp.id,
-        reelId: reel.id,
-        amount: exp.current_price ?? null,
-        guests: 1,
-      });
-      setBooked(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (err) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(
-        'Booking failed',
-        err instanceof Error ? err.message : 'Please try again.',
-      );
-    }
+    if (bookedOut || !exp?.id) return;
+    setBookingOpen(true);
   };
 
   const height = width * 1.5; // web aspect-[2/3]
@@ -306,7 +286,7 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
         <Pressable
           testID={`grid-book-${reel.id}`}
           onPress={onBook}
-          disabled={bookedOut || booked || createBooking.isPending}
+          disabled={bookedOut}
           style={({ pressed }) => [
             styles.bookButton,
             {
@@ -319,20 +299,23 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
             },
           ]}
         >
-          {createBooking.isPending ? (
-            <ActivityIndicator size="small" color="#ffffff" />
-          ) : (
-            <Text
-              style={[
-                styles.bookText,
-                bookedOut ? { color: 'rgba(255,255,255,0.55)' } : null,
-              ]}
-            >
-              {bookedOut ? 'Fully Booked' : booked ? 'Requested ✓' : 'Book Now'}
-            </Text>
-          )}
+          <Text
+            style={[
+              styles.bookText,
+              bookedOut ? { color: 'rgba(255,255,255,0.55)' } : null,
+            ]}
+          >
+            {bookedOut ? 'Fully Booked' : booked ? 'Booked ✓' : 'Book Now'}
+          </Text>
         </Pressable>
       </View>
+
+      <BookingSheet
+        reel={reel}
+        visible={bookingOpen}
+        onClose={() => setBookingOpen(false)}
+        onSuccess={() => setBooked(true)}
+      />
     </View>
   );
 }

@@ -18,3 +18,9 @@ description: How the Expo app reaches the shared Supabase backend and auth choic
 - Android signing: keystore committed at credentials/android/release.keystore + credentials.json (EAS "credentialsSource: local"). SHA-1 8E:E7:E0:5A:52:6C:D2:FC:12:80:04:FE:88:A2:11:B4:65:82:38:90 is registered with Google — losing the keystore or switching to EAS-managed keys breaks Google Sign-In until the new SHA-1 is added. Play App Signing re-signs: its SHA-1 needs adding too at publish time.
 - EAS cloud builds do NOT see repl env vars — EXPO_PUBLIC_* values must be in eas.json `env` blocks (Supabase URL/key are stored as Replit secrets, so the user pastes them; agent can't copy secret values).
 - gitPull/gitPush callbacks RETURN error objects (`{success:false, code:"CLI_ERROR", ...}`) instead of throwing — try/catch won't catch a failed pull; check `.success` explicitly. A pull may report MERGE_CONFLICT yet leave the tree untouched (auto-aborted); verify with `git status` + comparing HEAD vs origin/main SHAs before reacting. A non-force push that succeeds proves no remote commits were lost.
+
+## Booking flow (mobile)
+- Book Now opens a native BookingSheet mirroring web (dates → guests → payment → breakdown → escrow → confirm).
+- M-Pesa works natively: `supabase.functions.invoke('initiate-paystack-stk')` then poll `bookings.status` every 3s (paid/failed, ~20 attempts) — edge functions live on the production Supabase project, no key needed client-side.
+- Paystack card popup is web-only JS → mobile offers "Reserve" (pending booking insert) instead of a card option.
+- Calendar is hand-rolled (no date-fns / react-native-calendars) to stay JS-only and OTA-safe.

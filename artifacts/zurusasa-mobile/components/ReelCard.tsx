@@ -18,7 +18,6 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import {
-  useCreateBooking,
   useEnquire,
   useReelInteractions,
   useToggleFollow,
@@ -26,6 +25,7 @@ import {
   useToggleSave,
 } from '@/lib/queries';
 import { getReelExpiry } from '@/lib/reelExpiry';
+import { BookingSheet } from '@/components/BookingSheet';
 import { ReelInfoSheet } from '@/components/ReelInfoSheet';
 import { ZuruAgentChat } from '@/components/ZuruAgentChat';
 import type { ReelRow } from '@/lib/supabase';
@@ -69,7 +69,6 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const createBooking = useCreateBooking();
   const enquire = useEnquire();
   const toggleLike = useToggleLike();
   const toggleSave = useToggleSave();
@@ -78,6 +77,7 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
   const [muted, setMuted] = useState<boolean>(globalMuted);
   const [infoOpen, setInfoOpen] = useState<boolean>(false);
   const [agentOpen, setAgentOpen] = useState<boolean>(false);
+  const [bookingOpen, setBookingOpen] = useState<boolean>(false);
 
   const hostId = reel.user_id ?? null;
   const { data: inter } = useReelInteractions(
@@ -233,24 +233,10 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
     }
   };
 
-  const onBook = async () => {
+  const onBook = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (bookedOut) return;
-    if (!requireAuth() || !user) return;
-    if (!exp?.id || booked || createBooking.isPending) return;
-    try {
-      await createBooking.mutateAsync({
-        userId: user.id,
-        experienceId: exp.id,
-        reelId: reel.id,
-        amount: exp.current_price ?? null,
-        guests: 1,
-      });
-      setBooked(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    }
+    if (bookedOut || !exp?.id) return;
+    setBookingOpen(true);
   };
 
   const liked = inter?.liked ?? false;
@@ -482,7 +468,7 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
             <Pressable
               testID={`book-button-${reel.id}`}
               onPress={onBook}
-              disabled={bookedOut || booked || createBooking.isPending}
+              disabled={bookedOut}
               style={({ pressed }) => [
                 styles.bookButton,
                 {
@@ -495,22 +481,14 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
                 },
               ]}
             >
-              {createBooking.isPending ? (
-                <ActivityIndicator color="#ffffff" size="small" />
-              ) : (
-                <Text
-                  style={[
-                    styles.bookText,
-                    bookedOut ? { color: 'rgba(255,255,255,0.55)' } : null,
-                  ]}
-                >
-                  {bookedOut
-                    ? 'Fully Booked'
-                    : booked
-                      ? 'Requested ✓'
-                      : 'Book Now'}
-                </Text>
-              )}
+              <Text
+                style={[
+                  styles.bookText,
+                  bookedOut ? { color: 'rgba(255,255,255,0.55)' } : null,
+                ]}
+              >
+                {bookedOut ? 'Fully Booked' : booked ? 'Booked ✓' : 'Book Now'}
+              </Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -535,6 +513,13 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
         reel={reel}
         visible={infoOpen}
         onClose={() => setInfoOpen(false)}
+      />
+
+      <BookingSheet
+        reel={reel}
+        visible={bookingOpen}
+        onClose={() => setBookingOpen(false)}
+        onSuccess={() => setBooked(true)}
       />
 
       <ZuruAgentChat
