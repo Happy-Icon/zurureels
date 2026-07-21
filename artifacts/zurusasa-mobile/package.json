@@ -60,6 +60,7 @@
     "@expo-google-fonts/instrument-serif": "^0.4.1",
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@supabase/supabase-js": "^2.110.7",
+    "expo-updates": "~29.0.19",
     "expo-video": "^3.0.16",
     "react-native-url-polyfill": "^4.0.0"
   }

@@ -6,6 +6,7 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "credentialsSource": "local",
       "android": { "buildType": "apk" },
       "env": {
@@ -16,6 +17,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "credentialsSource": "local",
       "android": { "buildType": "apk" },
       "env": {
@@ -26,6 +28,7 @@
     },
     "production": {
       "autoIncrement": true,
+      "channel": "production",
       "credentialsSource": "local",
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://rjzgzxxdrltlteeshtuw.supabase.co",
