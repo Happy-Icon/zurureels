@@ -14,6 +14,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
+import { signInWithGoogleNatively } from '@/lib/googleNative';
 import * as Linking from 'expo-linking';
 import Svg, { Path } from 'react-native-svg';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -325,7 +326,11 @@ export default function AuthScreen() {
     }
   };
 
-  // Social logins — same Supabase calls as web; native opens an in-app browser.
+  // Social logins. Web keeps Supabase redirect OAuth (unchanged). On Android,
+  // Google uses the NATIVE system account picker (Play services) and the ID
+  // token is exchanged with Supabase via signInWithIdToken — no browser.
+  // Facebook — and Google when the native module isn't in the build (Expo Go,
+  // dev preview) — falls back to the in-app browser flow.
   const handleOAuth = async (provider: 'google' | 'facebook') => {
     resetMessages();
     try {
@@ -339,6 +344,25 @@ export default function AuthScreen() {
         });
         if (err) throw err;
         return;
+      }
+      if (provider === 'google') {
+        const native = await signInWithGoogleNatively();
+        if (native.status === 'success') {
+          const { data, error: err } = await supabase.auth.signInWithIdToken({
+            provider: 'google',
+            token: native.idToken,
+          });
+          if (err) throw err;
+          if (data.user) await routeAfterLogin(data.user.id);
+          return;
+        }
+        if (native.status === 'cancelled') return;
+        if (native.configError) {
+          setError(native.reason);
+          return;
+        }
+        // Native module missing (Expo Go / dev preview): fall through to the
+        // browser-based flow so Google login still works during development.
       }
       const redirectTo = Linking.createURL('/auth');
       const { data, error: err } = await supabase.auth.signInWithOAuth({

@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 
@@ -32,6 +32,7 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colors = useColors();
+  const router = useRouter();
   const { user } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -106,6 +107,16 @@ function ClassicTabLayout() {
             ) : (
               <Feather name="user" size={22} color={color} />
             ),
+        }}
+        listeners={{
+          tabPress: (e) => {
+            // Logged out, the tab reads "Log In" — open the auth screen
+            // directly instead of the profile placeholder.
+            if (!user) {
+              e.preventDefault();
+              router.push('/auth');
+            }
+          },
         }}
       />
     </Tabs>

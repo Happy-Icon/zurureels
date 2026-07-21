@@ -14,9 +14,12 @@
       "backgroundColor": "#e86817"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.zurureels.app"
     },
-    "android": {},
+    "android": {
+      "package": "com.zurureels.app"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -29,7 +32,8 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-video"
+      "expo-video",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,
