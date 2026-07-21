@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   supabase,
   type BookingRow,
+  type ConversationRow,
+  type EventRow,
   type ExperienceRow,
   type ReelRow,
 } from '@/lib/supabase';
@@ -55,7 +57,7 @@ export function useMyBookings(userId: string | undefined) {
         .from('bookings')
         .select(
           `*,
-          experience:experiences(id, title, location, current_price, price_unit)`,
+          experience:experiences(id, title, location, current_price, price_unit, image_url)`,
         )
         .eq('user_id', userId!)
         .order('created_at', { ascending: false })
@@ -253,6 +255,8 @@ export function useToggleSave() {
       queryClient.invalidateQueries({
         queryKey: ['reel-interactions', vars.reelId],
       });
+      // Keep the Saved tab in sync with save/unsave from anywhere in the app.
+      queryClient.invalidateQueries({ queryKey: ['saved-reels'] });
     },
   });
 }
@@ -337,6 +341,118 @@ export function useEnquire() {
         .single();
       if (created.error) throw new Error(created.error.message);
       return created.data.id as string;
+    },
+  });
+}
+
+// ---- Saved tab (mirrors web Saved.tsx: reel_saves -> reels join + event_subscribers) ----
+
+export function useSavedReels(userId: string | undefined) {
+  return useQuery<ReelRow[]>({
+    queryKey: ['saved-reels', userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const saves = await supabase
+        .from('reel_saves')
+        .select('reel_id')
+        .eq('user_id', userId!)
+        .order('created_at', { ascending: false });
+      if (saves.error) throw new Error(saves.error.message);
+      const reelIds = (saves.data ?? []).map((s) => s.reel_id as string);
+      if (reelIds.length === 0) return [];
+
+      const { data, error } = await supabase
+        .from('reels')
+        .select(
+          `*,
+          experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
+          host:profiles!reels_user_id_profiles_fkey(full_name, verification_status, metadata)`,
+        )
+        .in('id', reelIds);
+      if (error) throw new Error(error.message);
+
+      // Preserve most-recently-saved-first ordering from reel_saves.
+      const byId = new Map(
+        ((data ?? []) as unknown as ReelRow[]).map((r) => [r.id, r]),
+      );
+      return reelIds
+        .map((id) => byId.get(id))
+        .filter((r): r is ReelRow => Boolean(r));
+    },
+  });
+}
+
+export function useSavedEvents(userId: string | undefined) {
+  return useQuery<EventRow[]>({
+    queryKey: ['saved-events', userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('event_subscribers')
+        .select('event_id, events(*)')
+        .eq('user_id', userId!)
+        .order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as unknown as { events: EventRow | null }[])
+        .map((row) => row.events)
+        .filter((e): e is EventRow => Boolean(e));
+    },
+  });
+}
+
+// ---- Inbox (mirrors web MessagingSystem conversation list) ----
+
+export function useConversations(userId: string | undefined) {
+  return useQuery<ConversationRow[]>({
+    queryKey: ['conversations', userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const convs = await supabase
+        .from('conversations')
+        .select('id, participant_one, participant_two, last_message_at')
+        .or(`participant_one.eq.${userId},participant_two.eq.${userId}`)
+        .order('last_message_at', { ascending: false });
+      if (convs.error) throw new Error(convs.error.message);
+      const rows = (convs.data ?? []) as {
+        id: string;
+        participant_one: string;
+        participant_two: string;
+        last_message_at: string | null;
+      }[];
+      if (rows.length === 0) return [];
+
+      const otherIds = Array.from(
+        new Set(
+          rows.map((c) =>
+            c.participant_one === userId ? c.participant_two : c.participant_one,
+          ),
+        ),
+      );
+      const profs = await supabase
+        .from('profiles')
+        .select('id, full_name, username, role, metadata')
+        .in('id', otherIds);
+      if (profs.error) throw new Error(profs.error.message);
+      const profById = new Map(
+        (profs.data ?? []).map((p: Record<string, unknown>) => [p.id as string, p]),
+      );
+
+      return rows.map((c) => {
+        const otherId =
+          c.participant_one === userId ? c.participant_two : c.participant_one;
+        const p = profById.get(otherId);
+        const metadata = (p?.metadata ?? null) as { avatar_url?: string } | null;
+        return {
+          ...c,
+          other: {
+            id: otherId,
+            full_name: (p?.full_name as string) || 'Zuru User',
+            username: (p?.username as string) || 'user',
+            role: (p?.role as string) || 'guest',
+            avatar_url: metadata?.avatar_url ?? null,
+          },
+        };
+      });
     },
   });
 }

@@ -34,6 +34,7 @@ export interface ExperienceRow {
   category: string | null;
   availability_status: string | null;
   metadata: Record<string, unknown> | null;
+  image_url?: string | null;
 }
 
 export interface ProfileRow {
@@ -87,6 +88,39 @@ export interface BookingRow {
   created_at?: string | null;
   experience?: Pick<
     ExperienceRow,
-    'id' | 'title' | 'location' | 'current_price' | 'price_unit'
+    'id' | 'title' | 'location' | 'current_price' | 'price_unit' | 'image_url'
   > | null;
+}
+
+export interface EventRow {
+  id: string;
+  title: string | null;
+  description: string | null;
+  category: string | null;
+  event_date: string | null;
+  price: number | null;
+  location?: string | null;
+}
+
+export interface ConversationRow {
+  id: string;
+  participant_one: string;
+  participant_two: string;
+  last_message_at: string | null;
+  other: {
+    id: string;
+    full_name: string;
+    username: string;
+    role: string;
+    avatar_url: string | null;
+  };
+}
+
+export interface MessageRow {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  is_read: boolean | null;
+  created_at: string;
 }

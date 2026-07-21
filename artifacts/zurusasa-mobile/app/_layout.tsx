@@ -29,6 +29,7 @@ function RootLayoutNav() {
         name="auth"
         options={{ headerShown: false, presentation: 'formSheet' }}
       />
+      <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }

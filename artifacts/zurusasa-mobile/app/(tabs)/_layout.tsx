@@ -22,6 +22,24 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'safari', selected: 'safari.fill' }} />
         <Label>Discover</Label>
       </NativeTabs.Trigger>
+      {user ? (
+        <NativeTabs.Trigger name="saved">
+          <Icon sf={{ default: 'heart', selected: 'heart.fill' }} />
+          <Label>Saved</Label>
+        </NativeTabs.Trigger>
+      ) : null}
+      {user ? (
+        <NativeTabs.Trigger name="reservations">
+          <Icon sf={{ default: 'calendar', selected: 'calendar' }} />
+          <Label>Reservations</Label>
+        </NativeTabs.Trigger>
+      ) : null}
+      {user ? (
+        <NativeTabs.Trigger name="inbox">
+          <Icon sf={{ default: 'message', selected: 'message.fill' }} />
+          <Label>Inbox</Label>
+        </NativeTabs.Trigger>
+      ) : null}
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: 'person', selected: 'person.fill' }} />
         <Label>{user ? 'Profile' : 'Log In'}</Label>
@@ -94,6 +112,46 @@ function ClassicTabLayout() {
               <SymbolView name="safari" tintColor={color} size={24} />
             ) : (
               <Feather name="compass" size={22} color={color} />
+            ),
+        }}
+      />
+      {/* Web parity: Saved / Reservations / Inbox only exist for signed-in users. */}
+      <Tabs.Screen
+        name="saved"
+        options={{
+          title: 'Saved',
+          href: user ? undefined : null,
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="heart" tintColor={color} size={24} />
+            ) : (
+              <Feather name="heart" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="reservations"
+        options={{
+          title: 'Reservations',
+          href: user ? undefined : null,
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="calendar" tintColor={color} size={24} />
+            ) : (
+              <Feather name="calendar" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="inbox"
+        options={{
+          title: 'Inbox',
+          href: user ? undefined : null,
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="message" tintColor={color} size={24} />
+            ) : (
+              <Feather name="message-square" size={22} color={color} />
             ),
         }}
       />
