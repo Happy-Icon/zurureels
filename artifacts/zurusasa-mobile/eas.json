@@ -9,8 +9,8 @@
       "credentialsSource": "local",
       "android": { "buildType": "apk" },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "PASTE_YOUR_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://rjzgzxxdrltlteeshtuw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqemd6eHhkcmx0bHRlZXNodHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNDc4MjUsImV4cCI6MjA4MzkyMzgyNX0.rRudHu14sWNALKESz2Wwsjn_40xYaStRUlfdXZFVikA",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "558181052071-rt6sgqhgla022ujl6t3au6ofl34iuh27.apps.googleusercontent.com"
       }
     },
@@ -19,8 +19,8 @@
       "credentialsSource": "local",
       "android": { "buildType": "apk" },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "PASTE_YOUR_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://rjzgzxxdrltlteeshtuw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqemd6eHhkcmx0bHRlZXNodHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNDc4MjUsImV4cCI6MjA4MzkyMzgyNX0.rRudHu14sWNALKESz2Wwsjn_40xYaStRUlfdXZFVikA",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "558181052071-rt6sgqhgla022ujl6t3au6ofl34iuh27.apps.googleusercontent.com"
       }
     },
@@ -28,8 +28,8 @@
       "autoIncrement": true,
       "credentialsSource": "local",
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "PASTE_YOUR_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://rjzgzxxdrltlteeshtuw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqemd6eHhkcmx0bHRlZXNodHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNDc4MjUsImV4cCI6MjA4MzkyMzgyNX0.rRudHu14sWNALKESz2Wwsjn_40xYaStRUlfdXZFVikA",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "558181052071-rt6sgqhgla022ujl6t3au6ofl34iuh27.apps.googleusercontent.com"
       }
     }
