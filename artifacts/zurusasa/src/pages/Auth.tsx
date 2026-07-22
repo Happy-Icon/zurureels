@@ -48,7 +48,7 @@ export default function Auth() {
         }
         // Condition 2: Fully verified profile
         else {
-          navigate(returnTo || "/", { replace: true });
+          navigate(returnTo || "/app", { replace: true });
         }
       }
     };
@@ -133,7 +133,7 @@ export default function Auth() {
         // Condition 2: Has profile
         else {
           toast.success("Welcome back!");
-          navigate(returnTo || "/", { replace: true });
+          navigate(returnTo || "/app", { replace: true });
         }
       }
     } catch (error: any) {
@@ -182,8 +182,8 @@ export default function Auth() {
 
   const handleGoogleLogin = async () => {
     try {
-      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-      const redirectUrl = returnTo ? `${appUrl}/auth?return_to=${encodeURIComponent(returnTo)}` : `${appUrl}/`;
+      const appUrl = window.location.origin;
+      const redirectUrl = returnTo ? `${appUrl}/auth?return_to=${encodeURIComponent(returnTo)}` : `${appUrl}/app`;
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -230,10 +230,10 @@ export default function Auth() {
 
   const handleFacebookLogin = async () => {
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+    const appUrl = window.location.origin;
     const redirectUrl = returnTo
       ? `${appUrl}/auth?return_to=${encodeURIComponent(returnTo)}`
-      : `${appUrl}/`;
+      : `${appUrl}/app`;
 
     if (isMobile) {
       // Try to open the native Facebook app first via deep link

@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Landing from "./pages/Landing";
 import Home from "./pages/Home";
 import Discover from "./pages/Discover";
 import CityPulse from "./pages/CityPulse";
@@ -84,7 +85,12 @@ const App = () => (
             <NativeAppWrapper>
               <Routes>
                 <Route path="/mobile-onboarding" element={<MobileOnboarding />} />
-                <Route path="/" element={<CityPulse />} />
+                <Route path="/" element={<Landing />} />
+                <Route path="/landing" element={<Landing />} />
+                <Route path="/welcome" element={<Landing />} />
+                <Route path="/app" element={<CityPulse />} />
+                <Route path="/feed" element={<CityPulse />} />
+                <Route path="/citypulse" element={<CityPulse />} />
                 <Route path="/discover" element={<Discover />} />
                 <Route path="/host" element={<VerifiedRoute><Host /></VerifiedRoute>} />
                 <Route path="/host/listings" element={<VerifiedRoute><Listings /></VerifiedRoute>} />

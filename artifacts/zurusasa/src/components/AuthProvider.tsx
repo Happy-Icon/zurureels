@@ -69,6 +69,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    window.location.href = import.meta.env.VITE_LANDING_URL || "/";
   };
 
   const role = user

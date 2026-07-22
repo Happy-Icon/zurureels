@@ -88,9 +88,9 @@ const Profile = () => {
     );
   }
 
-  // GUEST VIEW - Redirect automatically to the Auth page instead of showing the interstitial
+  // GUEST VIEW - Redirect automatically to the Landing page
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // AUTHENTICATED VIEW
