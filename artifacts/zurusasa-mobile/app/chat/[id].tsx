@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,11 +12,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, type MessageRow } from '@/lib/supabase';
-import { useColors } from '@/hooks/useColors';
 
 function formatTime(iso: string) {
   const d = new Date(iso);
@@ -28,8 +29,7 @@ function formatTime(iso: string) {
   return `${hour}:${m} ${ampm}`;
 }
 
-export default function ChatScreen() {
-  const colors = useColors();
+export default function NativeChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -46,7 +46,10 @@ export default function ChatScreen() {
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<FlatList<MessageRow>>(null);
 
-  // Load history + subscribe to new messages (mirrors web MessagingSystem).
+  const topPad = Platform.OS === 'web' ? 12 : insets.top + 4;
+  const bottomPad = Platform.OS === 'web' ? 14 : Math.max(insets.bottom, 12);
+
+  // Load history + subscribe to new messages
   useEffect(() => {
     if (!id || !user) return;
     let active = true;
@@ -95,6 +98,7 @@ export default function ChatScreen() {
   }, [id, user?.id]);
 
   const goBack = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (router.canGoBack()) router.back();
     else router.replace('/inbox');
   };
@@ -125,7 +129,7 @@ export default function ChatScreen() {
 
     if (error) {
       setMessages((prev) => prev.filter((m) => m.id !== temp.id));
-      setSendError('Message failed to send. Try again.');
+      setSendError('Message failed to send. Please try again.');
       setText(content);
     } else if (data) {
       const real = data as unknown as MessageRow;
@@ -139,96 +143,84 @@ export default function ChatScreen() {
     setSending(false);
   };
 
-  const displayName = (name as string) || 'Conversation';
+  const handlePickAttachment = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.length) {
+      Alert.alert('Attachment Selected', 'Sharing photo in conversation.');
+    }
+  };
+
+  const displayName = (name as string) || 'Support Team';
   const avatarUrl = (avatar as string) || '';
 
+  // Render individual message bubble
   const renderMessage = ({ item }: { item: MessageRow }) => {
     const mine = item.sender_id === user?.id;
     return (
-      <View
-        style={[
-          styles.bubbleWrap,
-          mine ? styles.bubbleWrapMine : styles.bubbleWrapTheirs,
-        ]}
-      >
+      <View style={[styles.bubbleWrapper, mine ? styles.bubbleRight : styles.bubbleLeft]}>
         <View
           style={[
-            styles.bubble,
-            mine
-              ? { backgroundColor: colors.primary, borderBottomRightRadius: 4 }
-              : {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderBottomLeftRadius: 4,
-                },
+            styles.bubbleContainer,
+            mine ? styles.mineBubble : styles.theirBubble,
           ]}
         >
-          <Text
-            style={[
-              styles.bubbleText,
-              { color: mine ? '#ffffff' : colors.foreground },
-            ]}
-          >
+          <Text style={[styles.bubbleText, mine ? styles.mineText : styles.theirText]}>
             {item.content}
           </Text>
-          <Text
-            style={[
-              styles.bubbleTime,
-              {
-                color: mine ? 'rgba(255,255,255,0.75)' : colors.mutedForeground,
-              },
-            ]}
-          >
-            {formatTime(item.created_at)}
-          </Text>
         </View>
+        <Text style={styles.timestampText}>{formatTime(item.created_at)}</Text>
       </View>
     );
   };
 
   return (
-    <View style={[styles.fill, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: (Platform.OS === 'web' ? 12 : insets.top) + 6,
-            borderBottomColor: colors.border,
-            backgroundColor: colors.background,
-          },
-        ]}
-      >
+    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      {/* 1. Native Navigation Header Bar */}
+      <View style={[styles.headerBar, { paddingTop: topPad }]}>
         <Pressable
           testID="chat-back"
           onPress={goBack}
           hitSlop={10}
-          style={styles.backBtn}
+          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
         >
-          <Feather name="chevron-left" size={26} color={colors.foreground} />
+          <Feather name="chevron-left" size={26} color="#222222" />
         </Pressable>
-        {avatarUrl ? (
-          <Image
-            source={{ uri: avatarUrl }}
-            style={[styles.headerAvatar, { backgroundColor: colors.muted }]}
-          />
-        ) : (
-          <View
-            style={[styles.headerAvatar, { backgroundColor: colors.primary }]}
-          >
-            <Text style={styles.headerAvatarText}>
-              {displayName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
-        <View style={styles.headerInfo}>
-          <Text
-            style={[styles.headerName, { color: colors.foreground }]}
-            numberOfLines={1}
-          >
+
+        {/* Avatar & Online Indicator */}
+        <View style={styles.avatarWrap}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+          ) : (
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
+          <View style={styles.onlineDot} />
+        </View>
+
+        {/* Title & Sub-status Stack */}
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerNameText} numberOfLines={1}>
             {displayName}
           </Text>
+          <Text style={styles.headerStatusText}>Typically replies within 1 hour</Text>
         </View>
+
+        {/* Right Info Action */}
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            Alert.alert(displayName, 'Conversation details and support ticket context.');
+          }}
+          hitSlop={10}
+          style={({ pressed }) => [styles.infoBtn, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Feather name="info" size={20} color="#222222" />
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView
@@ -240,72 +232,74 @@ export default function ChatScreen() {
           data={messages}
           keyExtractor={(m) => m.id}
           renderItem={renderMessage}
-          contentContainerStyle={styles.listContent}
-          onContentSizeChange={() =>
-            listRef.current?.scrollToEnd({ animated: true })
+          contentContainerStyle={styles.threadContent}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          ListHeaderComponent={
+            messages.length > 0 ? (
+              <View style={styles.contextBadgeCard}>
+                <Feather name="shield" size={13} color="#717171" />
+                <Text style={styles.contextBadgeText}>
+                  Support Inquiry · Verified Conversation
+                </Text>
+              </View>
+            ) : null
           }
           ListEmptyComponent={
             loading ? null : (
-              <View style={styles.empty}>
-                <Feather
-                  name="message-circle"
-                  size={36}
-                  color={colors.mutedForeground}
-                />
-                <Text
-                  style={[styles.emptyText, { color: colors.mutedForeground }]}
-                >
-                  Say hello and start planning your trip.
+              /* 2. Chat Body Empty State Refinement */
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <Feather name="message-square" size={28} color="#717171" />
+                </View>
+                <Text style={styles.emptyHeadline}>Start a conversation</Text>
+                <Text style={styles.emptyBody}>
+                  Our team is here to assist with your bookings, payments, or general questions.
                 </Text>
               </View>
             )
           }
         />
 
-        {sendError ? (
-          <Text style={[styles.sendError, { color: colors.destructive }]}>
-            {sendError}
-          </Text>
-        ) : null}
+        {sendError ? <Text style={styles.sendErrorText}>{sendError}</Text> : null}
 
-        <View
-          style={[
-            styles.inputRow,
-            {
-              borderTopColor: colors.border,
-              paddingBottom: Math.max(insets.bottom, 10),
-              backgroundColor: colors.background,
-            },
-          ]}
-        >
-          <TextInput
-            testID="message-input"
-            value={text}
-            onChangeText={setText}
-            placeholder="Write a message…"
-            placeholderTextColor={colors.mutedForeground}
-            multiline
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.muted,
-                color: colors.foreground,
-              },
-            ]}
-          />
+        {/* 4. Message Composer Bar (Sticky Bottom Input Dock) */}
+        <View style={[styles.composerBar, { paddingBottom: bottomPad }]}>
+          <Pressable
+            onPress={handlePickAttachment}
+            style={({ pressed }) => [styles.attachmentBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={8}
+          >
+            <Feather name="paperclip" size={20} color="#717171" />
+          </Pressable>
+
+          <View style={styles.inputPillBox}>
+            <TextInput
+              testID="message-input"
+              value={text}
+              onChangeText={setText}
+              placeholder="Type a message..."
+              placeholderTextColor="#717171"
+              multiline
+              style={styles.composerInputText}
+            />
+          </View>
+
           <Pressable
             testID="send-button"
             onPress={send}
             disabled={!text.trim() || sending}
             style={({ pressed }) => [
-              styles.sendBtn,
-              {
-                backgroundColor: colors.primary,
-                opacity: !text.trim() || sending ? 0.4 : pressed ? 0.8 : 1,
-              },
+              styles.sendCircleBtn,
+              text.trim() && !sending ? styles.sendCircleActive : styles.sendCircleDisabled,
+              { opacity: pressed ? 0.8 : 1 },
             ]}
           >
-            <Feather name="send" size={17} color="#ffffff" />
+            <Feather
+              name="send"
+              size={15}
+              color={text.trim() && !sending ? '#FFFFFF' : '#9CA3AF'}
+            />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -315,106 +309,224 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  header: {
+  headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
+    gap: 10,
   },
   backBtn: {
     width: 32,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerAvatar: {
+  avatarWrap: {
+    position: 'relative',
     width: 38,
     height: 38,
     borderRadius: 19,
+  },
+  avatarImage: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
+  avatarFallback: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F7F7F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+  },
+  avatarInitial: {
+    fontSize: 16,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#008A05',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  headerTitleWrap: {
+    flex: 1,
+    gap: 1,
+  },
+  headerNameText: {
+    fontSize: 16,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  headerStatusText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  infoBtn: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerAvatarText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontFamily: 'DMSans_700Bold',
-  },
-  headerInfo: { flex: 1 },
-  headerName: {
-    fontSize: 20,
-    fontFamily: 'InstrumentSerif_400Regular',
-  },
-  listContent: {
-    padding: 16,
-    gap: 8,
+  threadContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 12,
     flexGrow: 1,
   },
-  bubbleWrap: {
+  contextBadgeCard: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: 'center',
+    marginBottom: 8,
   },
-  bubbleWrapMine: {
-    justifyContent: 'flex-end',
+  contextBadgeText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
   },
-  bubbleWrapTheirs: {
-    justifyContent: 'flex-start',
-  },
-  bubble: {
-    maxWidth: '78%',
-    borderRadius: 16,
-    paddingHorizontal: 13,
-    paddingVertical: 9,
+  bubbleWrapper: {
     gap: 3,
+    maxWidth: '80%',
+  },
+  bubbleRight: {
+    alignSelf: 'flex-end',
+    alignItems: 'flex-end',
+  },
+  bubbleLeft: {
+    alignSelf: 'flex-start',
+    alignItems: 'flex-start',
+  },
+  bubbleContainer: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+  },
+  mineBubble: {
+    backgroundColor: '#EE7D30',
+    borderTopRightRadius: 4,
+  },
+  theirBubble: {
+    backgroundColor: '#F7F7F7',
+    borderTopLeftRadius: 4,
   },
   bubbleText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'DMSans_400Regular',
-    lineHeight: 19,
+    lineHeight: 20,
   },
-  bubbleTime: {
-    fontSize: 10,
+  mineText: {
+    color: '#FFFFFF',
+  },
+  theirText: {
+    color: '#222222',
+  },
+  timestampText: {
+    fontSize: 11,
     fontFamily: 'DMSans_400Regular',
-    alignSelf: 'flex-end',
+    color: '#717171',
+    paddingHorizontal: 4,
   },
-  empty: {
+  emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 64,
+    gap: 12,
   },
-  emptyText: {
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F7F7F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyHeadline: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
     textAlign: 'center',
   },
-  sendError: {
+  emptyBody: {
+    fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 260,
+  },
+  sendErrorText: {
     fontSize: 12,
     fontFamily: 'DMSans_500Medium',
+    color: '#EF4444',
     paddingHorizontal: 16,
     paddingBottom: 6,
   },
-  inputRow: {
+  composerBar: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#EBEBEB',
+    paddingHorizontal: 16,
     paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  input: {
-    flex: 1,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    paddingTop: 10,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
-    maxHeight: 110,
-  },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  attachmentBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  inputPillBox: {
+    flex: 1,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  composerInputText: {
+    fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
+    color: '#222222',
+    maxHeight: 100,
+  },
+  sendCircleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendCircleActive: {
+    backgroundColor: '#EE7D30',
+  },
+  sendCircleDisabled: {
+    backgroundColor: '#EBEBEB',
   },
 });

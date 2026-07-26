@@ -1,70 +1,70 @@
 /**
- * Semantic design tokens synced from the ZuruSasa web app (src/index.css).
- * Orange brand primary, warm neutral surfaces, dark mode supported.
+ * Semantic design tokens for ZuruSasa native app.
+ * Light mode everywhere theme: clean off-white background, crisp dark text,
+ * white surfaces with soft shadows, and warm orange accent (#EE7D30).
  */
 
 const colors = {
   light: {
-    // Legacy aliases
-    text: '#1c1a17',
-    tint: '#e86817',
+    text: '#111827',
+    tint: '#EE7D30',
 
-    background: '#fbfaf9',
-    foreground: '#1c1a17',
+    background: '#FAFAFA',
+    foreground: '#111827',
 
-    card: '#f8f7f6',
-    cardForeground: '#1c1a17',
+    card: '#FFFFFF',
+    cardForeground: '#111827',
 
-    primary: '#e86817',
+    primary: '#EE7D30',
     primaryForeground: '#ffffff',
 
-    secondary: '#f0edeb',
-    secondaryForeground: '#383330',
+    secondary: '#F3F4F6',
+    secondaryForeground: '#1F2937',
 
-    muted: '#f2f0ee',
-    mutedForeground: '#7e7367',
+    muted: '#F9FAFB',
+    mutedForeground: '#6B7280',
 
-    accent: '#dc7c3c',
+    accent: '#EE7D30',
     accentForeground: '#ffffff',
 
-    destructive: '#dc2828',
+    destructive: '#EF4444',
     destructiveForeground: '#ffffff',
 
-    border: '#e5e1dc',
-    input: '#e5e1dc',
+    border: '#E5E7EB',
+    input: '#E5E7EB',
   },
 
+  // Enforce clean Light Mode everywhere for consistent premium visual experience
   dark: {
-    text: '#f4f2f1',
-    tint: '#f1711e',
+    text: '#111827',
+    tint: '#EE7D30',
 
-    background: '#161412',
-    foreground: '#f4f2f1',
+    background: '#FAFAFA',
+    foreground: '#111827',
 
-    card: '#221f1c',
-    cardForeground: '#f4f2f1',
+    card: '#FFFFFF',
+    cardForeground: '#111827',
 
-    primary: '#f1711e',
+    primary: '#EE7D30',
     primaryForeground: '#ffffff',
 
-    secondary: '#332e29',
-    secondaryForeground: '#e8e5e3',
+    secondary: '#F3F4F6',
+    secondaryForeground: '#1F2937',
 
-    muted: '#383330',
-    mutedForeground: '#a3998f',
+    muted: '#F9FAFB',
+    mutedForeground: '#6B7280',
 
-    accent: '#e08b52',
+    accent: '#EE7D30',
     accentForeground: '#ffffff',
 
-    destructive: '#bb2b2b',
+    destructive: '#EF4444',
     destructiveForeground: '#ffffff',
 
-    border: '#383330',
-    input: '#383330',
+    border: '#E5E7EB',
+    input: '#E5E7EB',
   },
 
-  // Synced from web --radius: 0.75rem
-  radius: 12,
+  radius: 16,
 };
 
 export default colors;

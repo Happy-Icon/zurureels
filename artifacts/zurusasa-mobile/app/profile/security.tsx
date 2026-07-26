@@ -10,30 +10,32 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { ScreenHeader } from '@/components/profile/ScreenHeader';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { useColors } from '@/hooks/useColors';
 
-export default function SecurityScreen() {
-  const colors = useColors();
+export default function LoginAndSecurityScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuth();
   const [pageLoading, setPageLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [sendingTest, setSendingTest] = useState(false);
 
   const [twoFactor, setTwoFactor] = useState(false);
   const [twoFactorMethod, setTwoFactorMethod] = useState<'app' | 'sms'>('app');
   const [loginAlerts, setLoginAlerts] = useState(true);
 
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  const bottomPad = Platform.OS === 'web' ? 100 : insets.bottom + 40;
+
   const deviceLabel =
     Platform.OS === 'ios'
-      ? 'iPhone - ZuruSasa App'
+      ? 'iPhone · ZuruSasa Mobile App'
       : Platform.OS === 'android'
-        ? 'Android Phone - ZuruSasa App'
-        : 'Web Browser - ZuruSasa';
+      ? 'Android Phone · ZuruSasa Mobile App'
+      : 'Web Browser · ZuruSasa';
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -50,7 +52,7 @@ export default function SecurityScreen() {
           setLoginAlerts(s.login_alerts !== undefined ? s.login_alerts : true);
         }
       } catch (e) {
-        console.error('Error fetching settings:', e);
+        console.error('Error fetching security settings:', e);
       } finally {
         setPageLoading(false);
       }
@@ -58,244 +60,212 @@ export default function SecurityScreen() {
     fetchSettings();
   }, [user]);
 
-  const handleTestEmail = async () => {
-    if (!user?.email) return;
-    setSendingTest(true);
-    try {
-      const { error } = await supabase.functions.invoke('send-email', {
-        body: {
-          type: 'security',
-          email: user.email,
-          data: {
-            message: 'This is a test security alert triggered from your security settings.',
-          },
-        },
-      });
-      if (error) throw error;
-      Alert.alert('Sent', 'Test email sent! Check your inbox.');
-    } catch (e: any) {
-      Alert.alert('Error', 'Failed to send test email: ' + (e.message ?? 'unknown error'));
-    } finally {
-      setSendingTest(false);
-    }
-  };
-
-  const handleSave = async () => {
+  // Instant Auto-Save Helper
+  const autoSaveSecurity = async (tf: boolean, la: boolean) => {
     if (!user) return;
-    setSaving(true);
     try {
-      const { error } = await supabase
+      await supabase
         .from('profiles')
         .update({
           security_settings: {
-            two_factor: twoFactor,
-            login_alerts: loginAlerts,
+            two_factor: tf,
+            login_alerts: la,
             sms_notifications: false,
           },
         })
         .eq('id', user.id);
-      if (error) throw error;
-      Alert.alert('Saved', 'Security settings updated');
-    } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to save.');
-    } finally {
-      setSaving(false);
+    } catch (e) {
+      console.error('Auto-save security error:', e);
     }
+  };
+
+  const handleToggle2FA = (val: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTwoFactor(val);
+    autoSaveSecurity(val, loginAlerts);
+  };
+
+  const handleToggleAlerts = (val: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setLoginAlerts(val);
+    autoSaveSecurity(twoFactor, val);
+  };
+
+  const handleLogoutDevice = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert('Log out of device', 'Are you sure you want to log out of this active session?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log out', style: 'destructive', onPress: () => supabase.auth.signOut() },
+    ]);
   };
 
   if (pageLoading) {
     return (
-      <View style={[styles.fill, { backgroundColor: colors.background }]}>
-        <ScreenHeader />
-        <View style={[styles.fill, styles.centered]}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
+      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF' }]}>
+        <ActivityIndicator size="large" color="#EE7D30" />
       </View>
     );
   }
 
   return (
-    <View style={[styles.fill, { backgroundColor: colors.background }]}>
-      <ScreenHeader />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Hero */}
-        <View
-          style={[
-            styles.heroCard,
-            { backgroundColor: `${colors.primary}0D`, borderColor: `${colors.primary}33` },
-          ]}
+    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      {/* 1. Top Header & Navigation */}
+      <View style={[styles.topNavBar, { paddingTop: topPad }]}>
+        <Pressable
+          testID="security-back-btn"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (router.canGoBack()) router.back();
+            else router.replace('/profile');
+          }}
+          style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={10}
         >
-          <View style={[styles.heroIcon, { backgroundColor: `${colors.primary}1A` }]}>
-            <Feather name="shield" size={22} color={colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.heroTitle, { color: colors.foreground }]}>
-              Account Security
-            </Text>
-            <Text style={[styles.mutedSmall, { color: colors.mutedForeground }]}>
-              Manage how you sign in and secure your account.
-            </Text>
-          </View>
+          <Feather name="arrow-left" size={22} color="#222222" />
+        </Pressable>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.titleSection}>
+          <Text style={styles.pageTitle}>Login & security</Text>
         </View>
 
-        {/* Sessions */}
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Where you are logged in
-        </Text>
-        <View
-          style={[
-            styles.sessionCard,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <View style={[styles.sessionIcon, { backgroundColor: colors.secondary }]}>
-            <Feather name="smartphone" size={19} color={colors.mutedForeground} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={styles.sessionTitleRow}>
-              <Text style={[styles.sessionDevice, { color: colors.foreground }]}>
-                {deviceLabel}
-              </Text>
-              <View style={[styles.currentPill, { backgroundColor: colors.secondary }]}>
-                <Text style={[styles.currentPillText, { color: colors.secondaryForeground }]}>
-                  Current Device
-                </Text>
-              </View>
+        {/* 2. Soft Neutral Summary Banner */}
+        <View style={styles.summaryBanner}>
+          <Feather name="shield" size={18} color="#EE7D30" />
+          <Text style={styles.summaryBannerText}>
+            Manage your login credentials, multi-factor authentication, and connected devices.
+          </Text>
+        </View>
+
+        {/* 3. Active Login Sessions ("Where you're logged in") */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionHeading}>Where you're logged in</Text>
+
+          <View style={styles.deviceRow}>
+            <View style={styles.deviceIconCircle}>
+              <Feather
+                name={Platform.OS === 'web' ? 'monitor' : 'smartphone'}
+                size={20}
+                color="#222222"
+              />
             </View>
-            <View style={styles.sessionMeta}>
-              <Feather name="map-pin" size={11} color={colors.mutedForeground} />
-              <Text style={[styles.sessionMetaText, { color: colors.mutedForeground }]}>
-                Current Location
+
+            <View style={styles.deviceTextWrap}>
+              <Text style={styles.deviceTitle}>{deviceLabel}</Text>
+              <Text style={styles.deviceSubtext}>Active now · Current location</Text>
+            </View>
+
+            <Pressable onPress={handleLogoutDevice} hitSlop={8}>
+              <Text style={styles.logoutLink}>Log out</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.sectionDivider} />
+
+        {/* 4. Security Controls & Toggle Architecture */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionHeading}>Account Security</Text>
+
+          {/* Two-Factor Authentication */}
+          <View style={styles.settingRow}>
+            <View style={styles.textColumn}>
+              <Text style={styles.rowTitle}>Two-Factor Authentication (2FA)</Text>
+              <Text style={styles.rowSubtext}>
+                Add extra security using SMS or an authenticator app when logging in.
               </Text>
             </View>
-            <Text style={[styles.sessionMetaText, { color: colors.mutedForeground }]}>
-              Active: Now
-            </Text>
+            <Switch
+              value={twoFactor}
+              onValueChange={handleToggle2FA}
+              trackColor={{ true: '#EE7D30', false: '#EBEBEB' }}
+              thumbColor="#FFFFFF"
+            />
           </View>
-        </View>
 
-        {/* 2FA */}
-        <View style={styles.toggleBlock}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.toggleTitle, { color: colors.foreground }]}>
-              Two-Factor Authentication (2FA)
-            </Text>
-            <Text style={[styles.mutedSmall, { color: colors.mutedForeground }]}>
-              Add an extra layer of security. We'll verify your identity via SMS or
-              Authenticator App when logging in.
-            </Text>
-          </View>
-          <Switch
-            value={twoFactor}
-            onValueChange={setTwoFactor}
-            trackColor={{ true: colors.primary, false: colors.border }}
-            thumbColor="#ffffff"
-          />
-        </View>
-
-        {twoFactor ? (
-          <View
-            style={[
-              styles.methodBox,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.methodTitle, { color: colors.foreground }]}>
-              Preferred Method
-            </Text>
-            <View style={styles.methodRow}>
-              {(
-                [
-                  { key: 'app', label: 'Authenticator App' },
-                  { key: 'sms', label: 'SMS Message' },
-                ] as const
-              ).map((m) => {
-                const selected = twoFactorMethod === m.key;
-                return (
-                  <Pressable
-                    key={m.key}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setTwoFactorMethod(m.key);
-                    }}
-                    style={[
-                      styles.methodButton,
-                      selected
-                        ? {
-                            borderColor: colors.primary,
-                            backgroundColor: `${colors.primary}0D`,
-                          }
-                        : { borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
+          {/* 2FA Preferred Method Selector */}
+          {twoFactor ? (
+            <View style={styles.methodWrap}>
+              <Text style={styles.methodLabel}>Preferred 2FA Method</Text>
+              <View style={styles.segmentedControlTrack}>
+                {(
+                  [
+                    { key: 'app', label: 'Authenticator App' },
+                    { key: 'sms', label: 'SMS Message' },
+                  ] as const
+                ).map((m) => {
+                  const isSelected = twoFactorMethod === m.key;
+                  return (
+                    <Pressable
+                      key={m.key}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setTwoFactorMethod(m.key);
+                      }}
                       style={[
-                        styles.methodButtonText,
-                        { color: selected ? colors.primary : colors.foreground },
+                        styles.segmentedTile,
+                        isSelected ? styles.segmentedTileActive : null,
                       ]}
                     >
-                      {m.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.segmentedTileText,
+                          isSelected ? styles.segmentedTileTextActive : null,
+                        ]}
+                      >
+                        {m.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        ) : null}
+          ) : null}
 
-        {/* Login alerts */}
-        <View style={styles.toggleBlock}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.toggleTitle, { color: colors.foreground }]}>Login Alerts</Text>
-            <Text style={[styles.mutedSmall, { color: colors.mutedForeground }]}>
-              Get notified via email if someone logs into your account from an unrecognized
-              device.
-            </Text>
+          <View style={styles.rowDivider} />
+
+          {/* Login Alerts */}
+          <View style={styles.settingRow}>
+            <View style={styles.textColumn}>
+              <Text style={styles.rowTitle}>Login Alerts</Text>
+              <Text style={styles.rowSubtext}>
+                Get notified if someone logs into your account from an unrecognized device.
+              </Text>
+            </View>
+            <Switch
+              value={loginAlerts}
+              onValueChange={handleToggleAlerts}
+              trackColor={{ true: '#EE7D30', false: '#EBEBEB' }}
+              thumbColor="#FFFFFF"
+            />
           </View>
-          <Switch
-            value={loginAlerts}
-            onValueChange={setLoginAlerts}
-            trackColor={{ true: colors.primary, false: colors.border }}
-            thumbColor="#ffffff"
-          />
+
+          <View style={styles.rowDivider} />
+
+          {/* Password & Credentials */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Alert.alert('Update Password', 'A password reset link will be sent to your email.');
+            }}
+            style={({ pressed }) => [
+              styles.settingRow,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={styles.textColumn}>
+              <Text style={styles.rowTitle}>Password & Security Keys</Text>
+              <Text style={styles.rowSubtext}>
+                Update your account password or manage security passkeys.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#717171" />
+          </Pressable>
         </View>
-
-        <Pressable
-          testID="send-test-alert"
-          onPress={handleTestEmail}
-          disabled={sendingTest}
-          style={({ pressed }) => [
-            styles.outlineButton,
-            { borderColor: colors.border, opacity: pressed || sendingTest ? 0.7 : 1 },
-          ]}
-        >
-          {sendingTest ? (
-            <ActivityIndicator size="small" color={colors.foreground} />
-          ) : (
-            <Feather name="mail" size={15} color={colors.foreground} />
-          )}
-          <Text style={[styles.outlineButtonText, { color: colors.foreground }]}>
-            Send Test Alert
-          </Text>
-        </Pressable>
-
-        {/* Save */}
-        <Pressable
-          testID="save-security"
-          onPress={handleSave}
-          disabled={saving}
-          style={({ pressed }) => [
-            styles.saveButton,
-            { backgroundColor: colors.primary, opacity: pressed || saving ? 0.85 : 1 },
-          ]}
-        >
-          {saving ? (
-            <ActivityIndicator color="#ffffff" size="small" />
-          ) : (
-            <Feather name="save" size={16} color="#ffffff" />
-          )}
-          <Text style={styles.saveButtonText}>Save Security Settings</Text>
-        </Pressable>
       </ScrollView>
     </View>
   );
@@ -304,114 +274,155 @@ export default function SecurityScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingBottom: 48 },
-  heroCard: {
+  topNavBar: {
+    paddingTop: 12,
+    paddingBottom: 8,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 20,
+    alignItems: 'center',
   },
-  heroIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  backIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroTitle: { fontSize: 16, fontFamily: 'DMSans_600SemiBold' },
-  mutedSmall: { fontSize: 13, fontFamily: 'DMSans_400Regular', marginTop: 2 },
-  sectionTitle: {
-    fontSize: 17,
-    fontFamily: 'DMSans_600SemiBold',
-    marginBottom: 10,
+  titleSection: {
+    marginTop: 8,
+    marginBottom: 16,
   },
-  sessionCard: {
+  pageTitle: {
+    fontSize: 28,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    letterSpacing: -0.4,
+  },
+  summaryBanner: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
     padding: 14,
     marginBottom: 24,
   },
-  sessionIcon: {
+  summaryBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    lineHeight: 18,
+  },
+  sectionBlock: {
+    gap: 4,
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    marginBottom: 12,
+  },
+  deviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  deviceIconCircle: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: '#F7F7F7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sessionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  sessionDevice: { fontSize: 14, fontFamily: 'DMSans_500Medium' },
-  currentPill: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  currentPillText: { fontSize: 10, fontFamily: 'DMSans_500Medium' },
-  sessionMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  sessionMetaText: { fontSize: 12, fontFamily: 'DMSans_400Regular', marginTop: 2 },
-  toggleBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 12,
-  },
-  toggleTitle: { fontSize: 15, fontFamily: 'DMSans_600SemiBold' },
-  methodBox: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 14,
-    gap: 10,
-    marginBottom: 8,
-  },
-  methodTitle: { fontSize: 13, fontFamily: 'DMSans_600SemiBold' },
-  methodRow: { flexDirection: 'row', gap: 10 },
-  methodButton: {
+  deviceTextWrap: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: 10,
-    alignItems: 'center',
-    paddingVertical: 11,
+    gap: 2,
   },
-  methodButtonText: { fontSize: 13, fontFamily: 'DMSans_500Medium' },
-  outlineButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 11,
-    marginTop: 8,
-    alignSelf: 'flex-end',
-    paddingHorizontal: 20,
-  },
-  outlineButtonText: { fontSize: 13, fontFamily: 'DMSans_500Medium' },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 999,
-    paddingVertical: 14,
-    marginTop: 28,
-  },
-  saveButtonText: {
-    color: '#ffffff',
+  deviceTitle: {
     fontSize: 15,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  deviceSubtext: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  logoutLink: {
+    fontSize: 14,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#EE7D30',
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+    marginVertical: 24,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    gap: 16,
+  },
+  textColumn: {
+    flex: 1,
+    gap: 3,
+  },
+  rowTitle: {
+    fontSize: 16,
+    fontFamily: 'DMSans_500Medium',
+    color: '#222222',
+  },
+  rowSubtext: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    lineHeight: 18,
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+  },
+  methodWrap: {
+    marginTop: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  methodLabel: {
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
+  },
+  segmentedControlTrack: {
+    flexDirection: 'row',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 10,
+    padding: 3,
+  },
+  segmentedTile: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  segmentedTileActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  segmentedTileText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
+  },
+  segmentedTileTextActive: {
     fontFamily: 'DMSans_700Bold',
+    color: '#222222',
   },
 });

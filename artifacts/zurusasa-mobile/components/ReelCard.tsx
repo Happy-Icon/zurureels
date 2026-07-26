@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -24,7 +24,6 @@ import {
   useToggleLike,
   useToggleSave,
 } from '@/lib/queries';
-import { getReelExpiry } from '@/lib/reelExpiry';
 import { BookingSheet } from '@/components/BookingSheet';
 import { ReelInfoSheet } from '@/components/ReelInfoSheet';
 import { ZuruAgentChat } from '@/components/ZuruAgentChat';
@@ -32,26 +31,6 @@ import type { ReelRow } from '@/lib/supabase';
 
 export const ZURU_ORANGE = '#EE7D30';
 
-// Same palette as the web ReelCard categoryColors (tailwind 500/600 at 90%)
-const CATEGORY_COLORS: Record<string, string> = {
-  hotel: '#3B82F6E6',
-  villa: '#10B981E6',
-  boats: '#06B6D4E6',
-  tours: '#F59E0BE6',
-  events: '#A855F7E6',
-  apartment: '#6366F1E6',
-  food: '#F97316E6',
-  drinks: '#EC4899E6',
-  rentals: '#14B8A6E6',
-  adventure: '#EF4444E6',
-  parks_camps: '#16A34AE6',
-  land_adventure: '#D97706E6',
-  air_adventure: '#0EA5E9E6',
-  water_adventure: '#2563EBE6',
-};
-
-// Mirrors the web app's module-level `globalMuted` — feed starts muted and
-// the choice sticks as you scroll between reels.
 let globalMuted = true;
 
 function formatCount(n: number): string {
@@ -116,7 +95,6 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
     setMuted(next);
   };
 
-  // Web behavior: tapping the video while muted unmutes it; otherwise toggles play.
   const onVideoTap = () => {
     if (!videoUrl) return;
     if (muted) {
@@ -133,22 +111,17 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
 
   const exp = reel.experience;
   const meta = (exp?.metadata ?? {}) as Record<string, unknown>;
-  const rating = Number((meta.rating as number | string | undefined) ?? 5);
-  const expiry = getReelExpiry(reel.created_at);
-  const hostName = reel.host?.full_name ?? 'ZuruSasa host';
+  const rating = Number((meta.rating as number | string | undefined) ?? 5.0);
+  const hostName = reel.host?.full_name ?? 'Zuru Host';
   const avatarUrl =
     (reel.host?.metadata as { avatar_url?: string } | null)?.avatar_url ?? null;
-  const categoryColor = reel.category
-    ? (CATEGORY_COLORS[reel.category.toLowerCase()] ?? `${ZURU_ORANGE}E6`)
-    : `${ZURU_ORANGE}E6`;
 
   const priceAmount = exp?.current_price;
   const priceUnit = exp?.price_unit ?? 'person';
   const bookedOut = exp?.availability_status === 'booked_out';
 
-  // Web: bottom content sits at bottom-6 (24px), the rail at bottom-32 (128px).
-  const baseBottom = Math.max(24, insets.bottom + 10);
-  const railBottom = baseBottom + 104;
+  const baseBottom = Math.max(16, insets.bottom + 12);
+  const railBottom = baseBottom + 120;
 
   const requireAuth = (): boolean => {
     if (!user) {
@@ -202,7 +175,7 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
         }`,
       });
     } catch {
-      // user dismissed the share sheet
+      // dismissed
     }
   };
 
@@ -246,7 +219,7 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
 
   return (
     <View style={[styles.page, { height }]}>
-      {/* Full-bleed video */}
+      {/* Full-bleed video / thumbnail */}
       {reel.thumbnail_url ? (
         <Image
           source={{ uri: reel.thumbnail_url }}
@@ -266,15 +239,15 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#14110e' }]} />
       ) : null}
 
-      {/* Bottom legibility gradient (web: from-black/80 via-transparent) */}
+      {/* 1. Dual-Gradient Overlay Scrim for Legibility (Bottom 260px) */}
       <LinearGradient
-        colors={['transparent', 'transparent', 'rgba(0,0,0,0.8)']}
+        colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
         locations={[0, 0.5, 1]}
-        style={StyleSheet.absoluteFill}
+        style={styles.bottomGradientScrim}
         pointerEvents="none"
       />
 
-      {/* Tap to unmute / play-pause */}
+      {/* Tap to unmute / play-pause overlay */}
       <Pressable
         testID={`video-tap-${reel.id}`}
         onPress={onVideoTap}
@@ -283,91 +256,84 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
         {videoUrl && !isPlaying ? (
           <View pointerEvents="none" style={styles.playOverlay}>
             <View style={styles.playCircle}>
-              <MaterialCommunityIcons name="play" size={46} color="#ffffff" />
+              <MaterialCommunityIcons name="play" size={46} color="#FFFFFF" />
             </View>
           </View>
         ) : null}
       </Pressable>
 
-      {/* Right action rail (overlaid on the video, like web mobile) */}
+      {/* 3. Streamlined Right Action Rail (Vertical Column) */}
       <View style={[styles.rail, { bottom: railBottom }]}>
+        {/* Host Avatar with Online Green Dot */}
         <Pressable
           testID={`follow-button-${reel.id}`}
           onPress={onFollow}
           style={styles.avatarWrap}
         >
           {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            <Image source={{ uri: avatarUrl }} style={styles.avatar} contentFit="cover" />
           ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}>
+            <View style={styles.avatarFallback}>
               <Text style={styles.avatarText}>
                 {hostName.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
-          {hostId && hostId !== user?.id ? (
-            <View
-              style={[
-                styles.followBadge,
-                following ? { backgroundColor: '#10b981' } : null,
-              ]}
-            >
-              <Feather
-                name={following ? 'check' : 'plus'}
-                size={13}
-                color="#ffffff"
-              />
+          <View style={styles.onlineDot} />
+          {!following && hostId && hostId !== user?.id ? (
+            <View style={styles.plusBadge}>
+              <Feather name="plus" size={10} color="#FFFFFF" />
             </View>
           ) : null}
         </Pressable>
 
+        {/* Heart / Like Count */}
         <Pressable
           testID={`like-button-${reel.id}`}
           onPress={onLike}
           hitSlop={6}
           style={styles.railItem}
         >
-          {liked ? (
-            <MaterialCommunityIcons name="heart" size={29} color="#EF4444" />
-          ) : (
-            <Feather name="heart" size={28} color="#ffffff" />
-          )}
-          <Text style={styles.railLabel}>{formatCount(likeCount)}</Text>
+          <Ionicons
+            name={liked ? 'heart' : 'heart-outline'}
+            size={28}
+            color={liked ? '#EF4444' : '#FFFFFF'}
+          />
+          {likeCount > 0 ? (
+            <Text style={styles.railCountText}>{formatCount(likeCount)}</Text>
+          ) : null}
         </Pressable>
 
+        {/* Wishlist / Bookmark */}
         <Pressable
           testID={`save-button-${reel.id}`}
           onPress={onSave}
           hitSlop={6}
           style={styles.railItem}
         >
-          {saved ? (
-            <MaterialCommunityIcons
-              name="bookmark"
-              size={29}
-              color={ZURU_ORANGE}
-            />
-          ) : (
-            <Feather name="bookmark" size={26} color="#ffffff" />
-          )}
-          <Text style={styles.railLabel}>{saved ? 'SAVED' : 'SAVE'}</Text>
+          <Ionicons
+            name={saved ? 'bookmark' : 'bookmark-outline'}
+            size={26}
+            color={saved ? '#EE7D30' : '#FFFFFF'}
+          />
         </Pressable>
 
+        {/* Share Button */}
         <Pressable onPress={onShare} hitSlop={6} style={styles.railItem}>
-          <Feather name="share-2" size={25} color="#ffffff" />
-          <Text style={styles.railLabel}>SHARE</Text>
+          <Feather name="share-2" size={24} color="#FFFFFF" />
         </Pressable>
 
+        {/* Info Button */}
         <Pressable
           testID={`info-button-${reel.id}`}
           onPress={() => setInfoOpen(true)}
           hitSlop={6}
           style={styles.railItem}
         >
-          <Feather name="info" size={25} color="#ffffff" />
-          <Text style={styles.railLabel}>INFO</Text>
+          <Feather name="info" size={24} color="#FFFFFF" />
         </Pressable>
 
+        {/* Mute/Audio Toggle */}
         <Pressable
           testID={`sound-button-${reel.id}`}
           onPress={() => {
@@ -377,26 +343,55 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
           hitSlop={6}
           style={styles.railItem}
         >
-          <View
-            style={[
-              styles.soundCircle,
-              {
-                backgroundColor: muted ? ZURU_ORANGE : 'rgba(0,0,0,0.25)',
-              },
-            ]}
-          >
+          <View style={styles.soundCircle}>
             <Feather
               name={muted ? 'volume-x' : 'volume-2'}
-              size={21}
-              color="#ffffff"
+              size={18}
+              color="#FFFFFF"
             />
           </View>
-          <Text style={styles.railLabel}>{muted ? 'SOUND ON' : 'MUTE'}</Text>
         </Pressable>
       </View>
 
-      {/* Bottom info stack */}
+      {/* 4. Bottom Information Stack & 5. Action Dock */}
       <View style={[styles.bottomOverlay, { bottom: baseBottom }]}>
+        {/* Category Glass Pill */}
+        {reel.category ? (
+          <View style={styles.categoryGlassPill}>
+            <Text style={styles.categoryGlassText}>
+              {(reel.category ?? 'Reel').toUpperCase().replace(/_/g, ' ')}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Title & Rating Row */}
+        <View style={styles.titleRatingRow}>
+          <Text style={styles.titleText} numberOfLines={1}>
+            {exp?.title ?? 'Coastal Experience'}
+          </Text>
+          <View style={styles.ratingBadge}>
+            <Ionicons name="star" size={13} color="#FFD166" />
+            <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+          </View>
+        </View>
+
+        {/* Location Row */}
+        <View style={styles.locationRow}>
+          <Feather name="map-pin" size={12} color="rgba(255,255,255,0.85)" />
+          <Text style={styles.locationText} numberOfLines={1}>
+            {exp?.location ?? 'Kenyan Coast'}
+          </Text>
+        </View>
+
+        {/* Price Row */}
+        {priceAmount != null ? (
+          <Text style={styles.priceText}>
+            KES {Number(priceAmount).toLocaleString()}
+            <Text style={styles.priceUnitText}> / {priceUnit}</Text>
+          </Text>
+        ) : null}
+
+        {/* Zuru AI Concierge Prompt Badge */}
         <Pressable
           testID={`zuru-agent-${reel.id}`}
           onPress={() => {
@@ -404,86 +399,36 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
             setAgentOpen(true);
           }}
           style={({ pressed }) => [
-            styles.agentButton,
-            { transform: [{ scale: pressed ? 0.97 : 1 }] },
+            styles.aiPromptPill,
+            { opacity: pressed ? 0.85 : 1 },
           ]}
         >
-          <MaterialCommunityIcons name="creation" size={18} color="#ffffff" />
-          <Text style={styles.agentText}>ZURU AGENT</Text>
+          <MaterialCommunityIcons name="creation" size={15} color="#FFFFFF" />
+          <Text style={styles.aiPromptText}>✨ Ask Zuru AI Assistant</Text>
         </Pressable>
 
-        <View style={styles.metaRow}>
-          {reel.category ? (
-            <View
-              style={[styles.categoryPill, { backgroundColor: categoryColor }]}
-            >
-              <Text style={styles.categoryText}>
-                {reel.category.replace(/_/g, ' ')}
-              </Text>
-            </View>
-          ) : null}
-          {expiry ? (
-            <View style={styles.expiryRow}>
-              <Feather
-                name="clock"
-                size={11}
-                color={expiry.urgent ? '#fb923c' : 'rgba(255,255,255,0.9)'}
-              />
-              <Text
-                style={[
-                  styles.expiryText,
-                  {
-                    color: expiry.urgent ? '#fb923c' : 'rgba(255,255,255,0.9)',
-                  },
-                ]}
-              >
-                {expiry.label.toUpperCase()}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        <Text style={styles.title} numberOfLines={1}>
-          {exp?.title ?? 'Coastal experience'}
-        </Text>
-
-        {exp?.location ? (
-          <Text style={styles.location} numberOfLines={1}>
-            {exp.location}
-          </Text>
-        ) : null}
-
-        <View style={styles.priceRow}>
-          {priceAmount != null ? (
-            <Text style={styles.price}>
-              KES {Number(priceAmount).toLocaleString()}
-              <Text style={styles.priceUnit}>/{priceUnit}</Text>
-            </Text>
-          ) : null}
-          <Text style={styles.ratingText}>⭐ {rating.toFixed(1)}</Text>
-        </View>
-
-        <View style={styles.buttonRow}>
+        {/* 5. Bottom Action Dock (Primary Dual Buttons) */}
+        <View style={styles.actionDockRow}>
           {exp?.id ? (
             <Pressable
               testID={`book-button-${reel.id}`}
               onPress={onBook}
               disabled={bookedOut}
               style={({ pressed }) => [
-                styles.bookButton,
+                styles.primaryBookBtn,
                 {
                   backgroundColor: bookedOut
                     ? 'rgba(82,76,70,0.85)'
                     : booked
-                      ? '#2e7d32'
-                      : ZURU_ORANGE,
-                  opacity: pressed ? 0.85 : 1,
+                    ? '#008A05'
+                    : '#EE7D30',
+                  opacity: pressed ? 0.88 : 1,
                 },
               ]}
             >
               <Text
                 style={[
-                  styles.bookText,
+                  styles.primaryBookBtnText,
                   bookedOut ? { color: 'rgba(255,255,255,0.55)' } : null,
                 ]}
               >
@@ -491,19 +436,20 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
               </Text>
             </Pressable>
           ) : null}
+
           <Pressable
             testID={`enquire-button-${reel.id}`}
             onPress={onEnquire}
             disabled={enquire.isPending}
             style={({ pressed }) => [
-              styles.enquireButton,
+              styles.secondaryGlassBtn,
               { opacity: pressed || enquire.isPending ? 0.7 : 1 },
             ]}
           >
             {enquire.isPending ? (
-              <ActivityIndicator color="#ffffff" size="small" />
+              <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.enquireText}>Enquire</Text>
+              <Text style={styles.secondaryGlassBtnText}>Enquire</Text>
             )}
           </Pressable>
         </View>
@@ -541,196 +487,213 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#000000',
   },
+  bottomGradientScrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 280,
+  },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
   playCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: 'rgba(0,0,0,0.32)',
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   rail: {
     position: 'absolute',
-    right: 12,
+    right: 14,
     alignItems: 'center',
-    gap: 20,
+    gap: 18,
     zIndex: 20,
   },
   railItem: {
     alignItems: 'center',
-    gap: 4,
-    minWidth: 52,
+    gap: 3,
   },
-  railLabel: {
-    color: '#ffffff',
-    fontSize: 10,
+  railCountText: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontFamily: 'DMSans_700Bold',
-    letterSpacing: 0.5,
-    textAlign: 'center',
   },
   avatarWrap: {
-    alignItems: 'center',
+    position: 'relative',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     marginBottom: 4,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: '#FFFFFF',
   },
   avatarFallback: {
-    backgroundColor: '#3a332c',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#222222',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#ffffff',
-    fontSize: 20,
+    color: '#FFFFFF',
+    fontSize: 18,
     fontFamily: 'DMSans_700Bold',
   },
-  followBadge: {
+  onlineDot: {
     position: 'absolute',
-    bottom: -8,
-    width: 21,
-    height: 21,
-    borderRadius: 11,
-    backgroundColor: ZURU_ORANGE,
+    bottom: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#008A05',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  plusBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EE7D30',
     alignItems: 'center',
     justifyContent: 'center',
   },
   soundCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   bottomOverlay: {
     position: 'absolute',
-    left: 0,
-    right: 64,
-    paddingHorizontal: 16,
-    gap: 5,
+    left: 16,
+    right: 70,
+    gap: 6,
     zIndex: 15,
   },
-  agentButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  categoryGlassPill: {
     alignSelf: 'flex-start',
-    gap: 10,
-    backgroundColor: 'rgba(238,125,48,0.92)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    marginBottom: 8,
-    shadowColor: ZURU_ORANGE,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 14,
-    elevation: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  agentText: {
-    color: '#ffffff',
-    fontSize: 11,
+  categoryGlassText: {
+    color: '#FFFFFF',
+    fontSize: 10,
     fontFamily: 'DMSans_700Bold',
-    letterSpacing: 1.4,
+    letterSpacing: 0.4,
   },
-  metaRow: {
+  titleRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
   },
-  categoryPill: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 3.5,
-  },
-  categoryText: {
-    color: '#ffffff',
-    fontSize: 10.5,
+  titleText: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 22,
     fontFamily: 'DMSans_700Bold',
-    textTransform: 'capitalize',
+    letterSpacing: -0.3,
   },
-  expiryRow: {
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  ratingText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+  },
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  expiryText: {
-    fontSize: 9.5,
+  locationText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+  },
+  priceText: {
+    color: '#FFFFFF',
+    fontSize: 18,
     fontFamily: 'DMSans_700Bold',
-    letterSpacing: 1,
   },
-  title: {
-    color: '#ffffff',
-    fontSize: 24,
-    lineHeight: 28,
-    fontFamily: 'InstrumentSerif_400Regular',
-  },
-  location: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 11.5,
+  priceUnitText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
     fontFamily: 'DMSans_400Regular',
   },
-  priceRow: {
+  aiPromptPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginVertical: 4,
   },
-  price: {
-    color: '#ffffff',
+  aiPromptText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+  },
+  actionDockRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  primaryBookBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBookBtnText: {
+    color: '#FFFFFF',
     fontSize: 15,
     fontFamily: 'DMSans_700Bold',
   },
-  priceUnit: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 10.5,
-    fontFamily: 'DMSans_400Regular',
-  },
-  ratingText: {
-    color: '#ffffff',
-    fontSize: 11.5,
-    fontFamily: 'DMSans_700Bold',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 6,
-  },
-  bookButton: {
+  secondaryGlassBtn: {
     flex: 1,
-    height: 34,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bookText: {
-    color: '#ffffff',
-    fontSize: 12.5,
-    fontFamily: 'DMSans_700Bold',
-  },
-  enquireButton: {
-    flex: 1,
-    height: 34,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  enquireText: {
-    color: '#ffffff',
-    fontSize: 12.5,
-    fontFamily: 'DMSans_500Medium',
+  secondaryGlassBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
   },
 });

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,14 +11,14 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { ScreenHeader } from '@/components/profile/ScreenHeader';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { useColors } from '@/hooks/useColors';
 
 const COMMON_LANGUAGES = [
   'English',
@@ -54,8 +56,9 @@ async function pickImage(square: boolean) {
   return result.assets[0];
 }
 
-export default function DigitalIdentityScreen() {
-  const colors = useColors();
+export default function PersonalInformationScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user, refreshProfile } = useAuth();
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -80,6 +83,9 @@ export default function DigitalIdentityScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [idUrl, setIdUrl] = useState<string | null>(null);
   const [completeness, setCompleteness] = useState(0);
+
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  const bottomPad = Platform.OS === 'web' ? 100 : insets.bottom + 84;
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -173,7 +179,7 @@ export default function DigitalIdentityScreen() {
       if (updateError) throw updateError;
 
       await refreshProfile();
-      Alert.alert('Success', 'Profile picture updated!');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Alert.alert('Upload failed', e.message ?? 'Something went wrong.');
     } finally {
@@ -210,7 +216,8 @@ export default function DigitalIdentityScreen() {
 
       setIdUrl(filePath);
       setBadges(newBadges);
-      Alert.alert('Success', 'ID document uploaded! It is now pending review.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Success', 'Government ID uploaded for verification review.');
     } catch (e: any) {
       Alert.alert('Upload failed', e.message ?? 'Something went wrong.');
     } finally {
@@ -220,6 +227,7 @@ export default function DigitalIdentityScreen() {
 
   const handleSave = async () => {
     if (!user) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
     try {
       const { error: authError } = await supabase.auth.updateUser({
@@ -247,9 +255,10 @@ export default function DigitalIdentityScreen() {
       if (profileError) throw profileError;
 
       await refreshProfile();
-      Alert.alert('Saved', 'Digital identity updated successfully');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Saved', 'Personal information updated successfully.');
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to save.');
+      Alert.alert('Error', e.message ?? 'Failed to save changes.');
     } finally {
       setSaving(false);
     }
@@ -262,405 +271,324 @@ export default function DigitalIdentityScreen() {
     );
   };
 
-  const inputStyle = [
-    styles.input,
-    {
-      borderColor: colors.border,
-      color: colors.foreground,
-      backgroundColor: colors.card,
-    },
-  ];
-
   if (pageLoading) {
     return (
-      <View style={[styles.fill, { backgroundColor: colors.background }]}>
-        <ScreenHeader />
-        <View style={[styles.fill, styles.centered]}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
+      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF' }]}>
+        <ActivityIndicator size="large" color="#EE7D30" />
       </View>
     );
   }
 
   return (
-    <View style={[styles.fill, { backgroundColor: colors.background }]}>
-      <ScreenHeader />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Trust Score */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
+    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      {/* 1. Header & Navigation Structure */}
+      <View style={[styles.topNavBar, { paddingTop: topPad }]}>
+        <Pressable
+          testID="back-btn"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (router.canGoBack()) router.back();
+            else router.replace('/profile');
+          }}
+          style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={10}
         >
-          <View style={styles.rowBetween}>
-            <View style={{ flex: 1, gap: 2 }}>
-              <View style={styles.row}>
-                <MaterialCommunityIcons
-                  name="shield-check-outline"
-                  size={20}
-                  color={colors.primary}
-                />
-                <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-                  Trust Score
-                </Text>
-              </View>
-              <Text style={[styles.mutedSmall, { color: colors.mutedForeground }]}>
-                Complete your profile to build trust
-              </Text>
-            </View>
-            <Text style={[styles.scoreText, { color: colors.primary }]}>
-              {completeness}%
+          <Feather name="arrow-left" size={22} color="#222222" />
+        </Pressable>
+      </View>
+
+      <KeyboardAvoidingView
+        style={styles.fill}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Page Title */}
+          <View style={styles.titleSection}>
+            <Text style={styles.pageTitle}>Personal information</Text>
+            <Text style={styles.pageSub}>
+              Manage your identity, contact details, and emergency contact.
             </Text>
           </View>
-          <View style={[styles.progressTrack, { backgroundColor: colors.secondary }]}>
-            <View
-              style={[
-                styles.progressFill,
-                { backgroundColor: colors.primary, width: `${completeness}%` },
-              ]}
-            />
-          </View>
-          {completeness < 100 ? (
-            <View style={styles.warningBox}>
-              <Feather name="alert-triangle" size={15} color="#c2410c" />
-              <Text style={styles.warningText}>
-                Add a government ID to reach 100% verified status.
-              </Text>
-            </View>
-          ) : null}
-        </View>
 
-        {/* Profile Picture */}
-        <View
-          style={[
-            styles.card,
-            styles.centered,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <Pressable
-            testID="avatar-upload"
-            onPress={handleAvatarUpload}
-            disabled={avatarUploading}
-            style={({ pressed }) => [
-              styles.avatar,
-              {
-                backgroundColor: colors.secondary,
-                borderColor: `${colors.primary}33`,
-                opacity: pressed ? 0.8 : 1,
-              },
-            ]}
-          >
-            {avatarUrl ? (
-              <Image
-                source={{ uri: avatarUrl }}
-                style={styles.avatarImage}
-                contentFit="cover"
-              />
-            ) : (
-              <Feather name="user" size={40} color={colors.mutedForeground} />
-            )}
-            <View style={styles.avatarOverlay}>
-              {avatarUploading ? (
-                <ActivityIndicator color="#ffffff" size="small" />
-              ) : (
-                <Feather name="upload" size={18} color="#ffffff" />
-              )}
-            </View>
-          </Pressable>
-          <Text style={[styles.cardTitle, { color: colors.foreground, marginTop: 12 }]}>
-            Profile Picture
-          </Text>
-          <Text style={[styles.mutedSmall, { color: colors.mutedForeground }]}>
-            Tap the photo to upload a clear picture of yourself
-          </Text>
-        </View>
-
-        {/* Basic Information */}
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Basic Information
-        </Text>
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Full Name</Text>
-          <TextInput
-            value={fullName}
-            onChangeText={setFullName}
-            placeholder="Enter your full name"
-            placeholderTextColor={colors.mutedForeground}
-            style={inputStyle}
-          />
-        </View>
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Phone Number</Text>
-          <TextInput
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="+254 7..."
-            keyboardType="phone-pad"
-            placeholderTextColor={colors.mutedForeground}
-            style={inputStyle}
-          />
-        </View>
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Email Address</Text>
-          <TextInput
-            value={user?.email ?? ''}
-            editable={false}
-            style={[
-              styles.input,
-              {
-                borderColor: colors.border,
-                color: colors.mutedForeground,
-                backgroundColor: colors.secondary,
-              },
-            ]}
-          />
-        </View>
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Your Bio</Text>
-          <TextInput
-            value={bio}
-            onChangeText={setBio}
-            placeholder="Tell the community about yourself..."
-            placeholderTextColor={colors.mutedForeground}
-            multiline
-            style={[...inputStyle, styles.textArea]}
-          />
-          <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-            Share your background, interests, and why you love ZuruSasa.
-          </Text>
-        </View>
-
-        {/* Languages */}
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Languages Spoken
-        </Text>
-        <Text style={[styles.mutedSmall, { color: colors.mutedForeground, marginBottom: 10 }]}>
-          Help hosts and guests understand you better.
-        </Text>
-        <View style={styles.chipsWrap}>
-          {COMMON_LANGUAGES.map((lang) => {
-            const selected = languages.includes(lang);
-            return (
-              <Pressable
-                key={lang}
-                onPress={() => toggleLanguage(lang)}
-                style={[
-                  styles.chip,
-                  selected
-                    ? { backgroundColor: `${colors.primary}1A`, borderColor: colors.primary }
-                    : { backgroundColor: 'transparent', borderColor: colors.border },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    { color: selected ? colors.primary : colors.mutedForeground },
-                  ]}
-                >
-                  {lang}
+          {/* 2. Trust Banner (Airbnb Soft Banner) */}
+          <View style={styles.trustBanner}>
+            <View style={styles.trustBannerLeft}>
+              <MaterialCommunityIcons name="shield-check" size={22} color="#EE7D30" />
+              <View style={styles.trustBannerTextWrap}>
+                <Text style={styles.trustBannerTitle}>Trust & Verification</Text>
+                <Text style={styles.trustBannerSub}>
+                  {completeness}% profile complete · {badges.identity ? 'Verified Member' : 'Add ID to complete'}
                 </Text>
-                {selected ? <Feather name="x" size={13} color={colors.primary} /> : null}
-              </Pressable>
-            );
-          })}
-        </View>
+              </View>
+            </View>
+            <View style={styles.trustBadgePill}>
+              <Text style={styles.trustBadgePillText}>{completeness}%</Text>
+            </View>
+          </View>
 
-        {/* Verifications */}
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Verifications</Text>
-        <Text style={[styles.mutedSmall, { color: colors.mutedForeground, marginBottom: 10 }]}>
-          Verified profiles get 3x more bookings.
-        </Text>
-        <VerificationRow label="Email Address" verified={badges.email} colors={colors} />
-        <VerificationRow
-          label="Phone Number"
-          verified={!!phone && phone.length > 5}
-          colors={colors}
-        />
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: colors.card, borderColor: colors.border, marginTop: 10 },
-          ]}
-        >
-          <View style={styles.rowBetween}>
-            <View style={[styles.row, { flex: 1 }]}>
-              <View
-                style={[
-                  styles.iconCircle,
-                  {
-                    backgroundColor: badges.identity ? '#d1fae5' : colors.secondary,
-                  },
-                ]}
-              >
-                <Feather
-                  name="file-text"
-                  size={15}
-                  color={badges.identity ? '#059669' : colors.mutedForeground}
+          {/* 3. Profile Image */}
+          <View style={styles.avatarSection}>
+            <Pressable
+              testID="avatar-upload"
+              onPress={handleAvatarUpload}
+              disabled={avatarUploading}
+              style={({ pressed }) => [styles.avatarWrap, { opacity: pressed ? 0.85 : 1 }]}
+            >
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Feather name="user" size={44} color="#717171" />
+                </View>
+              )}
+              <View style={styles.avatarBadge}>
+                {avatarUploading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Feather name="camera" size={14} color="#FFFFFF" />
+                )}
+              </View>
+            </Pressable>
+            <Text style={styles.avatarLabel}>Profile photo</Text>
+            <Text style={styles.avatarSub}>Clear photo helps hosts and guests recognize you</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* 4. Basic Information (Soft Block Inputs) */}
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeading}>Legal info & contact</Text>
+
+            {/* Full Name */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Full Name</Text>
+              <View style={styles.inputBox}>
+                <TextInput
+                  value={fullName}
+                  onChangeText={setFullName}
+                  placeholder="Enter your legal full name"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.inputText}
                 />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.badgeLabel, { color: colors.foreground }]}>
-                  Government ID
-                </Text>
-                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-                  Passport, ID Card or Driving License
-                </Text>
+            </View>
+
+            {/* Phone Number */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <View style={styles.inputBox}>
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="e.g. +254 712 345 678"
+                  keyboardType="phone-pad"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.inputText}
+                />
+                {phone.length > 5 ? (
+                  <View style={styles.verifiedInlineRow}>
+                    <Feather name="check-circle" size={15} color="#008A05" />
+                    <Text style={styles.verifiedInlineText}>Added</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
-            {badges.identity ? (
-              <StatusPill text="Verified" bg="#10b981" fg="#ffffff" />
-            ) : idUrl ? (
-              <StatusPill text="Pending Review" bg="#fef3c7" fg="#b45309" />
-            ) : (
-              <StatusPill text="Not Provided" bg={colors.secondary} fg={colors.mutedForeground} />
-            )}
+
+            {/* Email Address (Read-only System field) */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email Address</Text>
+              <View style={[styles.inputBox, styles.inputBoxDisabled]}>
+                <TextInput
+                  value={user?.email ?? ''}
+                  editable={false}
+                  style={[styles.inputText, { color: '#717171' }]}
+                />
+                {badges.email ? (
+                  <View style={styles.verifiedInlineRow}>
+                    <Feather name="check-circle" size={15} color="#008A05" />
+                    <Text style={styles.verifiedInlineText}>Verified</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={styles.helperText}>Confirmed through your account sign in</Text>
+            </View>
+
+            {/* Bio */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>About You (Bio)</Text>
+              <View style={[styles.inputBox, styles.textAreaBox]}>
+                <TextInput
+                  value={bio}
+                  onChangeText={setBio}
+                  placeholder="Share a few words about yourself, your travels, or hosting style..."
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  style={[styles.inputText, styles.textAreaText]}
+                />
+              </View>
+            </View>
           </View>
 
-          {!badges.identity && !idUrl ? (
+          <View style={styles.divider} />
+
+          {/* Languages Spoken */}
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeading}>Languages spoken</Text>
+            <View style={styles.chipsRow}>
+              {COMMON_LANGUAGES.map((lang) => {
+                const selected = languages.includes(lang);
+                return (
+                  <Pressable
+                    key={lang}
+                    onPress={() => toggleLanguage(lang)}
+                    style={[
+                      styles.chipItem,
+                      selected ? styles.chipItemSelected : styles.chipItemUnselected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        { color: selected ? '#EE7D30' : '#222222' },
+                      ]}
+                    >
+                      {lang}
+                    </Text>
+                    {selected ? <Feather name="check" size={13} color="#EE7D30" /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* 5. Verification Status & ID Button Row */}
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeading}>Identity verification</Text>
+            <Text style={styles.sectionSub}>
+              Required to host experiences or book premium stays on ZuruSasa.
+            </Text>
+
             <Pressable
-              testID="id-upload"
+              testID="id-upload-row"
               onPress={handleIdUpload}
               disabled={idUploading}
               style={({ pressed }) => [
-                styles.uploadBox,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: pressed ? colors.secondary : 'transparent',
-                },
+                styles.idButtonRow,
+                { opacity: pressed ? 0.8 : 1 },
               ]}
             >
+              <View style={styles.idButtonLeft}>
+                <View style={styles.idIconCircle}>
+                  <Feather
+                    name="file-text"
+                    size={18}
+                    color={badges.identity ? '#008A05' : '#717171'}
+                  />
+                </View>
+                <View style={styles.idTextWrap}>
+                  <Text style={styles.idTitle}>Government ID</Text>
+                  <Text style={styles.idStatusText}>
+                    {badges.identity
+                      ? 'Verified identity'
+                      : idUrl
+                      ? 'Pending review'
+                      : 'Not provided'}
+                  </Text>
+                </View>
+              </View>
+
               {idUploading ? (
-                <ActivityIndicator color={colors.primary} />
+                <ActivityIndicator size="small" color="#EE7D30" />
+              ) : badges.identity ? (
+                <View style={styles.verifiedInlineRow}>
+                  <Feather name="check-circle" size={16} color="#008A05" />
+                  <Text style={styles.verifiedInlineText}>Verified</Text>
+                </View>
               ) : (
-                <Feather name="upload" size={24} color={colors.mutedForeground} />
+                <View style={styles.addInlineRow}>
+                  <Text style={styles.addInlineText}>{idUrl ? 'Under review' : 'Add'}</Text>
+                  <Feather name="chevron-right" size={18} color="#717171" />
+                </View>
               )}
-              <Text style={[styles.mutedSmall, { color: colors.mutedForeground }]}>
-                Tap to upload ID (JPG, PNG)
-              </Text>
-              <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-                Max file size: 5MB
-              </Text>
             </Pressable>
-          ) : null}
-        </View>
+          </View>
 
-        {/* Emergency Contact */}
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Emergency Contact
-        </Text>
-        <Text style={[styles.mutedSmall, { color: colors.mutedForeground, marginBottom: 10 }]}>
-          Trusted contact for safety purposes.
-        </Text>
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Contact Name</Text>
-          <TextInput
-            value={emergencyContact.name}
-            onChangeText={(v) => setEmergencyContact((p) => ({ ...p, name: v }))}
-            placeholder="e.g. John Doe"
-            placeholderTextColor={colors.mutedForeground}
-            style={inputStyle}
-          />
-        </View>
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Relationship</Text>
-          <TextInput
-            value={emergencyContact.relationship}
-            onChangeText={(v) => setEmergencyContact((p) => ({ ...p, relationship: v }))}
-            placeholder="e.g. Brother, Friend"
-            placeholderTextColor={colors.mutedForeground}
-            style={inputStyle}
-          />
-        </View>
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Contact Phone</Text>
-          <TextInput
-            value={emergencyContact.phone}
-            onChangeText={(v) => setEmergencyContact((p) => ({ ...p, phone: v }))}
-            placeholder="+254 7..."
-            keyboardType="phone-pad"
-            placeholderTextColor={colors.mutedForeground}
-            style={inputStyle}
-          />
-        </View>
+          <View style={styles.divider} />
 
-        {/* Save */}
+          {/* 6. Emergency Contact */}
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeading}>Emergency contact</Text>
+            <Text style={styles.sectionSub}>
+              A trusted contact we can reach in case of an urgent emergency during a stay or trip.
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Contact Name</Text>
+              <View style={styles.inputBox}>
+                <TextInput
+                  value={emergencyContact.name}
+                  onChangeText={(v) => setEmergencyContact((p) => ({ ...p, name: v }))}
+                  placeholder="Full name of contact"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.inputText}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Relationship</Text>
+              <View style={styles.inputBox}>
+                <TextInput
+                  value={emergencyContact.relationship}
+                  onChangeText={(v) => setEmergencyContact((p) => ({ ...p, relationship: v }))}
+                  placeholder="e.g. Spouse, Parent, Sibling"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.inputText}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <View style={styles.inputBox}>
+                <TextInput
+                  value={emergencyContact.phone}
+                  onChangeText={(v) => setEmergencyContact((p) => ({ ...p, phone: v }))}
+                  placeholder="e.g. +254 700 000 000"
+                  keyboardType="phone-pad"
+                  placeholderTextColor="#9CA3AF"
+                  style={styles.inputText}
+                />
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* 7. Pinned Bottom Sticky Action Bar */}
+      <View style={[styles.pinnedBottomBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
         <Pressable
-          testID="save-identity"
+          testID="save-identity-btn"
           onPress={handleSave}
           disabled={saving}
           style={({ pressed }) => [
-            styles.saveButton,
-            { backgroundColor: colors.primary, opacity: pressed || saving ? 0.85 : 1 },
+            styles.primaryCtaBtn,
+            { opacity: pressed || saving ? 0.85 : 1 },
           ]}
         >
           {saving ? (
             <ActivityIndicator color="#ffffff" size="small" />
           ) : (
-            <Feather name="save" size={16} color="#ffffff" />
+            <Text style={styles.primaryCtaBtnText}>Save changes</Text>
           )}
-          <Text style={styles.saveButtonText}>Save Changes</Text>
         </Pressable>
-      </ScrollView>
-    </View>
-  );
-}
-
-function VerificationRow({
-  label,
-  verified,
-  colors,
-}: {
-  label: string;
-  verified: boolean;
-  colors: ReturnType<typeof useColors>;
-}) {
-  return (
-    <View
-      style={[
-        styles.card,
-        styles.rowBetween,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          marginBottom: 10,
-          gap: 0,
-        },
-      ]}
-    >
-      <View style={styles.row}>
-        <View
-          style={[
-            styles.iconCircle,
-            { backgroundColor: verified ? '#d1fae5' : colors.secondary },
-          ]}
-        >
-          <Feather
-            name={verified ? 'check' : 'clock'}
-            size={15}
-            color={verified ? '#059669' : colors.mutedForeground}
-          />
-        </View>
-        <Text style={[styles.badgeLabel, { color: colors.foreground }]}>{label}</Text>
       </View>
-      {verified ? (
-        <StatusPill text="Verified" bg="#10b981" fg="#ffffff" />
-      ) : (
-        <StatusPill text="Unverified" bg={colors.secondary} fg={colors.mutedForeground} />
-      )}
-    </View>
-  );
-}
-
-function StatusPill({ text, bg, fg }: { text: string; bg: string; fg: string }) {
-  return (
-    <View style={[styles.statusPill, { backgroundColor: bg }]}>
-      <Text style={[styles.statusPillText, { color: fg }]}>{text}</Text>
     </View>
   );
 }
@@ -668,132 +596,293 @@ function StatusPill({ text, bg, fg }: { text: string; bg: string; fg: string }) 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingBottom: 48 },
-  card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: 16,
-    gap: 12,
-    marginBottom: 16,
+  topNavBar: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rowBetween: {
+  backIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleSection: {
+    paddingTop: 16,
+    paddingBottom: 20,
+    gap: 6,
+  },
+  pageTitle: {
+    fontSize: 26,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    letterSpacing: -0.3,
+  },
+  pageSub: {
+    fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    lineHeight: 20,
+  },
+  trustBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
   },
-  cardTitle: { fontSize: 16, fontFamily: 'DMSans_600SemiBold' },
-  mutedSmall: { fontSize: 13, fontFamily: 'DMSans_400Regular' },
-  hint: { fontSize: 11, fontFamily: 'DMSans_400Regular', marginTop: 2 },
-  scoreText: { fontSize: 24, fontFamily: 'DMSans_700Bold' },
-  progressTrack: {
-    height: 8,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  progressFill: { height: '100%', borderRadius: 999 },
-  warningBox: {
+  trustBannerLeft: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#fff7ed',
-    borderRadius: 10,
-    padding: 12,
-  },
-  warningText: {
+    alignItems: 'center',
+    gap: 12,
     flex: 1,
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-    color: '#c2410c',
   },
-  avatar: {
+  trustBannerTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  trustBannerTitle: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  trustBannerSub: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  trustBadgePill: {
+    backgroundColor: '#EE7D3018',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  trustBadgePillText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: '#EE7D30',
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginVertical: 8,
+    gap: 6,
+  },
+  avatarWrap: {
+    position: 'relative',
     width: 96,
     height: 96,
     borderRadius: 48,
-    borderWidth: 2,
+  },
+  avatarImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+  },
+  avatarFallback: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#F7F7F7',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
   },
-  avatarImage: { width: '100%', height: '100%' },
-  avatarOverlay: {
+  avatarBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#222222',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarLabel: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    marginTop: 4,
+  },
+  avatarSub: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+    marginVertical: 24,
+  },
+  sectionBlock: {
+    gap: 16,
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  sectionSub: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    lineHeight: 18,
+    marginTop: -8,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
+  },
+  inputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
+  },
+  inputBoxDisabled: {
+    backgroundColor: '#F0F0F0',
+  },
+  inputText: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
+    color: '#222222',
+  },
+  textAreaBox: {
+    minHeight: 90,
+    alignItems: 'flex-start',
+  },
+  textAreaText: {
+    textAlignVertical: 'top',
+  },
+  helperText: {
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chipItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  chipItemSelected: {
+    backgroundColor: '#EE7D3012',
+    borderColor: '#EE7D30',
+  },
+  chipItemUnselected: {
+    backgroundColor: '#F7F7F7',
+    borderColor: '#EBEBEB',
+  },
+  chipText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+  },
+  idButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    padding: 16,
+  },
+  idButtonLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  idIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  idTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  idTitle: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  idStatusText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  verifiedInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  verifiedInlineText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#008A05',
+  },
+  addInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addInlineText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
+  },
+  pinnedBottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 30,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#EBEBEB',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  primaryCtaBtn: {
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#EE7D30',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#EE7D30',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontFamily: 'DMSans_600SemiBold',
-    marginTop: 8,
-    marginBottom: 6,
-  },
-  fieldGroup: { marginBottom: 14, gap: 6 },
-  label: { fontSize: 13, fontFamily: 'DMSans_500Medium' },
-  input: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    fontSize: 15,
-    fontFamily: 'DMSans_400Regular',
-  },
-  textArea: { minHeight: 110, textAlignVertical: 'top' },
-  chipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  chipText: { fontSize: 13, fontFamily: 'DMSans_500Medium' },
-  iconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeLabel: { fontSize: 14, fontFamily: 'DMSans_500Medium' },
-  statusPill: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  statusPillText: { fontSize: 12, fontFamily: 'DMSans_500Medium' },
-  uploadBox: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 24,
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 999,
-    paddingVertical: 14,
-    marginTop: 12,
-  },
-  saveButtonText: {
-    color: '#ffffff',
+  primaryCtaBtnText: {
+    color: '#FFFFFF',
     fontSize: 15,
     fontFamily: 'DMSans_700Bold',
   },

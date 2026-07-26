@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, type ProfileRow } from '@/lib/supabase';
 
@@ -13,6 +14,10 @@ interface AuthContextValue {
   user: User | null;
   profile: ProfileRow | null;
   loading: boolean;
+  role: 'guest' | 'host' | 'admin' | null;
+  viewMode: 'guest' | 'host';
+  switchViewMode: (mode: 'guest' | 'host') => void;
+  hasPass: boolean;
   sendOtp: (email: string) => Promise<{ error: string | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -25,6 +30,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [viewMode, setViewModeState] = useState<'guest' | 'host'>('guest');
+
+  useEffect(() => {
+    AsyncStorage.getItem('viewMode').then((stored) => {
+      if (stored === 'host' || stored === 'guest') {
+        setViewModeState(stored);
+      }
+    });
+  }, []);
 
   const loadProfile = useCallback(async (userId: string) => {
     const { data } = await supabase
@@ -58,6 +72,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [loadProfile]);
 
+  const user = session?.user ?? null;
+  const meta = (user?.user_metadata ?? {}) as Record<string, unknown>;
+  const role: 'guest' | 'host' | 'admin' | null = user
+    ? (profile?.role === 'host' || meta.role === 'host' ? 'host' : (profile?.role as any) || (meta.role as any) || 'guest')
+    : null;
+
+  const hasPass = (profile?.metadata as { has_pass?: boolean } | null)?.has_pass === true;
+
+  useEffect(() => {
+    if (loading) return;
+    if ((role === 'guest' || role === null) && viewMode === 'host') {
+      setViewModeState('guest');
+      AsyncStorage.setItem('viewMode', 'guest');
+    }
+  }, [role, viewMode, loading]);
+
+  const switchViewMode = useCallback((mode: 'guest' | 'host') => {
+    setViewModeState(mode);
+    AsyncStorage.setItem('viewMode', mode);
+  }, []);
+
   const sendOtp = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -87,9 +122,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         session,
-        user: session?.user ?? null,
+        user,
         profile,
         loading,
+        role,
+        viewMode,
+        switchViewMode,
+        hasPass,
         sendOtp,
         verifyOtp,
         signOut,

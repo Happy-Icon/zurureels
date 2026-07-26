@@ -38,9 +38,8 @@ const ORANGE = '#EE7D30';
 
 // Web styles all h1-h6 with the display serif (see web src/index.css);
 // browsers synthesize the semibold weight, so mirror that on RN web only.
-const SERIF = 'InstrumentSerif_400Regular';
-const serifWeight =
-  Platform.OS === 'web' ? ({ fontWeight: '600' } as const) : null;
+const SERIF = 'DMSans_700Bold';
+const serifWeight = {};
 
 const COUNTRY_OPTIONS = [
   { code: '+254', label: 'Kenya (+254)' },

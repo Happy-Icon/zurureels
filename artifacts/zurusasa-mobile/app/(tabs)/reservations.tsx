@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   FlatList,
-  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -9,13 +8,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { useMyBookings } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
-import { useColors } from '@/hooks/useColors';
 import type { BookingRow } from '@/lib/supabase';
 
 const MONTHS = [
@@ -28,8 +27,8 @@ function formatDay(iso: string | null) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   const year =
-    d.getFullYear() === new Date().getFullYear() ? '' : ` ${d.getFullYear()}`;
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}${year}`;
+    d.getFullYear() === new Date().getFullYear() ? '' : `, ${d.getFullYear()}`;
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}${year}`;
 }
 
 function dateRange(b: BookingRow) {
@@ -49,16 +48,17 @@ function daysUntil(iso: string | null) {
   return `In ${days} day${days === 1 ? '' : 's'}`;
 }
 
-export default function ReservationsScreen() {
-  const colors = useColors();
+type TripTab = 'upcoming' | 'history';
+
+export default function TripsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, loading } = useAuth();
-  const [tab, setTab] = useState<'upcoming' | 'history'>('upcoming');
+  const [activeTab, setActiveTab] = useState<TripTab>('upcoming');
   const { data: bookings, isLoading } = useMyBookings(user?.id);
 
-  const topPad = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomPad = Platform.OS === 'web' ? 110 : 100;
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 90;
 
   const { upcoming, history } = useMemo(() => {
     const todayStart = new Date();
@@ -77,214 +77,245 @@ export default function ReservationsScreen() {
     return { upcoming: up, history: past };
   }, [bookings]);
 
+  // Unauthenticated signed-out state
   if (!loading && !user) {
     return (
-      <View
-        style={[
-          styles.fill,
-          styles.centered,
-          { backgroundColor: colors.background, paddingTop: topPad },
-        ]}
-      >
-        <View style={[styles.heroIcon, { backgroundColor: colors.secondary }]}>
-          <Feather name="calendar" size={30} color={colors.primary} />
+      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad }]}>
+        <View style={styles.topNavBar}>
+          <Pressable
+            testID="reservations-back-btn"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/profile');
+            }}
+            style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={10}
+          >
+            <Feather name="arrow-left" size={22} color="#222222" />
+          </Pressable>
         </View>
-        <Text style={[styles.heroTitle, { color: colors.foreground }]}>
-          Your trips live here
-        </Text>
-        <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-          Sign in to see upcoming reservations and booking history.
-        </Text>
-        <Pressable
-          testID="reservations-signin"
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/auth');
-          }}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <Text style={styles.primaryButtonText}>Sign in</Text>
-        </Pressable>
+
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconCircle}>
+            <Feather name="briefcase" size={30} color="#222222" />
+          </View>
+
+          <Text style={styles.emptyHeadline}>Log in to view trips</Text>
+          <Text style={styles.emptyBody}>
+            Once you log in, you'll find your active reservations, check-in guides, and past trips here.
+          </Text>
+
+          <Pressable
+            testID="reservations-signin"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/auth');
+            }}
+            style={({ pressed }) => [
+              styles.primaryCtaBtn,
+              { opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <Text style={styles.primaryCtaBtnText}>Log in</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
-  const statusStyle = (status: string | null) => {
-    if (status === 'confirmed' || status === 'paid') {
-      return { bg: '#2e7d3220', fg: '#2e7d32' };
-    }
-    if (status === 'cancelled') {
-      return { bg: `${colors.destructive}20`, fg: colors.destructive };
-    }
-    return { bg: colors.secondary, fg: colors.secondaryForeground };
-  };
+  // Header with title & Airbnb line tab switcher
+  const renderHeader = () => (
+    <View style={styles.headerWrap}>
+      <View style={styles.topNavBar}>
+        <Pressable
+          testID="reservations-back-btn"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push('/profile');
+          }}
+          style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={10}
+        >
+          <Feather name="arrow-left" size={22} color="#222222" />
+        </Pressable>
+      </View>
 
-  const renderBooking = ({ item }: { item: BookingRow }) => {
-    const st = statusStyle(item.status);
-    const range = dateRange(item);
-    const chip = tab === 'upcoming' ? daysUntil(item.check_in) : null;
-    return (
-      <View
-        testID={`booking-${item.id}`}
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            borderRadius: colors.radius,
-          },
-        ]}
-      >
-        {item.experience?.image_url ? (
-          <Image
-            source={{ uri: item.experience.image_url }}
-            style={[styles.cardImage, { backgroundColor: colors.muted }]}
-            resizeMode="cover"
-          />
-        ) : (
-          <View
-            style={[styles.cardImage, styles.cardImageFallback, { backgroundColor: colors.secondary }]}
-          >
-            <Feather name="map" size={20} color={colors.primary} />
-          </View>
-        )}
-        <View style={styles.cardInfo}>
-          <Text
-            style={[styles.cardTitle, { color: colors.foreground }]}
-            numberOfLines={1}
-          >
-            {item.experience?.title ?? 'Experience'}
-          </Text>
-          {item.experience?.location ? (
-            <View style={styles.locRow}>
-              <Feather name="map-pin" size={11} color={colors.mutedForeground} />
+      <Text style={styles.pageTitle}>Trips</Text>
+
+      {/* Airbnb Line Tab Switcher */}
+      <View style={styles.tabLineContainer}>
+        {(
+          [
+            { id: 'upcoming', label: 'Upcoming' },
+            { id: 'history', label: 'Past / Cancelled' },
+          ] as const
+        ).map((t) => {
+          const isActive = activeTab === t.id;
+          return (
+            <Pressable
+              key={t.id}
+              testID={`reservations-tab-${t.id}`}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setActiveTab(t.id);
+              }}
+              style={styles.tabLineItem}
+            >
               <Text
-                style={[styles.cardLoc, { color: colors.mutedForeground }]}
-                numberOfLines={1}
+                style={[
+                  styles.tabLineText,
+                  isActive ? styles.tabLineTextActive : styles.tabLineTextInactive,
+                ]}
               >
-                {item.experience.location}
+                {t.label}
               </Text>
+              {isActive ? <View style={styles.tabActiveIndicator} /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  // Render populated trip card (Single-column vertical card list)
+  const renderTripCard = ({ item }: { item: BookingRow }) => {
+    const range = dateRange(item);
+    const chip = activeTab === 'upcoming' ? daysUntil(item.check_in) : null;
+    const isPaid = item.status === 'confirmed' || item.status === 'paid';
+    const isCancelled = item.status === 'cancelled';
+
+    return (
+      <View testID={`booking-${item.id}`} style={styles.tripCard}>
+        {/* Cover Photo */}
+        <View style={styles.tripImageWrap}>
+          {item.experience?.image_url ? (
+            <Image
+              source={{ uri: item.experience.image_url }}
+              style={styles.tripImage}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={styles.tripImageFallback}>
+              <Feather name="map-pin" size={28} color="#717171" />
+            </View>
+          )}
+
+          {/* Days until badge on image */}
+          {chip ? (
+            <View style={styles.daysUntilBadge}>
+              <Text style={styles.daysUntilBadgeText}>{chip}</Text>
             </View>
           ) : null}
-          {range ? (
-            <Text style={[styles.cardDates, { color: colors.mutedForeground }]}>
-              {range}
-              {item.guests ? `  ·  ${item.guests} guest${item.guests === 1 ? '' : 's'}` : ''}
-            </Text>
-          ) : item.guests ? (
-            <Text style={[styles.cardDates, { color: colors.mutedForeground }]}>
-              {item.guests} guest{item.guests === 1 ? '' : 's'}
-            </Text>
-          ) : null}
-          {item.amount != null ? (
-            <Text style={[styles.cardAmount, { color: colors.primary }]}>
-              KES {Number(item.amount).toLocaleString()}
-            </Text>
-          ) : null}
         </View>
-        <View style={styles.cardRight}>
-          <View style={[styles.statusPill, { backgroundColor: st.bg }]}>
-            <Text style={[styles.statusText, { color: st.fg }]}>
-              {item.status ?? 'pending'}
-            </Text>
+
+        {/* Content Stack */}
+        <View style={styles.tripCardContent}>
+          <View style={styles.tripCardTopRow}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.tripLocationTitle} numberOfLines={1}>
+                {item.experience?.location || 'Kenya Coast'}
+              </Text>
+              <Text style={styles.tripStayTitle} numberOfLines={1}>
+                {item.experience?.title ?? 'Coastal Stay'}
+              </Text>
+            </View>
+
+            {/* Status Badge */}
+            <View
+              style={[
+                styles.statusBadge,
+                isPaid
+                  ? styles.statusBadgePaid
+                  : isCancelled
+                  ? styles.statusBadgeCancelled
+                  : styles.statusBadgeNeutral,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusBadgeText,
+                  isPaid
+                    ? { color: '#047857' }
+                    : isCancelled
+                    ? { color: '#EF4444' }
+                    : { color: '#4B5563' },
+                ]}
+              >
+                {item.status === 'paid' ? 'Confirmed' : item.status ?? 'Pending'}
+              </Text>
+            </View>
           </View>
-          {chip ? (
-            <Text style={[styles.daysChip, { color: colors.primary }]}>
-              {chip}
-            </Text>
-          ) : null}
+
+          <View style={styles.cardDivider} />
+
+          {/* Reservation details */}
+          <View style={styles.tripCardBottomRow}>
+            <View style={{ gap: 2 }}>
+              <Text style={styles.tripDatesText}>
+                {range || 'Dates to be confirmed'}
+              </Text>
+              <Text style={styles.tripGuestsText}>
+                {item.guests ? `${item.guests} guest${item.guests === 1 ? '' : 's'}` : '1 guest'}
+              </Text>
+            </View>
+
+            {item.amount != null ? (
+              <Text style={styles.tripAmountText}>
+                KES {Number(item.amount).toLocaleString()}
+              </Text>
+            ) : null}
+          </View>
         </View>
       </View>
     );
   };
 
-  const data = tab === 'upcoming' ? upcoming : history;
+  const currentData = activeTab === 'upcoming' ? upcoming : history;
 
   return (
-    <View
-      testID="reservations-screen"
-      style={[styles.fill, { backgroundColor: colors.background }]}
-    >
+    <View testID="reservations-screen" style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
       <FlatList
-        data={data}
+        data={currentData}
         keyExtractor={(b) => b.id}
-        renderItem={renderBooking}
+        renderItem={renderTripCard}
         contentContainerStyle={{
-          paddingTop: topPad + 8,
+          paddingHorizontal: 20,
           paddingBottom: bottomPad,
-          paddingHorizontal: 16,
-          gap: 10,
+          gap: 20,
         }}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.foreground }]}>
-              Reservations
-            </Text>
-            <View style={[styles.pillRow, { backgroundColor: colors.muted }]}>
-              {(['upcoming', 'history'] as const).map((key) => (
-                <Pressable
-                  key={key}
-                  testID={`reservations-tab-${key}`}
-                  onPress={() => setTab(key)}
-                  style={[
-                    styles.pill,
-                    tab === key && { backgroundColor: colors.background },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.pillText,
-                      {
-                        color:
-                          tab === key
-                            ? colors.foreground
-                            : colors.mutedForeground,
-                      },
-                    ]}
-                  >
-                    {key === 'upcoming' ? 'Upcoming' : 'History'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        }
+        ListHeaderComponent={renderHeader()}
         ListEmptyComponent={
           isLoading ? (
-            <View style={{ gap: 10 }}>
-              <Skeleton style={styles.skeletonCard} />
-              <Skeleton style={styles.skeletonCard} />
-              <Skeleton style={styles.skeletonCard} />
+            <View style={{ gap: 16 }}>
+              <Skeleton style={styles.skeletonTripCard} />
+              <Skeleton style={styles.skeletonTripCard} />
             </View>
           ) : (
-            <View style={styles.empty}>
-              <Feather
-                name="calendar"
-                size={40}
-                color={colors.mutedForeground}
-              />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                {tab === 'upcoming' ? 'No upcoming trips' : 'No past trips'}
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconCircle}>
+                <MaterialCommunityIcons name="bag-suitcase-outline" size={30} color="#222222" />
+              </View>
+
+              <Text style={styles.emptyHeadline}>
+                {activeTab === 'upcoming' ? 'No trips booked... yet!' : 'No past trips'}
               </Text>
-              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-                {tab === 'upcoming'
-                  ? 'When you book an experience, it will show up here.'
-                  : 'Completed and cancelled trips will show up here.'}
+              <Text style={styles.emptyBody}>
+                {activeTab === 'upcoming'
+                  ? 'Time to dust off your bags and start planning your next coastal adventure.'
+                  : 'Your past, completed, and cancelled bookings will be listed here.'}
               </Text>
+
               <Pressable
-                onPress={() => router.push('/discover')}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/discover');
+                }}
                 style={({ pressed }) => [
-                  styles.primaryButton,
-                  {
-                    backgroundColor: colors.primary,
-                    opacity: pressed ? 0.85 : 1,
-                  },
+                  styles.primaryCtaBtn,
+                  { opacity: pressed ? 0.85 : 1 },
                 ]}
               >
-                <Text style={styles.primaryButtonText}>Start Exploring</Text>
+                <Text style={styles.primaryCtaBtnText}>Start searching</Text>
               </Pressable>
             </View>
           )
@@ -296,134 +327,211 @@ export default function ReservationsScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  centered: {
+  topNavBar: {
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 32,
   },
-  heroIcon: {
+  headerWrap: {
+    marginBottom: 20,
+  },
+  pageTitle: {
+    fontSize: 32,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    letterSpacing: -0.5,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  tabLineContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
+    gap: 24,
+  },
+  tabLineItem: {
+    paddingBottom: 12,
+    position: 'relative',
+  },
+  tabLineText: {
+    fontSize: 16,
+  },
+  tabLineTextActive: {
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  tabLineTextInactive: {
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  tabActiveIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#222222',
+    borderRadius: 1,
+  },
+  tripCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  tripImageWrap: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#F7F7F7',
+    position: 'relative',
+  },
+  tripImage: {
+    width: '100%',
+    height: '100%',
+  },
+  tripImageFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  daysUntilBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(34, 34, 34, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  daysUntilBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+  },
+  tripCardContent: {
+    padding: 16,
+    gap: 12,
+  },
+  tripCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  tripLocationTitle: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  tripStayTitle: {
+    fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusBadgePaid: {
+    backgroundColor: '#10B98118',
+  },
+  statusBadgeCancelled: {
+    backgroundColor: '#EF444418',
+  },
+  statusBadgeNeutral: {
+    backgroundColor: '#F3F4F6',
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+    textTransform: 'capitalize',
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+  },
+  tripCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tripDatesText: {
+    fontSize: 14,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  tripGuestsText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  tripAmountText: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    color: '#EE7D30',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 56,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  emptyIconCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
+    backgroundColor: '#F7F7F7',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 4,
   },
-  heroTitle: {
-    fontSize: 26,
-    fontFamily: 'InstrumentSerif_400Regular',
+  emptyHeadline: {
+    fontSize: 22,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
     textAlign: 'center',
   },
-  heroSub: {
+  emptyBody: {
     fontSize: 14,
     fontFamily: 'DMSans_400Regular',
+    color: '#717171',
     textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 280,
+    marginBottom: 8,
   },
-  primaryButton: {
-    borderRadius: 999,
+  primaryCtaBtn: {
+    height: 48,
     paddingHorizontal: 28,
-    paddingVertical: 12,
-    marginTop: 8,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
-  },
-  header: { marginBottom: 14, gap: 10 },
-  title: {
-    fontSize: 30,
-    fontFamily: 'InstrumentSerif_400Regular',
-  },
-  pillRow: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    borderRadius: 10,
-    padding: 3,
-  },
-  pill: {
-    paddingHorizontal: 18,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  pillText: {
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 12,
-    gap: 12,
-  },
-  cardImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 10,
-  },
-  cardImageFallback: {
+    borderRadius: 12,
+    backgroundColor: '#222222',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardInfo: { flex: 1, gap: 3 },
-  cardTitle: {
+  primaryCtaBtnText: {
+    color: '#FFFFFF',
     fontSize: 15,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  locRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  cardLoc: {
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
-    flexShrink: 1,
-  },
-  cardDates: {
-    fontSize: 12,
-    fontFamily: 'DMSans_500Medium',
-  },
-  cardAmount: {
-    fontSize: 13,
     fontFamily: 'DMSans_700Bold',
   },
-  cardRight: {
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  statusPill: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  statusText: {
-    fontSize: 11,
-    fontFamily: 'DMSans_500Medium',
-    textTransform: 'capitalize',
-  },
-  daysChip: {
-    fontSize: 11,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  skeletonCard: {
-    height: 88,
-    borderRadius: 12,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    gap: 8,
-    paddingHorizontal: 24,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontFamily: 'InstrumentSerif_400Regular',
-  },
-  emptySub: {
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-    textAlign: 'center',
+  skeletonTripCard: {
+    width: '100%',
+    height: 220,
+    borderRadius: 16,
   },
 });

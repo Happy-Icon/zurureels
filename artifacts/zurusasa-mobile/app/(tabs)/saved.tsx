@@ -1,38 +1,23 @@
 import React, { useState } from 'react';
 import {
   FlatList,
-  Image,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useSavedEvents, useSavedReels, useToggleSave } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
-import { useColors } from '@/hooks/useColors';
 import type { EventRow, ReelRow } from '@/lib/supabase';
-
-// Synced with the web Saved page's category badge palette.
-const CATEGORY_COLORS: Record<string, string> = {
-  hotel: '#3b82f6',
-  villa: '#10b981',
-  boats: '#06b6d4',
-  tours: '#f59e0b',
-  events: '#a855f7',
-  apartment: '#6366f1',
-  food: '#f97316',
-  drinks: '#ec4899',
-  rentals: '#14b8a6',
-  adventure: '#ef4444',
-  parks_camps: '#16a34a',
-};
 
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -48,528 +33,522 @@ function formatEventDate(iso: string | null) {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}${year}`;
 }
 
-export default function SavedScreen() {
-  const colors = useColors();
+type FilterTab = 'all' | 'reels' | 'events';
+
+export default function WishlistsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, loading } = useAuth();
-  const [tab, setTab] = useState<'reels' | 'events'>('reels');
+  const [filterTab, setFilterTab] = useState<FilterTab>('all');
 
   const { data: reels, isLoading: reelsLoading } = useSavedReels(user?.id);
   const { data: events, isLoading: eventsLoading } = useSavedEvents(user?.id);
   const toggleSave = useToggleSave();
 
-  const topPad = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomPad = Platform.OS === 'web' ? 110 : 100;
-
-  if (!loading && !user) {
-    return (
-      <View
-        style={[
-          styles.fill,
-          styles.centered,
-          { backgroundColor: colors.background, paddingTop: topPad },
-        ]}
-      >
-        <View style={[styles.heroIcon, { backgroundColor: colors.secondary }]}>
-          <Feather name="bookmark" size={30} color={colors.primary} />
-        </View>
-        <Text style={[styles.heroTitle, { color: colors.foreground }]}>
-          Sign in to see saved
-        </Text>
-        <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-          Save hotels, tours, and experiences you love.
-        </Text>
-        <Pressable
-          testID="saved-signin"
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/auth');
-          }}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <Text style={styles.primaryButtonText}>Sign in</Text>
-        </Pressable>
-      </View>
-    );
-  }
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 90;
 
   const handleUnsave = (reelId: string) => {
     if (!user) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Optimistically drop the card; useToggleSave invalidates ['saved-reels'] on settle.
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     queryClient.setQueryData<ReelRow[]>(['saved-reels', user.id], (old) =>
       (old ?? []).filter((r) => r.id !== reelId),
     );
     toggleSave.mutate({ reelId, userId: user.id, saved: true });
   };
 
-  const header = (
-    <View style={styles.header}>
-      <Text style={[styles.title, { color: colors.foreground }]}>Saved</Text>
-      <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-        {tab === 'reels'
-          ? `${reels?.length ?? 0} reels saved`
-          : `${events?.length ?? 0} events subscribed`}
-      </Text>
-      <View style={[styles.pillRow, { backgroundColor: colors.muted }]}>
-        {(['reels', 'events'] as const).map((key) => (
+  const totalSavedCount = (reels?.length ?? 0) + (events?.length ?? 0);
+  const isLoading = reelsLoading || eventsLoading;
+
+  // Unauthenticated signed-out state
+  if (!loading && !user) {
+    return (
+      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad }]}>
+        <View style={styles.topNavBar}>
           <Pressable
-            key={key}
-            testID={`saved-tab-${key}`}
-            onPress={() => setTab(key)}
-            style={[
-              styles.pill,
-              tab === key && {
-                backgroundColor: colors.background,
-              },
+            testID="saved-back-btn"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/profile');
+            }}
+            style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={10}
+          >
+            <Feather name="arrow-left" size={22} color="#222222" />
+          </Pressable>
+        </View>
+
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconCircle}>
+            <Ionicons name="heart-outline" size={32} color="#222222" />
+          </View>
+
+          <Text style={styles.emptyHeadline}>Log in to view wishlists</Text>
+          <Text style={styles.emptyBody}>
+            You can create, view, or edit wishlists once you're logged in.
+          </Text>
+
+          <Pressable
+            testID="saved-signin"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/auth');
+            }}
+            style={({ pressed }) => [
+              styles.primaryCtaBtn,
+              { opacity: pressed ? 0.85 : 1 },
             ]}
           >
-            <Text
+            <Text style={styles.primaryCtaBtnText}>Log in</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // Header component with title & segmented filter chips
+  const renderHeader = () => (
+    <View style={styles.headerWrap}>
+      <View style={styles.topNavBar}>
+        <Pressable
+          testID="saved-back-btn"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push('/profile');
+          }}
+          style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={10}
+        >
+          <Feather name="arrow-left" size={22} color="#222222" />
+        </Pressable>
+      </View>
+
+      <View style={styles.titleRow}>
+        <Text style={styles.pageTitle}>Wishlists</Text>
+        {totalSavedCount > 0 ? (
+          <Text style={styles.itemCountSub}>{totalSavedCount} saved items</Text>
+        ) : null}
+      </View>
+
+      {/* Segmented Filter Chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterChipRow}
+      >
+        {(
+          [
+            { id: 'all', label: 'All Saved' },
+            { id: 'reels', label: 'Reels & Stays' },
+            { id: 'events', label: 'Events' },
+          ] as const
+        ).map((chip) => {
+          const isActive = filterTab === chip.id;
+          return (
+            <Pressable
+              key={chip.id}
+              testID={`saved-chip-${chip.id}`}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setFilterTab(chip.id);
+              }}
               style={[
-                styles.pillText,
-                {
-                  color:
-                    tab === key ? colors.foreground : colors.mutedForeground,
-                },
+                styles.chipBtn,
+                isActive ? styles.chipActive : styles.chipInactive,
               ]}
             >
-              {key === 'reels' ? 'Reels' : 'Events'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+              <Text
+                style={[
+                  styles.chipText,
+                  { color: isActive ? '#FFFFFF' : '#222222' },
+                ]}
+              >
+                {chip.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 
-  const renderReel = ({ item }: { item: ReelRow }) => {
+  // Render reel item in 2-column grid
+  const renderReelCard = ({ item }: { item: ReelRow }) => {
     const price = Number(item.experience?.current_price ?? 0);
-    const badgeColor = CATEGORY_COLORS[item.category ?? ''] ?? colors.primary;
+    const priceUnit = item.experience?.price_unit ?? 'night';
+
     return (
       <Pressable
         testID={`saved-reel-${item.id}`}
         onPress={() => router.push('/')}
-        style={[styles.reelCard, { backgroundColor: colors.muted }]}
+        style={styles.gridCard}
       >
-        {item.thumbnail_url ? (
-          <Image
-            source={{ uri: item.thumbnail_url }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-          />
-        ) : null}
-        <View style={[styles.badge, { backgroundColor: badgeColor }]}>
-          <Text style={styles.badgeText}>{item.category ?? 'reel'}</Text>
+        <View style={styles.cardImageWrap}>
+          {item.thumbnail_url ? (
+            <Image
+              source={{ uri: item.thumbnail_url }}
+              style={styles.cardImage}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={styles.cardImageFallback}>
+              <Feather name="film" size={24} color="#717171" />
+            </View>
+          )}
+
+          {/* Floating Heart Icon Overlay */}
+          <Pressable
+            testID={`unsave-${item.id}`}
+            hitSlop={8}
+            onPress={() => handleUnsave(item.id)}
+            style={styles.floatingHeartBtn}
+          >
+            <Ionicons name="heart" size={18} color="#EE7D30" />
+          </Pressable>
         </View>
-        {item.is_live ? (
-          <View style={styles.liveChip}>
-            <Text style={styles.liveText}>LIVE</Text>
-          </View>
-        ) : null}
-        <Pressable
-          testID={`unsave-${item.id}`}
-          hitSlop={8}
-          onPress={() => handleUnsave(item.id)}
-          style={styles.unsaveBtn}
-        >
-          <MaterialCommunityIcons
-            name="bookmark"
-            size={18}
-            color={colors.primary}
-          />
-        </Pressable>
-        <View style={styles.reelInfo}>
-          <Text style={styles.reelTitle} numberOfLines={2}>
-            {item.experience?.title ?? 'Untitled Experience'}
+
+        {/* Stacked Text Below Image */}
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.experience?.title ?? 'Coastal Experience'}
           </Text>
-          <Text style={styles.reelLoc} numberOfLines={1}>
-            {item.experience?.location ?? 'Unknown Location'}
+          <Text style={styles.cardSub} numberOfLines={1}>
+            {item.experience?.location ?? 'Kenya Coast'}
           </Text>
-          <Text style={styles.reelPrice}>
-            KES {price.toLocaleString()}
-            <Text style={styles.reelUnit}>
-              /{item.experience?.price_unit ?? 'person'}
-            </Text>
+          <Text style={styles.cardPrice}>
+            KES {price.toLocaleString()} <Text style={styles.cardPriceUnit}>/ {priceUnit}</Text>
           </Text>
         </View>
       </Pressable>
     );
   };
 
-  const renderEvent = ({ item }: { item: EventRow }) => (
-    <View
-      style={[
-        styles.eventCard,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          borderRadius: colors.radius,
-        },
-      ]}
+  // Render event item
+  const renderEventCard = ({ item }: { item: EventRow }) => (
+    <Pressable
+      onPress={() => router.push('/discover')}
+      style={styles.eventRowCard}
     >
-      <View style={styles.eventTopRow}>
-        <View style={[styles.eventChip, { backgroundColor: colors.secondary }]}>
-          <Text
-            style={[styles.eventChipText, { color: colors.secondaryForeground }]}
-          >
-            {item.category ?? 'event'}
-          </Text>
+      <View style={styles.eventRowContent}>
+        <View style={styles.eventHeaderRow}>
+          <Text style={styles.eventCategoryTag}>{item.category ?? 'Event'}</Text>
+          <Text style={styles.eventDateText}>{formatEventDate(item.event_date)}</Text>
         </View>
-        <Text style={[styles.eventDate, { color: colors.mutedForeground }]}>
-          {formatEventDate(item.event_date)}
+        <Text style={styles.eventTitleText} numberOfLines={1}>
+          {item.title ?? 'Coastal Event'}
+        </Text>
+        <Text style={styles.eventPriceText}>
+          {item.price ? `KES ${Number(item.price).toLocaleString()}` : 'Free Entry'}
         </Text>
       </View>
-      <Text
-        style={[styles.eventTitle, { color: colors.foreground }]}
-        numberOfLines={2}
-      >
-        {item.title ?? 'Event'}
-      </Text>
-      {item.description ? (
-        <Text
-          style={[styles.eventDesc, { color: colors.mutedForeground }]}
-          numberOfLines={2}
-        >
-          {item.description}
-        </Text>
-      ) : null}
-      <View style={styles.eventBottomRow}>
-        <Text style={[styles.eventPrice, { color: colors.foreground }]}>
-          {item.price ? `KES ${Number(item.price).toLocaleString()}` : 'Free'}
-        </Text>
-        <Pressable
-          onPress={() => router.push('/discover')}
-          style={({ pressed }) => [
-            styles.eventBtn,
-            { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-          ]}
-        >
-          <Text style={[styles.eventBtnText, { color: colors.foreground }]}>
-            View Event
-          </Text>
-        </Pressable>
+      <View style={styles.eventChevronCircle}>
+        <Feather name="chevron-right" size={18} color="#717171" />
       </View>
-    </View>
+    </Pressable>
   );
 
-  const loadingBody = (
-    <View style={styles.skeletonGrid}>
-      <Skeleton style={styles.skeletonCard} />
-      <Skeleton style={styles.skeletonCard} />
-      <Skeleton style={styles.skeletonCard} />
-      <Skeleton style={styles.skeletonCard} />
-    </View>
-  );
-
-  const emptyState = (icon: React.ReactNode, title: string, sub: string) => (
-    <View style={styles.empty}>
-      {icon}
-      <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-        {title}
-      </Text>
-      <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-        {sub}
-      </Text>
-      <Pressable
-        onPress={() => router.push('/discover')}
-        style={({ pressed }) => [
-          styles.primaryButton,
-          { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
-        ]}
-      >
-        <Text style={styles.primaryButtonText}>Start Exploring</Text>
-      </Pressable>
-    </View>
-  );
-
-  if (tab === 'events') {
-    return (
-      <View
-        testID="saved-screen"
-        style={[styles.fill, { backgroundColor: colors.background }]}
-      >
-        <FlatList
-          data={events ?? []}
-          keyExtractor={(e) => e.id}
-          renderItem={renderEvent}
-          contentContainerStyle={{
-            paddingTop: topPad + 8,
-            paddingBottom: bottomPad,
-            paddingHorizontal: 16,
-            gap: 12,
-          }}
-          ListHeaderComponent={header}
-          ListEmptyComponent={
-            eventsLoading
-              ? loadingBody
-              : emptyState(
-                  <Feather
-                    name="calendar"
-                    size={40}
-                    color={colors.mutedForeground}
-                  />,
-                  'No events subscribed',
-                  'Subscribe to events you want to hear about.',
-                )
-          }
-        />
-      </View>
-    );
-  }
+  // Combined dataset based on active filter chip
+  const filteredReels = filterTab === 'events' ? [] : (reels ?? []);
+  const filteredEvents = filterTab === 'reels' ? [] : (events ?? []);
+  const isCombineEmpty = filteredReels.length === 0 && filteredEvents.length === 0;
 
   return (
-    <View
-      testID="saved-screen"
-      style={[styles.fill, { backgroundColor: colors.background }]}
-    >
-      <FlatList
-        data={reels ?? []}
-        keyExtractor={(r) => r.id}
-        renderItem={renderReel}
-        numColumns={2}
-        columnWrapperStyle={{ gap: 12 }}
-        contentContainerStyle={{
-          paddingTop: topPad + 8,
-          paddingBottom: bottomPad,
-          paddingHorizontal: 16,
-          gap: 12,
-        }}
-        ListHeaderComponent={header}
-        ListEmptyComponent={
-          reelsLoading
-            ? loadingBody
-            : emptyState(
-                <Feather
-                  name="bookmark"
-                  size={40}
-                  color={colors.mutedForeground}
-                />,
-                'Nothing saved yet',
-                'Save hotels, tours, and events you love for easy access later.',
-              )
-        }
-      />
+    <View testID="saved-screen" style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      {isCombineEmpty && !isLoading ? (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: bottomPad }}
+        >
+          {renderHeader()}
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="heart-outline" size={30} color="#222222" />
+            </View>
+
+            <Text style={styles.emptyHeadline}>Create your first wishlist</Text>
+            <Text style={styles.emptyBody}>
+              As you search, tap the heart icon on any stay, experience, or event to save it here.
+            </Text>
+
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/discover');
+              }}
+              style={({ pressed }) => [
+                styles.primaryCtaBtn,
+                { opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <Text style={styles.primaryCtaBtnText}>Start exploring</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={filteredReels}
+          keyExtractor={(r) => r.id}
+          renderItem={renderReelCard}
+          numColumns={2}
+          columnWrapperStyle={styles.gridColumnWrapper}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingBottom: bottomPad,
+          }}
+          ListHeaderComponent={
+            <View>
+              {renderHeader()}
+              {filteredEvents.length > 0 ? (
+                <View style={styles.eventsSectionWrap}>
+                  <Text style={styles.sectionHeading}>Subscribed Events</Text>
+                  {filteredEvents.map((ev) => (
+                    <React.Fragment key={ev.id}>{renderEventCard({ item: ev })}</React.Fragment>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          }
+          ListEmptyComponent={
+            isLoading ? (
+              <View style={styles.skeletonGrid}>
+                <Skeleton style={styles.skeletonCard} />
+                <Skeleton style={styles.skeletonCard} />
+              </View>
+            ) : null
+          }
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  centered: {
+  topNavBar: {
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 32,
   },
-  heroIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+  headerWrap: {
+    marginBottom: 20,
   },
-  heroTitle: {
-    fontSize: 26,
-    fontFamily: 'InstrumentSerif_400Regular',
-    textAlign: 'center',
-  },
-  heroSub: {
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
-    textAlign: 'center',
-  },
-  primaryButton: {
-    borderRadius: 999,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
+  titleRow: {
     marginTop: 8,
+    marginBottom: 16,
+    gap: 4,
   },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
+  pageTitle: {
+    fontSize: 28,
     fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    letterSpacing: -0.4,
   },
-  header: { marginBottom: 14, gap: 8 },
-  title: {
-    fontSize: 30,
-    fontFamily: 'InstrumentSerif_400Regular',
-  },
-  subtitle: {
+  itemCountSub: {
     fontSize: 13,
     fontFamily: 'DMSans_400Regular',
+    color: '#717171',
   },
-  pillRow: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    borderRadius: 10,
-    padding: 3,
-    marginTop: 4,
+  filterChipRow: {
+    gap: 8,
+    paddingRight: 20,
   },
-  pill: {
-    paddingHorizontal: 18,
-    paddingVertical: 7,
-    borderRadius: 8,
+  chipBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
   },
-  pillText: {
+  chipActive: {
+    backgroundColor: '#222222',
+  },
+  chipInactive: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+  },
+  chipText: {
     fontSize: 13,
     fontFamily: 'DMSans_600SemiBold',
   },
-  reelCard: {
-    flex: 1,
-    aspectRatio: 3 / 4,
+  gridColumnWrapper: {
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  gridCard: {
+    width: '48%',
+    gap: 8,
+  },
+  cardImageWrap: {
+    width: '100%',
+    aspectRatio: 1,
     borderRadius: 14,
     overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#F7F7F7',
   },
-  badge: {
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardImageFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingHeartBtn: {
     position: 'absolute',
     top: 10,
-    left: 10,
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    zIndex: 2,
-  },
-  badgeText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontFamily: 'DMSans_600SemiBold',
-    textTransform: 'capitalize',
-  },
-  liveChip: {
-    position: 'absolute',
-    top: 38,
     right: 10,
-    backgroundColor: '#ef4444',
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    zIndex: 2,
-  },
-  liveText: {
-    color: '#ffffff',
-    fontSize: 9,
-    fontFamily: 'DMSans_700Bold',
-  },
-  unsaveBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 2,
+    shadowColor: '#000000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
-  reelInfo: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    padding: 10,
+  cardContent: {
     gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.35)',
   },
-  reelTitle: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  reelLoc: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 11,
-    fontFamily: 'DMSans_400Regular',
-  },
-  reelPrice: {
-    color: '#ffffff',
-    fontSize: 13,
+  cardTitle: {
+    fontSize: 14,
     fontFamily: 'DMSans_700Bold',
+    color: '#222222',
   },
-  reelUnit: {
-    fontSize: 10,
-    fontFamily: 'DMSans_400Regular',
-  },
-  eventCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    gap: 8,
-  },
-  eventTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  eventChip: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  eventChipText: {
-    fontSize: 11,
-    fontFamily: 'DMSans_500Medium',
-    textTransform: 'capitalize',
-  },
-  eventDate: {
+  cardSub: {
     fontSize: 12,
     fontFamily: 'DMSans_400Regular',
+    color: '#717171',
   },
-  eventTitle: {
-    fontSize: 17,
-    fontFamily: 'DMSans_700Bold',
-  },
-  eventDesc: {
+  cardPrice: {
     fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-    lineHeight: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    marginTop: 2,
   },
-  eventBottomRow: {
+  cardPriceUnit: {
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  eventsSectionWrap: {
+    marginBottom: 20,
+    gap: 10,
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    marginBottom: 4,
+  },
+  eventRowCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    padding: 14,
   },
-  eventPrice: {
+  eventRowContent: {
+    flex: 1,
+    gap: 3,
+  },
+  eventHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  eventCategoryTag: {
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
+    color: '#EE7D30',
+    textTransform: 'uppercase',
+  },
+  eventDateText: {
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  eventTitleText: {
     fontSize: 14,
-    fontFamily: 'DMSans_600SemiBold',
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
   },
-  eventBtn: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+  eventPriceText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
   },
-  eventBtnText: {
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
+  eventChevronCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 56,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F7F7F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyHeadline: {
+    fontSize: 20,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    textAlign: 'center',
+  },
+  emptyBody: {
+    fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 300,
+    marginBottom: 8,
+  },
+  primaryCtaBtn: {
+    height: 48,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    backgroundColor: '#222222',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryCtaBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
   },
   skeletonGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
   },
   skeletonCard: {
-    width: '47%',
-    aspectRatio: 3 / 4,
+    width: '48%',
+    aspectRatio: 1,
     borderRadius: 14,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    gap: 8,
-    paddingHorizontal: 24,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontFamily: 'InstrumentSerif_400Regular',
-  },
-  emptySub: {
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-    textAlign: 'center',
   },
 });

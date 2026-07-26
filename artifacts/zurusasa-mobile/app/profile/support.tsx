@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,14 +11,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { ScreenHeader } from '@/components/profile/ScreenHeader';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { useColors } from '@/hooks/useColors';
 
-const WHATSAPP_GREEN = '#25D366';
 const SUPPORT_EMAIL = 'support@zurusasa.com';
 
 interface TicketRow {
@@ -27,11 +27,27 @@ interface TicketRow {
   created_at: string;
 }
 
-const TOPICS = [
-  { icon: 'calendar', label: 'Bookings', desc: 'Manage trips and reservations' },
-  { icon: 'credit-card', label: 'Payments', desc: 'Refunds, taxes, and payouts' },
-  { icon: 'user', label: 'Account', desc: 'Profile settings and security' },
-  { icon: 'shield', label: 'Safety', desc: 'Trust and safety concerns' },
+const BROWSE_TOPICS = [
+  {
+    icon: 'calendar',
+    title: 'Bookings & Stays',
+    desc: 'Manage reservations, check-in details, and host rules',
+  },
+  {
+    icon: 'credit-card',
+    title: 'Payments & Refunds',
+    desc: 'Payment methods, receipts, M-Pesa, and refund policies',
+  },
+  {
+    icon: 'user',
+    title: 'Account & Profile',
+    desc: 'Login credentials, verification badges, and privacy',
+  },
+  {
+    icon: 'shield',
+    title: 'Safety & Security',
+    desc: 'Emergency assistance, trust scores, and community rules',
+  },
 ] as const;
 
 function formatDate(d?: string | null) {
@@ -43,14 +59,15 @@ function formatDate(d?: string | null) {
   });
 }
 
-function ticketStatusColors(status: string): { bg: string; fg: string } {
-  if (status === 'resolved') return { bg: '#d1fae5', fg: '#047857' };
-  if (status === 'open') return { bg: '#dbeafe', fg: '#1d4ed8' };
-  return { bg: '#e5e7eb', fg: '#4b5563' };
+function ticketStatusStyle(status: string): { bg: string; fg: string } {
+  if (status === 'resolved') return { bg: '#10B98118', fg: '#047857' };
+  if (status === 'open' || status === 'in_progress') return { bg: '#3B82F618', fg: '#1D4ED8' };
+  return { bg: '#F3F4F6', fg: '#4B5563' };
 }
 
-export default function SupportScreen() {
-  const colors = useColors();
+export default function HelpCenterScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuth();
 
   const [tickets, setTickets] = useState<TicketRow[]>([]);
@@ -59,16 +76,25 @@ export default function SupportScreen() {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  const bottomPad = Platform.OS === 'web' ? 100 : insets.bottom + 40;
 
   useEffect(() => {
     const fetchTickets = async () => {
       if (!user) return;
-      const { data } = await supabase
-        .from('support_tickets')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (data) setTickets(data as TicketRow[]);
-      setLoading(false);
+      try {
+        const { data } = await supabase
+          .from('support_tickets')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (data) setTickets(data as TicketRow[]);
+      } catch (e) {
+        console.error('Error fetching tickets:', e);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchTickets();
   }, [user]);
@@ -92,7 +118,8 @@ export default function SupportScreen() {
       setIsAdding(false);
       setSubject('');
       setMessage('');
-      Alert.alert('Submitted', "Ticket submitted! Our team will get back to you soon.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Submitted', "Ticket submitted! Our support team will get back to you soon.");
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Failed to submit ticket.');
     } finally {
@@ -100,245 +127,254 @@ export default function SupportScreen() {
     }
   };
 
-  const contactSupport = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const contactWhatsApp = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
-      'Live Support',
-      `Our support team is available 24/7. Reach us at ${SUPPORT_EMAIL} — average response time is under 2 minutes on WhatsApp.`,
+      '24/7 WhatsApp Support',
+      'Our team is active on WhatsApp to assist with active bookings and emergencies. Average response time is under 2 minutes.',
     );
   };
 
+  const contactPhone = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert('Support Hotline', 'Calling ZuruSasa Support Line: +254 700 000 000');
+  };
+
   return (
-    <View style={[styles.fill, { backgroundColor: colors.background }]}>
-      <ScreenHeader />
+    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      {/* 1. Header Bar & Navigation */}
+      <View style={[styles.topNavBar, { paddingTop: topPad }]}>
+        <Pressable
+          testID="support-back-btn"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (router.canGoBack()) router.back();
+            else router.replace('/profile');
+          }}
+          style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={10}
+        >
+          <Feather name="arrow-left" size={22} color="#222222" />
+        </Pressable>
+      </View>
+
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero */}
-        <Text style={[styles.heroTitle, { color: colors.foreground }]}>
-          How can we help you today?
-        </Text>
-        <View
-          style={[
-            styles.searchBox,
-            { borderColor: colors.border, backgroundColor: colors.card },
-          ]}
-        >
-          <Feather name="search" size={18} color={colors.mutedForeground} />
+        <View style={styles.titleSection}>
+          <Text style={styles.pageTitle}>How can we help?</Text>
+        </View>
+
+        {/* Search Bar Refinement */}
+        <View style={styles.searchPillBox}>
+          <Feather name="search" size={18} color="#717171" />
           <TextInput
-            placeholder="Search for answers..."
-            placeholderTextColor={colors.mutedForeground}
-            style={[styles.searchInput, { color: colors.foreground }]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search help articles, policies & more..."
+            placeholderTextColor="#717171"
+            style={styles.searchInputText}
           />
         </View>
 
-        {/* Topics */}
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Browse by Topic</Text>
-        <View style={styles.topicGrid}>
-          {TOPICS.map((t) => (
-            <View
-              key={t.label}
-              style={[
-                styles.topicCard,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <View style={[styles.topicIcon, { backgroundColor: `${colors.primary}1A` }]}>
-                <Feather name={t.icon} size={20} color={colors.primary} />
-              </View>
-              <Text style={[styles.topicLabel, { color: colors.foreground }]}>{t.label}</Text>
-              <Text style={[styles.topicDesc, { color: colors.mutedForeground }]}>
-                {t.desc}
-              </Text>
-            </View>
-          ))}
-        </View>
+        {/* 2. Browse Topics Section Architecture (Vertical Native Rows) */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionHeading}>Browse by Topic</Text>
 
-        {/* Live support */}
-        <View
-          style={[
-            styles.liveCard,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.liveTitle, { color: colors.foreground }]}>
-            Need to talk to someone?
-          </Text>
-          <Text style={[styles.mutedSmall, { color: colors.mutedForeground }]}>
-            Our support team is available 24/7 to assist you.
-          </Text>
-          <Pressable
-            testID="whatsapp-support"
-            onPress={contactSupport}
-            style={({ pressed }) => [
-              styles.whatsappButton,
-              { opacity: pressed ? 0.85 : 1 },
-            ]}
-          >
-            <MaterialCommunityIcons name="whatsapp" size={19} color="#ffffff" />
-            <Text style={styles.whatsappButtonText}>Chat on WhatsApp</Text>
-          </Pressable>
-          <Pressable
-            testID="call-support"
-            onPress={contactSupport}
-            style={({ pressed }) => [
-              styles.callButton,
-              { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <Feather name="phone" size={16} color={colors.foreground} />
-            <Text style={[styles.callButtonText, { color: colors.foreground }]}>
-              Call Support
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Tickets */}
-        <View style={styles.ticketsHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 0 }]}>
-            Your Support Requests
-          </Text>
-          <Pressable
-            testID="create-ticket"
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setIsAdding(true);
-            }}
-            style={({ pressed }) => [
-              styles.createButton,
-              { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
-            ]}
-          >
-            <Feather name="plus" size={15} color="#ffffff" />
-            <Text style={styles.createButtonText}>Create Ticket</Text>
-          </Pressable>
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
-        ) : tickets.length === 0 ? (
-          <View
-            style={[
-              styles.emptyBox,
-              { borderColor: colors.border, backgroundColor: colors.card },
-            ]}
-          >
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              No support tickets yet.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.ticketList}>
-            {tickets.map((ticket) => {
-              const sc = ticketStatusColors(ticket.status);
-              return (
-                <View
-                  key={ticket.id}
-                  style={[
-                    styles.ticketCard,
-                    { backgroundColor: colors.card, borderColor: colors.border },
+          {BROWSE_TOPICS.map((topic, index) => {
+            const isLast = index === BROWSE_TOPICS.length - 1;
+            return (
+              <View key={topic.title}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Alert.alert(topic.title, `Showing help articles for ${topic.title}.`);
+                  }}
+                  style={({ pressed }) => [
+                    styles.topicRow,
+                    { opacity: pressed ? 0.75 : 1 },
                   ]}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.ticketId, { color: colors.mutedForeground }]}>
-                      #{ticket.id.split('-')[0].toUpperCase()}
-                    </Text>
-                    <Text
-                      style={[styles.ticketSubject, { color: colors.foreground }]}
-                      numberOfLines={1}
-                    >
-                      {ticket.subject}
-                    </Text>
-                    <Text style={[styles.ticketDate, { color: colors.mutedForeground }]}>
-                      {formatDate(ticket.created_at)}
-                    </Text>
+                  <View style={styles.topicIconCircle}>
+                    <Feather name={topic.icon as any} size={18} color="#222222" />
                   </View>
-                  <View style={[styles.statusPill, { backgroundColor: sc.bg }]}>
-                    <Text style={[styles.statusText, { color: sc.fg }]}>{ticket.status}</Text>
+                  <View style={styles.topicTextStack}>
+                    <Text style={styles.topicTitleText}>{topic.title}</Text>
+                    <Text style={styles.topicDescText}>{topic.desc}</Text>
                   </View>
-                </View>
-              );
-            })}
+                  <Feather name="chevron-right" size={18} color="#717171" />
+                </Pressable>
+                {!isLast ? <View style={styles.rowDivider} /> : null}
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.sectionDivider} />
+
+        {/* 3. Direct Support Section (Low-Contrast Soft Card) */}
+        <View style={styles.directSupportCard}>
+          <Text style={styles.supportCardTitle}>Contact Customer Support</Text>
+          <Text style={styles.supportCardSub}>
+            Our team is available 24/7 to assist with active reservations or emergencies.
+          </Text>
+
+          <View style={styles.supportButtonsStack}>
+            {/* WhatsApp Soft Green Button */}
+            <Pressable
+              testID="whatsapp-support"
+              onPress={contactWhatsApp}
+              style={({ pressed }) => [
+                styles.whatsappBtn,
+                { opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <MaterialCommunityIcons name="whatsapp" size={18} color="#008A05" />
+              <Text style={styles.whatsappBtnText}>24/7 WhatsApp Chat</Text>
+            </Pressable>
+
+            {/* Phone Support Outlined Button */}
+            <Pressable
+              testID="call-support"
+              onPress={contactPhone}
+              style={({ pressed }) => [
+                styles.phoneBtn,
+                { opacity: pressed ? 0.75 : 1 },
+              ]}
+            >
+              <Feather name="phone" size={16} color="#222222" />
+              <Text style={styles.phoneBtnText}>Call Support Hotline</Text>
+            </Pressable>
           </View>
-        )}
+        </View>
+
+        <View style={styles.sectionDivider} />
+
+        {/* 4. "Your Support Requests" (Tickets Section) */}
+        <View style={styles.sectionBlock}>
+          <View style={styles.ticketsHeaderRow}>
+            <Text style={styles.sectionHeading}>Active Requests</Text>
+            <Pressable
+              testID="create-ticket"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setIsAdding(true);
+              }}
+              hitSlop={8}
+            >
+              <Text style={styles.createTicketLink}>+ Create Ticket</Text>
+            </Pressable>
+          </View>
+
+          {loading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color="#EE7D30" />
+            </View>
+          ) : tickets.length === 0 ? (
+            /* Clean Flat Empty State */
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconCircle}>
+                <Feather name="headphones" size={28} color="#717171" />
+              </View>
+              <Text style={styles.emptyHeadline}>No support tickets yet</Text>
+              <Text style={styles.emptyBody}>
+                Tap "+ Create Ticket" above if you need help with a reservation or account issue.
+              </Text>
+            </View>
+          ) : (
+            /* Populated Ticket List */
+            <View style={styles.ticketListWrap}>
+              {tickets.map((ticket) => {
+                const sc = ticketStatusStyle(ticket.status);
+                return (
+                  <View key={ticket.id} style={styles.ticketRowCard}>
+                    <View style={styles.ticketCardLeft}>
+                      <Text style={styles.ticketSubjectText} numberOfLines={1}>
+                        {ticket.subject}
+                      </Text>
+                      <Text style={styles.ticketDateText}>
+                        Updated {formatDate(ticket.created_at)}
+                      </Text>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
+                      <Text style={[styles.statusBadgeText, { color: sc.fg }]}>
+                        {ticket.status === 'open' ? 'In Progress' : ticket.status}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
       </ScrollView>
 
-      {/* New ticket modal */}
-      <Modal visible={isAdding} transparent animationType="fade" onRequestClose={() => setIsAdding(false)}>
+      {/* New Ticket Modal Sheet */}
+      <Modal
+        visible={isAdding}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsAdding(false)}
+      >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: colors.card }]}>
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-              New Support Request
-            </Text>
-            <Text style={[styles.mutedSmall, { color: colors.mutedForeground }]}>
-              Describe your issue and we'll get back to you within 24 hours.
-            </Text>
-            <Text style={[styles.label, { color: colors.foreground }]}>Subject</Text>
-            <TextInput
-              value={subject}
-              onChangeText={setSubject}
-              placeholder="What's the issue?"
-              placeholderTextColor={colors.mutedForeground}
-              style={[
-                styles.input,
-                {
-                  borderColor: colors.border,
-                  color: colors.foreground,
-                  backgroundColor: colors.background,
-                },
-              ]}
-            />
-            <Text style={[styles.label, { color: colors.foreground }]}>Details</Text>
-            <TextInput
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Provide more information..."
-              placeholderTextColor={colors.mutedForeground}
-              multiline
-              style={[
-                styles.input,
-                styles.textArea,
-                {
-                  borderColor: colors.border,
-                  color: colors.foreground,
-                  backgroundColor: colors.background,
-                },
-              ]}
-            />
-            <View style={styles.modalActions}>
+          <View style={styles.modalSheetCard}>
+            <View style={styles.modalSheetHeader}>
+              <Text style={styles.modalSheetTitle}>New Support Request</Text>
               <Pressable
                 onPress={() => setIsAdding(false)}
-                style={({ pressed }) => [
-                  styles.modalCancel,
-                  { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-                ]}
+                style={styles.modalSheetCloseBtn}
+                hitSlop={8}
               >
-                <Text style={[styles.modalCancelText, { color: colors.foreground }]}>
-                  Cancel
-                </Text>
+                <Feather name="x" size={20} color="#222222" />
               </Pressable>
+            </View>
+
+            <View style={styles.modalFormStack}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Subject</Text>
+                <View style={styles.inputBox}>
+                  <TextInput
+                    value={subject}
+                    onChangeText={setSubject}
+                    placeholder="Brief summary of your issue"
+                    placeholderTextColor="#9CA3AF"
+                    style={styles.inputText}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Details</Text>
+                <View style={[styles.inputBox, styles.textAreaBox]}>
+                  <TextInput
+                    value={message}
+                    onChangeText={setMessage}
+                    placeholder="Provide more information..."
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                    style={[styles.inputText, styles.textAreaText]}
+                  />
+                </View>
+              </View>
+
               <Pressable
                 testID="submit-ticket"
                 onPress={handleSubmit}
                 disabled={submitting || !subject || !message}
                 style={({ pressed }) => [
-                  styles.modalSubmit,
+                  styles.submitBtn,
                   {
-                    backgroundColor: colors.primary,
-                    opacity: pressed || submitting || !subject || !message ? 0.7 : 1,
+                    opacity: pressed || submitting || !subject || !message ? 0.75 : 1,
                   },
                 ]}
               >
                 {submitting ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : null}
-                <Text style={styles.modalSubmitText}>
-                  {submitting ? 'Sending...' : 'Submit Ticket'}
-                </Text>
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.submitBtnText}>Submit Ticket</Text>
+                )}
               </Pressable>
             </View>
           </View>
@@ -350,203 +386,293 @@ export default function SupportScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  content: { padding: 16, paddingBottom: 48 },
-  heroTitle: {
-    fontSize: 28,
-    fontFamily: 'InstrumentSerif_400Regular',
-    textAlign: 'center',
-    marginTop: 16,
+  topNavBar: {
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleSection: {
+    marginTop: 8,
     marginBottom: 16,
   },
-  searchBox: {
+  pageTitle: {
+    fontSize: 28,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    letterSpacing: -0.4,
+  },
+  searchPillBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    marginBottom: 28,
-  },
-  searchInput: {
-    flex: 1,
+    gap: 10,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
+    marginBottom: 24,
+  },
+  searchInputText: {
+    flex: 1,
     fontSize: 15,
     fontFamily: 'DMSans_400Regular',
+    color: '#222222',
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontFamily: 'DMSans_600SemiBold',
-    marginBottom: 12,
-  },
-  topicGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 28,
-  },
-  topicCard: {
-    width: '47%',
-    flexGrow: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: 16,
-    alignItems: 'center',
+  sectionBlock: {
     gap: 4,
   },
-  topicIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  sectionHeading: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    marginBottom: 12,
+  },
+  topicRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    gap: 12,
+  },
+  topicIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F7F7F7',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
   },
-  topicLabel: { fontSize: 14, fontFamily: 'DMSans_600SemiBold' },
-  topicDesc: {
-    fontSize: 11,
+  topicTextStack: {
+    flex: 1,
+    gap: 2,
+  },
+  topicTitleText: {
+    fontSize: 16,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  topicDescText: {
+    fontSize: 13,
     fontFamily: 'DMSans_400Regular',
-    textAlign: 'center',
+    color: '#717171',
   },
-  liveCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: 16,
+  rowDivider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+    marginVertical: 24,
+  },
+  directSupportCard: {
+    backgroundColor: '#F7F7F7',
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+  },
+  supportCardTitle: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  supportCardSub: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    lineHeight: 18,
+  },
+  supportButtonsStack: {
     gap: 10,
-    marginBottom: 28,
+    marginTop: 4,
   },
-  liveTitle: { fontSize: 16, fontFamily: 'DMSans_600SemiBold' },
-  mutedSmall: { fontSize: 13, fontFamily: 'DMSans_400Regular' },
-  whatsappButton: {
+  whatsappBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: WHATSAPP_GREEN,
-    borderRadius: 999,
-    paddingVertical: 12,
-    marginTop: 6,
+    backgroundColor: '#E6F7ED',
+    borderRadius: 12,
+    height: 46,
   },
-  whatsappButtonText: {
-    color: '#ffffff',
+  whatsappBtnText: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+    color: '#008A05',
+  },
+  phoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#222222',
+    borderRadius: 12,
+    height: 46,
+  },
+  phoneBtnText: {
     fontSize: 14,
     fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
   },
-  callButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 12,
-  },
-  callButtonText: { fontSize: 14, fontFamily: 'DMSans_500Medium' },
-  ticketsHeader: {
+  ticketsHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  createTicketLink: {
+    fontSize: 14,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#EE7D30',
+  },
+  loadingBox: {
+    paddingVertical: 32,
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 24,
     gap: 10,
   },
-  createButton: {
-    flexDirection: 'row',
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F7F7F7',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    justifyContent: 'center',
+    marginBottom: 4,
   },
-  createButtonText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
+  emptyHeadline: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    textAlign: 'center',
   },
-  loadingBox: { paddingVertical: 32, alignItems: 'center' },
-  emptyBox: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  emptyText: {
+  emptyBody: {
     fontSize: 13,
     fontFamily: 'DMSans_400Regular',
-    fontStyle: 'italic',
+    color: '#717171',
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 280,
   },
-  ticketList: { gap: 10 },
-  ticketCard: {
+  ticketListWrap: {
+    gap: 10,
+  },
+  ticketRowCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 14,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
   },
-  ticketId: { fontSize: 10, fontFamily: 'DMSans_500Medium' },
-  ticketSubject: { fontSize: 14, fontFamily: 'DMSans_600SemiBold', marginTop: 2 },
-  ticketDate: { fontSize: 11, fontFamily: 'DMSans_400Regular', marginTop: 2 },
-  statusPill: {
-    borderRadius: 999,
+  ticketCardLeft: {
+    flex: 1,
+    gap: 4,
+    paddingRight: 10,
+  },
+  ticketSubjectText: {
+    fontSize: 15,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  ticketDateText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 8,
   },
-  statusText: {
+  statusBadgeText: {
     fontSize: 12,
-    fontFamily: 'DMSans_500Medium',
+    fontFamily: 'DMSans_600SemiBold',
     textTransform: 'capitalize',
   },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
+  },
+  modalSheetCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 24,
   },
-  modalCard: {
-    alignSelf: 'stretch',
-    borderRadius: 18,
-    padding: 20,
-    gap: 8,
-  },
-  modalTitle: { fontSize: 18, fontFamily: 'DMSans_700Bold' },
-  label: {
-    fontSize: 13,
-    fontFamily: 'DMSans_500Medium',
-    marginTop: 10,
-  },
-  input: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    fontSize: 15,
-    fontFamily: 'DMSans_400Regular',
-  },
-  textArea: { minHeight: 100, textAlignVertical: 'top' },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-    marginTop: 16,
-  },
-  modalCancel: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  modalCancelText: { fontSize: 14, fontFamily: 'DMSans_500Medium' },
-  modalSubmit: {
+  modalSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  modalSubmitText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontFamily: 'DMSans_600SemiBold',
+  modalSheetTitle: {
+    fontSize: 20,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  modalSheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F7F7F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalFormStack: {
+    gap: 16,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
+  },
+  inputBox: {
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
+  },
+  inputText: {
+    fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
+    color: '#222222',
+  },
+  textAreaBox: {
+    minHeight: 110,
+  },
+  textAreaText: {
+    textAlignVertical: 'top',
+  },
+  submitBtn: {
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#EE7D30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  submitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
   },
 });

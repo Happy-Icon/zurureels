@@ -7,7 +7,6 @@ import React, {
 } from 'react';
 import {
   Alert,
-  Appearance,
   FlatList,
   Modal,
   Platform,
@@ -17,16 +16,13 @@ import {
   Text,
   TextInput,
   View,
-  useColorScheme,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
-import { useColors } from '@/hooks/useColors';
-import { useAuth } from '@/context/AuthContext';
 import { useReels } from '@/lib/queries';
 import { useWeather, type Coordinates } from '@/lib/weather';
 import { WeatherCard } from '@/components/WeatherCard';
@@ -37,63 +33,21 @@ import { ZuruAgentChat, type ReelSummary } from '@/components/ZuruAgentChat';
 import { Skeleton } from '@/components/Skeleton';
 import type { ReelRow } from '@/lib/supabase';
 
-const ZURU_ORANGE = '#EE7D30';
-
-// Mirrors web DiscoverContent's discoveryGroups.
-const DISCOVERY_GROUPS = [
-  { id: 'all', label: 'All', categories: ['all'] },
-  {
-    id: 'accommodation',
-    label: 'Accommodation',
-    categories: ['hotel', 'villa', 'apartment', 'parks_camps'],
-  },
-  { id: 'events', label: 'Events', categories: ['events', 'food', 'drinks'] },
-  {
-    id: 'adventure',
-    label: 'Adventure',
-    categories: ['land_adventure', 'air_adventure', 'water_adventure'],
-  },
+const DISCOVERY_CATEGORIES = [
+  { id: 'all', label: 'All', icon: 'grid', categories: ['all'] },
+  { id: 'accommodation', label: 'Stays', icon: 'home', categories: ['hotel', 'villa', 'apartment', 'parks_camps'] },
+  { id: 'events', label: 'Events', icon: 'calendar', categories: ['events', 'food', 'drinks'] },
+  { id: 'experiences', label: 'Experiences', icon: 'compass', categories: ['land_adventure', 'air_adventure', 'water_adventure', 'tours'] },
 ] as const;
 
-type GroupId = (typeof DISCOVERY_GROUPS)[number]['id'];
+type CategoryId = (typeof DISCOVERY_CATEGORIES)[number]['id'];
 
-function GroupIcon({ id, color }: { id: GroupId; color: string }) {
-  switch (id) {
-    case 'all':
-      return <MaterialCommunityIcons name="creation" size={15} color={color} />;
-    case 'accommodation':
-      return <Feather name="home" size={15} color={color} />;
-    case 'events':
-      return (
-        <MaterialCommunityIcons name="party-popper" size={15} color={color} />
-      );
-    case 'adventure':
-      return (
-        <MaterialCommunityIcons
-          name="image-filter-hdr"
-          size={15}
-          color={color}
-        />
-      );
-  }
-}
-
-const subLabel = (cat: string) =>
-  cat
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-
-export default function DiscoverScreen() {
-  const colors = useColors();
+export default function AirbnbDiscoverScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const scheme = useColorScheme();
-  const { user, profile } = useAuth();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
 
-  const [selectedGroup, setSelectedGroup] = useState<GroupId>('all');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [activeCategory, setActiveCategory] = useState<CategoryId>('all');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCity, setSelectedCity] = useState('Mombasa');
@@ -107,13 +61,11 @@ export default function DiscoverScreen() {
   const reelsQuery = useReels();
   const weatherQuery = useWeather(selectedCity, coords);
 
-  // Debounce search like web (500ms).
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 500);
+    const t = setTimeout(() => setDebouncedSearch(search), 400);
     return () => clearTimeout(t);
   }, [search]);
 
-  // Web parity: CityPulse auto-detects location on mount.
   const applyMyLocation = useCallback(async (interactive: boolean) => {
     try {
       let { status } = await Location.getForegroundPermissionsAsync();
@@ -124,7 +76,7 @@ export default function DiscoverScreen() {
       if (status !== 'granted') {
         if (interactive) {
           Alert.alert(
-            'Location',
+            'Location Required',
             'Location permission was denied. Pick a coastal city instead.',
           );
         }
@@ -137,7 +89,7 @@ export default function DiscoverScreen() {
       setSelectedCity('Current Location');
     } catch {
       if (interactive) {
-        Alert.alert('Location', 'Could not get your location right now.');
+        Alert.alert('Location Error', 'Could not retrieve your current location.');
       }
     }
   }, []);
@@ -146,7 +98,7 @@ export default function DiscoverScreen() {
     applyMyLocation(false);
   }, [applyMyLocation]);
 
-  const group = DISCOVERY_GROUPS.find((g) => g.id === selectedGroup)!;
+  const categoryObj = DISCOVERY_CATEGORIES.find((c) => c.id === activeCategory)!;
 
   const filteredReels = useMemo(() => {
     const reels = reelsQuery.data ?? [];
@@ -156,12 +108,10 @@ export default function DiscoverScreen() {
       const title = (r.experience?.title ?? '').toLowerCase();
       const location = (r.experience?.location ?? '').toLowerCase();
 
-      const matchesGroup =
-        selectedCategory !== 'all'
-          ? cat === selectedCategory
-          : selectedGroup === 'all'
-            ? true
-            : (group.categories as readonly string[]).includes(cat);
+      const matchesCategory =
+        activeCategory === 'all'
+          ? true
+          : (categoryObj.categories as readonly string[]).includes(cat);
 
       const matchesCity =
         selectedCity === 'Current Location'
@@ -171,15 +121,14 @@ export default function DiscoverScreen() {
       const matchesSearch =
         !q || title.includes(q) || location.includes(q) || cat.includes(q);
 
-      return matchesGroup && matchesCity && matchesSearch;
+      return matchesCategory && matchesCity && matchesSearch;
     });
   }, [
     reelsQuery.data,
     debouncedSearch,
-    selectedCategory,
-    selectedGroup,
+    activeCategory,
     selectedCity,
-    group,
+    categoryObj,
   ]);
 
   const chatReels: ReelSummary[] = useMemo(
@@ -193,287 +142,120 @@ export default function DiscoverScreen() {
     [filteredReels],
   );
 
-  const isHost = profile?.role === 'host';
-  const cardWidth = (winWidth - 32 - 12) / 2;
-  const topPad = Platform.OS === 'web' ? 10 : insets.top;
-  const bottomPad = (Platform.OS === 'web' ? 104 : 92) + insets.bottom;
+  const cardWidth = (winWidth - 40 - 12) / 2;
+  const topPad = Platform.OS === 'web' ? 12 : insets.top;
+  const bottomPad = Platform.OS === 'web' ? 100 : insets.bottom + 84;
 
-  const onToggleTheme = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      if (typeof Appearance.setColorScheme === 'function') {
-        Appearance.setColorScheme(scheme === 'dark' ? 'light' : 'dark');
-      }
-    } catch {
-      // not supported on this platform — leave system theme
-    }
-  };
-
-  const onNotifications = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const msg = "You're all caught up — no new notifications.";
-    if (Platform.OS === 'web') {
-      // RN Web's Alert is a no-op.
-      (globalThis as { alert?: (m: string) => void }).alert?.(msg);
-    } else {
-      Alert.alert('Notifications', msg);
-    }
-  };
-
-  const onSelectGroup = (id: GroupId) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedGroup(id);
-    setSelectedCategory('all');
-  };
-
-  const secondary50 = `${colors.secondary}80`;
-  const secondary30 = `${colors.secondary}4D`;
-
-  const showSubcategories = selectedGroup !== 'all';
-
-  const countLabel = `${filteredReels.length} reel${
-    filteredReels.length === 1 ? '' : 's'
-  } found${selectedCategory !== 'all' ? ` in ${subLabel(selectedCategory)}` : ''}`;
+  const countLabel = `${filteredReels.length} ${
+    filteredReels.length === 1 ? 'experience' : 'experiences'
+  } in ${selectedCity}`;
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      {/* ---- Sticky header (web: MainLayout bar + CityPulse explore header) ---- */}
-      <View
-        style={[
-          styles.topBar,
-          {
-            paddingTop: topPad + 10,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <Text style={[styles.logo, { color: colors.foreground }]}>
-          ZuruSasa
-        </Text>
-        <View style={styles.topBarCenter}>
+    <View style={[styles.screen, { backgroundColor: '#FFFFFF' }]}>
+      {/* 1. Header & Search Integration (Airbnb Floating Search Style) */}
+      <View style={[styles.headerContainer, { paddingTop: topPad + 6 }]}>
+        {/* Floating Search Pill Bar */}
+        <View style={styles.floatingSearchPill}>
+          <Feather name="search" size={18} color="#222222" style={{ marginLeft: 4 }} />
           <Pressable
-            testID="header-search"
-            onPress={() => searchInputRef.current?.focus()}
-            style={({ pressed }) => [
-              styles.searchCircle,
-              { backgroundColor: colors.secondary, opacity: pressed ? 0.7 : 1 },
-            ]}
+            testID="floating-search-trigger"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              searchInputRef.current?.focus();
+            }}
+            style={styles.searchPillTextGroup}
           >
-            <Feather name="search" size={18} color={colors.foreground} />
+            <Text style={styles.searchPillTitle}>Where to?</Text>
+            <Text style={styles.searchPillSub} numberOfLines={1}>
+              {selectedCity} · Any week · Add guests
+            </Text>
           </Pressable>
-        </View>
-        <View style={styles.topBarRight}>
-          <Pressable
-            testID="theme-toggle"
-            onPress={onToggleTheme}
-            hitSlop={6}
-            style={styles.iconButton}
-          >
-            <Feather
-              name={scheme === 'dark' ? 'moon' : 'sun'}
-              size={19}
-              color={colors.foreground}
-            />
-          </Pressable>
-          <Pressable
-            testID="notifications-button"
-            onPress={onNotifications}
-            hitSlop={6}
-            style={styles.iconButton}
-          >
-            <Feather name="bell" size={19} color={colors.foreground} />
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        {/* Segmented ZuruFlow | Discover + location */}
-        <View style={styles.segmentRow}>
-          <View
-            style={[styles.segment, { backgroundColor: colors.secondary }]}
-          >
-            <Pressable
-              testID="segment-zuruflow"
-              onPress={() => router.navigate('/')}
-              style={styles.segmentButton}
-            >
-              <Text
-                style={[styles.segmentText, { color: colors.mutedForeground }]}
-              >
-                ZuruFlow
-              </Text>
-            </Pressable>
-            <Pressable
-              testID="segment-discover"
-              style={[styles.segmentButton, styles.segmentActive]}
-            >
-              <Text style={[styles.segmentText, { color: '#ffffff' }]}>
-                Discover
-              </Text>
-            </Pressable>
-          </View>
 
           <Pressable
-            testID="city-pill"
+            testID="filter-button"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setCityPickerOpen(true);
             }}
             style={({ pressed }) => [
-              styles.cityPill,
-              { backgroundColor: colors.secondary, opacity: pressed ? 0.7 : 1 },
+              styles.filterCircleBtn,
+              { opacity: pressed ? 0.7 : 1 },
             ]}
           >
-            <Feather name="map-pin" size={14} color={colors.primary} />
-            <Text
-              numberOfLines={1}
-              style={[styles.cityText, { color: colors.foreground }]}
-            >
-              {selectedCity}
-            </Text>
-            <Feather
-              name="chevron-down"
-              size={14}
-              color={colors.mutedForeground}
-            />
+            <Feather name="sliders" size={15} color="#222222" />
           </Pressable>
         </View>
 
-        {/* Search + filter */}
-        <View style={styles.searchRow}>
-          <View style={styles.searchWrap}>
-            <Feather
-              name="search"
-              size={16}
-              color={colors.mutedForeground}
-              style={styles.searchIcon}
-            />
-            <TextInput
-              ref={searchInputRef}
-              testID="discover-search-input"
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search villas, hotels, locations..."
-              placeholderTextColor={colors.mutedForeground}
-              style={[
-                styles.searchInput,
-                { backgroundColor: secondary50, color: colors.foreground },
-              ]}
-              returnKeyType="search"
-            />
-          </View>
-          <Pressable
-            testID="filter-button"
-            style={({ pressed }) => [
-              styles.filterButton,
-              { backgroundColor: colors.secondary, opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <Feather name="filter" size={17} color={colors.foreground} />
-          </Pressable>
-        </View>
+        {/* Hidden TextInput for keyboard search */}
+        <TextInput
+          ref={searchInputRef}
+          value={search}
+          onChangeText={setSearch}
+          style={styles.hiddenSearchInput}
+        />
 
-        {/* Discovery group toggle */}
-        <View style={[styles.groups, { backgroundColor: secondary30 }]}>
-          {DISCOVERY_GROUPS.map((g) => {
-            const active = selectedGroup === g.id;
+        {/* 2. Horizontal Category Scroll Bar (Airbnb Icon + Text Underline Pattern) */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryBarScroll}
+        >
+          {DISCOVERY_CATEGORIES.map((cat) => {
+            const isActive = activeCategory === cat.id;
             return (
               <Pressable
-                key={g.id}
-                testID={`group-${g.id}`}
-                onPress={() => onSelectGroup(g.id)}
-                style={[
-                  styles.groupButton,
-                  active ? { backgroundColor: ZURU_ORANGE } : null,
-                ]}
+                key={cat.id}
+                testID={`category-${cat.id}`}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveCategory(cat.id);
+                }}
+                style={styles.categoryItem}
               >
-                <GroupIcon
-                  id={g.id}
-                  color={active ? '#ffffff' : colors.mutedForeground}
+                <Feather
+                  name={cat.icon as any}
+                  size={20}
+                  color={isActive ? '#222222' : '#717171'}
                 />
                 <Text
-                  numberOfLines={1}
                   style={[
-                    styles.groupText,
-                    { color: active ? '#ffffff' : colors.mutedForeground },
+                    styles.categoryLabelText,
+                    isActive ? styles.categoryLabelActive : styles.categoryLabelInactive,
                   ]}
                 >
-                  {g.label.toUpperCase()}
+                  {cat.label}
                 </Text>
+                {isActive ? <View style={styles.activeUnderline} /> : null}
               </Pressable>
             );
           })}
-        </View>
-
-        {/* Sub-category chips */}
-        {showSubcategories ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipsRow}
-          >
-            {['all', ...group.categories].map((cat) => {
-              const active = selectedCategory === cat;
-              const label =
-                cat === 'all' ? `All ${selectedGroup}` : subLabel(cat);
-              return (
-                <Pressable
-                  key={cat}
-                  testID={`subcat-${cat}`}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSelectedCategory(cat);
-                  }}
-                  style={[
-                    styles.chip,
-                    active
-                      ? {
-                          backgroundColor: `${ZURU_ORANGE}33`,
-                          borderColor: `${ZURU_ORANGE}4D`,
-                        }
-                      : {
-                          backgroundColor: `${colors.secondary}CC`,
-                          borderColor: 'transparent',
-                        },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      {
-                        color: active
-                          ? colors.primary
-                          : colors.secondaryForeground,
-                      },
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        ) : null}
+        </ScrollView>
       </View>
 
-      {/* ---- Scrollable content: weather, count, reel grid ---- */}
+      {/* 4. Media Feed Card Grid Architecture */}
       <FlatList
         data={reelsQuery.isPending ? [] : filteredReels}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        columnWrapperStyle={styles.gridRow}
-        contentContainerStyle={{ paddingTop: 16, paddingBottom: bottomPad }}
+        columnWrapperStyle={styles.gridColumnWrapper}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingTop: 12,
+          paddingBottom: bottomPad,
+        }}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          <View style={styles.listHeader}>
+          <View style={styles.feedHeaderWrap}>
+            {/* 3. Weather & Coastal Conditions Widget (Compact Single-Row Strip) */}
             <WeatherCard
               weather={weatherQuery.data}
               loading={weatherQuery.isPending}
               city={selectedCity}
             />
-            <Text style={[styles.countText, { color: colors.mutedForeground }]}>
-              {countLabel}
-            </Text>
+
+            <View style={styles.countRow}>
+              <Text style={styles.countText}>{countLabel}</Text>
+            </View>
           </View>
         }
         ListEmptyComponent={
@@ -491,41 +273,34 @@ export default function DiscoverScreen() {
               ))}
             </View>
           ) : (
-            <View style={styles.empty}>
+            <View style={styles.emptyContainer}>
               <MaterialCommunityIcons
                 name="creation"
-                size={44}
-                color={colors.mutedForeground}
-                style={{ opacity: 0.35 }}
+                size={38}
+                color="#717171"
               />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                No reels found
-              </Text>
-              <Text
-                style={[styles.emptySub, { color: colors.mutedForeground }]}
-              >
-                Try a different search or category
+              <Text style={styles.emptyHeadline}>No experiences found</Text>
+              <Text style={styles.emptyBody}>
+                Try adjusting your search terms or city location filter.
               </Text>
             </View>
           )
         }
         ListFooterComponent={
-          !isHost ? (
-            <Pressable
-              testID="ask-zuru-discover"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setChatOpen(true);
-              }}
-              style={({ pressed }) => [
-                styles.zuruButton,
-                { transform: [{ scale: pressed ? 0.97 : 1 }] },
-              ]}
-            >
-              <MaterialCommunityIcons name="creation" size={17} color="#fff" />
-              <Text style={styles.zuruButtonText}>Zuru Agent</Text>
-            </Pressable>
-          ) : null
+          <Pressable
+            testID="ask-zuru-discover"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setChatOpen(true);
+            }}
+            style={({ pressed }) => [
+              styles.zuruFabBtn,
+              { opacity: pressed ? 0.88 : 1 },
+            ]}
+          >
+            <MaterialCommunityIcons name="creation" size={18} color="#FFFFFF" />
+            <Text style={styles.zuruFabBtnText}>Ask Zuru Concierge</Text>
+          </Pressable>
         }
         renderItem={({ item }) => (
           <ReelGridCard
@@ -536,29 +311,27 @@ export default function DiscoverScreen() {
         )}
       />
 
-      {/* ---- Full-screen reel viewer (web: selectedReel overlay) ---- */}
+      {/* Full Reel Viewer Modal */}
       <Modal
         visible={!!viewerReel}
         animationType="fade"
         onRequestClose={() => setViewerReel(null)}
       >
-        <View style={styles.viewer}>
+        <View style={styles.viewerContainer}>
           {viewerReel ? (
             <ReelCard reel={viewerReel} isActive height={winHeight} />
           ) : null}
           <Pressable
             testID="viewer-back"
             onPress={() => setViewerReel(null)}
-            style={[
-              styles.viewerBack,
-              { top: Math.max(insets.top, 14) + 6 },
-            ]}
+            style={[styles.viewerBackBtn, { top: Math.max(insets.top, 14) + 6 }]}
           >
-            <Feather name="chevron-left" size={22} color="#ffffff" />
+            <Feather name="chevron-left" size={22} color="#FFFFFF" />
           </Pressable>
         </View>
       </Modal>
 
+      {/* Coastal City Picker Sheet */}
       <CityPickerSheet
         visible={cityPickerOpen}
         selectedCity={selectedCity}
@@ -573,237 +346,178 @@ export default function DiscoverScreen() {
         }}
       />
 
+      {/* Concierge Agent Chat */}
       <ZuruAgentChat
         visible={chatOpen}
         onClose={() => setChatOpen(false)}
-        city="Discover"
+        city={selectedCity}
         reels={chatReels}
-        placeholder="Ask Zuru about these listings..."
+        placeholder="Ask Zuru concierge about coastal stays..."
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+  screen: { flex: 1 },
+  headerContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingBottom: 4,
     borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
   },
-  logo: {
-    fontSize: 21,
-    fontFamily: 'InstrumentSerif_400Regular',
-  },
-  topBarCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  searchCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topBarRight: {
+  floatingSearchPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 12,
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+    marginBottom: 14,
   },
-  iconButton: {
+  searchPillTextGroup: {
+    flex: 1,
+    gap: 1,
+  },
+  searchPillTitle: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  searchPillSub: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  filterCircleBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 14,
-    gap: 12,
-    borderBottomWidth: 1,
+  hiddenSearchInput: {
+    height: 0,
+    width: 0,
+    opacity: 0,
   },
-  segmentRow: {
+  categoryBarScroll: {
+    gap: 28,
+    paddingRight: 20,
+  },
+  categoryItem: {
+    alignItems: 'center',
+    gap: 6,
+    paddingBottom: 10,
+    position: 'relative',
+  },
+  categoryLabelText: {
+    fontSize: 12,
+  },
+  categoryLabelActive: {
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  categoryLabelInactive: {
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
+  },
+  activeUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#222222',
+    borderRadius: 1,
+  },
+  feedHeaderWrap: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  countRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
-  },
-  segment: {
-    flexDirection: 'row',
-    borderRadius: 999,
-    padding: 4,
-    gap: 4,
-  },
-  segmentButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-  },
-  segmentActive: {
-    backgroundColor: ZURU_ORANGE,
-  },
-  segmentText: {
-    fontSize: 13,
-    fontFamily: 'DMSans_700Bold',
-  },
-  cityPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    maxWidth: 150,
-    flexShrink: 1,
-  },
-  cityText: {
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-    flexShrink: 1,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  searchWrap: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  searchIcon: {
-    position: 'absolute',
-    left: 12,
-    zIndex: 1,
-  },
-  searchInput: {
-    height: 44,
-    borderRadius: 12,
-    paddingLeft: 36,
-    paddingRight: 12,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
-  },
-  filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  groups: {
-    flexDirection: 'row',
-    borderRadius: 24,
-    padding: 4,
-  },
-  groupButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderRadius: 19,
-  },
-  groupText: {
-    fontSize: 10,
-    fontFamily: 'DMSans_700Bold',
-    letterSpacing: 0.2,
-    flexShrink: 1,
-  },
-  chipsRow: {
-    gap: 8,
-    paddingRight: 8,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  chipText: {
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  listHeader: {
-    paddingHorizontal: 16,
-    gap: 14,
-    paddingBottom: 14,
+    marginTop: 4,
   },
   countText: {
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
   },
-  gridRow: {
-    gap: 12,
-    paddingHorizontal: 16,
-    marginBottom: 12,
+  gridColumnWrapper: {
+    justifyContent: 'space-between',
+    marginBottom: 18,
   },
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
     gap: 12,
-    paddingHorizontal: 16,
   },
-  empty: {
+  emptyContainer: {
     alignItems: 'center',
     paddingVertical: 56,
-    gap: 8,
+    paddingHorizontal: 24,
+    gap: 10,
   },
-  emptyTitle: {
-    fontSize: 15,
-    fontFamily: 'DMSans_600SemiBold',
+  emptyHeadline: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    textAlign: 'center',
   },
-  emptySub: {
+  emptyBody: {
     fontSize: 13,
     fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    textAlign: 'center',
+    lineHeight: 18,
   },
-  zuruButton: {
-    alignSelf: 'flex-start',
-    marginLeft: 16,
-    marginTop: 8,
+  zuruFabBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
+    alignSelf: 'center',
+    gap: 8,
+    backgroundColor: '#222222',
     paddingHorizontal: 20,
-    paddingVertical: 13,
-    borderRadius: 16,
-    backgroundColor: 'rgba(238,125,48,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    shadowColor: ZURU_ORANGE,
-    shadowOpacity: 0.5,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 16,
+    shadowColor: '#000000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  zuruButtonText: {
-    color: '#ffffff',
-    fontSize: 11,
+  zuruFabBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontFamily: 'DMSans_700Bold',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
-  viewer: {
+  viewerContainer: {
     flex: 1,
     backgroundColor: '#000000',
   },
-  viewerBack: {
+  viewerBackBtn: {
     position: 'absolute',
     left: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.4)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },

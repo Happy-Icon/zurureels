@@ -5,6 +5,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/context/AuthContext';
+import { CustomAlertProvider } from '@/context/CustomAlertContext';
 import {
   DMSans_400Regular,
   DMSans_500Medium,
@@ -31,6 +32,8 @@ function RootLayoutNav() {
       />
       <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="profile" options={{ headerShown: false }} />
+      <Stack.Screen name="host" options={{ headerShown: false }} />
+      <Stack.Screen name="become-host" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -57,11 +60,13 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <GestureHandlerRootView>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
+            <CustomAlertProvider>
+              <GestureHandlerRootView>
+                <KeyboardProvider>
+                  <RootLayoutNav />
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </CustomAlertProvider>
           </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>

@@ -60,6 +60,6 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 15,
-    fontFamily: 'DMSans_400Regular',
+    fontFamily: 'DMSans_600SemiBold',
   },
 });

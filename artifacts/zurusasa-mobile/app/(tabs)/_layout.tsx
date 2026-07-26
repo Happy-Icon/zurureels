@@ -1,145 +1,196 @@
 import React from 'react';
-import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
-import { useColors } from '@/hooks/useColors';
-import { useAuth } from '@/context/AuthContext';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs, useRouter } from 'expo-router';
-import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
-import { SymbolView } from 'expo-symbols';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import * as Haptics from 'expo-haptics';
+import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
 
-// iOS 26 liquid glass tabs. Brand colors only apply on the classic path.
-function NativeTabLayout() {
-  const { user } = useAuth();
+const ACTIVE_COLOR = '#F26522';
+const INACTIVE_COLOR = '#94A3B8';
+
+/**
+ * Premium 4-Tab Bottom Navigation Bar (Pulse, Discover, Inbox, Profile).
+ * Refined aesthetic:
+ * - 1.5px stroke-width minimalist line icons
+ * - Inactive tab color: Muted slate gray (#94A3B8)
+ * - Active tab color: Warm orange (#F26522) with subtle 10% opacity duotone icon fill
+ * - Active indicator: Soft 2px top accent pill (#F26522) centered above active tab
+ * - Typography: 10px font size, DMSans_500Medium (#94A3B8) to DMSans_600SemiBold (#F26522)
+ * - Touch state: Soft micro-spring scaling (0.95 scale)
+ */
+function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const { user, viewMode } = useAuth();
+  const isHostMode = viewMode === 'host';
+  const bottomPad = Platform.OS === 'web' ? 10 : Math.max(insets.bottom, 6);
+
+  const focusedRoute = state.routes[state.index];
+  const focusedOptions = descriptors[focusedRoute.key]?.options;
+
+  // Hide bottom tab bar on full-screen ZuruFlow video feed in Guest mode / signed out
+  if (!isHostMode && (focusedRoute.name === 'index' || (focusedOptions?.tabBarStyle as any)?.display === 'none')) {
+    return null;
+  }
+
+  // Explicit allowed routes list
+  const allowedRoutes = !user
+    ? ['index', 'discover', 'profile']
+    : isHostMode
+    ? ['index', 'listings', 'reservations', 'inbox', 'profile']
+    : ['index', 'discover', 'inbox', 'profile'];
+
   return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: 'bolt', selected: 'bolt.fill' }} />
-        <Label>Pulse</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="discover">
-        <Icon sf={{ default: 'safari', selected: 'safari.fill' }} />
-        <Label>Discover</Label>
-      </NativeTabs.Trigger>
-      {user ? (
-        <NativeTabs.Trigger name="saved">
-          <Icon sf={{ default: 'heart', selected: 'heart.fill' }} />
-          <Label>Saved</Label>
-        </NativeTabs.Trigger>
-      ) : null}
-      {user ? (
-        <NativeTabs.Trigger name="reservations">
-          <Icon sf={{ default: 'calendar', selected: 'calendar' }} />
-          <Label>Reservations</Label>
-        </NativeTabs.Trigger>
-      ) : null}
-      {user ? (
-        <NativeTabs.Trigger name="inbox">
-          <Icon sf={{ default: 'message', selected: 'message.fill' }} />
-          <Label>Inbox</Label>
-        </NativeTabs.Trigger>
-      ) : null}
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: 'person', selected: 'person.fill' }} />
-        <Label>{user ? 'Profile' : 'Log In'}</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <View
+      style={[
+        styles.bottomBarContainer,
+        {
+          paddingBottom: bottomPad,
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#E2E8F0',
+        },
+      ]}
+    >
+      <View style={styles.barRow}>
+        {state.routes.map((route, index) => {
+          if (!allowedRoutes.includes(route.name)) return null;
+
+          const { options } = descriptors[route.key];
+
+          const isProfileActive =
+            focusedRoute.name === 'profile' ||
+            focusedRoute.name === 'saved' ||
+            (!isHostMode && focusedRoute.name === 'reservations');
+
+          const isFocused =
+            route.name === 'profile' ? isProfileActive : state.index === index;
+
+          const label = options.title !== undefined ? options.title : route.name;
+
+          const onPress = () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          return (
+            <Pressable
+              key={route.key}
+              onPress={onPress}
+              style={({ pressed }) => [
+                styles.tabItem,
+                { transform: [{ scale: pressed ? 0.95 : 1 }] },
+              ]}
+            >
+              {/* Soft 2px Top Accent Pill Centered Above Active Tab */}
+              {isFocused ? <View style={styles.activeTopPill} /> : null}
+
+              {/* Icon Container with 10% Duotone Fill */}
+              <View
+                style={[
+                  styles.iconBox,
+                  isFocused ? styles.iconBoxActive : styles.iconBoxInactive,
+                ]}
+              >
+                {options.tabBarIcon ? (
+                  options.tabBarIcon({
+                    focused: isFocused,
+                    color: isFocused ? ACTIVE_COLOR : INACTIVE_COLOR,
+                    size: 20,
+                  })
+                ) : (
+                  <Feather
+                    name="grid"
+                    size={20}
+                    color={isFocused ? ACTIVE_COLOR : INACTIVE_COLOR}
+                  />
+                )}
+              </View>
+
+              {/* Typography: 10px Font Size */}
+              <Text
+                style={[
+                  styles.tabLabel,
+                  {
+                    color: isFocused ? ACTIVE_COLOR : INACTIVE_COLOR,
+                    fontFamily: isFocused ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
+                  },
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
-function ClassicTabLayout() {
+export default function TabLayout() {
   const colors = useColors();
   const router = useRouter();
-  const { user } = useAuth();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const isIOS = Platform.OS === 'ios';
-  const isWeb = Platform.OS === 'web';
+  const { user, viewMode } = useAuth();
+  const isHostMode = viewMode === 'host';
 
   return (
     <Tabs
+      tabBar={(props) => <CustomBottomTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
-        tabBarStyle: {
-          position: 'absolute',
-          backgroundColor: isIOS ? 'transparent' : colors.background,
-          borderTopWidth: isWeb ? 1 : 0,
-          borderTopColor: colors.border,
-          elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
-        },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={100}
-              tint={isDark ? 'dark' : 'light'}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
-            />
-          ) : null,
+        tabBarActiveTintColor: ACTIVE_COLOR,
+        tabBarInactiveTintColor: INACTIVE_COLOR,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Pulse',
-          // Web parity: the ZuruFlow feed is immersive — the bottom nav is
-          // hidden there and reappears on Discover/Profile.
-          tabBarStyle: { display: 'none' },
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="bolt" tintColor={color} size={24} />
-            ) : (
-              <Feather name="zap" size={22} color={color} />
-            ),
+          title: isHostMode ? 'Dashboard' : 'Pulse',
+          tabBarStyle: isHostMode ? undefined : { display: 'none' },
+          tabBarIcon: ({ color }) => (
+            <Feather name={isHostMode ? 'grid' : 'zap'} size={20} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="listings"
+        options={{
+          title: 'Listings',
+          href: isHostMode ? undefined : null,
+          tabBarIcon: ({ color }) => <Feather name="film" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="discover"
         options={{
           title: 'Discover',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="safari" tintColor={color} size={24} />
-            ) : (
-              <Feather name="compass" size={22} color={color} />
-            ),
+          href: isHostMode ? null : undefined,
+          tabBarIcon: ({ color }) => <Feather name="compass" size={20} color={color} />,
         }}
       />
-      {/* Web parity: Saved / Reservations / Inbox only exist for signed-in users. */}
       <Tabs.Screen
         name="saved"
         options={{
           title: 'Saved',
-          href: user ? undefined : null,
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="heart" tintColor={color} size={24} />
-            ) : (
-              <Feather name="heart" size={22} color={color} />
-            ),
+          href: null,
+          tabBarIcon: ({ color }) => <Feather name="heart" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="reservations"
         options={{
-          title: 'Reservations',
-          href: user ? undefined : null,
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="calendar" tintColor={color} size={24} />
-            ) : (
-              <Feather name="calendar" size={22} color={color} />
-            ),
+          title: isHostMode ? 'Bookings' : 'Trips',
+          href: isHostMode && user ? undefined : null,
+          tabBarIcon: ({ color }) => <Feather name="calendar" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -147,31 +198,20 @@ function ClassicTabLayout() {
         options={{
           title: 'Inbox',
           href: user ? undefined : null,
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="message" tintColor={color} size={24} />
-            ) : (
-              <Feather name="message-square" size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => <Feather name="message-square" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: user ? 'Profile' : 'Log In',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person" tintColor={color} size={24} />
-            ) : (
-              <Feather name="user" size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => <Feather name="user" size={20} color={color} />,
         }}
         listeners={{
           tabPress: (e) => {
-            // Logged out, the tab reads "Log In" — open the auth screen
-            // directly instead of the profile placeholder.
             if (!user) {
               e.preventDefault();
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/auth');
             }
           },
@@ -181,9 +221,58 @@ function ClassicTabLayout() {
   );
 }
 
-export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout />;
-}
+const styles = StyleSheet.create({
+  bottomBarContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: 1,
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 6,
+    zIndex: 100,
+  },
+  barRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingTop: 4,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    paddingVertical: 6,
+    minHeight: 50,
+  },
+  activeTopPill: {
+    position: 'absolute',
+    top: 0,
+    width: 20,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: ACTIVE_COLOR,
+  },
+  iconBox: {
+    width: 38,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBoxActive: {
+    backgroundColor: 'rgba(242, 101, 34, 0.10)',
+  },
+  iconBoxInactive: {
+    backgroundColor: 'transparent',
+  },
+  tabLabel: {
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+});

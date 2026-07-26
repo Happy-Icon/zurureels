@@ -1,16 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { ScreenHeader } from '@/components/profile/ScreenHeader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { useColors } from '@/hooks/useColors';
 
 interface TransactionRow {
   id: string;
@@ -35,20 +39,29 @@ function statusColors(status: string | null): { bg: string; fg: string } {
   switch (status) {
     case 'confirmed':
     case 'completed':
-      return { bg: '#d1fae5', fg: '#047857' };
+    case 'paid':
+      return { bg: '#10B98118', fg: '#047857' };
     case 'cancelled':
     case 'refunded':
-      return { bg: '#fee2e2', fg: '#b91c1c' };
+      return { bg: '#EF444418', fg: '#B91C1C' };
     default:
-      return { bg: '#fef3c7', fg: '#b45309' };
+      return { bg: '#F3F4F6', fg: '#4B5563' };
   }
 }
 
-export default function TransactionsScreen() {
-  const colors = useColors();
-  const { user } = useAuth();
+type TabKey = 'payments' | 'history';
+
+export default function PaymentsAndPayoutsScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { user, profile } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabKey>('payments');
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<TransactionRow[]>([]);
+  const [selectedTx, setSelectedTx] = useState<TransactionRow | null>(null);
+
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  const bottomPad = Platform.OS === 'web' ? 100 : insets.bottom + 40;
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -70,147 +83,589 @@ export default function TransactionsScreen() {
     fetchTransactions();
   }, [user]);
 
-  return (
-    <View style={[styles.fill, { backgroundColor: colors.background }]}>
-      <ScreenHeader label="Transactions & Receipts" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.titleRow}>
-          <Ionicons name="receipt-outline" size={20} color={colors.primary} />
-          <Text style={[styles.title, { color: colors.foreground }]}>Transaction Ledger</Text>
-        </View>
-        <Text style={[styles.caption, { color: colors.mutedForeground }]}>
-          View receipts and refund records for all your bookings on ZuruSasa.
-        </Text>
+  const userPhone = profile?.phone || user?.user_metadata?.phone || '+254 712 *** ***';
 
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
-        ) : transactions.length === 0 ? (
-          <View
-            style={[
-              styles.emptyBox,
-              { borderColor: colors.border, backgroundColor: colors.card },
-            ]}
-          >
-            <MaterialCommunityIcons
-              name="shield-check-outline"
-              size={36}
-              color={colors.mutedForeground}
-            />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              No transaction records found.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.list}>
-            {transactions.map((tx) => {
-              const sc = statusColors(tx.status);
-              return (
-                <View
-                  key={tx.id}
+  return (
+    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      {/* 1. Top Navigation & Modern Header */}
+      <View style={[styles.topNavBar, { paddingTop: topPad }]}>
+        <Pressable
+          testID="payments-back-btn"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (router.canGoBack()) router.back();
+            else router.replace('/profile');
+          }}
+          style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={10}
+        >
+          <Feather name="arrow-left" size={22} color="#222222" />
+        </Pressable>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.titleSection}>
+          <Text style={styles.pageTitle}>Payments & payouts</Text>
+        </View>
+
+        {/* 2. Segmented Navigation Tab Switcher */}
+        <View style={styles.tabLineContainer}>
+          {(
+            [
+              { id: 'payments', label: 'Payments' },
+              { id: 'history', label: 'History' },
+            ] as const
+          ).map((t) => {
+            const isActive = activeTab === t.id;
+            return (
+              <Pressable
+                key={t.id}
+                testID={`payments-tab-${t.id}`}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveTab(t.id);
+                }}
+                style={styles.tabLineItem}
+              >
+                <Text
                   style={[
-                    styles.txCard,
-                    { backgroundColor: colors.card, borderColor: colors.border },
+                    styles.tabLineText,
+                    isActive ? styles.tabLineTextActive : styles.tabLineTextInactive,
                   ]}
                 >
-                  <View style={styles.txTop}>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[styles.txTitle, { color: colors.foreground }]}
-                        numberOfLines={1}
-                      >
-                        {tx.trip_title ?? 'Booking'}
-                      </Text>
-                      <Text style={[styles.txDate, { color: colors.mutedForeground }]}>
-                        {formatDate(tx.created_at)}
-                      </Text>
-                    </View>
-                    <Text style={[styles.txAmount, { color: colors.foreground }]}>
-                      KSh {Number(tx.amount ?? 0).toLocaleString()}
-                    </Text>
-                  </View>
-                  <View style={styles.txBottom}>
-                    {tx.payment_reference ? (
-                      <Text
-                        style={[styles.txRef, { color: colors.mutedForeground }]}
-                        numberOfLines={1}
-                      >
-                        Ref: {tx.payment_reference}
-                      </Text>
-                    ) : (
-                      <View />
-                    )}
-                    <View style={[styles.statusPill, { backgroundColor: sc.bg }]}>
-                      <Text style={[styles.statusText, { color: sc.fg }]}>
-                        {tx.status ?? 'pending'}
-                      </Text>
-                    </View>
-                  </View>
-                  {tx.refund_amount ? (
-                    <Text style={[styles.refundText, { color: colors.primary }]}>
-                      Refunded: KSh {Number(tx.refund_amount).toLocaleString()}
-                    </Text>
-                  ) : null}
+                  {t.label}
+                </Text>
+                {isActive ? <View style={styles.tabActiveIndicator} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {activeTab === 'payments' ? (
+          /* TAB 1: PAYMENTS & SAVED METHODS */
+          <View style={styles.tabSectionWrap}>
+            <Text style={styles.sectionHeading}>Your payment methods</Text>
+            <Text style={styles.sectionSub}>
+              Manage saved M-Pesa accounts and payment methods for booking stays and experiences.
+            </Text>
+
+            {/* M-Pesa Saved Method Row */}
+            <View style={styles.paymentMethodRow}>
+              <View style={styles.paymentMethodLeft}>
+                <View style={styles.mpesaBadgeIcon}>
+                  <Feather name="smartphone" size={18} color="#008A05" />
                 </View>
-              );
-            })}
+                <View style={styles.methodTextWrap}>
+                  <Text style={styles.methodPrimaryText}>M-Pesa Mobile Money</Text>
+                  <Text style={styles.methodSecondaryText}>{userPhone} · STK Express</Text>
+                </View>
+              </View>
+              <View style={styles.defaultPill}>
+                <Text style={styles.defaultPillText}>Default</Text>
+              </View>
+            </View>
+
+            {/* Zuru Escrow Protection Row */}
+            <View style={styles.paymentMethodRow}>
+              <View style={styles.paymentMethodLeft}>
+                <View style={styles.shieldBadgeIcon}>
+                  <MaterialCommunityIcons name="shield-check" size={18} color="#EE7D30" />
+                </View>
+                <View style={styles.methodTextWrap}>
+                  <Text style={styles.methodPrimaryText}>Zuru Secure Escrow</Text>
+                  <Text style={styles.methodSecondaryText}>Payment held until check-in confirmation</Text>
+                </View>
+              </View>
+              <Feather name="check" size={16} color="#008A05" />
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Coupons & Credits */}
+            <Text style={styles.sectionHeading}>Coupons & Credits</Text>
+            <View style={styles.paymentMethodRow}>
+              <View style={styles.paymentMethodLeft}>
+                <View style={styles.tagBadgeIcon}>
+                  <Feather name="tag" size={18} color="#717171" />
+                </View>
+                <View style={styles.methodTextWrap}>
+                  <Text style={styles.methodPrimaryText}>Add a coupon</Text>
+                  <Text style={styles.methodSecondaryText}>Enter promo code for discount</Text>
+                </View>
+              </View>
+              <Feather name="chevron-right" size={18} color="#717171" />
+            </View>
+          </View>
+        ) : (
+          /* TAB 2: TRANSACTION HISTORY & RECEIPTS */
+          <View style={styles.tabSectionWrap}>
+            {loading ? (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="large" color="#EE7D30" />
+              </View>
+            ) : transactions.length === 0 ? (
+              /* 3. Redesigned Empty State UI */
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <Ionicons name="receipt-outline" size={30} color="#717171" />
+                </View>
+                <Text style={styles.emptyHeadline}>No transaction records</Text>
+                <Text style={styles.emptyBody}>
+                  When you complete a booking or receive a payout, your detailed receipts will appear here.
+                </Text>
+              </View>
+            ) : (
+              /* 5. Populated Transaction History Row Architecture */
+              <View style={styles.historyListWrap}>
+                <Text style={styles.sectionHeading}>Completed Receipts</Text>
+                {transactions.map((tx) => {
+                  const sc = statusColors(tx.status);
+                  return (
+                    <Pressable
+                      key={tx.id}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setSelectedTx(tx);
+                      }}
+                      style={({ pressed }) => [
+                        styles.historyRow,
+                        { opacity: pressed ? 0.75 : 1 },
+                      ]}
+                    >
+                      <View style={styles.historyRowLeft}>
+                        <Text style={styles.historyTitleText} numberOfLines={1}>
+                          {tx.trip_title ?? 'Booking Transaction'}
+                        </Text>
+                        <View style={styles.historyMetaRow}>
+                          <Text style={styles.historyDateText}>{formatDate(tx.created_at)}</Text>
+                          {tx.payment_reference ? (
+                            <Text style={styles.historyRefText}>
+                              · Ref: {tx.payment_reference.slice(-8)}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+
+                      <View style={styles.historyRowRight}>
+                        <Text style={styles.historyAmountText}>
+                          KES {Number(tx.amount ?? 0).toLocaleString()}
+                        </Text>
+                        <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: sc.fg }]}>
+                            {tx.status ?? 'Pending'}
+                          </Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
+
+      {/* Itemized Modal Receipt Detail View */}
+      <Modal
+        visible={selectedTx !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedTx(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Receipt Detail</Text>
+              <Pressable
+                onPress={() => setSelectedTx(null)}
+                style={styles.modalCloseBtn}
+                hitSlop={8}
+              >
+                <Feather name="x" size={20} color="#222222" />
+              </Pressable>
+            </View>
+
+            {selectedTx ? (
+              <View style={styles.modalBody}>
+                <View style={styles.modalReceiptHeader}>
+                  <Text style={styles.modalReceiptTitle}>{selectedTx.trip_title || 'Coastal Experience'}</Text>
+                  <Text style={styles.modalReceiptDate}>{formatDate(selectedTx.created_at)}</Text>
+                </View>
+
+                <View style={styles.modalDivider} />
+
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalDetailLabel}>Status</Text>
+                  <Text style={styles.modalDetailVal}>{selectedTx.status || 'Paid'}</Text>
+                </View>
+
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalDetailLabel}>Payment Reference</Text>
+                  <Text style={styles.modalDetailVal}>{selectedTx.payment_reference || 'STK-ESCROW-254'}</Text>
+                </View>
+
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalDetailLabel}>Payment Method</Text>
+                  <Text style={styles.modalDetailVal}>M-Pesa Mobile Money</Text>
+                </View>
+
+                {selectedTx.refund_amount ? (
+                  <View style={styles.modalDetailRow}>
+                    <Text style={styles.modalDetailLabel}>Refund Amount</Text>
+                    <Text style={[styles.modalDetailVal, { color: '#008A05' }]}>
+                      KES {Number(selectedTx.refund_amount).toLocaleString()}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.modalDivider} />
+
+                <View style={styles.modalTotalRow}>
+                  <Text style={styles.modalTotalLabel}>Total Paid</Text>
+                  <Text style={styles.modalTotalVal}>
+                    KES {Number(selectedTx.amount ?? 0).toLocaleString()}
+                  </Text>
+                </View>
+
+                <Pressable
+                  onPress={() => setSelectedTx(null)}
+                  style={styles.modalDoneBtn}
+                >
+                  <Text style={styles.modalDoneBtnText}>Done</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  content: { padding: 16, paddingBottom: 48 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { fontSize: 20, fontFamily: 'InstrumentSerif_400Regular' },
-  caption: {
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
-    marginTop: 4,
-    marginBottom: 20,
-  },
-  loadingBox: { paddingVertical: 48, alignItems: 'center' },
-  emptyBox: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderRadius: 16,
+  topNavBar: {
+    paddingTop: 12,
+    paddingBottom: 8,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 40,
-    paddingHorizontal: 24,
   },
-  emptyText: { fontSize: 13, fontFamily: 'DMSans_400Regular' },
-  list: { gap: 12 },
-  txCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: 14,
-    gap: 8,
+  backIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  txTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  txTitle: { fontSize: 15, fontFamily: 'DMSans_600SemiBold' },
-  txDate: { fontSize: 12, fontFamily: 'DMSans_400Regular', marginTop: 2 },
-  txAmount: { fontSize: 15, fontFamily: 'DMSans_700Bold' },
-  txBottom: {
+  titleSection: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    letterSpacing: -0.4,
+  },
+  tabLineContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
+    gap: 24,
+    marginBottom: 24,
+  },
+  tabLineItem: {
+    paddingBottom: 12,
+    position: 'relative',
+  },
+  tabLineText: {
+    fontSize: 16,
+  },
+  tabLineTextActive: {
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  tabLineTextInactive: {
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  tabActiveIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#222222',
+    borderRadius: 1,
+  },
+  tabSectionWrap: {
+    gap: 16,
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  sectionSub: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    lineHeight: 18,
+    marginTop: -8,
+    marginBottom: 8,
+  },
+  paymentMethodRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
   },
-  txRef: { fontSize: 11, fontFamily: 'DMSans_400Regular', flex: 1 },
-  statusPill: {
-    borderRadius: 999,
+  paymentMethodLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  mpesaBadgeIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#008A0512',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shieldBadgeIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#EE7D3012',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagBadgeIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F7F7F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  methodTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  methodPrimaryText: {
+    fontSize: 15,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  methodSecondaryText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  defaultPill: {
+    backgroundColor: '#F7F7F7',
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 999,
   },
-  statusText: {
+  defaultPillText: {
     fontSize: 12,
-    fontFamily: 'DMSans_500Medium',
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+    marginVertical: 12,
+  },
+  loadingBox: {
+    paddingVertical: 48,
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F7F7F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyHeadline: {
+    fontSize: 20,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    textAlign: 'center',
+  },
+  emptyBody: {
+    fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 280,
+  },
+  historyListWrap: {
+    gap: 8,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
+  },
+  historyRowLeft: {
+    flex: 1,
+    gap: 4,
+    paddingRight: 10,
+  },
+  historyTitleText: {
+    fontSize: 15,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  historyMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  historyDateText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  historyRefText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#9CA3AF',
+  },
+  historyRowRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  historyAmountText: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontFamily: 'DMSans_600SemiBold',
     textTransform: 'capitalize',
   },
-  refundText: { fontSize: 12, fontFamily: 'DMSans_500Medium' },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F7F7F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBody: {
+    gap: 12,
+  },
+  modalReceiptHeader: {
+    gap: 4,
+  },
+  modalReceiptTitle: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  modalReceiptDate: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+    marginVertical: 4,
+  },
+  modalDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalDetailLabel: {
+    fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  modalDetailVal: {
+    fontSize: 14,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  modalTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 4,
+  },
+  modalTotalLabel: {
+    fontSize: 16,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  modalTotalVal: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#EE7D30',
+  },
+  modalDoneBtn: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#222222',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  modalDoneBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+  },
 });

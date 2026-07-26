@@ -28,10 +28,30 @@ export async function signInWithGoogleNatively(): Promise<NativeGoogleResult> {
     return { status: 'unavailable', configError: false, reason: 'web platform' };
   }
 
+  try {
+    const { NativeModules, TurboModuleRegistry } = require('react-native');
+    const hasNativeModule = Boolean(
+      (TurboModuleRegistry && typeof TurboModuleRegistry.get === 'function' && TurboModuleRegistry.get('RNGoogleSignin')) ||
+      (NativeModules && NativeModules.RNGoogleSignin)
+    );
+
+    if (!hasNativeModule) {
+      return {
+        status: 'unavailable',
+        configError: false,
+        reason: 'RNGoogleSignin native module is not registered in Expo Go sandbox',
+      };
+    }
+  } catch {
+    return {
+      status: 'unavailable',
+      configError: false,
+      reason: 'failed to query native module registry',
+    };
+  }
+
   let lib: typeof import('@react-native-google-signin/google-signin');
   try {
-    // Lazy require: a static import would evaluate the native TurboModule at
-    // startup and crash the web / Expo Go bundle where it doesn't exist.
     lib = require('@react-native-google-signin/google-signin');
   } catch {
     return {

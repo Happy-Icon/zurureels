@@ -41,7 +41,7 @@ export default function InboxScreen() {
   const { user, loading } = useAuth();
   const { data: conversations, isLoading } = useConversations(user?.id);
 
-  const topPad = Platform.OS === 'web' ? 67 : insets.top;
+  const topPad = Platform.OS === 'web' ? 67 : insets.top + 10;
   const bottomPad = Platform.OS === 'web' ? 110 : 100;
 
   if (!loading && !user) {
@@ -50,17 +50,15 @@ export default function InboxScreen() {
         style={[
           styles.fill,
           styles.centered,
-          { backgroundColor: colors.background, paddingTop: topPad },
+          { backgroundColor: '#FAFAFA', paddingTop: topPad },
         ]}
       >
-        <View style={[styles.heroIcon, { backgroundColor: colors.secondary }]}>
-          <Feather name="message-square" size={30} color={colors.primary} />
+        <View style={styles.heroIcon}>
+          <Feather name="message-square" size={32} color="#EE7D30" />
         </View>
-        <Text style={[styles.heroTitle, { color: colors.foreground }]}>
-          Talk to your hosts
-        </Text>
-        <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-          Sign in to message hosts and plan the details of your trip.
+        <Text style={styles.heroTitle}>Talk to your hosts</Text>
+        <Text style={styles.heroSub}>
+          Sign in to message hosts and plan the details of your trip across the Kenyan coast.
         </Text>
         <Pressable
           testID="inbox-signin"
@@ -70,10 +68,10 @@ export default function InboxScreen() {
           }}
           style={({ pressed }) => [
             styles.primaryButton,
-            { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
+            { opacity: pressed ? 0.88 : 1 },
           ]}
         >
-          <Text style={styles.primaryButtonText}>Sign in</Text>
+          <Text style={styles.primaryButtonText}>Sign in or Sign up</Text>
         </Pressable>
       </View>
     );
@@ -98,42 +96,35 @@ export default function InboxScreen() {
       style={({ pressed }) => [
         styles.row,
         {
-          backgroundColor: pressed ? colors.muted : 'transparent',
-          borderBottomColor: colors.border,
+          backgroundColor: pressed ? '#F9FAFB' : '#FFFFFF',
         },
       ]}
     >
       {item.other.avatar_url ? (
         <Image
           source={{ uri: item.other.avatar_url }}
-          style={[styles.avatar, { backgroundColor: colors.muted }]}
+          style={styles.avatar}
         />
       ) : (
-        <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+        <View style={[styles.avatar, styles.avatarFallback]}>
           <Text style={styles.avatarText}>
             {item.other.full_name.charAt(0).toUpperCase()}
           </Text>
         </View>
       )}
       <View style={styles.rowInfo}>
-        <Text
-          style={[styles.rowName, { color: colors.foreground }]}
-          numberOfLines={1}
-        >
+        <Text style={styles.rowName} numberOfLines={1}>
           {item.other.full_name}
         </Text>
-        <Text
-          style={[styles.rowUsername, { color: colors.mutedForeground }]}
-          numberOfLines={1}
-        >
+        <Text style={styles.rowUsername} numberOfLines={1}>
           @{item.other.username}
         </Text>
       </View>
       <View style={styles.rowRight}>
-        <Text style={[styles.rowTime, { color: colors.mutedForeground }]}>
+        <Text style={styles.rowTime}>
           {timeAgo(item.last_message_at)}
         </Text>
-        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+        <Feather name="chevron-right" size={16} color="#9CA3AF" />
       </View>
     </Pressable>
   );
@@ -141,47 +132,39 @@ export default function InboxScreen() {
   return (
     <View
       testID="inbox-screen"
-      style={[styles.fill, { backgroundColor: colors.background }]}
+      style={[styles.fill, { backgroundColor: '#FAFAFA' }]}
     >
       <FlatList
         data={conversations ?? []}
         keyExtractor={(c) => c.id}
         renderItem={renderRow}
         contentContainerStyle={{
-          paddingTop: topPad + 8,
+          paddingTop: topPad,
           paddingBottom: bottomPad,
         }}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.foreground }]}>
-              Inbox
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+            <Text style={styles.title}>Inbox</Text>
+            <Text style={styles.subtitle}>
               {conversations?.length
-                ? `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`
-                : 'Chats with hosts and travelers'}
+                ? `${conversations.length} active conversation${conversations.length === 1 ? '' : 's'}`
+                : 'Direct messaging with hosts & guests'}
             </Text>
           </View>
         }
         ListEmptyComponent={
           isLoading ? (
-            <View style={{ paddingHorizontal: 16, gap: 10 }}>
+            <View style={{ paddingHorizontal: 20, gap: 12 }}>
               <Skeleton style={styles.skeletonRow} />
               <Skeleton style={styles.skeletonRow} />
               <Skeleton style={styles.skeletonRow} />
             </View>
           ) : (
             <View style={styles.empty}>
-              <Feather
-                name="message-circle"
-                size={40}
-                color={colors.mutedForeground}
-              />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                No conversations yet
-              </Text>
-              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-                Enquire on any experience and the chat will show up here.
+              <Feather name="message-circle" size={44} color="#9CA3AF" style={{ opacity: 0.5 }} />
+              <Text style={styles.emptyTitle}>No conversations yet</Text>
+              <Text style={styles.emptySub}>
+                Enquire on any stay or experience and your chat with the host will appear here.
               </Text>
             </View>
           )
@@ -196,105 +179,131 @@ const styles = StyleSheet.create({
   centered: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: 14,
     paddingHorizontal: 32,
   },
   heroIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#EE7D3014',
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroTitle: {
-    fontSize: 26,
-    fontFamily: 'InstrumentSerif_400Regular',
+    fontSize: 24,
+    fontFamily: 'DMSans_700Bold',
     textAlign: 'center',
+    color: '#111827',
   },
   heroSub: {
     fontSize: 14,
     fontFamily: 'DMSans_400Regular',
     textAlign: 'center',
+    lineHeight: 22,
+    color: '#4B5563',
   },
   primaryButton: {
+    backgroundColor: '#EE7D30',
     borderRadius: 999,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
     marginTop: 8,
   },
   primaryButtonText: {
     color: '#ffffff',
     fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
+    fontFamily: 'DMSans_600SemiBold',
   },
   header: {
-    paddingHorizontal: 16,
-    marginBottom: 10,
+    paddingHorizontal: 20,
+    marginBottom: 16,
     gap: 4,
   },
   title: {
-    fontSize: 30,
-    fontFamily: 'InstrumentSerif_400Regular',
+    fontSize: 28,
+    fontFamily: 'DMSans_700Bold',
+    color: '#111827',
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontFamily: 'DMSans_400Regular',
+    color: '#6B7280',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
+    marginHorizontal: 20,
+    marginBottom: 10,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: '#000000',
+    shadowOpacity: 0.02,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+  },
+  avatarFallback: {
+    backgroundColor: '#EE7D30',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     color: '#ffffff',
-    fontSize: 19,
+    fontSize: 18,
     fontFamily: 'DMSans_700Bold',
   },
   rowInfo: { flex: 1, gap: 2 },
   rowName: {
     fontSize: 15,
     fontFamily: 'DMSans_600SemiBold',
+    color: '#111827',
   },
   rowUsername: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontFamily: 'DMSans_400Regular',
+    color: '#6B7280',
   },
   rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   rowTime: {
     fontSize: 12,
     fontFamily: 'DMSans_400Regular',
+    color: '#9CA3AF',
   },
   skeletonRow: {
-    height: 64,
-    borderRadius: 12,
+    height: 72,
+    borderRadius: 20,
   },
   empty: {
     alignItems: 'center',
-    paddingVertical: 48,
-    gap: 8,
+    paddingVertical: 56,
+    gap: 10,
     paddingHorizontal: 24,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontFamily: 'InstrumentSerif_400Regular',
+    fontSize: 18,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#111827',
   },
   emptySub: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontFamily: 'DMSans_400Regular',
+    color: '#6B7280',
     textAlign: 'center',
+    lineHeight: 20,
   },
 });

@@ -9,58 +9,55 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/context/AuthContext';
-import { useColors } from '@/hooks/useColors';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 
-const WEB_APP_URL = 'https://zurusasa.com';
+type ProfileRowItem = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  icon: keyof typeof Feather.glyphMap;
+  route?: Href;
+  action?: () => void;
+  destructive?: boolean;
+};
 
-type MenuItem = {
-  key: string;
-  label: string;
-  route: Href;
-  render: (color: string) => React.ReactNode;
+type ProfileSection = {
+  title: string;
+  items: ProfileRowItem[];
 };
 
 export default function ProfileScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, profile, signOut, loading } = useAuth();
+  const { user, profile, signOut, loading, viewMode, switchViewMode, role } = useAuth();
+  const { showAlert } = useCustomAlert();
 
-  const topPad = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomPad = Platform.OS === 'web' ? 100 : 80;
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
+  const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 90;
 
   if (loading) {
     return (
-      <View style={[styles.fill, styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} />
+      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF' }]}>
+        <ActivityIndicator color="#EE7D30" size="large" />
       </View>
     );
   }
 
+  // Unauthenticated Signed-Out State
   if (!user) {
     return (
-      <View
-        style={[
-          styles.fill,
-          styles.centered,
-          { backgroundColor: colors.background, paddingTop: topPad },
-        ]}
-      >
-        <View style={[styles.heroIcon, { backgroundColor: colors.secondary }]}>
-          <Feather name="user" size={30} color={colors.primary} />
+      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF', paddingTop: topPad }]}>
+        <View style={styles.loggedOutIconCircle}>
+          <Feather name="user" size={32} color="#EE7D30" />
         </View>
-        <Text style={[styles.heroTitle, { color: colors.foreground }]}>
-          Your coastal story starts here
-        </Text>
-        <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-          Sign in to book experiences and track your reservations.
+        <Text style={styles.loggedOutTitle}>Your Coastal Story Starts Here</Text>
+        <Text style={styles.loggedOutSub}>
+          Sign in to discover curated stays, book experiences, and track your reservations across the Kenyan coast.
         </Text>
         <Pressable
           testID="signin-button"
@@ -69,11 +66,11 @@ export default function ProfileScreen() {
             router.push('/auth');
           }}
           style={({ pressed }) => [
-            styles.primaryButton,
-            { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
+            styles.signInBtn,
+            { opacity: pressed ? 0.85 : 1 },
           ]}
         >
-          <Text style={styles.primaryButtonText}>Sign in</Text>
+          <Text style={styles.signInBtnText}>Sign in or Sign up</Text>
         </Pressable>
       </View>
     );
@@ -81,211 +78,373 @@ export default function ProfileScreen() {
 
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   const displayName =
-    (typeof meta.full_name === 'string' && meta.full_name) || user.email || 'Traveler';
-  const avatarUrl =
-    ((profile?.metadata as { avatar_url?: string } | null)?.avatar_url as string | undefined) ??
-    undefined;
-  const isHost = profile?.role === 'host' || meta.role === 'host';
+    (typeof meta.full_name === 'string' && meta.full_name) ||
+    user.email?.split('@')[0] ||
+    'Traveler';
+  const avatarUrl = (profile?.metadata as { avatar_url?: string } | null)?.avatar_url;
+  const isHost = role === 'host';
+  const createdYear = user.created_at ? new Date(user.created_at).getFullYear() : '2026';
 
-  const menuItems: MenuItem[] = [
-    {
-      key: 'identity',
-      label: 'Digital Identity Center',
-      route: '/profile/info',
-      render: (c) => (
-        <MaterialCommunityIcons name="shield-check-outline" size={21} color={c} />
-      ),
-    },
-    {
-      key: 'notifications',
-      label: 'Notifications',
-      route: '/profile/notifications',
-      render: (c) => <Feather name="bell" size={20} color={c} />,
-    },
-    {
-      key: 'payments',
-      label: 'Transactions & Receipts',
-      route: '/profile/payments',
-      render: (c) => <Ionicons name="receipt-outline" size={20} color={c} />,
-    },
-    {
-      key: 'security',
-      label: 'Privacy & Security',
-      route: '/profile/security',
-      render: (c) => <Feather name="shield" size={20} color={c} />,
-    },
-    {
-      key: 'support',
-      label: 'Help & Support',
-      route: '/profile/support',
-      render: (c) => <Feather name="help-circle" size={20} color={c} />,
-    },
-    {
-      key: 'settings',
-      label: 'Settings',
-      route: '/profile/settings',
-      render: (c) => <Feather name="settings" size={20} color={c} />,
-    },
+  const handleSignOut = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    showAlert({
+      title: 'Log Out',
+      message: 'Are you sure you want to log out of your ZuruSasa account?',
+      icon: 'log-out',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: () => signOut(),
+        },
+      ],
+    });
+  };
+
+  const accountSection: ProfileSection = {
+    title: 'ACCOUNT SETTINGS',
+    items: [
+      {
+        id: 'personal',
+        title: 'Personal Information',
+        subtitle: 'Manage legal name and contact details',
+        icon: 'user',
+        route: '/profile/info',
+      },
+      {
+        id: 'saved',
+        title: 'Saved Favorites',
+        subtitle: 'Reels, stays & experiences you saved',
+        icon: 'heart',
+        route: '/saved',
+      },
+      {
+        id: 'trips',
+        title: 'Reservations & Trips',
+        subtitle: 'Active and past booking requests',
+        icon: 'calendar',
+        route: '/reservations',
+      },
+      {
+        id: 'payments',
+        title: 'Payments & Transactions',
+        subtitle: 'Receipts and transaction history',
+        icon: 'credit-card',
+        route: '/profile/payments',
+      },
+      {
+        id: 'notifications',
+        title: 'Notifications',
+        subtitle: 'Trip alerts and message updates',
+        icon: 'bell',
+        route: '/profile/notifications',
+      },
+      {
+        id: 'security',
+        title: 'Privacy & Security',
+        subtitle: 'Password, passkeys & device security',
+        icon: 'shield',
+        route: '/profile/security',
+      },
+      {
+        id: 'language',
+        title: 'Language & Region',
+        subtitle: 'English (US) · KES (KSh)',
+        icon: 'globe',
+        route: '/profile/settings',
+      },
+    ],
+  };
+
+  // Strictly on Host Mode only
+  const hostingSection: ProfileSection | null =
+    isHost && viewMode === 'host'
+      ? {
+          title: 'HOSTING MANAGEMENT',
+          items: [
+            {
+              id: 'mode_switch',
+              title: 'Switch to Guest Mode',
+              subtitle: 'View the guest discovery feed',
+              icon: 'refresh-cw',
+              action: () => switchViewMode('guest'),
+            },
+            {
+              id: 'dashboard',
+              title: 'Host Dashboard',
+              subtitle: 'Earnings summary, stats & requests',
+              icon: 'grid',
+              route: '/',
+            },
+            {
+              id: 'listings',
+              title: 'My Listings & Reels',
+              subtitle: 'Create, edit & publish experiences',
+              icon: 'film',
+              route: '/listings',
+            },
+            {
+              id: 'verification',
+              title: 'Identity Verification (KYC)',
+              subtitle:
+                profile?.verification_status === 'verified'
+                  ? 'Identity Verified'
+                  : 'Action required',
+              icon: 'check-circle',
+              route: '/host/verification',
+            },
+            {
+              id: 'payouts',
+              title: 'Payout Settings',
+              subtitle: 'M-Pesa and Kenyan bank account',
+              icon: 'dollar-sign',
+              route: '/host/payouts',
+            },
+          ],
+        }
+      : null;
+
+  const supportSection: ProfileSection = {
+    title: 'SUPPORT',
+    items: [
+      {
+        id: 'help',
+        title: 'Help Center',
+        subtitle: 'FAQs, booking guides & policies',
+        icon: 'help-circle',
+        route: '/profile/support',
+      },
+      {
+        id: 'contact',
+        title: 'Contact Support',
+        subtitle: '24/7 Zuru concierge assistant',
+        icon: 'message-circle',
+        route: '/chat/support',
+      },
+    ],
+  };
+
+  const aboutSection: ProfileSection = {
+    title: 'ABOUT & LEGAL',
+    items: [
+      {
+        id: 'terms',
+        title: 'Terms of Service',
+        icon: 'file-text',
+        route: '/profile/support',
+      },
+      {
+        id: 'privacy',
+        title: 'Privacy Policy',
+        icon: 'lock',
+        route: '/profile/security',
+      },
+      {
+        id: 'logout',
+        title: 'Log Out',
+        icon: 'log-out',
+        destructive: true,
+        action: handleSignOut,
+      },
+    ],
+  };
+
+  const sections = [
+    accountSection,
+    ...(hostingSection ? [hostingSection] : []),
+    supportSection,
+    aboutSection,
   ];
 
   return (
-    <View style={[styles.fill, { backgroundColor: colors.background }]}>
+    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
       <ScrollView
         style={styles.fill}
-        contentContainerStyle={{ paddingBottom: bottomPad + 24 }}
+        contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottomPad }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <LinearGradient
-          colors={[`${colors.primary}1A`, colors.background]}
-          style={[styles.header, { paddingTop: topPad + 32 }]}
-        >
-          <View style={styles.avatarWrap}>
-            <View
-              style={[
-                styles.avatar,
-                {
-                  backgroundColor: colors.secondary,
-                  borderColor: colors.background,
-                },
-              ]}
-            >
-              {avatarUrl ? (
-                <Image
-                  source={{ uri: avatarUrl }}
-                  style={styles.avatarImage}
-                  contentFit="cover"
-                  transition={150}
-                />
-              ) : (
-                <Feather name="user" size={44} color={colors.mutedForeground} />
-              )}
-            </View>
-            <Pressable
-              testID="avatar-camera-button"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/profile/info');
-              }}
-              style={({ pressed }) => [
-                styles.cameraBadge,
-                {
-                  backgroundColor: colors.primary,
-                  borderColor: colors.background,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <Feather name="camera" size={15} color="#ffffff" />
-            </Pressable>
-          </View>
-          <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
-            {displayName}
-          </Text>
-          {user.email ? (
-            <Text style={[styles.email, { color: colors.mutedForeground }]} numberOfLines={1}>
-              {user.email}
-            </Text>
-          ) : null}
-
-          {/* Stats — hosts only, mirrors web */}
-          {profile?.role === 'host' ? (
-            <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
-              <View style={styles.stat}>
-                <Text style={[styles.statValue, { color: colors.foreground }]}>0</Text>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-                  Reservations
-                </Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={[styles.statValue, { color: colors.foreground }]}>0</Text>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-                  Reviews
-                </Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={[styles.statValue, { color: colors.foreground }]}>2</Text>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-                  Saved
-                </Text>
-              </View>
-            </View>
-          ) : null}
-        </LinearGradient>
-
-        {/* Menu */}
-        <View style={styles.menu}>
-          {menuItems.map((item) => (
-            <Pressable
-              key={item.key}
-              testID={`menu-${item.key}`}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push(item.route);
-              }}
-              style={({ pressed }) => [
-                styles.menuRow,
-                { backgroundColor: pressed ? colors.secondary : 'transparent' },
-              ]}
-            >
-              <View style={styles.menuLeft}>
-                {item.render(colors.mutedForeground)}
-                <Text style={[styles.menuLabel, { color: colors.foreground }]}>
-                  {item.label}
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-            </Pressable>
-          ))}
-
-          {/* Sign Out */}
+        {/* 1. Profile Header & Identity Block (Airbnb Left-Aligned Pattern) */}
+        <View style={styles.headerBlock}>
           <Pressable
-            testID="signout-button"
+            testID="edit-profile-avatar"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              signOut();
+              router.push('/profile/info');
             }}
             style={({ pressed }) => [
-              styles.menuRow,
-              styles.signOutRow,
-              {
-                backgroundColor: pressed ? `${colors.destructive}14` : 'transparent',
-              },
+              styles.avatarWrap,
+              { opacity: pressed ? 0.85 : 1 },
             ]}
           >
-            <View style={styles.menuLeft}>
-              <Feather name="log-out" size={20} color={colors.destructive} />
-              <Text style={[styles.menuLabel, { color: colors.destructive }]}>Sign Out</Text>
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatarImage}
+                contentFit="cover"
+                transition={200}
+              />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Feather name="user" size={34} color="#717171" />
+              </View>
+            )}
+            <View style={styles.cameraEditBadge}>
+              <Feather name="camera" size={12} color="#FFFFFF" />
             </View>
+          </Pressable>
+
+          <View style={styles.headerInfoStack}>
+            <Text style={styles.userNameText} numberOfLines={1}>
+              {displayName}
+            </Text>
+            <Text style={styles.memberStatusText}>
+              {isHost ? 'Verified Host' : 'Zuru Member'} · Member since {createdYear}
+            </Text>
+          </View>
+
+          <Pressable
+            testID="edit-profile-icon"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/profile/info');
+            }}
+            style={({ pressed }) => [
+              styles.editIconBtn,
+              { opacity: pressed ? 0.6 : 1 },
+            ]}
+            hitSlop={10}
+          >
+            <Feather name="chevron-right" size={20} color="#717171" />
           </Pressable>
         </View>
 
-        {/* Footer */}
-        <Text style={[styles.footer, { color: colors.mutedForeground }]}>ZuruSasa v1.0.0</Text>
-      </ScrollView>
+        {/* 2. Host Switching Banner (Low-Profile Streamlined Feature Card) */}
+        <View style={styles.hostBannerContainer}>
+          <View style={styles.hostBannerCard}>
+            <View style={styles.hostBannerLeft}>
+              <View style={styles.hostBadgeCircle}>
+                <Feather
+                  name={isHost ? (viewMode === 'host' ? 'check-circle' : 'zap') : 'home'}
+                  size={18}
+                  color="#EE7D30"
+                />
+              </View>
+              <View style={styles.hostTextWrap}>
+                <Text style={styles.hostBannerTitle}>
+                  {isHost
+                    ? viewMode === 'host'
+                      ? 'Hosting Active 🌟'
+                      : 'Switch to Host Dashboard'
+                    : 'Become a Host'}
+                </Text>
+                <Text style={styles.hostBannerSub} numberOfLines={2}>
+                  {isHost
+                    ? 'Manage listings, guest reservations, and payouts.'
+                    : 'Host stays, experiences, and tours on ZuruSasa.'}
+                </Text>
+              </View>
+            </View>
 
-      {/* Floating switch/become host button */}
-      <Pressable
-        testID="host-mode-button"
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          WebBrowser.openBrowserAsync(
-            isHost ? `${WEB_APP_URL}/host` : `${WEB_APP_URL}/become-host`,
-          );
-        }}
-        style={({ pressed }) => [
-          styles.floatingButton,
-          {
-            backgroundColor: colors.primary,
-            bottom: bottomPad + 16,
-            transform: [{ scale: pressed ? 0.97 : 1 }],
-          },
-        ]}
-      >
-        <Text style={styles.floatingButtonText}>
-          {isHost ? 'Switch to Hosting' : 'Become a Host'}
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                if (isHost) {
+                  switchViewMode(viewMode === 'host' ? 'guest' : 'host');
+                } else {
+                  router.push('/become-host');
+                }
+              }}
+              style={({ pressed }) => [
+                styles.hostPillBtn,
+                { opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <Text style={styles.hostPillBtnText}>
+                {isHost
+                  ? viewMode === 'host'
+                    ? 'Guest Feed'
+                    : 'Open'
+                  : 'Start'}
+              </Text>
+              <Feather name="arrow-right" size={13} color="#FFFFFF" />
+            </Pressable>
+          </View>
+        </View>
+
+        {/* 3. List Container & Row Item Redesign (Edge-to-Edge Divider Pattern) */}
+        <View style={styles.sectionsContainer}>
+          {sections.map((section, sIdx) => (
+            <View key={sIdx} style={styles.sectionBlock}>
+              <Text style={styles.sectionHeading}>{section.title}</Text>
+
+              <View style={styles.sectionItemsList}>
+                {section.items.map((item, iIdx) => {
+                  const isLast = iIdx === section.items.length - 1;
+
+                  return (
+                    <View key={item.id}>
+                      <Pressable
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          if (item.action) {
+                            item.action();
+                          } else if (item.route) {
+                            router.push(item.route);
+                          }
+                        }}
+                        style={({ pressed }) => [
+                          styles.menuRow,
+                          { opacity: pressed ? 0.7 : 1 },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.rowIconCircle,
+                            item.destructive ? styles.iconCircleDestructive : styles.iconCircleNeutral,
+                          ]}
+                        >
+                          <Feather
+                            name={item.icon}
+                            size={18}
+                            color={item.destructive ? '#E53935' : '#222222'}
+                          />
+                        </View>
+
+                        <View style={styles.rowTextStack}>
+                          <Text
+                            style={[
+                              styles.rowTitleText,
+                              item.destructive ? { color: '#E53935' } : { color: '#222222' },
+                            ]}
+                          >
+                            {item.title}
+                          </Text>
+                          {item.subtitle ? (
+                            <Text style={styles.rowSubtext}>{item.subtitle}</Text>
+                          ) : null}
+                        </View>
+
+                        <Feather
+                          name="chevron-right"
+                          size={18}
+                          color={item.destructive ? '#E53935' : '#B0B0B0'}
+                        />
+                      </Pressable>
+                      {!isLast ? <View style={styles.rowDivider} /> : null}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* 4. Version & Build Footer */}
+        <Text style={styles.versionFooter}>
+          ZuruSasa Native v1.2.0 · Kenya Coast 🌴
         </Text>
-      </Pressable>
+      </ScrollView>
     </View>
   );
 }
@@ -295,147 +454,223 @@ const styles = StyleSheet.create({
   centered: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
     paddingHorizontal: 32,
+    gap: 14,
   },
-  heroIcon: {
+  loggedOutIconCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
+    backgroundColor: '#F7F7F7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroTitle: {
-    fontSize: 26,
-    fontFamily: 'InstrumentSerif_400Regular',
+  loggedOutTitle: {
+    fontSize: 22,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
     textAlign: 'center',
   },
-  heroSub: {
+  loggedOutSub: {
     fontSize: 14,
     fontFamily: 'DMSans_400Regular',
+    color: '#717171',
     textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 280,
   },
-  primaryButton: {
-    borderRadius: 999,
+  signInBtn: {
+    backgroundColor: '#EE7D30',
+    borderRadius: 12,
     paddingHorizontal: 28,
-    paddingVertical: 12,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 8,
   },
-  primaryButtonText: {
-    color: '#ffffff',
+  signInBtnText: {
+    color: '#FFFFFF',
     fontSize: 15,
     fontFamily: 'DMSans_700Bold',
   },
-  header: {
+  headerBlock: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 28,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 16,
   },
-  avatarWrap: { position: 'relative' },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 4,
+  avatarWrap: {
+    position: 'relative',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  avatarFallback: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#F7F7F7',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
   },
-  avatarImage: { width: '100%', height: '100%' },
-  cameraBadge: {
+  cameraEditBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#222222',
     borderWidth: 2,
+    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
   },
-  name: {
-    marginTop: 16,
-    fontSize: 24,
-    fontFamily: 'InstrumentSerif_400Regular',
-    textAlign: 'center',
+  headerInfoStack: {
+    flex: 1,
+    gap: 3,
   },
-  email: {
-    marginTop: 4,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
-    textAlign: 'center',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 48,
-    marginTop: 24,
-    paddingTop: 24,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
-  },
-  stat: { alignItems: 'center' },
-  statValue: {
+  userNameText: {
     fontSize: 22,
-    fontFamily: 'DMSans_600SemiBold',
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    letterSpacing: -0.3,
   },
-  statLabel: {
+  memberStatusText: {
     fontSize: 13,
     fontFamily: 'DMSans_400Regular',
-    marginTop: 2,
+    color: '#717171',
   },
-  menu: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
+  editIconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hostBannerContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  hostBannerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF8F5',
+    borderWidth: 1,
+    borderColor: '#F0E6E1',
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  hostBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  hostBadgeCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#EE7D3014',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hostTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  hostBannerTitle: {
+    fontSize: 15,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  hostBannerSub: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    lineHeight: 16,
+  },
+  hostPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EE7D30',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  hostPillBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'DMSans_700Bold',
+  },
+  sectionsContainer: {
+    paddingHorizontal: 20,
+    gap: 24,
+  },
+  sectionBlock: {
+    gap: 4,
+  },
+  sectionHeading: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: '#717171',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  sectionItemsList: {
+    backgroundColor: '#FFFFFF',
   },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 12,
+    paddingVertical: 14,
+    gap: 14,
   },
-  menuLeft: {
-    flexDirection: 'row',
+  rowIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
   },
-  menuLabel: {
+  iconCircleNeutral: {
+    backgroundColor: '#F7F7F7',
+  },
+  iconCircleDestructive: {
+    backgroundColor: '#FFF0F0',
+  },
+  rowTextStack: {
+    flex: 1,
+    gap: 2,
+  },
+  rowTitleText: {
     fontSize: 16,
     fontFamily: 'DMSans_500Medium',
   },
-  signOutRow: { marginTop: 16 },
-  footer: {
-    textAlign: 'center',
+  rowSubtext: {
     fontSize: 13,
     fontFamily: 'DMSans_400Regular',
-    padding: 16,
+    color: '#717171',
   },
-  floatingButton: {
-    position: 'absolute',
-    right: 24,
-    borderRadius: 999,
-    paddingHorizontal: 24,
-    paddingVertical: 13,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+  rowDivider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
   },
-  floatingButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontFamily: 'DMSans_600SemiBold',
+  versionFooter: {
+    textAlign: 'center',
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#A0A0A0',
+    marginTop: 32,
   },
 });
