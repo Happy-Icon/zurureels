@@ -21,9 +21,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { useReels } from '@/lib/queries';
+import { useNotifications } from '@/hooks/useNotifications';
+import { NotificationBadge } from '@/components/NotificationBadge';
 import { useWeather, type Coordinates } from '@/lib/weather';
 import { WeatherCard } from '@/components/WeatherCard';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
@@ -33,11 +34,23 @@ import { ZuruAgentChat, type ReelSummary } from '@/components/ZuruAgentChat';
 import { Skeleton } from '@/components/Skeleton';
 import type { ReelRow } from '@/lib/supabase';
 
+// Advanced Search & Smart Filters Imports
+import { useSearch } from '@/hooks/useSearch';
+import { useFilters } from '@/hooks/useFilters';
+import { filterService } from '@/services/filterService';
+import { SearchBar } from '@/components/search/SearchBar';
+import { FilterChip } from '@/components/search/FilterChip';
+import { FilterSheet } from '@/components/search/FilterSheet';
+import { SortSheet } from '@/components/search/SortSheet';
+import { SearchSuggestions } from '@/components/search/SearchSuggestions';
+import { SearchEmptyState } from '@/components/search/SearchEmptyState';
+import { AIFloatingButton } from '@/components/ai/AIFloatingButton';
+
 const DISCOVERY_CATEGORIES = [
   { id: 'all', label: 'All', icon: 'grid', categories: ['all'] },
-  { id: 'accommodation', label: 'Stays', icon: 'home', categories: ['hotel', 'villa', 'apartment', 'parks_camps'] },
+  { id: 'accommodation', label: 'Stays', icon: 'home', categories: ['hotel', 'villa', 'apartment', 'stay', 'parks_camps'] },
   { id: 'events', label: 'Events', icon: 'calendar', categories: ['events', 'food', 'drinks'] },
-  { id: 'experiences', label: 'Experiences', icon: 'compass', categories: ['land_adventure', 'air_adventure', 'water_adventure', 'tours'] },
+  { id: 'experiences', label: 'Experiences', icon: 'compass', categories: ['land_adventure', 'air_adventure', 'water_adventure', 'tours', 'boat'] },
 ] as const;
 
 type CategoryId = (typeof DISCOVERY_CATEGORIES)[number]['id'];
@@ -48,23 +61,46 @@ export default function AirbnbDiscoverScreen() {
   const { width: winWidth, height: winHeight } = useWindowDimensions();
 
   const [activeCategory, setActiveCategory] = useState<CategoryId>('all');
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCity, setSelectedCity] = useState('Mombasa');
   const [coords, setCoords] = useState<Coordinates | null>(null);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [viewerReel, setViewerReel] = useState<ReelRow | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
 
+  // Advanced Search & Filter Hooks
+  const {
+    query,
+    setQuery,
+    recentSearches,
+    popularDestinations,
+    trendingTags,
+    addSearch,
+    clearHistory,
+    parseAiQuery,
+  } = useSearch();
+
+  const { filters, updateFilters, resetFilters, activeFilterCount } = useFilters();
+
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [sortSheetOpen, setSortSheetOpen] = useState(false);
+
   const searchInputRef = useRef<TextInput>(null);
 
   const reelsQuery = useReels();
   const weatherQuery = useWeather(selectedCity, coords);
+  const { unreadCount } = useNotifications();
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 400);
-    return () => clearTimeout(t);
-  }, [search]);
+  // Handle AI Natural Language Query submission
+  const handleSearchSubmit = (text: string) => {
+    if (!text.trim()) return;
+    addSearch(text);
+    const aiParsed = parseAiQuery(text);
+    if (Object.keys(aiParsed).length > 0) {
+      updateFilters(aiParsed);
+    }
+    setIsSearchFocused(false);
+  };
 
   const applyMyLocation = useCallback(async (interactive: boolean) => {
     try {
@@ -100,36 +136,35 @@ export default function AirbnbDiscoverScreen() {
 
   const categoryObj = DISCOVERY_CATEGORIES.find((c) => c.id === activeCategory)!;
 
+  // Filter & Search Execution Pipeline
   const filteredReels = useMemo(() => {
-    const reels = reelsQuery.data ?? [];
-    const q = debouncedSearch.trim().toLowerCase();
-    return reels.filter((r) => {
-      const cat = (r.category ?? '').toLowerCase();
-      const title = (r.experience?.title ?? '').toLowerCase();
-      const location = (r.experience?.location ?? '').toLowerCase();
+    const rawReels = reelsQuery.data ?? [];
 
-      const matchesCategory =
-        activeCategory === 'all'
-          ? true
-          : (categoryObj.categories as readonly string[]).includes(cat);
+    // 1. Text Search Filter (title, description, location, category)
+    const q = query.trim().toLowerCase();
+    let searchFiltered = rawReels;
+    if (q) {
+      searchFiltered = rawReels.filter((r) => {
+        const cat = (r.category ?? '').toLowerCase();
+        const title = (r.experience?.title ?? '').toLowerCase();
+        const desc = (r.experience?.description ?? '').toLowerCase();
+        const loc = (r.experience?.location ?? '').toLowerCase();
+        return title.includes(q) || desc.includes(q) || loc.includes(q) || cat.includes(q);
+      });
+    }
 
-      const matchesCity =
-        selectedCity === 'Current Location'
-          ? true
-          : location.includes(selectedCity.toLowerCase());
+    // 2. Category Tab Filter
+    if (activeCategory !== 'all') {
+      const catSubList = categoryObj.categories as readonly string[];
+      searchFiltered = searchFiltered.filter((r) => {
+        const cat = (r.category ?? '').toLowerCase();
+        return catSubList.includes(cat);
+      });
+    }
 
-      const matchesSearch =
-        !q || title.includes(q) || location.includes(q) || cat.includes(q);
-
-      return matchesCategory && matchesCity && matchesSearch;
-    });
-  }, [
-    reelsQuery.data,
-    debouncedSearch,
-    activeCategory,
-    selectedCity,
-    categoryObj,
-  ]);
+    // 3. Multi-faceted Smart Filters (Price, Rating, Amenities, Host Type, Sorting)
+    return filterService.applyFilters(searchFiltered, filters);
+  }, [reelsQuery.data, query, activeCategory, categoryObj, filters]);
 
   const chatReels: ReelSummary[] = useMemo(
     () =>
@@ -146,213 +181,226 @@ export default function AirbnbDiscoverScreen() {
   const topPad = Platform.OS === 'web' ? 12 : insets.top;
   const bottomPad = Platform.OS === 'web' ? 100 : insets.bottom + 84;
 
-  const countLabel = `${filteredReels.length} ${
-    filteredReels.length === 1 ? 'experience' : 'experiences'
-  } in ${selectedCity}`;
-
   return (
     <View style={[styles.screen, { backgroundColor: '#FFFFFF' }]}>
-      {/* 1. Header & Search Integration (Airbnb Floating Search Style) */}
+      {/* 1. Header & Search Integration */}
       <View style={[styles.headerContainer, { paddingTop: topPad + 6 }]}>
-        {/* Floating Search Pill Bar */}
-        <View style={styles.floatingSearchPill}>
-          <Feather name="search" size={18} color="#222222" style={{ marginLeft: 4 }} />
-          <Pressable
-            testID="floating-search-trigger"
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              searchInputRef.current?.focus();
-            }}
-            style={styles.searchPillTextGroup}
-          >
-            <Text style={styles.searchPillTitle}>Where to?</Text>
-            <Text style={styles.searchPillSub} numberOfLines={1}>
-              {selectedCity} · Any week · Add guests
-            </Text>
-          </Pressable>
+        <View style={styles.headerTopRow}>
+          <View style={{ flex: 1 }}>
+            <SearchBar
+              inputRef={searchInputRef}
+              value={query}
+              onChangeText={(text) => {
+                setQuery(text);
+                if (text.length > 0 && !isSearchFocused) setIsSearchFocused(true);
+              }}
+              onFocus={() => setIsSearchFocused(true)}
+              onFilterPress={() => setFilterSheetOpen(true)}
+              onSortPress={() => setSortSheetOpen(true)}
+              activeFilterCount={activeFilterCount}
+            />
+          </View>
 
+          {/* Bell Notifications Icon */}
           <Pressable
-            testID="filter-button"
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setCityPickerOpen(true);
-            }}
+            testID="notifications-bell-btn"
+            onPress={() => router.push('/notifications' as any)}
             style={({ pressed }) => [
-              styles.filterCircleBtn,
+              styles.bellBtn,
               { opacity: pressed ? 0.7 : 1 },
             ]}
           >
-            <Feather name="sliders" size={15} color="#222222" />
+            <Feather name="bell" size={18} color="#222222" />
+            <NotificationBadge count={unreadCount} />
           </Pressable>
         </View>
 
-        {/* Hidden TextInput for keyboard search */}
-        <TextInput
-          ref={searchInputRef}
-          value={search}
-          onChangeText={setSearch}
-          style={styles.hiddenSearchInput}
+        {/* Active Filter Chips Row */}
+        <FilterChip
+          filters={filters}
+          onRemoveCategory={() => updateFilters({ category: null })}
+          onRemoveCity={(c) => updateFilters({ cities: (filters.cities || []).filter((x) => x !== c) })}
+          onRemovePrice={() => updateFilters({ minPrice: 0, maxPrice: 150000 })}
+          onRemoveRating={() => updateFilters({ minRating: null })}
+          onRemoveAmenity={(a) => updateFilters({ amenities: (filters.amenities || []).filter((x) => x !== a) })}
+          onResetAll={resetFilters}
         />
 
-        {/* 2. Horizontal Category Scroll Bar (Airbnb Icon + Text Underline Pattern) */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryBarScroll}
-        >
-          {DISCOVERY_CATEGORIES.map((cat) => {
-            const isActive = activeCategory === cat.id;
-            return (
-              <Pressable
-                key={cat.id}
-                testID={`category-${cat.id}`}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setActiveCategory(cat.id);
-                }}
-                style={styles.categoryItem}
-              >
-                <Feather
-                  name={cat.icon as any}
-                  size={20}
-                  color={isActive ? '#222222' : '#717171'}
-                />
-                <Text
-                  style={[
-                    styles.categoryLabelText,
-                    isActive ? styles.categoryLabelActive : styles.categoryLabelInactive,
-                  ]}
+        {/* 2. Horizontal Category Scroll Bar */}
+        {!isSearchFocused ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryBarScroll}
+          >
+            {DISCOVERY_CATEGORIES.map((cat) => {
+              const isActive = activeCategory === cat.id;
+              return (
+                <Pressable
+                  key={cat.id}
+                  testID={`category-${cat.id}`}
+                  onPress={() => setActiveCategory(cat.id)}
+                  style={styles.categoryItem}
                 >
-                  {cat.label}
-                </Text>
-                {isActive ? <View style={styles.activeUnderline} /> : null}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                  <Feather
+                    name={cat.icon as any}
+                    size={20}
+                    color={isActive ? '#222222' : '#717171'}
+                  />
+                  <Text
+                    style={[
+                      styles.categoryLabelText,
+                      isActive ? styles.categoryLabelActive : styles.categoryLabelInactive,
+                    ]}
+                  >
+                    {cat.label}
+                  </Text>
+                  {isActive ? <View style={styles.categoryUnderline} /> : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
       </View>
 
-      {/* 4. Media Feed Card Grid Architecture */}
-      <FlatList
-        data={reelsQuery.isPending ? [] : filteredReels}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.gridColumnWrapper}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 12,
-          paddingBottom: bottomPad,
-        }}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View style={styles.feedHeaderWrap}>
-            {/* 3. Weather & Coastal Conditions Widget (Compact Single-Row Strip) */}
-            <WeatherCard
-              weather={weatherQuery.data}
-              loading={weatherQuery.isPending}
-              city={selectedCity}
-            />
-
-            <View style={styles.countRow}>
-              <Text style={styles.countText}>{countLabel}</Text>
-            </View>
+      {/* SEARCH SUGGESTIONS OVERLAY (When Search Bar is focused & query is typed/empty) */}
+      {isSearchFocused ? (
+        <View style={[styles.suggestionsOverlay, { paddingBottom: bottomPad }]}>
+          <View style={styles.suggestionsHeader}>
+            <Text style={styles.suggestionsTitle}>Search Suggestions</Text>
+            <Pressable onPress={() => setIsSearchFocused(false)} hitSlop={8}>
+              <Text style={styles.closeSuggestionsText}>Done</Text>
+            </Pressable>
           </View>
-        }
-        ListEmptyComponent={
-          reelsQuery.isPending ? (
-            <View style={styles.skeletonGrid}>
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton
-                  key={i}
-                  style={{
-                    width: cardWidth,
-                    height: cardWidth * 1.5,
-                    borderRadius: 16,
-                  }}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons
-                name="creation"
-                size={38}
-                color="#717171"
-              />
-              <Text style={styles.emptyHeadline}>No experiences found</Text>
-              <Text style={styles.emptyBody}>
-                Try adjusting your search terms or city location filter.
-              </Text>
-            </View>
-          )
-        }
-        ListFooterComponent={
-          <Pressable
-            testID="ask-zuru-discover"
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setChatOpen(true);
+
+          <SearchSuggestions
+            recentSearches={recentSearches}
+            popularDestinations={popularDestinations}
+            trendingTags={trendingTags}
+            onSelectQuery={(q) => {
+              setQuery(q);
+              handleSearchSubmit(q);
             }}
-            style={({ pressed }) => [
-              styles.zuruFabBtn,
-              { opacity: pressed ? 0.88 : 1 },
-            ]}
-          >
-            <MaterialCommunityIcons name="creation" size={18} color="#FFFFFF" />
-            <Text style={styles.zuruFabBtnText}>Ask Zuru Concierge</Text>
-          </Pressable>
-        }
-        renderItem={({ item }) => (
-          <ReelGridCard
-            reel={item}
-            width={cardWidth}
-            onOpen={() => setViewerReel(item)}
+            onSelectCity={(city) => {
+              setSelectedCity(city);
+              updateFilters({ cities: [city] });
+              setIsSearchFocused(false);
+            }}
+            onClearHistory={clearHistory}
           />
-        )}
+        </View>
+      ) : (
+        /* MAIN REELS & EXPERIENCES LIST */
+        <FlatList
+          data={filteredReels}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.gridColumnWrapper}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingBottom: bottomPad,
+            gap: 16,
+          }}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={{ gap: 16, marginBottom: 8 }}>
+              {/* Weather Widget */}
+              <WeatherCard
+                weather={weatherQuery.data}
+                loading={weatherQuery.isLoading}
+                city={selectedCity}
+              />
+            </View>
+          }
+          renderItem={({ item }) => (
+            <ReelGridCard
+              reel={item}
+              width={cardWidth}
+              onOpen={() => setViewerReel(item)}
+            />
+          )}
+          ListEmptyComponent={
+            reelsQuery.isLoading ? (
+              <View style={styles.gridColumnWrapper}>
+                {[1, 2, 3, 4].map((i) => (
+                  <View key={i} style={{ width: cardWidth, gap: 8 }}>
+                    <Skeleton style={{ width: '100%', height: 220, borderRadius: 16 }} />
+                    <Skeleton style={{ width: '80%', height: 16, borderRadius: 4 }} />
+                    <Skeleton style={{ width: '50%', height: 14, borderRadius: 4 }} />
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <SearchEmptyState
+                onResetFilters={resetFilters}
+                onExploreAll={() => {
+                  setQuery('');
+                  resetFilters();
+                  setActiveCategory('all');
+                }}
+              />
+            )
+          }
+        />
+      )}
+
+      {/* Floating Zuru AI Button — navigates to the new AI home screen */}
+      <AIFloatingButton
+        visible={!isSearchFocused}
+        label="Zuru AI"
+        onPress={() => router.push('/ai' as any)}
       />
 
-      {/* Full Reel Viewer Modal */}
-      <Modal
-        visible={!!viewerReel}
-        animationType="fade"
-        onRequestClose={() => setViewerReel(null)}
-      >
-        <View style={styles.viewerContainer}>
-          {viewerReel ? (
-            <ReelCard reel={viewerReel} isActive height={winHeight} />
-          ) : null}
-          <Pressable
-            testID="viewer-back"
-            onPress={() => setViewerReel(null)}
-            style={[styles.viewerBackBtn, { top: Math.max(insets.top, 14) + 6 }]}
-          >
-            <Feather name="chevron-left" size={22} color="#FFFFFF" />
+      {/* Full Reel Video Player Viewer Modal */}
+      <Modal visible={Boolean(viewerReel)} animationType="slide" onRequestClose={() => setViewerReel(null)}>
+        <View style={{ flex: 1, backgroundColor: '#000000' }}>
+          <Pressable onPress={() => setViewerReel(null)} style={styles.closeViewerBtn} hitSlop={10}>
+            <Feather name="x" size={24} color="#FFFFFF" />
           </Pressable>
+          {viewerReel ? (
+            <ReelCard reel={viewerReel} isActive={true} height={winHeight} />
+          ) : null}
         </View>
       </Modal>
 
-      {/* Coastal City Picker Sheet */}
+      {/* City Picker Modal Sheet */}
       <CityPickerSheet
         visible={cityPickerOpen}
         selectedCity={selectedCity}
+        onSelectCity={(city) => {
+          setSelectedCity(city);
+          updateFilters({ cities: [city] });
+          setCityPickerOpen(false);
+        }}
         onClose={() => setCityPickerOpen(false)}
         onUseMyLocation={() => {
-          setCityPickerOpen(false);
           applyMyLocation(true);
-        }}
-        onSelectCity={(city) => {
           setCityPickerOpen(false);
-          setSelectedCity(city);
         }}
       />
 
-      {/* Concierge Agent Chat */}
+      {/* Filter Bottom Sheet Modal */}
+      <FilterSheet
+        visible={filterSheetOpen}
+        filters={filters}
+        onClose={() => setFilterSheetOpen(false)}
+        onApply={(newFilters) => updateFilters(newFilters)}
+        onReset={resetFilters}
+      />
+
+      {/* Sort Options Bottom Sheet Modal */}
+      <SortSheet
+        visible={sortSheetOpen}
+        selectedSort={filters.sortBy}
+        onClose={() => setSortSheetOpen(false)}
+        onSelectSort={(sort) => updateFilters({ sortBy: sort })}
+      />
+
+      {/* Zuru AI Concierge Modal Chat */}
       <ZuruAgentChat
         visible={chatOpen}
         onClose={() => setChatOpen(false)}
-        city={selectedCity}
         reels={chatReels}
-        placeholder="Ask Zuru concierge about coastal stays..."
       />
     </View>
   );
@@ -361,79 +409,53 @@ export default function AirbnbDiscoverScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   headerContainer: {
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
-    paddingBottom: 4,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EBEBEB',
+    gap: 8,
+    paddingBottom: 4,
   },
-  floatingSearchPill: {
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 12,
-    shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: '#EBEBEB',
-    marginBottom: 14,
+    gap: 10,
   },
-  searchPillTextGroup: {
-    flex: 1,
-    gap: 1,
-  },
-  searchPillTitle: {
-    fontSize: 14,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-  },
-  searchPillSub: {
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
-    color: '#717171',
-  },
-  filterCircleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  bellBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F7F7F7',
     borderWidth: 1,
     borderColor: '#EBEBEB',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  hiddenSearchInput: {
-    height: 0,
-    width: 0,
-    opacity: 0,
+    position: 'relative',
   },
   categoryBarScroll: {
-    gap: 28,
-    paddingRight: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+    paddingVertical: 8,
   },
   categoryItem: {
     alignItems: 'center',
-    gap: 6,
-    paddingBottom: 10,
+    gap: 4,
     position: 'relative',
+    paddingBottom: 6,
   },
   categoryLabelText: {
     fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
   },
   categoryLabelActive: {
     fontFamily: 'DMSans_700Bold',
     color: '#222222',
   },
   categoryLabelInactive: {
-    fontFamily: 'DMSans_500Medium',
     color: '#717171',
   },
-  activeUnderline: {
+  categoryUnderline: {
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -442,82 +464,63 @@ const styles = StyleSheet.create({
     backgroundColor: '#222222',
     borderRadius: 1,
   },
-  feedHeaderWrap: {
-    gap: 12,
-    marginBottom: 16,
+  suggestionsOverlay: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
   },
-  countRow: {
+  suggestionsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
   },
-  countText: {
-    fontSize: 13,
-    fontFamily: 'DMSans_500Medium',
-    color: '#717171',
-  },
-  gridColumnWrapper: {
-    justifyContent: 'space-between',
-    marginBottom: 18,
-  },
-  skeletonGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 56,
-    paddingHorizontal: 24,
-    gap: 10,
-  },
-  emptyHeadline: {
+  suggestionsTitle: {
     fontSize: 18,
     fontFamily: 'DMSans_700Bold',
     color: '#222222',
-    textAlign: 'center',
   },
-  emptyBody: {
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-    color: '#717171',
-    textAlign: 'center',
-    lineHeight: 18,
+  closeSuggestionsText: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+    color: '#F26522',
   },
-  zuruFabBtn: {
+  gridColumnWrapper: {
+    justifyContent: 'space-between',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 90,
+    right: 20,
+    backgroundColor: '#F26522',
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
     gap: 8,
-    backgroundColor: '#222222',
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: 24,
-    marginTop: 16,
-    shadowColor: '#000000',
-    shadowOpacity: 0.15,
+    borderRadius: 26,
+    shadowColor: '#F26522',
+    shadowOpacity: 0.3,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    elevation: 6,
   },
-  zuruFabBtnText: {
+  fabText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontFamily: 'DMSans_700Bold',
   },
-  viewerContainer: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  viewerBackBtn: {
+  closeViewerBtn: {
     position: 'absolute',
-    left: 16,
+    top: 50,
+    left: 20,
+    zIndex: 100,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -13,9 +13,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { Skeleton } from '@/components/Skeleton';
 
 export default function LoginAndSecurityScreen() {
   const insets = useSafeAreaInsets();
@@ -80,19 +80,16 @@ export default function LoginAndSecurityScreen() {
   };
 
   const handleToggle2FA = (val: boolean) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setTwoFactor(val);
     autoSaveSecurity(val, loginAlerts);
   };
 
   const handleToggleAlerts = (val: boolean) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoginAlerts(val);
     autoSaveSecurity(twoFactor, val);
   };
 
   const handleLogoutDevice = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert('Log out of device', 'Are you sure you want to log out of this active session?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Log out', style: 'destructive', onPress: () => supabase.auth.signOut() },
@@ -101,8 +98,27 @@ export default function LoginAndSecurityScreen() {
 
   if (pageLoading) {
     return (
-      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF' }]}>
-        <ActivityIndicator size="large" color="#EE7D30" />
+      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad, paddingHorizontal: 20, gap: 20 }]}>
+        <Skeleton style={{ height: 28, width: 200, borderRadius: 6 }} />
+        <Skeleton style={{ height: 56, borderRadius: 12 }} />
+        <Skeleton style={{ height: 16, width: 160, borderRadius: 4, marginTop: 8 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Skeleton style={{ width: 40, height: 40, borderRadius: 20 }} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <Skeleton style={{ height: 16, width: 180, borderRadius: 4 }} />
+            <Skeleton style={{ height: 12, width: 130, borderRadius: 4 }} />
+          </View>
+        </View>
+        <Skeleton style={{ height: 16, width: 140, borderRadius: 4, marginTop: 12 }} />
+        {[1, 2, 3].map((i) => (
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ gap: 6, flex: 1 }}>
+              <Skeleton style={{ height: 16, width: 160, borderRadius: 4 }} />
+              <Skeleton style={{ height: 12, width: 220, borderRadius: 4 }} />
+            </View>
+            <Skeleton style={{ width: 44, height: 24, borderRadius: 12 }} />
+          </View>
+        ))}
       </View>
     );
   }
@@ -114,7 +130,6 @@ export default function LoginAndSecurityScreen() {
         <Pressable
           testID="security-back-btn"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             if (router.canGoBack()) router.back();
             else router.replace('/profile');
           }}
@@ -203,7 +218,6 @@ export default function LoginAndSecurityScreen() {
                     <Pressable
                       key={m.key}
                       onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setTwoFactorMethod(m.key);
                       }}
                       style={[
@@ -249,7 +263,6 @@ export default function LoginAndSecurityScreen() {
           {/* Password & Credentials */}
           <Pressable
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               Alert.alert('Update Password', 'A password reset link will be sent to your email.');
             }}
             style={({ pressed }) => [

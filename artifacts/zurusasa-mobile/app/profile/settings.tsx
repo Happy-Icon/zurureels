@@ -16,9 +16,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { Skeleton } from '@/components/Skeleton';
 
 const LANGUAGES = [
   { code: 'en', name: 'English (US)', region: 'United States' },
@@ -115,27 +115,23 @@ export default function AppPreferencesScreen() {
   };
 
   const handleSelectLanguage = (code: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLanguage(code);
     setLangModalVisible(false);
     autoSaveSettings(code, currency, dataSaver, highContrast, textSize);
   };
 
   const handleSelectCurrency = (code: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setCurrency(code);
     setCurrModalVisible(false);
     autoSaveSettings(language, code, dataSaver, highContrast, textSize);
   };
 
   const handleToggleDataSaver = (val: boolean) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDataSaver(val);
     autoSaveSettings(language, currency, val, highContrast, textSize);
   };
 
   const handleToggleHighContrast = (val: boolean) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setHighContrast(val);
     autoSaveSettings(language, currency, dataSaver, val, textSize);
   };
@@ -146,7 +142,6 @@ export default function AppPreferencesScreen() {
   };
 
   const handleClearCache = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert('App Cache Cleared', 'Local image and data cache cleared successfully.');
   };
 
@@ -161,8 +156,15 @@ export default function AppPreferencesScreen() {
 
   if (pageLoading) {
     return (
-      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF' }]}>
-        <ActivityIndicator size="large" color="#EE7D30" />
+      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad, paddingHorizontal: 20, gap: 20 }]}>
+        <Skeleton style={{ height: 28, width: 220, borderRadius: 6 }} />
+        <Skeleton style={{ height: 14, width: 260, borderRadius: 4 }} />
+        <Skeleton style={{ height: 16, width: 120, borderRadius: 4, marginTop: 12 }} />
+        <Skeleton style={{ height: 48, borderRadius: 12 }} />
+        <Skeleton style={{ height: 48, borderRadius: 12 }} />
+        <Skeleton style={{ height: 16, width: 140, borderRadius: 4, marginTop: 12 }} />
+        <Skeleton style={{ height: 48, borderRadius: 12 }} />
+        <Skeleton style={{ height: 48, borderRadius: 12 }} />
       </View>
     );
   }
@@ -174,7 +176,6 @@ export default function AppPreferencesScreen() {
         <Pressable
           testID="settings-back-btn"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             if (router.canGoBack()) router.back();
             else router.replace('/profile');
           }}
@@ -204,7 +205,6 @@ export default function AppPreferencesScreen() {
           <Pressable
             testID="select-language-row"
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setLangModalVisible(true);
             }}
             style={({ pressed }) => [
@@ -228,7 +228,6 @@ export default function AppPreferencesScreen() {
           <Pressable
             testID="select-currency-row"
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setCurrModalVisible(true);
             }}
             style={({ pressed }) => [

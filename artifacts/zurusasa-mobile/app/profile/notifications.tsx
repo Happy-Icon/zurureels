@@ -12,9 +12,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { Skeleton } from '@/components/Skeleton';
 
 interface NotificationSettings {
   channels: { email: boolean; sms: boolean; push: boolean; whatsapp: boolean };
@@ -91,7 +91,6 @@ export default function NotificationsPreferencesScreen() {
   };
 
   const updateSetting = (updater: (prev: NotificationSettings) => NotificationSettings) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSettings((prev) => {
       const next = updater(prev);
       autoSaveSettings(next);
@@ -101,8 +100,19 @@ export default function NotificationsPreferencesScreen() {
 
   if (pageLoading) {
     return (
-      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF' }]}>
-        <ActivityIndicator size="large" color="#EE7D30" />
+      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad, paddingHorizontal: 20, gap: 20 }]}>
+        <Skeleton style={{ height: 28, width: 180, borderRadius: 6 }} />
+        <Skeleton style={{ height: 14, width: 260, borderRadius: 4 }} />
+        <Skeleton style={{ height: 16, width: 140, borderRadius: 4, marginTop: 12 }} />
+        {[1, 2, 3, 4, 5].map((i) => (
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ gap: 6, flex: 1 }}>
+              <Skeleton style={{ height: 16, width: 140, borderRadius: 4 }} />
+              <Skeleton style={{ height: 12, width: 220, borderRadius: 4 }} />
+            </View>
+            <Skeleton style={{ width: 44, height: 24, borderRadius: 12 }} />
+          </View>
+        ))}
       </View>
     );
   }
@@ -114,7 +124,6 @@ export default function NotificationsPreferencesScreen() {
         <Pressable
           testID="notifications-back-btn"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             if (router.canGoBack()) router.back();
             else router.replace('/profile');
           }}
@@ -335,7 +344,7 @@ function SettingToggleRow({
         <Switch
           value={value}
           onValueChange={onValueChange}
-          trackColor={{ true: '#EE7D30', false: '#EBEBEB' }}
+          trackColor={{ true: '#F26522', false: '#EBEBEB' }}
           thumbColor="#FFFFFF"
         />
       </View>

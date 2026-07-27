@@ -14,10 +14,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, type MessageRow } from '@/lib/supabase';
+import { Skeleton } from '@/components/Skeleton';
+import { notificationService } from '@/services/notificationService';
 
 function formatTime(iso: string) {
   const d = new Date(iso);
@@ -33,10 +35,12 @@ export default function NativeChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const { id, name, avatar } = useLocalSearchParams<{
+  const queryClient = useQueryClient();
+  const { id, name, avatar, otherId } = useLocalSearchParams<{
     id: string;
     name?: string;
     avatar?: string;
+    otherId?: string;
   }>();
 
   const [messages, setMessages] = useState<MessageRow[]>([]);
@@ -98,7 +102,6 @@ export default function NativeChatScreen() {
   }, [id, user?.id]);
 
   const goBack = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (router.canGoBack()) router.back();
     else router.replace('/inbox');
   };
@@ -106,7 +109,6 @@ export default function NativeChatScreen() {
   const send = async () => {
     const content = text.trim();
     if (!content || !user || !id || sending) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSending(true);
     setSendError(null);
     setText('');
@@ -139,12 +141,41 @@ export default function NativeChatScreen() {
           ? withoutTemp
           : [...withoutTemp, real];
       });
+
+      const now = new Date().toISOString();
+      await supabase
+        .from('conversations')
+        .update({ last_message_at: now })
+        .eq('id', id);
+
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+
+      // Find recipient ID from conversation
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('participant_one, participant_two')
+        .eq('id', id)
+        .single();
+
+      if (conv) {
+        const recipientId =
+          conv.participant_one === user.id ? conv.participant_two : conv.participant_one;
+        if (recipientId) {
+          notificationService.createNotification({
+            userId: recipientId,
+            type: 'message',
+            title: `New message from ${user.user_metadata?.full_name || 'Host/Guest'}`,
+            message: content,
+            actionType: 'chat',
+            actionId: id,
+          });
+        }
+      }
     }
     setSending(false);
   };
 
   const handlePickAttachment = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.8,
@@ -190,30 +221,41 @@ export default function NativeChatScreen() {
           <Feather name="chevron-left" size={26} color="#222222" />
         </Pressable>
 
-        {/* Avatar & Online Indicator */}
-        <View style={styles.avatarWrap}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-          ) : (
-            <View style={styles.avatarFallback}>
-              <Text style={styles.avatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
-            </View>
-          )}
-          <View style={styles.onlineDot} />
-        </View>
+        {/* Avatar & Title Group -> Clickable Host Profile Link */}
+        <Pressable
+          onPress={() => {
+            const targetId = otherId || id;
+            if (targetId) {
+              router.push(`/profile/${targetId}` as any);
+            }
+          }}
+          style={({ pressed }) => [
+            { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+            { opacity: pressed ? 0.75 : 1 },
+          ]}
+        >
+          <View style={styles.avatarWrap}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={styles.onlineDot} />
+          </View>
 
-        {/* Title & Sub-status Stack */}
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerNameText} numberOfLines={1}>
-            {displayName}
-          </Text>
-          <Text style={styles.headerStatusText}>Typically replies within 1 hour</Text>
-        </View>
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.headerNameText} numberOfLines={1}>
+              {displayName}
+            </Text>
+            <Text style={styles.headerStatusText}>Typically replies within 1 hour</Text>
+          </View>
+        </Pressable>
 
         {/* Right Info Action */}
         <Pressable
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             Alert.alert(displayName, 'Conversation details and support ticket context.');
           }}
           hitSlop={10}
@@ -246,7 +288,13 @@ export default function NativeChatScreen() {
             ) : null
           }
           ListEmptyComponent={
-            loading ? null : (
+            loading ? (
+              <View style={{ paddingHorizontal: 20, paddingTop: 16, gap: 14 }}>
+                <Skeleton style={{ height: 44, width: '65%', borderRadius: 16, borderTopLeftRadius: 4 }} />
+                <Skeleton style={{ height: 56, width: '75%', borderRadius: 16, borderTopRightRadius: 4, alignSelf: 'flex-end', backgroundColor: '#EE7D3025' }} />
+                <Skeleton style={{ height: 44, width: '55%', borderRadius: 16, borderTopLeftRadius: 4 }} />
+              </View>
+            ) : (
               /* 2. Chat Body Empty State Refinement */
               <View style={styles.emptyContainer}>
                 <View style={styles.emptyIconCircle}>

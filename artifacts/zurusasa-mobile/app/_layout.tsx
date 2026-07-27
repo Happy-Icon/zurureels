@@ -24,16 +24,30 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: 'Back' }}>
+    <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="auth"
         options={{ headerShown: false, presentation: 'formSheet' }}
       />
       <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="notifications" options={{ headerShown: false }} />
+      <Stack.Screen name="notifications/index" options={{ headerShown: false }} />
+      <Stack.Screen name="reviews" options={{ headerShown: false }} />
+      <Stack.Screen name="reviews/index" options={{ headerShown: false }} />
       <Stack.Screen name="profile" options={{ headerShown: false }} />
       <Stack.Screen name="host" options={{ headerShown: false }} />
       <Stack.Screen name="become-host" options={{ headerShown: false }} />
+      {/* Zuru AI screens */}
+      <Stack.Screen name="ai" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="ai/index"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ai/chat"
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
     </Stack>
   );
 }

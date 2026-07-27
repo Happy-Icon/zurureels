@@ -12,9 +12,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { Skeleton } from '@/components/Skeleton';
 
 interface TransactionRow {
   id: string;
@@ -85,6 +85,18 @@ export default function PaymentsAndPayoutsScreen() {
 
   const userPhone = profile?.phone || user?.user_metadata?.phone || '+254 712 *** ***';
 
+  if (loading) {
+    return (
+      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad, paddingHorizontal: 20, gap: 16 }]}>
+        <Skeleton style={{ height: 28, width: 200, borderRadius: 6 }} />
+        <Skeleton style={{ height: 44, borderRadius: 12 }} />
+        <Skeleton style={{ height: 72, borderRadius: 16 }} />
+        <Skeleton style={{ height: 72, borderRadius: 16 }} />
+        <Skeleton style={{ height: 56, borderRadius: 12 }} />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
       {/* 1. Top Navigation & Modern Header */}
@@ -92,7 +104,6 @@ export default function PaymentsAndPayoutsScreen() {
         <Pressable
           testID="payments-back-btn"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             if (router.canGoBack()) router.back();
             else router.replace('/profile');
           }}
@@ -125,7 +136,6 @@ export default function PaymentsAndPayoutsScreen() {
                 key={t.id}
                 testID={`payments-tab-${t.id}`}
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setActiveTab(t.id);
                 }}
                 style={styles.tabLineItem}
@@ -227,7 +237,6 @@ export default function PaymentsAndPayoutsScreen() {
                     <Pressable
                       key={tx.id}
                       onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setSelectedTx(tx);
                       }}
                       style={({ pressed }) => [

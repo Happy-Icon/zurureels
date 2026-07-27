@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 
@@ -70,7 +69,6 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
           const label = options.title !== undefined ? options.title : route.name;
 
           const onPress = () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             const event = navigation.emit({
               type: 'tabPress',
               target: route.key,
@@ -211,7 +209,6 @@ export default function TabLayout() {
           tabPress: (e) => {
             if (!user) {
               e.preventDefault();
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/auth');
             }
           },

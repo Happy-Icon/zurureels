@@ -11,7 +11,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { useMyBookings } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
@@ -83,9 +82,8 @@ export default function TripsScreen() {
       <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad }]}>
         <View style={styles.topNavBar}>
           <Pressable
-            testID="reservations-back-btn"
+            testID="trips-back-btn"
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/profile');
             }}
             style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
@@ -97,18 +95,17 @@ export default function TripsScreen() {
 
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconCircle}>
-            <Feather name="briefcase" size={30} color="#222222" />
+            <MaterialCommunityIcons name="bag-suitcase-outline" size={30} color="#F26522" />
           </View>
 
           <Text style={styles.emptyHeadline}>Log in to view trips</Text>
           <Text style={styles.emptyBody}>
-            Once you log in, you'll find your active reservations, check-in guides, and past trips here.
+            You can check your upcoming reservations, booking details, and past trips once you're logged in.
           </Text>
 
           <Pressable
-            testID="reservations-signin"
+            testID="trips-signin"
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/auth');
             }}
             style={({ pressed }) => [
@@ -128,9 +125,8 @@ export default function TripsScreen() {
     <View style={styles.headerWrap}>
       <View style={styles.topNavBar}>
         <Pressable
-          testID="reservations-back-btn"
+          testID="trips-back-btn"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             router.push('/profile');
           }}
           style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
@@ -156,7 +152,6 @@ export default function TripsScreen() {
               key={t.id}
               testID={`reservations-tab-${t.id}`}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setActiveTab(t.id);
               }}
               style={styles.tabLineItem}
@@ -235,10 +230,10 @@ export default function TripsScreen() {
                 style={[
                   styles.statusBadgeText,
                   isPaid
-                    ? { color: '#047857' }
+                    ? { color: '#16A34A' }
                     : isCancelled
                     ? { color: '#EF4444' }
-                    : { color: '#4B5563' },
+                    : { color: '#6B7280' },
                 ]}
               >
                 {item.status === 'paid' ? 'Confirmed' : item.status ?? 'Pending'}
@@ -265,6 +260,31 @@ export default function TripsScreen() {
               </Text>
             ) : null}
           </View>
+
+          {/* Write Review CTA for confirmed/paid trips */}
+          {isPaid ? (
+            <View style={{ marginTop: 10, alignItems: 'flex-end' }}>
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: '/reviews',
+                    params: {
+                      bookingId: item.id,
+                      listingId: item.experience_id,
+                      title: item.experience?.title || 'Stay',
+                    },
+                  } as any)
+                }
+                style={({ pressed }) => [
+                  styles.writeReviewBtn,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+              >
+                <Feather name="star" size={13} color="#F26522" />
+                <Text style={styles.writeReviewBtnText}>Write Review</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </View>
     );
@@ -281,7 +301,7 @@ export default function TripsScreen() {
         contentContainerStyle={{
           paddingHorizontal: 20,
           paddingBottom: bottomPad,
-          gap: 20,
+          gap: 16,
         }}
         ListHeaderComponent={renderHeader()}
         ListEmptyComponent={
@@ -293,7 +313,7 @@ export default function TripsScreen() {
           ) : (
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconCircle}>
-                <MaterialCommunityIcons name="bag-suitcase-outline" size={30} color="#222222" />
+                <MaterialCommunityIcons name="bag-suitcase-outline" size={30} color="#F26522" />
               </View>
 
               <Text style={styles.emptyHeadline}>
@@ -307,12 +327,11 @@ export default function TripsScreen() {
 
               <Pressable
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push('/discover');
                 }}
                 style={({ pressed }) => [
                   styles.primaryCtaBtn,
-                  { opacity: pressed ? 0.85 : 1 },
+                  { opacity: pressed ? 0.88 : 1 },
                 ]}
               >
                 <Text style={styles.primaryCtaBtnText}>Start searching</Text>
@@ -328,8 +347,8 @@ export default function TripsScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   topNavBar: {
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 4,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -341,14 +360,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerWrap: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   pageTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontFamily: 'DMSans_700Bold',
     color: '#222222',
-    letterSpacing: -0.5,
-    marginTop: 8,
+    letterSpacing: -0.4,
+    marginTop: 6,
     marginBottom: 16,
   },
   tabLineContainer: {
@@ -358,18 +377,18 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   tabLineItem: {
-    paddingBottom: 12,
+    paddingBottom: 10,
     position: 'relative',
   },
   tabLineText: {
-    fontSize: 16,
+    fontSize: 15,
   },
   tabLineTextActive: {
-    fontFamily: 'DMSans_600SemiBold',
+    fontFamily: 'DMSans_700Bold',
     color: '#222222',
   },
   tabLineTextInactive: {
-    fontFamily: 'DMSans_400Regular',
+    fontFamily: 'DMSans_500Medium',
     color: '#717171',
   },
   tabActiveIndicator: {
@@ -378,7 +397,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: '#222222',
+    backgroundColor: '#F26522',
     borderRadius: 1,
   },
   tripCard: {
@@ -389,8 +408,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#000000',
     shadowOpacity: 0.03,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   tripImageWrap: {
@@ -434,37 +453,38 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   tripLocationTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: 'DMSans_700Bold',
     color: '#222222',
   },
   tripStayTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'DMSans_400Regular',
     color: '#717171',
+    marginTop: 1,
   },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   statusBadgePaid: {
-    backgroundColor: '#10B98118',
+    backgroundColor: '#F0FDF4',
   },
   statusBadgeCancelled: {
-    backgroundColor: '#EF444418',
+    backgroundColor: '#FEF2F2',
   },
   statusBadgeNeutral: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F7F7F7',
   },
   statusBadgeText: {
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
     textTransform: 'capitalize',
   },
   cardDivider: {
     height: 1,
-    backgroundColor: '#EBEBEB',
+    backgroundColor: '#F0F0F0',
   },
   tripCardBottomRow: {
     flexDirection: 'row',
@@ -484,25 +504,41 @@ const styles = StyleSheet.create({
   tripAmountText: {
     fontSize: 15,
     fontFamily: 'DMSans_700Bold',
-    color: '#EE7D30',
+    color: '#F26522',
+  },
+  writeReviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFBF8',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FCE3D6',
+  },
+  writeReviewBtnText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: '#F26522',
   },
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 56,
+    paddingVertical: 48,
     paddingHorizontal: 24,
-    gap: 12,
+    gap: 10,
   },
   emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#F7F7F7',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(242, 101, 34, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
   emptyHeadline: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: 'DMSans_700Bold',
     color: '#222222',
     textAlign: 'center',
@@ -513,16 +549,21 @@ const styles = StyleSheet.create({
     color: '#717171',
     textAlign: 'center',
     lineHeight: 20,
-    maxWidth: 280,
-    marginBottom: 8,
+    maxWidth: 290,
+    marginBottom: 10,
   },
   primaryCtaBtn: {
     height: 48,
-    paddingHorizontal: 28,
-    borderRadius: 12,
-    backgroundColor: '#222222',
+    paddingHorizontal: 32,
+    borderRadius: 24,
+    backgroundColor: '#F26522',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#F26522',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   primaryCtaBtnText: {
     color: '#FFFFFF',

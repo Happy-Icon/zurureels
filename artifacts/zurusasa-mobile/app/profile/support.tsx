@@ -14,7 +14,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
@@ -118,7 +117,6 @@ export default function HelpCenterScreen() {
       setIsAdding(false);
       setSubject('');
       setMessage('');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Submitted', "Ticket submitted! Our support team will get back to you soon.");
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Failed to submit ticket.');
@@ -128,7 +126,6 @@ export default function HelpCenterScreen() {
   };
 
   const contactWhatsApp = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
       '24/7 WhatsApp Support',
       'Our team is active on WhatsApp to assist with active bookings and emergencies. Average response time is under 2 minutes.',
@@ -136,7 +133,6 @@ export default function HelpCenterScreen() {
   };
 
   const contactPhone = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert('Support Hotline', 'Calling ZuruSasa Support Line: +254 700 000 000');
   };
 
@@ -147,7 +143,6 @@ export default function HelpCenterScreen() {
         <Pressable
           testID="support-back-btn"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             if (router.canGoBack()) router.back();
             else router.replace('/profile');
           }}
@@ -189,7 +184,6 @@ export default function HelpCenterScreen() {
               <View key={topic.title}>
                 <Pressable
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     Alert.alert(topic.title, `Showing help articles for ${topic.title}.`);
                   }}
                   style={({ pressed }) => [
@@ -259,7 +253,6 @@ export default function HelpCenterScreen() {
             <Pressable
               testID="create-ticket"
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setIsAdding(true);
               }}
               hitSlop={8}

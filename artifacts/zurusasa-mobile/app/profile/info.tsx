@@ -15,10 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { Skeleton } from '@/components/Skeleton';
 
 const COMMON_LANGUAGES = [
   'English',
@@ -179,7 +179,6 @@ export default function PersonalInformationScreen() {
       if (updateError) throw updateError;
 
       await refreshProfile();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Alert.alert('Upload failed', e.message ?? 'Something went wrong.');
     } finally {
@@ -216,7 +215,6 @@ export default function PersonalInformationScreen() {
 
       setIdUrl(filePath);
       setBadges(newBadges);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Success', 'Government ID uploaded for verification review.');
     } catch (e: any) {
       Alert.alert('Upload failed', e.message ?? 'Something went wrong.');
@@ -227,7 +225,6 @@ export default function PersonalInformationScreen() {
 
   const handleSave = async () => {
     if (!user) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
     try {
       const { error: authError } = await supabase.auth.updateUser({
@@ -255,7 +252,6 @@ export default function PersonalInformationScreen() {
       if (profileError) throw profileError;
 
       await refreshProfile();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Saved', 'Personal information updated successfully.');
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Failed to save changes.');
@@ -265,7 +261,6 @@ export default function PersonalInformationScreen() {
   };
 
   const toggleLanguage = (lang: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLanguages((prev) =>
       prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang],
     );
@@ -273,8 +268,18 @@ export default function PersonalInformationScreen() {
 
   if (pageLoading) {
     return (
-      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF' }]}>
-        <ActivityIndicator size="large" color="#EE7D30" />
+      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad, paddingHorizontal: 20, gap: 18 }]}>
+        <Skeleton style={{ height: 26, width: 220, borderRadius: 6 }} />
+        <Skeleton style={{ height: 60, borderRadius: 16 }} />
+        <View style={{ alignItems: 'center', marginVertical: 12 }}>
+          <Skeleton style={{ width: 96, height: 96, borderRadius: 48 }} />
+        </View>
+        <Skeleton style={{ height: 18, width: 140, borderRadius: 4 }} />
+        <Skeleton style={{ height: 48, borderRadius: 12 }} />
+        <Skeleton style={{ height: 18, width: 140, borderRadius: 4 }} />
+        <Skeleton style={{ height: 48, borderRadius: 12 }} />
+        <Skeleton style={{ height: 18, width: 140, borderRadius: 4 }} />
+        <Skeleton style={{ height: 48, borderRadius: 12 }} />
       </View>
     );
   }
@@ -286,7 +291,6 @@ export default function PersonalInformationScreen() {
         <Pressable
           testID="back-btn"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             if (router.canGoBack()) router.back();
             else router.replace('/profile');
           }}

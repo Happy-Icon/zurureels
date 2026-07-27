@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { Skeleton } from '@/components/Skeleton';
 import type { WeatherData } from '@/lib/weather';
 
@@ -42,7 +41,6 @@ export function WeatherCard({ weather, loading, city }: WeatherCardProps) {
   }
 
   const handleOpenDetails = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setModalOpen(true);
   };
 

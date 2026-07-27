@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -11,13 +10,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { supabase, type ReelRow } from '@/lib/supabase';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 
 interface HostReelItem extends ReelRow {
   title?: string | null;
@@ -27,8 +26,6 @@ interface HostReelItem extends ReelRow {
   likes_count?: number;
   availability_status?: 'available' | 'booked_out';
 }
-
-import { useCustomAlert } from '@/context/CustomAlertContext';
 
 export default function HostListingsScreen() {
   const colors = useColors();
@@ -42,7 +39,7 @@ export default function HostListingsScreen() {
   const [activeTab, setActiveTab] = useState<'published' | 'drafts'>('published');
   const [reels, setReels] = useState<HostReelItem[]>([]);
 
-  const topPad = Platform.OS === 'web' ? 67 : insets.top;
+  const topPad = Platform.OS === 'web' ? 60 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 100 : 90;
 
   const fetchListings = useCallback(async () => {
@@ -74,7 +71,6 @@ export default function HostListingsScreen() {
   };
 
   const handleToggleStatus = async (item: HostReelItem) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const newStatus = item.status === 'published' ? 'draft' : 'published';
     try {
       const { error } = await supabase
@@ -83,7 +79,6 @@ export default function HostListingsScreen() {
         .eq('id', item.id);
 
       if (error) throw error;
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       fetchListings();
     } catch (err: any) {
       showAlert({
@@ -94,7 +89,6 @@ export default function HostListingsScreen() {
   };
 
   const handleDelete = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     showAlert({
       title: 'Delete Listing',
       message: 'Are you sure you want to permanently delete this listing? This action cannot be undone.',
@@ -108,7 +102,6 @@ export default function HostListingsScreen() {
             try {
               const { error } = await supabase.from('reels').delete().eq('id', id);
               if (error) throw error;
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               fetchListings();
             } catch (err: any) {
               showAlert({
@@ -131,19 +124,19 @@ export default function HostListingsScreen() {
     const title = item.title || item.experience?.title || 'Untitled Experience';
     const location = item.location || item.experience?.location || 'Kenya Coast';
     const price = item.price ?? item.experience?.current_price ?? 0;
-    const priceUnit = item.price_unit || item.experience?.price_unit || '';
+    const priceUnit = item.price_unit || item.experience?.price_unit || 'night';
     const isBookedOut =
       item.availability_status === 'booked_out' ||
       item.experience?.availability_status === 'booked_out';
 
     return (
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={styles.card}>
         <View style={styles.thumbnailWrap}>
           {item.thumbnail_url ? (
             <Image source={{ uri: item.thumbnail_url }} style={styles.thumbnail} contentFit="cover" />
           ) : (
-            <View style={[styles.placeholderThumb, { backgroundColor: colors.secondary }]}>
-              <Feather name="film" size={28} color={colors.mutedForeground} />
+            <View style={styles.placeholderThumb}>
+              <Feather name="film" size={24} color="#717171" />
             </View>
           )}
 
@@ -157,12 +150,12 @@ export default function HostListingsScreen() {
         <View style={styles.cardContent}>
           <View style={styles.cardHeaderRow}>
             <View style={styles.titleArea}>
-              <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
+              <Text style={styles.title} numberOfLines={1}>
                 {title}
               </Text>
               <View style={styles.locationRow}>
-                <Feather name="map-pin" size={12} color={colors.mutedForeground} />
-                <Text style={[styles.locationText, { color: colors.mutedForeground }]} numberOfLines={1}>
+                <Feather name="map-pin" size={12} color="#717171" />
+                <Text style={styles.locationText} numberOfLines={1}>
                   {location}
                 </Text>
               </View>
@@ -171,13 +164,15 @@ export default function HostListingsScreen() {
 
           <View style={styles.metaRow}>
             {item.category ? (
-              <View style={[styles.badge, { backgroundColor: `${colors.primary}18` }]}>
-                <Text style={[styles.badgeText, { color: colors.primary }]}>{item.category}</Text>
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryBadgeText}>
+                  {item.category.toUpperCase().replace(/_/g, ' ')}
+                </Text>
               </View>
             ) : null}
-            <Text style={[styles.price, { color: colors.foreground }]}>
+            <Text style={styles.price}>
               KES {price.toLocaleString()}
-              {priceUnit ? ` / ${priceUnit}` : ''}
+              <Text style={styles.priceUnitText}> / {priceUnit}</Text>
             </Text>
           </View>
 
@@ -186,15 +181,15 @@ export default function HostListingsScreen() {
               onPress={() => handleToggleStatus(item)}
               style={({ pressed }) => [
                 styles.actionBtn,
-                { backgroundColor: colors.secondary, opacity: pressed ? 0.75 : 1 },
+                { opacity: pressed ? 0.75 : 1 },
               ]}
             >
               <Feather
                 name={item.status === 'published' ? 'eye-off' : 'eye'}
-                size={14}
-                color={colors.foreground}
+                size={13}
+                color="#222222"
               />
-              <Text style={[styles.actionBtnText, { color: colors.foreground }]}>
+              <Text style={styles.actionBtnText}>
                 {item.status === 'published' ? 'Unpublish' : 'Publish'}
               </Text>
             </Pressable>
@@ -202,12 +197,12 @@ export default function HostListingsScreen() {
             <Pressable
               onPress={() => handleDelete(item.id)}
               style={({ pressed }) => [
-                styles.actionBtn,
-                { backgroundColor: `${colors.destructive}18`, opacity: pressed ? 0.75 : 1 },
+                styles.deleteBtn,
+                { opacity: pressed ? 0.75 : 1 },
               ]}
             >
-              <Feather name="trash-2" size={14} color={colors.destructive} />
-              <Text style={[styles.actionBtnText, { color: colors.destructive }]}>Delete</Text>
+              <Feather name="trash-2" size={13} color="#EF4444" />
+              <Text style={styles.deleteBtnText}>Delete</Text>
             </Pressable>
           </View>
         </View>
@@ -217,43 +212,38 @@ export default function HostListingsScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.fill, styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
-          Loading host listings…
-        </Text>
+      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF' }]}>
+        <ActivityIndicator size="large" color="#F26522" />
+        <Text style={styles.loadingText}>Loading host listings…</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.fill, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 12 }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Host Listings</Text>
-          <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-            Manage your accommodation and tour reels.
-          </Text>
+    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      {/* 1. Header Bar */}
+      <View style={[styles.header, { paddingTop: topPad }]}>
+        <View style={styles.headerTextStack}>
+          <Text style={styles.headerTitle}>Host Listings</Text>
+          <Text style={styles.headerSub}>Manage your accommodation and tour reels.</Text>
         </View>
         <Pressable
           testID="create-listing-btn"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             router.push('/host/create-reel');
           }}
           style={({ pressed }) => [
             styles.createBtn,
-            { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 },
+            { opacity: pressed ? 0.88 : 1 },
           ]}
         >
-          <Feather name="plus" size={16} color="#ffffff" />
+          <Feather name="plus" size={15} color="#FFFFFF" />
           <Text style={styles.createBtnText}>Create</Text>
         </Pressable>
       </View>
 
-      {/* Tabs */}
-      <View style={[styles.tabsRow, { backgroundColor: colors.secondary }]}>
+      {/* 2. Segmented Tab Control */}
+      <View style={styles.segmentedControlTrack}>
         {(['published', 'drafts'] as const).map((t) => {
           const isActive = activeTab === t;
           const count = reels.filter((r) =>
@@ -264,18 +254,17 @@ export default function HostListingsScreen() {
             <Pressable
               key={t}
               onPress={() => {
-                Haptics.selectionAsync();
                 setActiveTab(t);
               }}
               style={[
-                styles.tabPill,
-                { backgroundColor: isActive ? colors.background : 'transparent' },
+                styles.segmentedTile,
+                isActive ? styles.segmentedTileActive : null,
               ]}
             >
               <Text
                 style={[
-                  styles.tabPillText,
-                  { color: isActive ? colors.foreground : colors.mutedForeground },
+                  styles.segmentedTileText,
+                  isActive ? styles.segmentedTileTextActive : null,
                 ]}
               >
                 {t.charAt(0).toUpperCase() + t.slice(1)} ({count})
@@ -285,7 +274,7 @@ export default function HostListingsScreen() {
         })}
       </View>
 
-      {/* List */}
+      {/* 3. Listings List */}
       <FlatList
         data={filteredReels}
         keyExtractor={(item) => item.id}
@@ -296,14 +285,16 @@ export default function HostListingsScreen() {
           gap: 12,
         }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F26522" />
         }
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={[styles.emptyCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
-            <Feather name="film" size={32} color={colors.mutedForeground} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No {activeTab} yet</Text>
-            <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+          <View style={styles.compactEmptyCard}>
+            <View style={styles.emptyIconCircle}>
+              <Feather name="film" size={22} color="#717171" />
+            </View>
+            <Text style={styles.emptyTitle}>No {activeTab} yet</Text>
+            <Text style={styles.emptySub}>
               {activeTab === 'published'
                 ? 'Create your first video reel listing to showcase your stay or tour!'
                 : 'Saved draft reels will appear here.'}
@@ -312,7 +303,7 @@ export default function HostListingsScreen() {
               onPress={() => router.push('/host/create-reel')}
               style={({ pressed }) => [
                 styles.emptyBtn,
-                { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 },
+                { opacity: pressed ? 0.88 : 1 },
               ]}
             >
               <Text style={styles.emptyBtnText}>Create Listing</Text>
@@ -327,7 +318,9 @@ export default function HostListingsScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { fontSize: 14, fontFamily: 'DMSans_400Regular' },
+  loadingText: { fontSize: 14, fontFamily: 'DMSans_400Regular', color: '#717171' },
+  
+  /* Header */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -335,36 +328,108 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 16,
   },
-  headerTitle: { fontSize: 26, fontFamily: 'DMSans_700Bold' },
-  headerSub: { fontSize: 13, fontFamily: 'DMSans_400Regular', marginTop: 2 },
+  headerTextStack: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    letterSpacing: -0.4,
+  },
+  headerSub: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    marginTop: 2,
+  },
   createBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 999,
+    backgroundColor: '#F26522',
+    borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
+    shadowColor: '#F26522',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
-  createBtnText: { color: '#ffffff', fontSize: 13, fontFamily: 'DMSans_700Bold' },
-  tabsRow: {
+  createBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'DMSans_600SemiBold',
+  },
+
+  /* Segmented Control */
+  segmentedControlTrack: {
     flexDirection: 'row',
     marginHorizontal: 20,
-    padding: 4,
+    padding: 3,
     borderRadius: 12,
+    backgroundColor: '#F7F7F7',
     marginBottom: 16,
   },
-  tabPill: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
-  tabPillText: { fontSize: 13, fontFamily: 'DMSans_600SemiBold' },
+  segmentedTile: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    borderRadius: 9,
+  },
+  segmentedTileActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  segmentedTileText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
+  },
+  segmentedTileTextActive: {
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+
+  /* Listing Card */
   card: {
     flexDirection: 'row',
     padding: 12,
     borderRadius: 16,
     borderWidth: 1,
+    borderColor: '#EBEBEB',
+    backgroundColor: '#FFFFFF',
     gap: 12,
+    shadowColor: '#000000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  thumbnailWrap: { width: 100, height: 100, borderRadius: 12, overflow: 'hidden', position: 'relative' },
-  thumbnail: { width: '100%', height: '100%' },
-  placeholderThumb: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  thumbnailWrap: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  placeholderThumb: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F7F7F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bookedOverlay: {
     position: 'absolute',
     inset: 0,
@@ -372,18 +437,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bookedTagText: { color: '#ffffff', fontSize: 9, fontFamily: 'DMSans_700Bold' },
-  cardContent: { flex: 1, justifyContent: 'space-between' },
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  titleArea: { flex: 1 },
-  title: { fontSize: 15, fontFamily: 'DMSans_700Bold' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  locationText: { fontSize: 12, fontFamily: 'DMSans_400Regular' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
-  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  badgeText: { fontSize: 11, fontFamily: 'DMSans_600SemiBold', textTransform: 'capitalize' },
-  price: { fontSize: 14, fontFamily: 'DMSans_700Bold' },
-  actionsRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  bookedTagText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontFamily: 'DMSans_700Bold',
+  },
+  cardContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  titleArea: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 3,
+  },
+  locationText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  categoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: 'rgba(242, 101, 34, 0.1)',
+  },
+  categoryBadgeText: {
+    fontSize: 10,
+    fontFamily: 'DMSans_700Bold',
+    color: '#F26522',
+  },
+  price: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  priceUnitText: {
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -391,18 +509,69 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
+    backgroundColor: '#F7F7F7',
   },
-  actionBtnText: { fontSize: 12, fontFamily: 'DMSans_600SemiBold' },
-  emptyCard: {
-    padding: 32,
-    borderRadius: 20,
+  actionBtnText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+  },
+  deleteBtnText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#EF4444',
+  },
+
+  /* Empty State */
+  compactEmptyCard: {
+    padding: 24,
+    borderRadius: 16,
     borderWidth: 1,
-    borderStyle: 'dashed',
+    borderColor: '#EBEBEB',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     gap: 8,
   },
-  emptyTitle: { fontSize: 16, fontFamily: 'DMSans_700Bold' },
-  emptySub: { fontSize: 13, fontFamily: 'DMSans_400Regular', textAlign: 'center' },
-  emptyBtn: { borderRadius: 999, paddingHorizontal: 20, paddingVertical: 10, marginTop: 8 },
-  emptyBtnText: { color: '#ffffff', fontSize: 14, fontFamily: 'DMSans_700Bold' },
+  emptyIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F7F7F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  emptySub: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  emptyBtn: {
+    backgroundColor: '#F26522',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  emptyBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'DMSans_600SemiBold',
+  },
 });

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -12,16 +11,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/context/AuthContext';
-import { useColors } from '@/hooks/useColors';
 import { supabase } from '@/lib/supabase';
-
 import { useCustomAlert } from '@/context/CustomAlertContext';
 
 export default function HostVerificationScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile, refreshProfile } = useAuth();
@@ -30,7 +25,7 @@ export default function HostVerificationScreen() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<'none' | 'pending' | 'verified' | 'rejected'>('none');
 
-  const topPad = Platform.OS === 'web' ? 20 : insets.top;
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 20;
 
   useEffect(() => {
@@ -66,7 +61,6 @@ export default function HostVerificationScreen() {
         // Fallback demo verification mode
         await supabase.from('profiles').update({ verification_status: 'pending' }).eq('id', user.id);
         setStatus('pending');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showAlert({
           title: 'Verification Submitted',
           message: 'Your documents have been submitted for review.',
@@ -86,78 +80,96 @@ export default function HostVerificationScreen() {
   };
 
   return (
-    <View style={[styles.fill, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 10 }]}>
+    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      {/* 1. Header Bar */}
+      <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
           onPress={() => router.back()}
-          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={10}
         >
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Feather name="arrow-left" size={22} color="#222222" />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Identity Verification</Text>
-        <View style={{ width: 32 }} />
+        <Text style={styles.headerTitle}>Identity Verification</Text>
+        <View style={{ width: 38 }} />
       </View>
 
       <ScrollView
         style={styles.fill}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: bottomPad + 24, gap: 20 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: bottomPad + 24, gap: 24 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* 2. Hero Section */}
         <View style={styles.heroSection}>
-          <View style={[styles.heroIcon, { backgroundColor: `${colors.primary}18` }]}>
-            <MaterialCommunityIcons name="shield-check-outline" size={32} color={colors.primary} />
+          <View style={styles.heroIconCircle}>
+            <MaterialCommunityIcons name="shield-check-outline" size={32} color="#F26522" />
           </View>
-          <Text style={[styles.heroTitle, { color: colors.foreground }]}>Verified Host Trust</Text>
-          <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-            To keep ZuruSasa safe, all hosts verify their government ID or passport before publishing listings.
+          <Text style={styles.heroTitle}>Verified Host Trust</Text>
+          <Text style={styles.heroSub}>
+            To keep ZuruSasa safe and secure for guests, all hosts verify their official government ID or passport before publishing listings.
           </Text>
         </View>
 
+        {/* 3. Status or Benefits Cards */}
         {status === 'verified' ? (
-          <View style={[styles.statusCard, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
-            <Feather name="check-circle" size={36} color="#16a34a" />
-            <Text style={[styles.statusTitle, { color: '#15803d' }]}>Identity Verified!</Text>
-            <Text style={[styles.statusSub, { color: '#166534' }]}>
-              Your host profile has earned the Verified badge. Guests can book with confidence.
+          <View style={styles.statusCardVerified}>
+            <Feather name="check-circle" size={36} color="#16A34A" />
+            <Text style={styles.statusTitleVerified}>Identity Verified!</Text>
+            <Text style={styles.statusSubVerified}>
+              Your host profile has earned the Verified badge. Guests can now book your stays and tours with total confidence.
             </Text>
           </View>
         ) : status === 'pending' ? (
-          <View style={[styles.statusCard, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}>
-            <ActivityIndicator size="large" color="#ea580c" />
-            <Text style={[styles.statusTitle, { color: '#c2410c' }]}>Verification Pending</Text>
-            <Text style={[styles.statusSub, { color: '#7c2d12' }]}>
-              Your documents are under review by our safety system. This usually takes under 5 minutes.
+          <View style={styles.statusCardPending}>
+            <ActivityIndicator size="large" color="#F26522" />
+            <Text style={styles.statusTitlePending}>Verification Pending</Text>
+            <Text style={styles.statusSubPending}>
+              Your documents are under review by our safety system. Verification typically completes within 5 minutes.
             </Text>
           </View>
         ) : (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.benefitsCard}>
             <View style={styles.benefitRow}>
-              <Feather name="check-square" size={20} color={colors.primary} />
+              <View style={styles.benefitIconWrap}>
+                <Feather name="check-square" size={18} color="#F26522" />
+              </View>
               <View style={styles.benefitTextWrap}>
-                <Text style={[styles.benefitTitle, { color: colors.foreground }]}>Verified Host Badge</Text>
-                <Text style={[styles.benefitSub, { color: colors.mutedForeground }]}>Displays on all your video reels and stays.</Text>
+                <Text style={styles.benefitTitle}>Verified Host Badge</Text>
+                <Text style={styles.benefitSub}>Displays prominently on all your video reels and stay listings.</Text>
               </View>
             </View>
 
             <View style={styles.benefitRow}>
-              <Feather name="credit-card" size={20} color={colors.primary} />
+              <View style={styles.benefitIconWrap}>
+                <Feather name="credit-card" size={18} color="#F26522" />
+              </View>
               <View style={styles.benefitTextWrap}>
-                <Text style={[styles.benefitTitle, { color: colors.foreground }]}>Automated M-Pesa Payouts</Text>
-                <Text style={[styles.benefitSub, { color: colors.mutedForeground }]}>Unlocks direct earnings withdrawals.</Text>
+                <Text style={styles.benefitTitle}>Automated Escrow Payouts</Text>
+                <Text style={styles.benefitSub}>Unlocks direct earnings withdrawals to M-Pesa or Kenyan bank.</Text>
               </View>
             </View>
 
+            <View style={styles.benefitRow}>
+              <View style={styles.benefitIconWrap}>
+                <Feather name="star" size={18} color="#F26522" />
+              </View>
+              <View style={styles.benefitTextWrap}>
+                <Text style={styles.benefitTitle}>Enhanced Guest Trust</Text>
+                <Text style={styles.benefitSub}>Verified hosts get up to 3x more booking inquiries and reservations.</Text>
+              </View>
+            </View>
+
+            {/* Verification Action Button */}
             <Pressable
               disabled={loading}
               onPress={startVerification}
               style={({ pressed }) => [
                 styles.verifyBtn,
-                { backgroundColor: colors.primary, opacity: pressed || loading ? 0.8 : 1 },
+                { opacity: pressed || loading ? 0.88 : 1 },
               ]}
             >
               {loading ? (
-                <ActivityIndicator color="#ffffff" size="small" />
+                <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <Text style={styles.verifyBtnText}>Verify Identity Now</Text>
               )}
@@ -172,26 +184,154 @@ export default function HostVerificationScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: {
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
   },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 20, fontFamily: 'InstrumentSerif_400Regular' },
-  heroSection: { alignItems: 'center', gap: 10, marginTop: 12, marginBottom: 8 },
-  heroIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  heroTitle: { fontSize: 24, fontFamily: 'InstrumentSerif_400Regular', textAlign: 'center' },
-  heroSub: { fontSize: 13, fontFamily: 'DMSans_400Regular', textAlign: 'center', paddingHorizontal: 12 },
-  statusCard: { padding: 24, borderRadius: 20, borderWidth: 1, alignItems: 'center', gap: 10 },
-  statusTitle: { fontSize: 18, fontFamily: 'DMSans_700Bold' },
-  statusSub: { fontSize: 13, fontFamily: 'DMSans_400Regular', textAlign: 'center' },
-  card: { padding: 20, borderRadius: 20, borderWidth: 1, gap: 16 },
-  benefitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  benefitTextWrap: { flex: 1 },
-  benefitTitle: { fontSize: 15, fontFamily: 'DMSans_700Bold' },
-  benefitSub: { fontSize: 12, fontFamily: 'DMSans_400Regular', marginTop: 2 },
-  verifyBtn: { borderRadius: 999, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-  verifyBtnText: { color: '#ffffff', fontSize: 15, fontFamily: 'DMSans_700Bold' },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  heroSection: {
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+  },
+  heroIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(242, 101, 34, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  heroSub: {
+    fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 8,
+  },
+  statusCardVerified: {
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusTitleVerified: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#15803D',
+  },
+  statusSubVerified: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#166534',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  statusCardPending: {
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FCE3D6',
+    backgroundColor: '#FFF8F5',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusTitlePending: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  statusSubPending: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#666666',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  benefitsCard: {
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+    backgroundColor: '#FFFFFF',
+    gap: 18,
+    shadowColor: '#000000',
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  benefitIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(242, 101, 34, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  benefitTextWrap: {
+    flex: 1,
+  },
+  benefitTitle: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  benefitSub: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  verifyBtn: {
+    backgroundColor: '#F26522',
+    borderRadius: 24,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    shadowColor: '#F26522',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  verifyBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+  },
 });

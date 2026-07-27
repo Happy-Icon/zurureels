@@ -1,17 +1,17 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   FlatList,
   Image,
   Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useConversations } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
@@ -39,7 +39,22 @@ export default function InboxScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, loading } = useAuth();
-  const { data: conversations, isLoading } = useConversations(user?.id);
+  const { data: conversations, isLoading, refetch } = useConversations(user?.id);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        refetch();
+      }
+    }, [user?.id, refetch]),
+  );
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top + 10;
   const bottomPad = Platform.OS === 'web' ? 110 : 100;
@@ -63,7 +78,6 @@ export default function InboxScreen() {
         <Pressable
           testID="inbox-signin"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             router.push('/auth');
           }}
           style={({ pressed }) => [
@@ -78,7 +92,6 @@ export default function InboxScreen() {
   }
 
   const openConversation = (c: ConversationRow) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({
       pathname: '/chat/[id]',
       params: {
@@ -138,6 +151,13 @@ export default function InboxScreen() {
         data={conversations ?? []}
         keyExtractor={(c) => c.id}
         renderItem={renderRow}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#EE7D30"
+          />
+        }
         contentContainerStyle={{
           paddingTop: topPad,
           paddingBottom: bottomPad,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -11,12 +11,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
-import { useColors } from '@/hooks/useColors';
 import { supabase } from '@/lib/supabase';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 
 const KENYAN_BANKS = [
   { code: '744', name: 'Safaricom M-PESA' },
@@ -29,10 +28,7 @@ const KENYAN_BANKS = [
   { code: '025', name: 'I&M Bank' },
 ];
 
-import { useCustomAlert } from '@/context/CustomAlertContext';
-
 export default function PayoutSettingsScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile, refreshProfile } = useAuth();
@@ -43,8 +39,9 @@ export default function PayoutSettingsScreen() {
   const [businessName, setBusinessName] = useState('');
   const [existingSubaccount, setExistingSubaccount] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showBankPickerModal, setShowBankPickerModal] = useState(false);
 
-  const topPad = Platform.OS === 'web' ? 20 : insets.top;
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 20;
 
   useEffect(() => {
@@ -56,6 +53,8 @@ export default function PayoutSettingsScreen() {
       setBankCode(meta.bank_code || '744');
     }
   }, [profile]);
+
+  const selectedBankObj = KENYAN_BANKS.find((b) => b.code === bankCode) || KENYAN_BANKS[0];
 
   const handleSave = async () => {
     if (!user) {
@@ -106,7 +105,6 @@ export default function PayoutSettingsScreen() {
       await refreshProfile();
       setExistingSubaccount(subCode);
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert({
         title: 'Payouts Connected! 💰',
         message: 'Your settlement account is ready to receive automated booking earnings.',
@@ -130,7 +128,6 @@ export default function PayoutSettingsScreen() {
 
       await refreshProfile();
       setExistingSubaccount(`ACCT_SUB_${Date.now()}`);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert({
         title: 'Payout Details Saved! 💰',
         message: 'Settlement account saved successfully.',
@@ -142,131 +139,134 @@ export default function PayoutSettingsScreen() {
   };
 
   return (
-    <View style={[styles.fill, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 10 }]}>
+    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      {/* 1. Header Bar */}
+      <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
           onPress={() => router.back()}
-          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={10}
         >
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Feather name="arrow-left" size={22} color="#222222" />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Payout Settings</Text>
-        <View style={{ width: 32 }} />
+        <Text style={styles.headerTitle}>Payout Settings</Text>
+        <View style={{ width: 38 }} />
       </View>
 
       <ScrollView
         style={styles.fill}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad + 24, gap: 16 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad + 24, gap: 20 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* 2. Hero Section */}
         <View style={styles.heroSection}>
-          <View style={[styles.heroIcon, { backgroundColor: `${colors.primary}18` }]}>
-            <MaterialCommunityIcons name="bank-outline" size={32} color={colors.primary} />
+          <View style={styles.heroIconCircle}>
+            <MaterialCommunityIcons name="bank-outline" size={30} color="#F26522" />
           </View>
-          <Text style={[styles.heroTitle, { color: colors.foreground }]}>Where should we send your earnings?</Text>
-          <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
+          <Text style={styles.heroTitle}>Where should we send earnings?</Text>
+          <Text style={styles.heroSub}>
             Connect your M-Pesa phone number or Kenyan bank account to receive booking revenue split automatically.
           </Text>
         </View>
 
+        {/* 3. Active Settlement Banner */}
         {existingSubaccount ? (
-          <View style={[styles.activeBanner, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
-            <Feather name="check-circle" size={20} color="#16a34a" />
+          <View style={styles.activeBanner}>
+            <Feather name="check-circle" size={20} color="#16A34A" />
             <View style={styles.activeBannerText}>
-              <Text style={[styles.activeBannerTitle, { color: '#15803d' }]}>Settlement Account Active</Text>
-              <Text style={[styles.activeBannerSub, { color: '#166534' }]}>
+              <Text style={styles.activeBannerTitle}>Settlement Account Active</Text>
+              <Text style={styles.activeBannerSub}>
                 Account ending in ...{accountNumber.slice(-4) || '****'} is connected.
               </Text>
             </View>
           </View>
         ) : null}
 
-        {/* Bank Picker */}
+        {/* 4. Bank / Settlement Selection Trigger */}
         <View style={styles.formGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Settlement Method</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-            {KENYAN_BANKS.map((b) => {
-              const selected = bankCode === b.code;
-              return (
-                <Pressable
-                  key={b.code}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setBankCode(b.code);
-                  }}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: selected ? colors.primary : colors.secondary,
-                      borderColor: selected ? colors.primary : colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.chipText, { color: selected ? '#ffffff' : colors.foreground }]}>
-                    {b.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          <Text style={styles.inputLabel}>Settlement Method / Bank *</Text>
+          <Pressable
+            onPress={() => setShowBankPickerModal(true)}
+            style={({ pressed }) => [
+              styles.selectTriggerBtn,
+              { opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <View style={styles.selectTriggerLeft}>
+              <Feather
+                name={bankCode === '744' ? 'smartphone' : 'home'}
+                size={18}
+                color="#F26522"
+              />
+              <Text style={styles.selectTriggerText}>{selectedBankObj.name}</Text>
+            </View>
+            <Feather name="chevron-down" size={18} color="#717171" />
+          </Pressable>
         </View>
 
-        {/* Account Number */}
+        {/* 5. Account Number Input */}
         <View style={styles.formGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>
+          <Text style={styles.inputLabel}>
             {bankCode === '744' ? 'M-Pesa Phone Number *' : 'Bank Account Number *'}
           </Text>
-          <View style={[styles.inputWrap, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-            <Feather name={bankCode === '744' ? 'smartphone' : 'credit-card'} size={18} color={colors.mutedForeground} />
+          <View style={styles.inputWrap}>
+            <Feather name={bankCode === '744' ? 'smartphone' : 'credit-card'} size={18} color="#717171" />
             <TextInput
-              placeholder={bankCode === '744' ? '07XXXXXXXX' : 'Account number'}
-              placeholderTextColor={colors.mutedForeground}
+              placeholder={bankCode === '744' ? 'e.g. 0712345678' : 'Account number'}
+              placeholderTextColor="#9CA3AF"
               keyboardType="number-pad"
               value={accountNumber}
               onChangeText={setAccountNumber}
-              style={[styles.input, { color: colors.foreground }]}
+              style={styles.textInput}
             />
           </View>
         </View>
 
-        {/* Business Name */}
+        {/* 6. Account Holder Name */}
         <View style={styles.formGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Legal Account Holder Name</Text>
-          <View style={[styles.inputWrap, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-            <Feather name="user" size={18} color={colors.mutedForeground} />
+          <Text style={styles.inputLabel}>Legal Account Holder Name</Text>
+          <View style={styles.inputWrap}>
+            <Feather name="user" size={18} color="#717171" />
             <TextInput
               placeholder="Name matching your bank/M-Pesa ID"
-              placeholderTextColor={colors.mutedForeground}
+              placeholderTextColor="#9CA3AF"
               value={businessName}
               onChangeText={setBusinessName}
-              style={[styles.input, { color: colors.foreground }]}
+              style={styles.textInput}
             />
           </View>
         </View>
 
-        {/* Fee Info */}
-        <View style={[styles.infoCard, { backgroundColor: colors.secondary }]}>
+        {/* 7. Fee & Payout Info Card */}
+        <View style={styles.infoCard}>
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Platform Host Fee</Text>
-            <Text style={[styles.infoVal, { color: colors.foreground }]}>10% per booking</Text>
+            <View style={styles.infoLeft}>
+              <Feather name="percent" size={14} color="#717171" />
+              <Text style={styles.infoLabel}>Platform Host Fee</Text>
+            </View>
+            <Text style={styles.infoVal}>10% per booking</Text>
           </View>
+          <View style={styles.infoDivider} />
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Payout Timing</Text>
-            <Text style={[styles.infoVal, { color: colors.foreground }]}>Automated on check-in</Text>
+            <View style={styles.infoLeft}>
+              <Feather name="clock" size={14} color="#717171" />
+              <Text style={styles.infoLabel}>Payout Timing</Text>
+            </View>
+            <Text style={styles.infoVal}>Automated on check-in</Text>
           </View>
         </View>
 
+        {/* 8. Save Button */}
         <Pressable
           disabled={loading}
           onPress={handleSave}
           style={({ pressed }) => [
             styles.saveBtn,
-            { backgroundColor: colors.primary, opacity: pressed || loading ? 0.8 : 1 },
+            { opacity: pressed || loading ? 0.88 : 1 },
           ]}
         >
           {loading ? (
-            <ActivityIndicator color="#ffffff" size="small" />
+            <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
             <Text style={styles.saveBtnText}>
               {existingSubaccount ? 'Update Payout Details' : 'Confirm Payout Details'}
@@ -274,6 +274,82 @@ export default function PayoutSettingsScreen() {
           )}
         </Pressable>
       </ScrollView>
+
+      {/* Settlement Method Selection Modal */}
+      <Modal
+        visible={showBankPickerModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowBankPickerModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowBankPickerModal(false)}
+        >
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalDragPill} />
+
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Settlement Method</Text>
+              <Pressable
+                onPress={() => setShowBankPickerModal(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Feather name="x" size={20} color="#222222" />
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              <View style={styles.modalOptionList}>
+                {KENYAN_BANKS.map((b) => {
+                  const isSelected = bankCode === b.code;
+                  return (
+                    <Pressable
+                      key={b.code}
+                      onPress={() => {
+                        setBankCode(b.code);
+                        setShowBankPickerModal(false);
+                      }}
+                      style={({ pressed }) => [
+                        styles.bankOptionRow,
+                        isSelected ? styles.bankOptionRowSelected : null,
+                        { opacity: pressed ? 0.8 : 1 },
+                      ]}
+                    >
+                      <View style={styles.bankOptionLeft}>
+                        <View
+                          style={[
+                            styles.bankIconCircle,
+                            isSelected ? styles.bankIconCircleSelected : null,
+                          ]}
+                        >
+                          <Feather
+                            name={b.code === '744' ? 'smartphone' : 'home'}
+                            size={16}
+                            color={isSelected ? '#F26522' : '#717171'}
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.bankOptionName,
+                            isSelected ? styles.bankOptionNameSelected : null,
+                          ]}
+                        >
+                          {b.name}
+                        </Text>
+                      </View>
+
+                      {isSelected ? (
+                        <Feather name="check" size={18} color="#F26522" />
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -281,40 +357,260 @@ export default function PayoutSettingsScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: {
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
   },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 20, fontFamily: 'InstrumentSerif_400Regular' },
-  heroSection: { alignItems: 'center', gap: 10, marginTop: 12, marginBottom: 8 },
-  heroIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  heroTitle: { fontSize: 24, fontFamily: 'InstrumentSerif_400Regular', textAlign: 'center' },
-  heroSub: { fontSize: 13, fontFamily: 'DMSans_400Regular', textAlign: 'center', paddingHorizontal: 12 },
-  activeBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
-  activeBannerText: { flex: 1 },
-  activeBannerTitle: { fontSize: 14, fontFamily: 'DMSans_700Bold' },
-  activeBannerSub: { fontSize: 12, fontFamily: 'DMSans_400Regular', marginTop: 2 },
-  formGroup: { gap: 6 },
-  label: { fontSize: 13, fontFamily: 'DMSans_600SemiBold' },
-  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
-  chipText: { fontSize: 13, fontFamily: 'DMSans_600SemiBold' },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  heroSection: {
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  heroIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(242, 101, 34, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  heroSub: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 8,
+  },
+  activeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    backgroundColor: '#F0FDF4',
+  },
+  activeBannerText: {
+    flex: 1,
+  },
+  activeBannerTitle: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+    color: '#15803D',
+  },
+  activeBannerSub: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#166534',
+    marginTop: 1,
+  },
+  formGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+
+  /* Selection Dropdown Trigger */
+  selectTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  selectTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  selectTriggerText: {
+    fontSize: 14,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 12,
+    backgroundColor: '#F7F7F7',
   },
-  input: { flex: 1, fontSize: 14, fontFamily: 'DMSans_400Regular' },
-  infoCard: { padding: 14, borderRadius: 14, gap: 8 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  infoLabel: { fontSize: 13, fontFamily: 'DMSans_400Regular' },
-  infoVal: { fontSize: 13, fontFamily: 'DMSans_700Bold' },
-  saveBtn: { borderRadius: 999, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-  saveBtnText: { color: '#ffffff', fontSize: 15, fontFamily: 'DMSans_700Bold' },
+  textInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
+    color: '#222222',
+  },
+  infoCard: {
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+    gap: 10,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  infoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  infoLabel: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+  },
+  infoVal: {
+    fontSize: 13,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  infoDivider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+  },
+  saveBtn: {
+    backgroundColor: '#F26522',
+    borderRadius: 24,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    shadowColor: '#F26522',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  saveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+  },
+
+  /* Modal Selection Sheet */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '75%',
+    paddingBottom: 32,
+  },
+  modalDragPill: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'center',
+    marginTop: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  modalOptionList: {
+    gap: 8,
+    paddingBottom: 20,
+  },
+  bankOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+  },
+  bankOptionRowSelected: {
+    backgroundColor: '#FFF8F5',
+    borderColor: '#F26522',
+  },
+  bankOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  bankIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bankIconCircleSelected: {
+    backgroundColor: 'rgba(242, 101, 34, 0.12)',
+  },
+  bankOptionName: {
+    fontSize: 14,
+    fontFamily: 'DMSans_500Medium',
+    color: '#222222',
+  },
+  bankOptionNameSelected: {
+    fontFamily: 'DMSans_700Bold',
+    color: '#F26522',
+  },
 });

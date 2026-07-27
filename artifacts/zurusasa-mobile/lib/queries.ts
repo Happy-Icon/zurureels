@@ -321,6 +321,7 @@ export function useToggleFollow() {
 // ---- Enquire: find or create the buyer<->host conversation (mirrors web handleEnquire) ----
 
 export function useEnquire() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
       userId,
@@ -337,18 +338,28 @@ export function useEnquire() {
         .eq('participant_two', participantTwo)
         .maybeSingle();
       if (found.error) throw new Error(found.error.message);
-      if (found.data?.id) return found.data.id as string;
+      if (found.data?.id) {
+        await supabase
+          .from('conversations')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', found.data.id);
+        return found.data.id as string;
+      }
 
       const created = await supabase
         .from('conversations')
         .insert({
           participant_one: participantOne,
           participant_two: participantTwo,
+          last_message_at: new Date().toISOString(),
         })
         .select('id')
         .single();
       if (created.error) throw new Error(created.error.message);
       return created.data.id as string;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
   });
 }
@@ -414,18 +425,20 @@ export function useConversations(userId: string | undefined) {
   return useQuery<ConversationRow[]>({
     queryKey: ['conversations', userId],
     enabled: !!userId,
+    staleTime: 0,
     queryFn: async () => {
       const convs = await supabase
         .from('conversations')
-        .select('id, participant_one, participant_two, last_message_at')
+        .select('id, participant_one, participant_two, last_message_at, created_at')
         .or(`participant_one.eq.${userId},participant_two.eq.${userId}`)
-        .order('last_message_at', { ascending: false });
+        .order('last_message_at', { ascending: false, nullsFirst: false });
       if (convs.error) throw new Error(convs.error.message);
       const rows = (convs.data ?? []) as {
         id: string;
         participant_one: string;
         participant_two: string;
         last_message_at: string | null;
+        created_at?: string | null;
       }[];
       if (rows.length === 0) return [];
 
@@ -452,6 +465,7 @@ export function useConversations(userId: string | undefined) {
         const metadata = (p?.metadata ?? null) as { avatar_url?: string } | null;
         return {
           ...c,
+          last_message_at: c.last_message_at || c.created_at || new Date().toISOString(),
           other: {
             id: otherId,
             full_name: (p?.full_name as string) || 'Zuru User',

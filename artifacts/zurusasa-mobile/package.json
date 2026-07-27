@@ -38,6 +38,7 @@
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.10",
     "expo-location": "~19.0.8",
+    "expo-notifications": "~0.32.14",
     "expo-router": "~6.0.17",
     "expo-splash-screen": "~31.0.12",
     "expo-status-bar": "~3.0.9",
@@ -65,6 +66,7 @@
     "@react-native-community/slider": "5.0.1",
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@supabase/supabase-js": "^2.110.7",
+    "expo-updates": "~29.0.19",
     "expo-video": "^3.0.16",
     "react-native-url-polyfill": "^4.0.0"
   }

@@ -14,11 +14,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { HostDashboard } from '@/components/host/HostDashboard';
 import { ReelCard } from '@/components/ReelCard';
-import { CenteredState } from '@/components/Skeleton';
+import { CenteredState, Skeleton } from '@/components/Skeleton';
 import { useReels } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
 
@@ -76,7 +75,6 @@ export default function ZuruFlowScreen() {
           <Pressable
             testID="top-tab-discover"
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.navigate('/discover');
             }}
             hitSlop={10}
@@ -90,7 +88,6 @@ export default function ZuruFlowScreen() {
         <Pressable
           testID="top-search"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             router.navigate('/discover');
           }}
           hitSlop={8}
@@ -107,11 +104,16 @@ export default function ZuruFlowScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.fill, { backgroundColor: '#000000' }]}>
-        <CenteredState>
-          <ActivityIndicator color="#EE7D30" size="large" />
-          <Text style={styles.stateText}>Loading coastal feed...</Text>
-        </CenteredState>
+      <View style={[styles.fill, { backgroundColor: '#000000', paddingTop: topInset + 60, paddingHorizontal: 20 }]}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 100, gap: 14 }}>
+          <Skeleton style={{ height: 28, width: 220, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+          <Skeleton style={{ height: 18, width: 140, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.12)' }} />
+          <Skeleton style={{ height: 22, width: 160, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+            <Skeleton style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+            <Skeleton style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)' }} />
+          </View>
+        </View>
         {topOverlay}
       </View>
     );

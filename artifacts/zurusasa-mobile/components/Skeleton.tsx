@@ -6,14 +6,12 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { useColors } from '@/hooks/useColors';
 
 export function Skeleton({ style }: { style?: ViewStyle }) {
-  const colors = useColors();
-  const opacity = useSharedValue(0.5);
+  const opacity = useSharedValue(0.4);
 
   useEffect(() => {
-    opacity.value = withRepeat(withTiming(1, { duration: 700 }), -1, true);
+    opacity.value = withRepeat(withTiming(1, { duration: 650 }), -1, true);
   }, [opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
@@ -22,7 +20,6 @@ export function Skeleton({ style }: { style?: ViewStyle }) {
     <Animated.View
       style={[
         styles.base,
-        { backgroundColor: colors.muted, borderRadius: colors.radius },
         style,
         animatedStyle,
       ]}
@@ -41,6 +38,8 @@ export function CenteredState({
 const styles = StyleSheet.create({
   base: {
     height: 16,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
   },
   centered: {
     flex: 1,

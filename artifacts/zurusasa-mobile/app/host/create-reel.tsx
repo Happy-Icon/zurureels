@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -11,14 +10,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
-import { useColors } from '@/hooks/useColors';
 import { supabase } from '@/lib/supabase';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 
 const CATEGORIES = [
   { label: 'Stays & Villas', value: 'stays' },
@@ -31,10 +29,7 @@ const CATEGORIES = [
 
 const LOCATIONS = ['Diani', 'Watamu', 'Lamu', 'Mombasa', 'Malindi', 'Kilifi'];
 
-import { useCustomAlert } from '@/context/CustomAlertContext';
-
 export default function CreateReelScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -52,11 +47,10 @@ export default function CreateReelScreen() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const topPad = Platform.OS === 'web' ? 20 : insets.top;
-  const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 20;
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 16;
 
   const pickVideo = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       showAlert({
@@ -78,7 +72,6 @@ export default function CreateReelScreen() {
   };
 
   const pickThumbnail = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -140,7 +133,7 @@ export default function CreateReelScreen() {
       if (expError) throw expError;
       setUploadProgress(50);
 
-      // 2. Mock / Storage Video Upload Link (Cloudinary or Direct Supabase Storage)
+      // 2. Video Upload Link
       const finalVideoUrl = videoUri || 'https://assets.mixkit.co/videos/preview/mixkit-beach-front-resort-with-palm-trees-41484-large.mp4';
       const finalThumbUrl = thumbnailUri || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800';
 
@@ -175,7 +168,6 @@ export default function CreateReelScreen() {
       }
 
       setUploadProgress(100);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert({
         title: 'Reel Published! 🎉',
         message: 'Your story is now live for guests to discover.',
@@ -189,7 +181,6 @@ export default function CreateReelScreen() {
       });
     } catch (err: any) {
       console.error('Publish reel error:', err);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showAlert({
         title: 'Publication Failed',
         message: err.message || 'Something went wrong while publishing.',
@@ -201,27 +192,92 @@ export default function CreateReelScreen() {
   };
 
   return (
-    <View style={[styles.fill, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 10 }]}>
+    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      {/* 1. Header Bar */}
+      <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
           onPress={() => router.back()}
-          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={10}
         >
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Feather name="arrow-left" size={22} color="#222222" />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Create Listing Reel</Text>
-        <View style={{ width: 32 }} />
+        <Text style={styles.headerTitle}>Create Listing Reel</Text>
+        <View style={{ width: 38 }} />
       </View>
+
+      {/* Upload Progress Bar */}
+      {uploading ? (
+        <View style={styles.progressBarTrack}>
+          <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
+        </View>
+      ) : null}
 
       <ScrollView
         style={styles.fill}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad + 24, gap: 16 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 110, gap: 20 }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Step 1: Category Picker */}
-        <View style={styles.formGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Experience Category</Text>
+        {/* Step 1: Media Action Cards (Video & Cover) */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionHeading}>1. Media Assets</Text>
+          <View style={styles.mediaRow}>
+            {/* Pick Video Action Card */}
+            <Pressable
+              onPress={pickVideo}
+              style={({ pressed }) => [
+                styles.mediaActionCard,
+                videoUri ? styles.mediaActionCardSelected : null,
+                { opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <View style={[styles.mediaBadgeCircle, videoUri ? styles.mediaBadgeActive : null]}>
+                <Feather name={videoUri ? 'check' : 'video'} size={20} color={videoUri ? '#F26522' : '#717171'} />
+              </View>
+              <Text style={styles.mediaCardTitle}>
+                {videoUri ? 'Video Attached' : 'Upload Reel Video'}
+              </Text>
+              <Text style={styles.mediaCardSub}>
+                {videoUri ? 'Tap to change video' : 'MP4 format · Max 60s'}
+              </Text>
+            </Pressable>
+
+            {/* Pick Cover Action Card */}
+            <Pressable
+              onPress={pickThumbnail}
+              style={({ pressed }) => [
+                styles.mediaActionCard,
+                thumbnailUri ? styles.mediaActionCardSelected : null,
+                { opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              {thumbnailUri ? (
+                <View style={styles.thumbPreviewWrap}>
+                  <Image source={{ uri: thumbnailUri }} style={styles.thumbPreviewImage} contentFit="cover" />
+                  <View style={styles.thumbChangeOverlay}>
+                    <Feather name="camera" size={14} color="#FFFFFF" />
+                    <Text style={styles.thumbChangeText}>Change</Text>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.mediaBadgeCircle}>
+                    <Feather name="image" size={20} color="#717171" />
+                  </View>
+                  <Text style={styles.mediaCardTitle}>Pick Cover</Text>
+                  <Text style={styles.mediaCardSub}>9:16 portrait image</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Step 2: Experience Details */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionHeading}>2. Experience Category</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {CATEGORIES.map((c) => {
               const selected = category === c.value;
@@ -229,18 +285,19 @@ export default function CreateReelScreen() {
                 <Pressable
                   key={c.value}
                   onPress={() => {
-                    Haptics.selectionAsync();
                     setCategory(c.value);
                   }}
                   style={[
-                    styles.chip,
-                    {
-                      backgroundColor: selected ? colors.primary : colors.secondary,
-                      borderColor: selected ? colors.primary : colors.border,
-                    },
+                    styles.categoryChip,
+                    selected ? styles.categoryChipSelected : null,
                   ]}
                 >
-                  <Text style={[styles.chipText, { color: selected ? '#ffffff' : colors.foreground }]}>
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      selected ? styles.categoryChipTextSelected : null,
+                    ]}
+                  >
                     {c.label}
                   </Text>
                 </Pressable>
@@ -249,151 +306,103 @@ export default function CreateReelScreen() {
           </ScrollView>
         </View>
 
-        {/* Title */}
+        {/* Listing Title */}
         <View style={styles.formGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Listing Title *</Text>
+          <Text style={styles.inputLabel}>Listing Title *</Text>
           <TextInput
             placeholder="e.g. Diani Sunset Villa & Private Pool"
-            placeholderTextColor={colors.mutedForeground}
+            placeholderTextColor="#9CA3AF"
             value={title}
             onChangeText={setTitle}
-            style={[styles.input, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
+            style={styles.textInput}
           />
         </View>
 
-        {/* Location & Price Row */}
-        <View style={styles.row}>
-          <View style={[styles.formGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Location *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-              {LOCATIONS.map((loc) => {
-                const sel = location === loc;
-                return (
-                  <Pressable
-                    key={loc}
-                    onPress={() => setLocation(loc)}
-                    style={[
-                      styles.locChip,
-                      {
-                        backgroundColor: sel ? `${colors.primary}20` : colors.secondary,
-                        borderColor: sel ? colors.primary : colors.border,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.locChipText, { color: sel ? colors.primary : colors.foreground }]}>
-                      {loc}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
+        {/* Location Selector */}
+        <View style={styles.formGroup}>
+          <Text style={styles.inputLabel}>Location *</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+            {LOCATIONS.map((loc) => {
+              const sel = location === loc;
+              return (
+                <Pressable
+                  key={loc}
+                  onPress={() => setLocation(loc)}
+                  style={[
+                    styles.locChip,
+                    sel ? styles.locChipSelected : null,
+                  ]}
+                >
+                  <Text style={[styles.locChipText, sel ? styles.locChipTextSelected : null]}>
+                    {loc}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
 
-        {/* Price & Unit */}
-        <View style={styles.row}>
+        {/* Price & Price Unit Row */}
+        <View style={styles.rowTwoCol}>
           <View style={[styles.formGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Price (KES) *</Text>
+            <Text style={styles.inputLabel}>Price (KES) *</Text>
             <TextInput
               placeholder="e.g. 15000"
-              placeholderTextColor={colors.mutedForeground}
+              placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
               value={price}
               onChangeText={setPrice}
-              style={[styles.input, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
+              style={styles.textInput}
             />
           </View>
 
-          <View style={[styles.formGroup, { width: 120 }]}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Price Unit</Text>
+          <View style={[styles.formGroup, { width: 130 }]}>
+            <Text style={styles.inputLabel}>Price Unit</Text>
             <TextInput
               placeholder="night / trip"
-              placeholderTextColor={colors.mutedForeground}
+              placeholderTextColor="#9CA3AF"
               value={priceUnit}
               onChangeText={setPriceUnit}
-              style={[styles.input, { backgroundColor: colors.secondary, color: colors.foreground, borderColor: colors.border }]}
+              style={styles.textInput}
             />
           </View>
         </View>
 
         {/* Description */}
         <View style={styles.formGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Description (Optional)</Text>
+          <Text style={styles.inputLabel}>Description (Optional)</Text>
           <TextInput
             placeholder="Describe what makes this experience special..."
-            placeholderTextColor={colors.mutedForeground}
+            placeholderTextColor="#9CA3AF"
             multiline
             numberOfLines={3}
             value={description}
             onChangeText={setDescription}
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.secondary,
-                color: colors.foreground,
-                borderColor: colors.border,
-                minHeight: 80,
-                textAlignVertical: 'top',
-              },
-            ]}
+            style={[styles.textInput, styles.textAreaInput]}
           />
         </View>
+      </ScrollView>
 
-        {/* Media Pickers */}
-        <View style={styles.mediaSection}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Video & Thumbnail</Text>
-          <View style={styles.row}>
-            <Pressable
-              onPress={pickVideo}
-              style={({ pressed }) => [
-                styles.mediaCard,
-                { backgroundColor: colors.secondary, borderColor: videoUri ? colors.primary : colors.border, opacity: pressed ? 0.8 : 1 },
-              ]}
-            >
-              <Feather name={videoUri ? 'check-circle' : 'video'} size={24} color={videoUri ? colors.primary : colors.mutedForeground} />
-              <Text style={[styles.mediaCardText, { color: colors.foreground }]}>
-                {videoUri ? 'Video Selected' : 'Pick Video'}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={pickThumbnail}
-              style={({ pressed }) => [
-                styles.mediaCard,
-                { backgroundColor: colors.secondary, borderColor: thumbnailUri ? colors.primary : colors.border, opacity: pressed ? 0.8 : 1 },
-              ]}
-            >
-              {thumbnailUri ? (
-                <Image source={{ uri: thumbnailUri }} style={styles.thumbImage} contentFit="cover" />
-              ) : (
-                <>
-                  <Feather name="image" size={24} color={colors.mutedForeground} />
-                  <Text style={[styles.mediaCardText, { color: colors.foreground }]}>Pick Cover</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Submit Button */}
+      {/* Sticky Bottom Dock */}
+      <View style={[styles.bottomDock, { paddingBottom: bottomPad }]}>
         <Pressable
           disabled={uploading}
           onPress={handleSubmit}
           style={({ pressed }) => [
-            styles.submitBtn,
-            { backgroundColor: colors.primary, opacity: pressed || uploading ? 0.8 : 1 },
+            styles.publishBtn,
+            { opacity: pressed || uploading ? 0.88 : 1 },
           ]}
         >
           {uploading ? (
             <View style={styles.uploadingRow}>
-              <ActivityIndicator color="#ffffff" size="small" />
-              <Text style={styles.submitBtnText}>Publishing ({uploadProgress}%)...</Text>
+              <ActivityIndicator color="#FFFFFF" size="small" />
+              <Text style={styles.publishBtnText}>Publishing ({uploadProgress}%)...</Text>
             </View>
           ) : (
-            <Text style={styles.submitBtnText}>Publish Reel</Text>
+            <Text style={styles.publishBtnText}>Publish Reel</Text>
           )}
         </Pressable>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -401,54 +410,214 @@ export default function CreateReelScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   header: {
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
   },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 20, fontFamily: 'InstrumentSerif_400Regular' },
-  formGroup: { gap: 6 },
-  label: { fontSize: 13, fontFamily: 'DMSans_600SemiBold' },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 999,
-    borderWidth: 1,
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  chipText: { fontSize: 13, fontFamily: 'DMSans_600SemiBold' },
-  input: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
+  headerTitle: {
+    fontSize: 20,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
   },
-  row: { flexDirection: 'row', gap: 12 },
-  locChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
-  locChipText: { fontSize: 12, fontFamily: 'DMSans_500Medium' },
-  mediaSection: { gap: 8 },
-  mediaCard: {
+  progressBarTrack: {
+    height: 3,
+    backgroundColor: '#F7F7F7',
+    width: '100%',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#F26522',
+  },
+  sectionBlock: {
+    gap: 10,
+  },
+  sectionHeading: {
+    fontSize: 16,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+  },
+
+  /* Media Action Cards */
+  mediaRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  mediaActionCard: {
     flex: 1,
-    height: 90,
-    borderRadius: 14,
+    height: 110,
+    borderRadius: 16,
+    backgroundColor: '#F7F7F7',
     borderWidth: 1,
+    borderColor: '#EBEBEB',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 12,
     gap: 6,
     overflow: 'hidden',
   },
-  mediaCardText: { fontSize: 12, fontFamily: 'DMSans_600SemiBold' },
-  thumbImage: { width: '100%', height: '100%' },
-  submitBtn: {
-    borderRadius: 999,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 12,
+  mediaActionCardSelected: {
+    borderColor: '#F26522',
+    backgroundColor: '#FFF8F5',
+    borderStyle: 'solid',
   },
-  submitBtnText: { color: '#ffffff', fontSize: 15, fontFamily: 'DMSans_700Bold' },
-  uploadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mediaBadgeCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaBadgeActive: {
+    backgroundColor: 'rgba(242, 101, 34, 0.12)',
+  },
+  mediaCardTitle: {
+    fontSize: 13,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+    textAlign: 'center',
+  },
+  mediaCardSub: {
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
+    color: '#717171',
+    textAlign: 'center',
+  },
+  thumbPreviewWrap: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  thumbPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbChangeOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 4,
+  },
+  thumbChangeText: {
+    fontSize: 11,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#FFFFFF',
+  },
+
+  /* Inputs & Form Groups */
+  formGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#222222',
+  },
+  textInput: {
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
+    color: '#222222',
+  },
+  textAreaInput: {
+    minHeight: 84,
+    textAlignVertical: 'top',
+  },
+  rowTwoCol: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: '#F7F7F7',
+  },
+  categoryChipSelected: {
+    backgroundColor: '#F26522',
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
+  },
+  categoryChipTextSelected: {
+    fontFamily: 'DMSans_700Bold',
+    color: '#FFFFFF',
+  },
+  locChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#F7F7F7',
+  },
+  locChipSelected: {
+    backgroundColor: 'rgba(242, 101, 34, 0.1)',
+  },
+  locChipText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+    color: '#717171',
+  },
+  locChipTextSelected: {
+    fontFamily: 'DMSans_700Bold',
+    color: '#F26522',
+  },
+
+  /* Bottom Dock */
+  bottomDock: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#EBEBEB',
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 6,
+  },
+  publishBtn: {
+    backgroundColor: '#F26522',
+    borderRadius: 24,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  publishBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+  },
+  uploadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
 });

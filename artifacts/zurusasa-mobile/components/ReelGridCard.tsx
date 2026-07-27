@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { useReelInteractions, useToggleSave } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
@@ -30,11 +29,9 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
 
   const onSave = () => {
     if (!user) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       router.push('/auth');
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleSave.mutate({ reelId: reel.id, userId: user.id, saved });
   };
 

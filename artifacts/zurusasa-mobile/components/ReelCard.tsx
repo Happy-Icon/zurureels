@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  PanResponder,
   Pressable,
   Share,
   StyleSheet,
@@ -15,10 +16,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import {
-  useEnquire,
   useReelInteractions,
   useToggleFollow,
   useToggleLike,
@@ -26,7 +25,7 @@ import {
 } from '@/lib/queries';
 import { BookingSheet } from '@/components/BookingSheet';
 import { ReelInfoSheet } from '@/components/ReelInfoSheet';
-import { ZuruAgentChat } from '@/components/ZuruAgentChat';
+import { EnquireModal } from '@/components/EnquireModal';
 import type { ReelRow } from '@/lib/supabase';
 
 export const ZURU_ORANGE = '#EE7D30';
@@ -48,14 +47,13 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const enquire = useEnquire();
   const toggleLike = useToggleLike();
   const toggleSave = useToggleSave();
   const toggleFollow = useToggleFollow();
   const [booked, setBooked] = useState<boolean>(false);
   const [muted, setMuted] = useState<boolean>(globalMuted);
   const [infoOpen, setInfoOpen] = useState<boolean>(false);
-  const [agentOpen, setAgentOpen] = useState<boolean>(false);
+  const [enquireOpen, setEnquireOpen] = useState<boolean>(false);
   const [bookingOpen, setBookingOpen] = useState<boolean>(false);
 
   const hostId = reel.user_id ?? null;
@@ -125,7 +123,6 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
 
   const requireAuth = (): boolean => {
     if (!user) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       router.push('/auth');
       return false;
     }
@@ -134,7 +131,6 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
 
   const onLike = () => {
     if (!requireAuth() || !user) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleLike.mutate({
       reelId: reel.id,
       userId: user.id,
@@ -144,7 +140,6 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
 
   const onSave = () => {
     if (!requireAuth() || !user) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleSave.mutate({
       reelId: reel.id,
       userId: user.id,
@@ -155,7 +150,6 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
   const onFollow = () => {
     if (!requireAuth() || !user) return;
     if (!hostId || hostId === user.id) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleFollow.mutate({
       reelId: reel.id,
       hostId,
@@ -165,7 +159,6 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
   };
 
   const onShare = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const title = exp?.title ?? 'a coastal experience';
     const location = exp?.location ? ` in ${exp.location}` : '';
     try {
@@ -179,35 +172,20 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
     }
   };
 
-  const onEnquire = async () => {
-    if (!requireAuth() || !user) return;
+  const onEnquire = () => {
+    if (!requireAuth()) return;
     if (!hostId) {
       Alert.alert('Host unavailable', 'This reel has no host to message.');
       return;
     }
-    if (hostId === user.id) {
+    if (hostId === user?.id) {
       Alert.alert('This is your reel', 'You cannot enquire on your own listing.');
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await enquire.mutateAsync({ userId: user.id, hostId });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        'Enquiry sent',
-        `Your chat with ${hostName} is open — replies will show up in your ZuruSasa inbox.`,
-      );
-    } catch (err) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(
-        'Could not send enquiry',
-        err instanceof Error ? err.message : 'Please try again.',
-      );
-    }
+    setEnquireOpen(true);
   };
 
   const onBook = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (bookedOut || !exp?.id) return;
     setBookingOpen(true);
   };
@@ -216,6 +194,27 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
   const saved = inter?.saved ?? false;
   const following = inter?.following ?? false;
   const likeCount = inter?.likeCount ?? 0;
+
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+
+  const handleTouchStart = (e: any) => {
+    touchStartX.current = e.nativeEvent.pageX ?? e.nativeEvent.locationX ?? 0;
+    touchStartY.current = e.nativeEvent.pageY ?? e.nativeEvent.locationY ?? 0;
+  };
+
+  const handleTouchEnd = (e: any) => {
+    const endX = e.nativeEvent.pageX ?? e.nativeEvent.locationX ?? 0;
+    const endY = e.nativeEvent.pageY ?? e.nativeEvent.locationY ?? 0;
+    const deltaX = endX - touchStartX.current;
+    const deltaY = endY - touchStartY.current;
+
+    if (deltaX >= 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      if (hostId) {
+        router.push(`/profile/${hostId}` as any);
+      }
+    }
+  };
 
   return (
     <View style={[styles.page, { height }]}>
@@ -247,10 +246,12 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
         pointerEvents="none"
       />
 
-      {/* Tap to unmute / play-pause overlay */}
+      {/* Tap to unmute / play-pause overlay & Swipe Right gesture listener */}
       <Pressable
         testID={`video-tap-${reel.id}`}
         onPress={onVideoTap}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         style={StyleSheet.absoluteFill}
       >
         {videoUrl && !isPlaying ? (
@@ -264,10 +265,14 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
 
       {/* 3. Streamlined Right Action Rail (Vertical Column) */}
       <View style={[styles.rail, { bottom: railBottom }]}>
-        {/* Host Avatar with Online Green Dot */}
+        {/* Host Avatar with Online Green Dot -> Opens Host Profile */}
         <Pressable
-          testID={`follow-button-${reel.id}`}
-          onPress={onFollow}
+          testID={`host-avatar-${reel.id}`}
+          onPress={() => {
+            if (hostId) {
+              router.push(`/profile/${hostId}` as any);
+            }
+          }}
           style={styles.avatarWrap}
         >
           {avatarUrl ? (
@@ -281,9 +286,15 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
           )}
           <View style={styles.onlineDot} />
           {!following && hostId && hostId !== user?.id ? (
-            <View style={styles.plusBadge}>
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                onFollow();
+              }}
+              style={styles.plusBadge}
+            >
               <Feather name="plus" size={10} color="#FFFFFF" />
-            </View>
+            </Pressable>
           ) : null}
         </Pressable>
 
@@ -337,7 +348,6 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
         <Pressable
           testID={`sound-button-${reel.id}`}
           onPress={() => {
-            Haptics.selectionAsync();
             toggleMute();
           }}
           hitSlop={6}
@@ -391,12 +401,16 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
           </Text>
         ) : null}
 
-        {/* Zuru AI Concierge Prompt Badge */}
+        {/* Zuru AI Concierge Prompt Badge → opens new Zuru AI chat */}
         <Pressable
           testID={`zuru-agent-${reel.id}`}
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setAgentOpen(true);
+            const prompt = exp?.title
+              ? `Tell me about "${exp.title}"${
+                  exp.location ? ` in ${exp.location}` : ''
+                } — is it worth booking?`
+              : 'What can you tell me about this experience?';
+            router.push({ pathname: '/ai/chat' as any, params: { initialPrompt: prompt } });
           }}
           style={({ pressed }) => [
             styles.aiPromptPill,
@@ -440,17 +454,12 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
           <Pressable
             testID={`enquire-button-${reel.id}`}
             onPress={onEnquire}
-            disabled={enquire.isPending}
             style={({ pressed }) => [
               styles.secondaryGlassBtn,
-              { opacity: pressed || enquire.isPending ? 0.7 : 1 },
+              { opacity: pressed ? 0.7 : 1 },
             ]}
           >
-            {enquire.isPending ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={styles.secondaryGlassBtnText}>Enquire</Text>
-            )}
+            <Text style={styles.secondaryGlassBtnText}>Enquire</Text>
           </Pressable>
         </View>
       </View>
@@ -468,16 +477,19 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
         onSuccess={() => setBooked(true)}
       />
 
-      <ZuruAgentChat
-        visible={agentOpen}
-        onClose={() => setAgentOpen(false)}
-        reelSummary={{
-          title: exp?.title ?? null,
-          category: reel.category,
-          location: exp?.location ?? null,
-          price: exp?.current_price ?? null,
-        }}
+      <EnquireModal
+        visible={enquireOpen}
+        onClose={() => setEnquireOpen(false)}
+        hostId={hostId ?? ''}
+        hostName={hostName}
+        hostAvatarUrl={avatarUrl}
+        experienceTitle={exp?.title ?? null}
+        experienceLocation={exp?.location ?? null}
+        experiencePrice={priceAmount != null ? Number(priceAmount) : null}
+        experiencePriceUnit={priceUnit}
+        reelThumbnailUrl={reel.thumbnail_url ?? null}
       />
+      {/* ZuruAgentChat removed — AI pill navigates to /ai/chat */}
     </View>
   );
 }

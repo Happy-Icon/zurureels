@@ -12,9 +12,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter, type Href } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+
+import { Skeleton } from '@/components/Skeleton';
 
 type ProfileRowItem = {
   id: string;
@@ -42,8 +43,21 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF' }]}>
-        <ActivityIndicator color="#EE7D30" size="large" />
+      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad, paddingHorizontal: 20, gap: 20 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <Skeleton style={{ width: 72, height: 72, borderRadius: 36 }} />
+          <View style={{ flex: 1, gap: 8 }}>
+            <Skeleton style={{ height: 22, width: 140, borderRadius: 6 }} />
+            <Skeleton style={{ height: 14, width: 180, borderRadius: 4 }} />
+          </View>
+        </View>
+        <Skeleton style={{ height: 72, borderRadius: 16 }} />
+        <View style={{ gap: 16, marginTop: 12 }}>
+          <Skeleton style={{ height: 14, width: 120, borderRadius: 4 }} />
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} style={{ height: 52, borderRadius: 12 }} />
+          ))}
+        </View>
       </View>
     );
   }
@@ -62,7 +76,6 @@ export default function ProfileScreen() {
         <Pressable
           testID="signin-button"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             router.push('/auth');
           }}
           style={({ pressed }) => [
@@ -86,7 +99,6 @@ export default function ProfileScreen() {
   const createdYear = user.created_at ? new Date(user.created_at).getFullYear() : '2026';
 
   const handleSignOut = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     showAlert({
       title: 'Log Out',
       message: 'Are you sure you want to log out of your ZuruSasa account?',
@@ -161,29 +173,8 @@ export default function ProfileScreen() {
   const hostingSection: ProfileSection | null =
     isHost && viewMode === 'host'
       ? {
-          title: 'HOSTING MANAGEMENT',
+          title: 'HOSTING SETTINGS',
           items: [
-            {
-              id: 'mode_switch',
-              title: 'Switch to Guest Mode',
-              subtitle: 'View the guest discovery feed',
-              icon: 'refresh-cw',
-              action: () => switchViewMode('guest'),
-            },
-            {
-              id: 'dashboard',
-              title: 'Host Dashboard',
-              subtitle: 'Earnings summary, stats & requests',
-              icon: 'grid',
-              route: '/',
-            },
-            {
-              id: 'listings',
-              title: 'My Listings & Reels',
-              subtitle: 'Create, edit & publish experiences',
-              icon: 'film',
-              route: '/listings',
-            },
             {
               id: 'verification',
               title: 'Identity Verification (KYC)',
@@ -269,7 +260,6 @@ export default function ProfileScreen() {
           <Pressable
             testID="edit-profile-avatar"
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/profile/info');
             }}
             style={({ pressed }) => [
@@ -306,7 +296,6 @@ export default function ProfileScreen() {
           <Pressable
             testID="edit-profile-icon"
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/profile/info');
             }}
             style={({ pressed }) => [
@@ -348,7 +337,6 @@ export default function ProfileScreen() {
 
             <Pressable
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 if (isHost) {
                   switchViewMode(viewMode === 'host' ? 'guest' : 'host');
                 } else {
@@ -386,7 +374,6 @@ export default function ProfileScreen() {
                     <View key={item.id}>
                       <Pressable
                         onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           if (item.action) {
                             item.action();
                           } else if (item.route) {

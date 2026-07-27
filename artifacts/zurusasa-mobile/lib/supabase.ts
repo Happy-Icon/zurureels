@@ -45,6 +45,67 @@ export interface ProfileRow {
   metadata: Record<string, unknown> | null;
 }
 
+export interface HostReviewRow {
+  id: string;
+  reviewer_name: string;
+  reviewer_avatar?: string | null;
+  rating: number;
+  comment: string;
+  created_at: string;
+}
+
+export interface FullReviewRow {
+  id: string;
+  booking_id: string;
+  reviewer_id: string;
+  reviewee_id: string;
+  listing_id?: string | null;
+  rating: number;
+  cleanliness?: number | null;
+  communication?: number | null;
+  accuracy?: number | null;
+  location?: number | null;
+  value?: number | null;
+  check_in?: number | null;
+  comment: string;
+  photos?: string[] | null;
+  is_host_review: boolean;
+  helpful_count?: number;
+  created_at: string;
+  updated_at?: string;
+  reviewer?: {
+    full_name: string;
+    avatar_url?: string | null;
+    verification_status?: string | null;
+  } | null;
+}
+
+export interface HostProfileData {
+  id: string;
+  full_name: string;
+  avatar_url?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role?: string | null;
+  verification_status?: string | null;
+  host_bio?: string | null;
+  languages?: string[];
+  joined_date?: string | null;
+  response_rate?: string | null;
+  response_time?: string | null;
+  is_super_host?: boolean;
+  is_verified?: boolean;
+  years_hosting?: number;
+  repeat_guest_rate?: string | null;
+  host_badges?: string[];
+  location?: string | null;
+  properties_count?: number;
+  trips_hosted?: number;
+  average_rating?: number;
+  reviews_count?: number;
+  metadata?: Record<string, unknown> | null;
+}
+
 export interface ReelRow {
   id: string;
   video_url: string | null;
@@ -121,4 +182,45 @@ export interface MessageRow {
   content: string;
   is_read: boolean | null;
   created_at: string;
+}
+
+export type NotificationType =
+  | 'booking_created'
+  | 'booking_confirmed'
+  | 'booking_cancelled'
+  | 'payment_success'
+  | 'refund_processed'
+  | 'message'
+  | 'review_reminder'
+  | 'promotion'
+  | 'wishlist_available'
+  | 'booking_request'
+  | 'payout_completed'
+  | 'verification'
+  | 'listing_approved'
+  | 'listing_rejected'
+  | 'performance';
+
+export type NotificationActionType =
+  | 'booking'
+  | 'chat'
+  | 'payout'
+  | 'listing'
+  | 'discover'
+  | 'profile'
+  | 'support';
+
+export interface NotificationRow {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  image_url?: string | null;
+  action_type?: NotificationActionType | null;
+  action_id?: string | null;
+  metadata?: Record<string, unknown> | null;
+  is_read: boolean;
+  created_at: string;
+  updated_at?: string;
 }

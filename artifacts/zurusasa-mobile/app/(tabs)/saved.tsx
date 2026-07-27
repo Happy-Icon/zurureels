@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useSavedEvents, useSavedReels, useToggleSave } from '@/lib/queries';
@@ -51,7 +50,6 @@ export default function WishlistsScreen() {
 
   const handleUnsave = (reelId: string) => {
     if (!user) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     queryClient.setQueryData<ReelRow[]>(['saved-reels', user.id], (old) =>
       (old ?? []).filter((r) => r.id !== reelId),
     );
@@ -69,7 +67,6 @@ export default function WishlistsScreen() {
           <Pressable
             testID="saved-back-btn"
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/profile');
             }}
             style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
@@ -92,7 +89,6 @@ export default function WishlistsScreen() {
           <Pressable
             testID="saved-signin"
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/auth');
             }}
             style={({ pressed }) => [
@@ -114,7 +110,6 @@ export default function WishlistsScreen() {
         <Pressable
           testID="saved-back-btn"
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             router.push('/profile');
           }}
           style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
@@ -150,7 +145,6 @@ export default function WishlistsScreen() {
               key={chip.id}
               testID={`saved-chip-${chip.id}`}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setFilterTab(chip.id);
               }}
               style={[
@@ -273,7 +267,6 @@ export default function WishlistsScreen() {
 
             <Pressable
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push('/discover');
               }}
               style={({ pressed }) => [
