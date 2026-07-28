@@ -1,6 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Dimensions,
   NativeModules,
   Platform,
   Pressable,
@@ -15,10 +17,11 @@ import type { ReelRow } from '@/lib/supabase';
 import { googleMapsService, type LatLng, type RouteResult } from '@/services/googleMapsService';
 
 const ORANGE = '#F26522';
+const GOOGLE_BLUE = '#4285F4';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-/**
- * Safely checks if the native RNMapsAirModule is linked in the native binary.
- */
+// ── NATIVE MODULE GUARD ─────────────────────────────────────────────────────
+
 function isNativeMapsAvailable(): boolean {
   try {
     if (Platform.OS === 'web') return false;
@@ -34,6 +37,7 @@ let NativeMapView: any = null;
 let NativeMarker: any = null;
 let NativePolyline: any = null;
 let NativeProviderGoogle: any = null;
+let ClusteredMapView: any = null;
 
 if (isNativeMapsAvailable()) {
   try {
@@ -42,12 +46,18 @@ if (isNativeMapsAvailable()) {
     NativeMarker = maps.Marker;
     NativePolyline = maps.Polyline;
     NativeProviderGoogle = maps.PROVIDER_GOOGLE;
+
+    try {
+      ClusteredMapView = require('react-native-map-clustering').default;
+    } catch {
+      // Clustering not available, use normal MapView
+    }
   } catch {
-    // Fallback gracefully
+    // Native maps not available
   }
 }
 
-// ── DISCOVER MAP SAFE VIEW ──────────────────────────────────────────────────
+// ── DISCOVER MAP VIEW ───────────────────────────────────────────────────────
 
 interface DiscoverMapViewProps {
   reels: ReelRow[];
@@ -70,68 +80,145 @@ export function DiscoverMapView({
   const [selectedReel, setSelectedReel] = useState<ReelRow | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Slide-up animation for preview card
+  const cardSlideAnim = useRef(new Animated.Value(200)).current;
+  const cardOpacityAnim = useRef(new Animated.Value(0)).current;
+
   const initialRegion = {
     latitude: -4.15,
     longitude: 39.65,
-    latitudeDelta: 0.5,
-    longitudeDelta: 0.5,
+    latitudeDelta: 0.6,
+    longitudeDelta: 0.6,
   };
 
+  // Geocode all listings
   useEffect(() => {
     let active = true;
     (async () => {
       setLoading(true);
       const list: MarkerData[] = [];
-      for (let i = 0; i < reels.length; i++) {
-        const reel = reels[i];
+      for (const reel of reels) {
         const locationStr = reel.experience?.location || 'Mombasa';
         const baseCoords = await googleMapsService.geocodeLocation(locationStr);
-        const offsetLat = baseCoords.latitude + (Math.random() - 0.5) * 0.04;
-        const offsetLng = baseCoords.longitude + (Math.random() - 0.5) * 0.04;
-
-        list.push({
-          reel,
-          coords: { latitude: offsetLat, longitude: offsetLng },
-        });
+        // Subtle offset to avoid exact overlap
+        const offsetLat = baseCoords.latitude + (Math.random() - 0.5) * 0.025;
+        const offsetLng = baseCoords.longitude + (Math.random() - 0.5) * 0.025;
+        list.push({ reel, coords: { latitude: offsetLat, longitude: offsetLng } });
       }
-
       if (active) {
         setMarkers(list);
         setLoading(false);
-        if (list.length > 0) setSelectedReel(list[0].reel);
+        // Do NOT auto-select — card only appears on marker tap
       }
     })();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [reels]);
 
-  const handleSelectMarker = (m: MarkerData) => {
+  // Animate card in/out
+  const showCard = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(cardSlideAnim, {
+        toValue: 0,
+        damping: 22,
+        stiffness: 280,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cardOpacityAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [cardSlideAnim, cardOpacityAnim]);
+
+  const hideCard = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(cardSlideAnim, {
+        toValue: 200,
+        damping: 22,
+        stiffness: 280,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cardOpacityAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setSelectedReel(null));
+  }, [cardSlideAnim, cardOpacityAnim]);
+
+  const handleMarkerPress = useCallback((m: MarkerData) => {
     setSelectedReel(m.reel);
-    if (mapRef.current?.animateToRegion) {
+    showCard();
+
+    // Smooth camera animation
+    if (mapRef.current?.animateCamera) {
+      mapRef.current.animateCamera(
+        {
+          center: { latitude: m.coords.latitude, longitude: m.coords.longitude },
+          zoom: 13,
+        },
+        { duration: 350 },
+      );
+    } else if (mapRef.current?.animateToRegion) {
       mapRef.current.animateToRegion(
         {
           latitude: m.coords.latitude,
           longitude: m.coords.longitude,
-          latitudeDelta: 0.08,
-          longitudeDelta: 0.08,
+          latitudeDelta: 0.06,
+          longitudeDelta: 0.06,
         },
-        400,
+        350,
       );
     }
-  };
+  }, [showCard]);
+
+  const handleMapPress = useCallback(() => {
+    if (selectedReel) hideCard();
+  }, [selectedReel, hideCard]);
 
   const selectedExp = selectedReel?.experience;
   const selectedPrice = selectedExp?.current_price;
-
   const hasNativeMaps = Boolean(NativeMapView);
+
+  // Use ClusteredMapView if available, otherwise fall back to regular MapView
+  const MapComponent = ClusteredMapView || NativeMapView;
+
+  const renderMarker = useCallback((m: MarkerData) => {
+    const isSelected = selectedReel?.id === m.reel.id;
+    const price = m.reel.experience?.current_price;
+    const label = price ? `KES ${(price / 1000).toFixed(1)}k` : 'Stay';
+
+    return (
+      <NativeMarker
+        key={m.reel.id}
+        identifier={m.reel.id}
+        coordinate={m.coords}
+        onPress={() => handleMarkerPress(m)}
+        tracksViewChanges={false}
+        zIndex={isSelected ? 100 : 1}
+      >
+        <View style={[
+          styles.markerPill,
+          isSelected ? styles.markerPillSelected : styles.markerPillDefault,
+          !isSelected && selectedReel ? styles.markerPillFaded : null,
+        ]}>
+          <Text style={[
+            styles.markerPillText,
+            isSelected ? styles.markerPillTextSelected : null,
+          ]}>
+            {label}
+          </Text>
+        </View>
+        {isSelected && <View style={styles.markerArrow} />}
+      </NativeMarker>
+    );
+  }, [selectedReel, handleMarkerPress]);
 
   return (
     <View style={styles.container}>
       {hasNativeMaps ? (
-        /* NATIVE GOOGLE MAPS SDK (WHEN RUNNING IN BUILT APK/IPA) */
-        <NativeMapView
+        <MapComponent
           ref={mapRef}
           provider={NativeProviderGoogle}
           style={StyleSheet.absoluteFillObject}
@@ -139,77 +226,48 @@ export function DiscoverMapView({
           showsUserLocation
           showsMyLocationButton={false}
           showsCompass={false}
+          showsPointsOfInterest={false}
+          onPress={handleMapPress}
+          // Clustering props (only effective with ClusteredMapView)
+          clusterColor={ORANGE}
+          clusterTextColor="#FFFFFF"
+          clusterFontFamily="DMSans_700Bold"
+          radius={60}
+          minZoomLevel={5}
+          maxZoomLevel={18}
+          animationEnabled
         >
-          {markers.map((m) => {
-            const isSelected = selectedReel?.id === m.reel.id;
-            const price = m.reel.experience?.current_price;
-            const label = price ? `KES ${(price / 1000).toFixed(1)}k` : 'Stay';
-
-            return (
-              <NativeMarker
-                key={m.reel.id}
-                coordinate={m.coords}
-                onPress={() => handleSelectMarker(m)}
-                zIndex={isSelected ? 100 : 1}
-              >
-                <View
-                  style={[
-                    styles.markerBubble,
-                    isSelected && styles.markerBubbleSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.markerText,
-                      isSelected && styles.markerTextSelected,
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                </View>
-              </NativeMarker>
-            );
-          })}
-        </NativeMapView>
+          {markers.map(renderMarker)}
+        </MapComponent>
       ) : (
-        /* INTERACTIVE EXPANSIVE MAP CANVAS (FOR EXPO GO & JS CONTAINERS) */
+        /* FALLBACK: Interactive Canvas for Expo Go */
         <View style={styles.fallbackCanvas}>
-          <View style={styles.gridLinesWrap}>
-            <View style={styles.coastlinePath} />
-            <Text style={styles.waterLabel}>INDIAN OCEAN</Text>
-          </View>
+          <View style={styles.fallbackGradientTop} />
+          <View style={styles.fallbackGradientBottom} />
+          <Text style={styles.fallbackWaterLabel}>INDIAN OCEAN</Text>
 
-          {/* Render Interactive Listing Pins */}
           {markers.map((m, idx) => {
             const isSelected = selectedReel?.id === m.reel.id;
             const price = m.reel.experience?.current_price;
             const label = price ? `KES ${(price / 1000).toFixed(1)}k` : 'Stay';
-
-            // Spread out markers across canvas for interactive map feel
-            const topPct = 20 + ((idx * 17) % 55);
-            const leftPct = 15 + ((idx * 23) % 65);
+            const topPct = 15 + ((idx * 19) % 58);
+            const leftPct = 10 + ((idx * 27) % 72);
 
             return (
               <Pressable
                 key={m.reel.id}
-                onPress={() => handleSelectMarker(m)}
-                style={[
-                  styles.fallbackMarker,
-                  { top: `${topPct}%`, left: `${leftPct}%` },
-                ]}
+                onPress={() => handleMarkerPress(m)}
+                style={[styles.fallbackMarkerPos, { top: `${topPct}%`, left: `${leftPct}%` }]}
               >
-                <View
-                  style={[
-                    styles.markerBubble,
-                    isSelected && styles.markerBubbleSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.markerText,
-                      isSelected && styles.markerTextSelected,
-                    ]}
-                  >
+                <View style={[
+                  styles.markerPill,
+                  isSelected ? styles.markerPillSelected : styles.markerPillDefault,
+                  !isSelected && selectedReel ? styles.markerPillFaded : null,
+                ]}>
+                  <Text style={[
+                    styles.markerPillText,
+                    isSelected ? styles.markerPillTextSelected : null,
+                  ]}>
                     {label}
                   </Text>
                 </View>
@@ -219,136 +277,205 @@ export function DiscoverMapView({
         </View>
       )}
 
-      {loading ? (
+      {/* Loading Pill */}
+      {loading && (
         <View style={styles.loadingPill}>
           <ActivityIndicator size="small" color={ORANGE} />
-          <Text style={styles.loadingText}>Loading Map Listings…</Text>
+          <Text style={styles.loadingText}>Loading listings…</Text>
         </View>
-      ) : null}
+      )}
 
-      {/* ── SELECTED LISTING PREVIEW CARD DOCK ──────────────────────── */}
-      {selectedReel ? (
-        <View style={styles.previewCard}>
-          <View style={styles.cardImageWrap}>
-            {selectedReel.thumbnail_url || selectedExp?.image_url ? (
-              <Image
-                source={{
-                  uri: selectedReel.thumbnail_url || selectedExp?.image_url || '',
-                }}
-                style={styles.cardImage}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[styles.cardImage, styles.cardImageFallback]}>
-                <Feather name="image" size={24} color="#D1D5DB" />
-              </View>
-            )}
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>
-                {(selectedReel.category || 'Stay').replace(/_/g, ' ')}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.cardInfo}>
-            <Text style={styles.cardTitle} numberOfLines={1}>
-              {selectedExp?.title ?? 'Coastal Experience'}
-            </Text>
-
-            <View style={styles.locationRow}>
-              <Feather name="map-pin" size={11} color="#9CA3AF" />
-              <Text style={styles.locationText} numberOfLines={1}>
-                {selectedExp?.location ?? 'Kenyan Coast'}
-              </Text>
-            </View>
-
-            <View style={styles.priceRatingRow}>
-              {selectedPrice != null ? (
-                <Text style={styles.priceText}>
-                  KES {Number(selectedPrice).toLocaleString()}
+      {/* ── ANIMATED PREVIEW CARD ───────────────────────────────────────── */}
+      <Animated.View
+        pointerEvents={selectedReel ? 'auto' : 'none'}
+        style={[
+          styles.previewCardWrap,
+          {
+            opacity: cardOpacityAnim,
+            transform: [{ translateY: cardSlideAnim }],
+          },
+        ]}
+      >
+        {selectedReel && (
+          <View style={styles.previewCard}>
+            {/* Cover Image */}
+            <View style={styles.cardCoverWrap}>
+              {(selectedReel.thumbnail_url || selectedExp?.image_url) ? (
+                <Image
+                  source={{ uri: selectedReel.thumbnail_url || selectedExp?.image_url || '' }}
+                  style={styles.cardCover}
+                  contentFit="cover"
+                  transition={200}
+                />
+              ) : (
+                <View style={[styles.cardCover, styles.cardCoverFallback]}>
+                  <Feather name="image" size={28} color="#D1D5DB" />
+                </View>
+              )}
+              {/* Category Tag */}
+              <View style={styles.cardCategoryTag}>
+                <Text style={styles.cardCategoryText}>
+                  {(selectedReel.category || 'Stay').replace(/_/g, ' ')}
                 </Text>
-              ) : null}
-
-              <View style={styles.ratingBadge}>
-                <Ionicons name="star" size={12} color="#F59E0B" />
-                <Text style={styles.ratingText}>4.9</Text>
               </View>
             </View>
 
-            <View style={styles.actionsRow}>
-              <Pressable
-                onPress={() => onOpenDirections?.(selectedReel)}
-                style={styles.directionsBtn}
-              >
-                <Feather name="navigation" size={13} color="#374151" />
-                <Text style={styles.directionsBtnText}>Directions</Text>
-              </Pressable>
+            {/* Info Section */}
+            <View style={styles.cardBody}>
+              <View style={styles.cardTitleRow}>
+                <Text style={styles.cardTitle} numberOfLines={1}>
+                  {selectedExp?.title ?? 'Coastal Experience'}
+                </Text>
+                <View style={styles.ratingChip}>
+                  <Ionicons name="star" size={11} color="#F59E0B" />
+                  <Text style={styles.ratingText}>4.9</Text>
+                </View>
+              </View>
 
-              <Pressable
-                onPress={() => onSelectReel?.(selectedReel)}
-                style={styles.viewBtn}
-              >
-                <Text style={styles.viewBtnText}>View</Text>
-              </Pressable>
+              <View style={styles.cardLocationRow}>
+                <Feather name="map-pin" size={11} color="#9CA3AF" />
+                <Text style={styles.cardLocationText} numberOfLines={1}>
+                  {selectedExp?.location ?? 'Kenyan Coast'}
+                </Text>
+              </View>
+
+              <View style={styles.cardBottomRow}>
+                {selectedPrice != null && (
+                  <Text style={styles.cardPrice}>
+                    KES {Number(selectedPrice).toLocaleString()}
+                    <Text style={styles.cardPriceUnit}> /night</Text>
+                  </Text>
+                )}
+
+                <Pressable
+                  onPress={() => onSelectReel?.(selectedReel)}
+                  style={({ pressed }) => [
+                    styles.viewCta,
+                    pressed && { transform: [{ scale: 0.96 }] },
+                  ]}
+                >
+                  <Text style={styles.viewCtaText}>View</Text>
+                  <Feather name="arrow-right" size={14} color="#FFFFFF" />
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
-      ) : null}
+        )}
+      </Animated.View>
     </View>
   );
 }
 
-// ── SAFE ROUTE MAP VIEW (FOR JOURNEY COMPANION SHEET) ────────────────────────
+// ── SAFE ROUTE MAP VIEW (for Journey Companion) ─────────────────────────────
 
 interface SafeRouteMapViewProps {
+  userLocation: LatLng;
   destLocation: LatLng;
   routeInfo: RouteResult | null;
   propertyTitle: string;
+  isTracking?: boolean;
+  onMapReady?: () => void;
 }
 
 export function SafeRouteMapView({
+  userLocation,
   destLocation,
   routeInfo,
   propertyTitle,
+  isTracking,
+  onMapReady,
 }: SafeRouteMapViewProps) {
+  const mapRef = useRef<any>(null);
   const hasNativeMaps = Boolean(NativeMapView);
+
+  // Fit map to show both origin and destination
+  useEffect(() => {
+    if (hasNativeMaps && mapRef.current && routeInfo?.polylineCoords?.length) {
+      try {
+        mapRef.current.fitToCoordinates(
+          [userLocation, destLocation],
+          { edgePadding: { top: 80, right: 60, bottom: 200, left: 60 }, animated: true },
+        );
+      } catch {
+        // fitToCoordinates not available
+      }
+    }
+  }, [routeInfo, hasNativeMaps]);
+
+  // Follow user when tracking
+  useEffect(() => {
+    if (isTracking && hasNativeMaps && mapRef.current) {
+      mapRef.current.animateCamera(
+        { center: userLocation, zoom: 16, heading: 0, pitch: 45 },
+        { duration: 500 },
+      );
+    }
+  }, [isTracking, userLocation, hasNativeMaps]);
 
   if (hasNativeMaps) {
     return (
       <NativeMapView
+        ref={mapRef}
         provider={NativeProviderGoogle}
         style={StyleSheet.absoluteFillObject}
         initialRegion={{
-          latitude: destLocation.latitude,
-          longitude: destLocation.longitude,
-          latitudeDelta: 0.15,
-          longitudeDelta: 0.15,
+          latitude: (userLocation.latitude + destLocation.latitude) / 2,
+          longitude: (userLocation.longitude + destLocation.longitude) / 2,
+          latitudeDelta: Math.abs(userLocation.latitude - destLocation.latitude) * 2.2 + 0.05,
+          longitudeDelta: Math.abs(userLocation.longitude - destLocation.longitude) * 2.2 + 0.05,
         }}
         showsUserLocation
+        showsMyLocationButton={false}
         showsCompass={false}
+        showsTraffic
+        onMapReady={onMapReady}
       >
-        {routeInfo?.polylineCoords ? (
-          <NativePolyline
-            coordinates={routeInfo.polylineCoords}
-            strokeColor={ORANGE}
-            strokeWidth={4}
-          />
-        ) : null}
-        <NativeMarker coordinate={destLocation} title={propertyTitle}>
-          <View style={styles.destMarker}>
-            <Ionicons name="location" size={20} color="#FFFFFF" />
+        {/* Route Polyline — Google Maps blue */}
+        {routeInfo?.polylineCoords && routeInfo.polylineCoords.length > 1 && (
+          <>
+            {/* Shadow polyline for depth */}
+            <NativePolyline
+              coordinates={routeInfo.polylineCoords}
+              strokeColor="rgba(66, 133, 244, 0.3)"
+              strokeWidth={8}
+            />
+            {/* Main polyline */}
+            <NativePolyline
+              coordinates={routeInfo.polylineCoords}
+              strokeColor={GOOGLE_BLUE}
+              strokeWidth={5}
+            />
+          </>
+        )}
+
+        {/* Destination Marker */}
+        <NativeMarker
+          coordinate={destLocation}
+          title={propertyTitle}
+          tracksViewChanges={false}
+        >
+          <View style={styles.destPinOuter}>
+            <View style={styles.destPinInner}>
+              <Ionicons name="location" size={18} color="#FFFFFF" />
+            </View>
+            <View style={styles.destPinShadow} />
           </View>
         </NativeMarker>
       </NativeMapView>
     );
   }
 
+  // Fallback for Expo Go / JS-only environments
   return (
-    <View style={[StyleSheet.absoluteFillObject, styles.fallbackCanvas]}>
-      <View style={styles.routePathFallback} />
-      <View style={styles.destMarker}>
-        <Ionicons name="location" size={20} color="#FFFFFF" />
+    <View style={[StyleSheet.absoluteFillObject, styles.fallbackRoute]}>
+      <View style={styles.fallbackRouteGrad} />
+      <View style={styles.fallbackRouteLine} />
+      <View style={styles.destPinOuter}>
+        <View style={styles.destPinInner}>
+          <Ionicons name="location" size={18} color="#FFFFFF" />
+        </View>
       </View>
+      <View style={styles.fallbackUserDot} />
     </View>
   );
 }
@@ -357,9 +484,11 @@ export function SafeRouteMapView({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  // Loading
   loadingPill: {
     position: 'absolute',
-    top: 20,
+    top: 16,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
@@ -369,161 +498,273 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 100,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
-  loadingText: { fontSize: 12.5, fontFamily: 'DMSans_600SemiBold', color: '#374151' },
+  loadingText: { fontSize: 13, fontFamily: 'DMSans_600SemiBold', color: '#374151' },
 
-  // Fallback Canvas
+  // ── MARKER PILLS ──────────────────────────────────────────────
+  markerPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 100,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  markerPillDefault: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  markerPillSelected: {
+    backgroundColor: ORANGE,
+    borderWidth: 0,
+    transform: [{ scale: 1.12 }],
+    shadowColor: ORANGE,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+  },
+  markerPillFaded: {
+    opacity: 0.55,
+  },
+  markerPillText: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_700Bold',
+    color: '#111111',
+  },
+  markerPillTextSelected: {
+    color: '#FFFFFF',
+  },
+  markerArrow: {
+    alignSelf: 'center',
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: ORANGE,
+    marginTop: -1,
+  },
+
+  // ── FALLBACK CANVAS ───────────────────────────────────────────
   fallbackCanvas: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#E0F2FE',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#DBEAFE',
     overflow: 'hidden',
   },
-  gridLinesWrap: { ...StyleSheet.absoluteFillObject, opacity: 0.3 },
-  coastlinePath: {
+  fallbackGradientTop: {
     position: 'absolute',
-    left: -40,
     top: 0,
-    bottom: 0,
-    width: 140,
-    backgroundColor: '#F0FDF4',
-    borderRightWidth: 3,
-    borderRightColor: '#86EFAC',
+    left: 0,
+    right: 0,
+    height: '35%',
+    backgroundColor: '#E8F5E9',
+    opacity: 0.6,
   },
-  waterLabel: {
+  fallbackGradientBottom: {
     position: 'absolute',
-    right: 24,
-    bottom: 40,
-    fontSize: 18,
-    fontFamily: 'DMSans_700Bold',
-    color: '#0284C7',
-    letterSpacing: 2,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '25%',
+    backgroundColor: '#B3E5FC',
     opacity: 0.4,
   },
-  fallbackMarker: {
+  fallbackWaterLabel: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    fontSize: 16,
+    fontFamily: 'DMSans_700Bold',
+    color: '#0284C7',
+    letterSpacing: 3,
+    opacity: 0.25,
+  },
+  fallbackMarkerPos: {
     position: 'absolute',
     zIndex: 10,
   },
-  routePathFallback: {
-    width: 180,
-    height: 3,
-    backgroundColor: ORANGE,
-    borderRadius: 2,
-    transform: [{ rotate: '-35deg' }],
-  },
 
-  // Markers
-  markerBubble: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 100,
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  markerBubbleSelected: {
-    backgroundColor: '#111111',
-    borderColor: '#111111',
-    transform: [{ scale: 1.1 }],
-  },
-  markerText: { fontSize: 12, fontFamily: 'DMSans_700Bold', color: '#111111' },
-  markerTextSelected: { color: '#FFFFFF' },
-  destMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: ORANGE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-
-  // Preview Card Dock
-  previewCard: {
+  // ── PREVIEW CARD ──────────────────────────────────────────────
+  previewCardWrap: {
     position: 'absolute',
-    bottom: 90,
+    bottom: 100,
     left: 16,
     right: 16,
-    flexDirection: 'row',
+  },
+  previewCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#EBEBEB',
-    padding: 12,
-    gap: 12,
+    borderRadius: 20,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
-  cardImageWrap: {
-    width: 100,
-    height: 100,
-    borderRadius: 16,
-    overflow: 'hidden',
+  cardCoverWrap: {
+    width: '100%',
+    height: 140,
     position: 'relative',
   },
-  cardImage: { width: '100%', height: '100%' },
-  cardImageFallback: { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
-  categoryBadge: {
-    position: 'absolute',
-    bottom: 6,
-    left: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 100,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+  cardCover: {
+    width: '100%',
+    height: '100%',
   },
-  categoryText: { color: '#FFFFFF', fontSize: 9, fontFamily: 'DMSans_700Bold', textTransform: 'capitalize' },
-  cardInfo: { flex: 1, justifyContent: 'space-between' },
-  cardTitle: { fontSize: 15, fontFamily: 'DMSans_700Bold', color: '#111111' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  locationText: { fontSize: 12, fontFamily: 'DMSans_400Regular', color: '#6B7280' },
-  priceRatingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  priceText: { fontSize: 14, fontFamily: 'DMSans_700Bold', color: ORANGE },
-  ratingBadge: {
+  cardCoverFallback: {
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardCategoryTag: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 100,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  cardCategoryText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'DMSans_700Bold',
+    textTransform: 'capitalize',
+  },
+  cardBody: {
+    padding: 14,
+    gap: 6,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  cardTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'DMSans_700Bold',
+    color: '#111111',
+  },
+  ratingChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     backgroundColor: '#FFFBEB',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
-  ratingText: { fontSize: 11.5, fontFamily: 'DMSans_700Bold', color: '#92400E' },
-  actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
-  directionsBtn: {
-    flex: 1,
+  ratingText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: '#92400E',
+  },
+  cardLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 4,
-    height: 32,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
   },
-  directionsBtnText: { fontSize: 11.5, fontFamily: 'DMSans_600SemiBold', color: '#374151' },
-  viewBtn: {
-    height: 32,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+  cardLocationText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#6B7280',
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  cardPrice: {
+    fontSize: 17,
+    fontFamily: 'DMSans_700Bold',
+    color: '#111111',
+  },
+  cardPriceUnit: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#9CA3AF',
+  },
+  viewCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#111111',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  viewCtaText: {
+    fontSize: 13.5,
+    fontFamily: 'DMSans_700Bold',
+    color: '#FFFFFF',
+  },
+
+  // ── DESTINATION PIN ───────────────────────────────────────────
+  destPinOuter: {
+    alignItems: 'center',
+  },
+  destPinInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: ORANGE,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  viewBtnText: { fontSize: 11.5, fontFamily: 'DMSans_700Bold', color: '#FFFFFF' },
+  destPinShadow: {
+    width: 12,
+    height: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    marginTop: 2,
+  },
+
+  // ── FALLBACK ROUTE VIEW ───────────────────────────────────────
+  fallbackRoute: {
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  fallbackRouteGrad: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#DBEAFE',
+    opacity: 0.5,
+  },
+  fallbackRouteLine: {
+    width: 200,
+    height: 4,
+    backgroundColor: GOOGLE_BLUE,
+    borderRadius: 2,
+    transform: [{ rotate: '-30deg' }],
+    opacity: 0.7,
+  },
+  fallbackUserDot: {
+    position: 'absolute',
+    bottom: '35%',
+    left: '30%',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: GOOGLE_BLUE,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
 });
