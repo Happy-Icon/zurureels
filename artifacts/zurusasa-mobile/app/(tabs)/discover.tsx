@@ -32,7 +32,7 @@ import { ReelGridCard } from '@/components/ReelGridCard';
 import { ReelCard } from '@/components/ReelCard';
 import { ZuruAgentChat, type ReelSummary } from '@/components/ZuruAgentChat';
 import { Skeleton } from '@/components/Skeleton';
-import type { ReelRow } from '@/lib/supabase';
+import type { BookingRow, ReelRow } from '@/lib/supabase';
 
 // Advanced Search & Smart Filters Imports
 import { useSearch } from '@/hooks/useSearch';
@@ -45,6 +45,8 @@ import { SortSheet } from '@/components/search/SortSheet';
 import { SearchSuggestions } from '@/components/search/SearchSuggestions';
 import { SearchEmptyState } from '@/components/search/SearchEmptyState';
 import { AIFloatingButton } from '@/components/ai/AIFloatingButton';
+import { DiscoverMapView } from '@/components/map/DiscoverMapView';
+import { JourneyCompanionSheet } from '@/components/journey/JourneyCompanionSheet';
 
 const DISCOVERY_CATEGORIES = [
   { id: 'all', label: 'All', icon: 'grid', categories: ['all'] },
@@ -66,6 +68,8 @@ export default function AirbnbDiscoverScreen() {
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [viewerReel, setViewerReel] = useState<ReelRow | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [discoverViewMode, setDiscoverViewMode] = useState<'grid' | 'map'>('grid');
+  const [journeyBooking, setJourneyBooking] = useState<BookingRow | null>(null);
 
   // Advanced Search & Filter Hooks
   const {
@@ -263,7 +267,7 @@ export default function AirbnbDiscoverScreen() {
         ) : null}
       </View>
 
-      {/* SEARCH SUGGESTIONS OVERLAY (When Search Bar is focused & query is typed/empty) */}
+      {/* MAIN VIEW CONTENT: MAP MODE vs GRID MODE */}
       {isSearchFocused ? (
         <View style={[styles.suggestionsOverlay, { paddingBottom: bottomPad }]}>
           <View style={styles.suggestionsHeader}>
@@ -289,8 +293,17 @@ export default function AirbnbDiscoverScreen() {
             onClearHistory={clearHistory}
           />
         </View>
+      ) : discoverViewMode === 'map' ? (
+        /* REAL GOOGLE MAPS DISCOVER VIEW */
+        <View style={{ flex: 1 }}>
+          <DiscoverMapView
+            reels={filteredReels}
+            onSelectReel={(reel) => setViewerReel(reel)}
+            onOpenDirections={(reel) => setJourneyBooking(reel as any)}
+          />
+        </View>
       ) : (
-        /* MAIN REELS & EXPERIENCES LIST */
+        /* MAIN REELS & EXPERIENCES GRID LIST */
         <FlatList
           data={filteredReels}
           keyExtractor={(item) => item.id}
@@ -344,12 +357,42 @@ export default function AirbnbDiscoverScreen() {
         />
       )}
 
-      {/* Floating Zuru AI Button — navigates to the new AI home screen */}
+      {/* Floating Map / Grid Mode Toggle Button */}
+      {!isSearchFocused ? (
+        <Pressable
+          onPress={() => setDiscoverViewMode(discoverViewMode === 'grid' ? 'map' : 'grid')}
+          style={({ pressed }) => [
+            styles.mapToggleFab,
+            pressed && { opacity: 0.88, transform: [{ scale: 0.96 }] },
+          ]}
+        >
+          <Feather
+            name={discoverViewMode === 'grid' ? 'map' : 'grid'}
+            size={16}
+            color="#FFFFFF"
+          />
+          <Text style={styles.mapToggleFabText}>
+            {discoverViewMode === 'grid' ? 'Map View' : 'Grid View'}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {/* Floating Zuru AI Button */}
       <AIFloatingButton
         visible={!isSearchFocused}
         label="Zuru AI"
         onPress={() => router.push('/ai' as any)}
       />
+
+      {/* Journey Companion Sheet for Map Directions */}
+      {journeyBooking ? (
+        <JourneyCompanionSheet
+          visible={Boolean(journeyBooking)}
+          booking={journeyBooking}
+          onClose={() => setJourneyBooking(null)}
+          onMessageHost={() => setJourneyBooking(null)}
+        />
+      ) : null}
 
       {/* Full Reel Video Player Viewer Modal */}
       <Modal visible={Boolean(viewerReel)} animationType="slide" onRequestClose={() => setViewerReel(null)}>
@@ -510,6 +553,29 @@ const styles = StyleSheet.create({
   fabText: {
     color: '#FFFFFF',
     fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+  },
+  mapToggleFab: {
+    position: 'absolute',
+    bottom: 90,
+    left: 20,
+    backgroundColor: '#111111',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 26,
+    shadowColor: '#000000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+    zIndex: 100,
+  },
+  mapToggleFabText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
     fontFamily: 'DMSans_700Bold',
   },
   closeViewerBtn: {

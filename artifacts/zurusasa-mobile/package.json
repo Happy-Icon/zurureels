@@ -68,6 +68,7 @@
     "@supabase/supabase-js": "^2.110.7",
     "expo-updates": "~29.0.19",
     "expo-video": "^3.0.16",
+    "react-native-maps": "^1.29.0",
     "react-native-url-polyfill": "^4.0.0"
   }
 }

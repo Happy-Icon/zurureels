@@ -57,7 +57,7 @@ export function useMyBookings(userId: string | undefined) {
         .from('bookings')
         .select(
           `*,
-          experience:experiences(id, title, location, current_price, price_unit, image_url)`,
+          experience:experiences(id, title, location, current_price, price_unit, image_url, entity_name)`,
         )
         .eq('user_id', userId!)
         .order('created_at', { ascending: false })

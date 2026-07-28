@@ -15,10 +15,29 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.zurureels.app"
+      "bundleIdentifier": "com.zurureels.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "$(EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)"
+        }
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ZuruSasa uses your location to display nearby experiences, stays, and calculate live journey routes.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ZuruSasa uses your location to accompany your trip with real-time arrival notifications and route progress."
+      }
     },
     "android": {
-      "package": "com.zurureels.app"
+      "package": "com.zurureels.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "$(EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)"
+        }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -33,7 +52,13 @@
       "expo-font",
       "expo-web-browser",
       "expo-video",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Show your location on the map to find nearby stays, restaurants, and tours across the Kenyan coast."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

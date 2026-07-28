@@ -127,6 +127,7 @@ export interface ReelRow {
     | 'price_unit'
     | 'availability_status'
     | 'metadata'
+    | 'image_url'
   > | null;
   host?: Pick<
     ProfileRow,
@@ -147,7 +148,7 @@ export interface BookingRow {
   created_at?: string | null;
   experience?: Pick<
     ExperienceRow,
-    'id' | 'title' | 'location' | 'current_price' | 'price_unit' | 'image_url'
+    'id' | 'title' | 'location' | 'current_price' | 'price_unit' | 'image_url' | 'entity_name'
   > | null;
 }
 
