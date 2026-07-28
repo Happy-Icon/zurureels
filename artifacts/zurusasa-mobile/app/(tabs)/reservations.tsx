@@ -897,7 +897,7 @@ function BookingDetailModal({
 // ── STYLES ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
+  fill: { flex: 1, backgroundColor: '#FAFAFA' },
   topNavBar: {
     flexDirection: 'row',
     alignItems: 'center',
