@@ -285,12 +285,25 @@ export default function TripsScreen() {
     if (url) Linking.openURL(url);
   };
 
+  const handleBack = () => {
+    router.push('/profile');
+  };
+
   // ── Unauthenticated State ──────────────────────────────────────────────────
   if (!loading && !user) {
     return (
       <View style={[styles.fill, { backgroundColor: '#FAFAFA', paddingTop: topPad }]}>
-        <View style={styles.topNavBar}>
+        <View style={[styles.topNavBar, { paddingHorizontal: 20 }]}>
+          <Pressable
+            testID="reservations-back-btn"
+            onPress={handleBack}
+            style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={10}
+          >
+            <Feather name="arrow-left" size={20} color="#111111" />
+          </Pressable>
           <Text style={styles.pageTitle}>Trips</Text>
+          <View style={{ width: 38 }} />
         </View>
 
         <View style={styles.loggedOutContainer}>
@@ -330,10 +343,22 @@ export default function TripsScreen() {
       >
         {/* ── Page Header ────────────────────────────────────────────── */}
         <View style={styles.headerArea}>
-          <Text style={styles.pageTitle}>Trips & Itineraries</Text>
-          <Text style={styles.pageSubtitle}>
-            Your upcoming coastal adventures & travel memories
-          </Text>
+          <View style={styles.topHeaderRow}>
+            <Pressable
+              testID="reservations-back-btn"
+              onPress={handleBack}
+              style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+              hitSlop={10}
+            >
+              <Feather name="arrow-left" size={20} color="#111111" />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pageTitle}>Trips & Itineraries</Text>
+              <Text style={styles.pageSubtitle}>
+                Your upcoming coastal adventures & travel memories
+              </Text>
+            </View>
+          </View>
 
           {/* Filter Chips Row */}
           {hasAnyBookings ? (
@@ -902,6 +927,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  topHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 1,
   },
   pageTitle: {
     fontSize: 26,

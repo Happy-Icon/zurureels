@@ -140,9 +140,11 @@ export const notificationService = {
           title: params.title,
           message: params.message,
           image_url: params.imageUrl ?? null,
-          action_type: params.actionType ?? null,
-          action_id: params.actionId ?? null,
-          metadata: params.metadata ?? {},
+          metadata: {
+            ...(params.metadata ?? {}),
+            ...(params.actionType ? { action_type: params.actionType } : {}),
+            ...(params.actionId ? { action_id: params.actionId } : {}),
+          },
           is_read: false,
         })
         .select()
@@ -251,6 +253,72 @@ export const notificationService = {
       });
     } catch (err) {
       console.warn('Error sending push notification via Expo:', err);
+    }
+  },
+
+  /**
+   * Triggers a real test push notification locally on device & creates inbox notification entry
+   */
+  async triggerTestPush(userId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      let scheduledOnDevice = false;
+
+      // In standalone builds or dev client, trigger local push banner via expo-notifications
+      if (!isExpoGo) {
+        try {
+          const Notifs = require('expo-notifications');
+          if (Notifs && Notifs.scheduleNotificationAsync) {
+            const { status: existingStatus } = await Notifs.getPermissionsAsync();
+            let finalStatus = existingStatus;
+
+            if (existingStatus !== 'granted') {
+              const { status } = await Notifs.requestPermissionsAsync();
+              finalStatus = status;
+            }
+
+            if (finalStatus === 'granted') {
+              await Notifs.scheduleNotificationAsync({
+                content: {
+                  title: '🌴 ZuruSasa Coastal Alert',
+                  body: 'Test Push Notification: Your booking alerts and trip reminders are working correctly!',
+                  sound: 'default',
+                  data: { type: 'test_push', timestamp: new Date().toISOString() },
+                },
+                trigger: null,
+              });
+              scheduledOnDevice = true;
+            }
+          }
+        } catch (e) {
+          console.warn('Local push scheduling note:', e);
+        }
+      }
+
+      // Create an entry in Supabase database so it appears in the Notification Inbox
+      if (userId) {
+        await this.createNotification({
+          userId,
+          type: 'booking_confirmed',
+          title: '🌴 ZuruSasa Test Push Notification',
+          message: 'Your push notification channel is active and receiving travel alerts.',
+          actionType: 'booking',
+        });
+      }
+
+      if (isExpoGo) {
+        return {
+          success: true,
+          error: 'Test notification added to your Inbox! (Note: Native OS lock screen banners require a Development Build or Standalone APK in Expo SDK 53)',
+        };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.warn('Error triggering test push:', err);
+      return {
+        success: false,
+        error: err?.message || 'Failed to trigger test push notification on device.',
+      };
     }
   },
 };
