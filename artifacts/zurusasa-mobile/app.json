@@ -22,6 +22,7 @@
         }
       },
       "infoPlist": {
+        "NSCameraUsageDescription": "ZuruSasa requires camera access to scan your Government ID and perform 3D facial liveness verification.",
         "NSLocationWhenInUseUsageDescription": "ZuruSasa uses your location to display nearby experiences, stays, and calculate live journey routes.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "ZuruSasa uses your location to accompany your trip with real-time arrival notifications and route progress.",
         "ITSAppUsesNonExemptEncryption": false
@@ -36,6 +37,8 @@
         }
       },
       "permissions": [
+        "CAMERA",
+        "android.permission.CAMERA",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "FOREGROUND_SERVICE",

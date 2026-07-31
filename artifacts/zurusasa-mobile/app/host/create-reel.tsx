@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { notificationService } from '@/services/notificationService';
 import { KeyboardScreen, GrowingInput } from '@/components/keyboard';
+import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
 
 const CATEGORIES = [
   { label: 'Stays & Villas', value: 'stays' },
@@ -52,6 +53,7 @@ export default function CreateReelScreen() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatusText, setUploadStatusText] = useState('');
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 16;
@@ -98,6 +100,12 @@ export default function CreateReelScreen() {
         title: 'Sign In Required',
         message: 'Please sign in to publish a reel',
       });
+      return;
+    }
+
+    const isVerified = user.user_metadata?.verification_status === 'verified';
+    if (!isVerified) {
+      setShowVerificationModal(true);
       return;
     }
 
@@ -459,6 +467,14 @@ export default function CreateReelScreen() {
             )}
           </Pressable>
         </View>
+
+        <PersonaVerificationModal
+          visible={showVerificationModal}
+          onClose={() => setShowVerificationModal(false)}
+          onSuccess={() => handleSubmit()}
+          title="Verification Required to List"
+          subtitle="ZuruSasa requires hosts to verify their identity before publishing listings and reels."
+        />
       </View>
     </KeyboardAvoidingView>
   );

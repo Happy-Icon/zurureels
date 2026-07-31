@@ -66,12 +66,14 @@
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-community/slider": "5.0.1",
     "@react-native-google-signin/google-signin": "^16.1.2",
+    "@sentry/react-native": "^8.21.0",
     "@supabase/supabase-js": "^2.110.7",
     "expo-insights": "~0.10.8",
     "expo-updates": "~29.0.19",
     "expo-video": "^3.0.16",
     "react-native-map-clustering": "^4.0.0",
     "react-native-maps": "^1.29.0",
+    "react-native-persona": "^2.49.0",
     "react-native-url-polyfill": "^4.0.0"
   }
 }

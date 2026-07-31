@@ -20,6 +20,7 @@ import { useColors } from '@/hooks/useColors';
 import { supabase, type BookingRow } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { Skeleton } from '@/components/Skeleton';
+import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
 
 interface PayoutMethod {
   id: string;
@@ -59,6 +60,7 @@ export default function HostWalletScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [autoPayoutEnabled, setAutoPayoutEnabled] = useState(true);
   const [showManageModal, setShowManageModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
 
   // Financial Balances (Computed strictly from real Supabase DB)
   const [availableBalance, setAvailableBalance] = useState(0);
@@ -257,6 +259,12 @@ export default function HostWalletScreen() {
 
   // Add new payout method & save to Supabase profile metadata
   const handleAddPayoutMethod = async () => {
+    const isVerified = profile?.verification_status === 'verified' || user?.user_metadata?.verification_status === 'verified';
+    if (!isVerified) {
+      setShowVerificationModal(true);
+      return;
+    }
+
     if (!newNumber.trim()) {
       showAlert({
         title: 'Missing Details',
@@ -766,6 +774,17 @@ export default function HostWalletScreen() {
           </View>
         </View>
       </Modal>
+
+      <PersonaVerificationModal
+        visible={showVerificationModal}
+        onClose={() => setShowVerificationModal(false)}
+        onSuccess={() => {
+          setShowVerificationModal(false);
+          setShowManageModal(true);
+        }}
+        title="Identity Verification Required"
+        subtitle="To add or manage payout methods on ZuruSasa, please verify your identity with Persona."
+      />
     </View>
   );
 }

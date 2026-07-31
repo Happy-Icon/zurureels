@@ -15,6 +15,8 @@ import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
+import { personaVerificationService } from '@/services/personaVerificationService';
 
 export default function HostVerificationScreen() {
   const insets = useSafeAreaInsets();
@@ -23,6 +25,7 @@ export default function HostVerificationScreen() {
   const { showAlert } = useCustomAlert();
 
   const [loading, setLoading] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [status, setStatus] = useState<'none' | 'pending' | 'verified' | 'rejected'>('none');
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
@@ -43,40 +46,16 @@ export default function HostVerificationScreen() {
       return;
     }
 
-    setLoading(true);
-    try {
-      // Call Shufti-token Edge function if deployed or trigger verification URL
-      const { data, error } = await supabase.functions.invoke('shufti-token', {
-        body: {
-          email: user.email,
-          full_name: user.user_metadata?.full_name || '',
-        },
-      });
+    setShowVerificationModal(true);
+  };
 
-      if (data?.verification_url) {
-        await supabase.from('profiles').update({ verification_status: 'pending' }).eq('id', user.id);
-        setStatus('pending');
-        await WebBrowser.openBrowserAsync(data.verification_url);
-      } else {
-        // Fallback demo verification mode
-        await supabase.from('profiles').update({ verification_status: 'pending' }).eq('id', user.id);
-        setStatus('pending');
-        showAlert({
-          title: 'Verification Submitted',
-          message: 'Your documents have been submitted for review.',
-          icon: 'check-circle',
-        });
-      }
-      refreshProfile();
-    } catch (err: any) {
-      console.log('Shufti verification notice:', err);
-      // Update status to pending for review
-      await supabase.from('profiles').update({ verification_status: 'pending' }).eq('id', user.id);
-      setStatus('pending');
-      refreshProfile();
-    } finally {
-      setLoading(false);
-    }
+  const handleResetVerification = async () => {
+    if (!user) return;
+    setLoading(true);
+    await personaVerificationService.resetVerification(user.id);
+    await refreshProfile();
+    setStatus('none');
+    setLoading(false);
   };
 
   return (
@@ -118,14 +97,37 @@ export default function HostVerificationScreen() {
             <Text style={styles.statusSubVerified}>
               Your host profile has earned the Verified badge. Guests can now book your stays and tours with total confidence.
             </Text>
+            <Pressable
+              onPress={handleResetVerification}
+              disabled={loading}
+              style={({ pressed }) => [
+                styles.resetBtn,
+                { opacity: pressed || loading ? 0.8 : 1 },
+              ]}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#64748B" />
+              ) : (
+                <Text style={styles.resetBtnText}>Re-verify / Test Again</Text>
+              )}
+            </Pressable>
           </View>
         ) : status === 'pending' ? (
           <View style={styles.statusCardPending}>
-            <ActivityIndicator size="large" color="#F26522" />
+            <MaterialCommunityIcons name="clock-outline" size={36} color="#F26522" />
             <Text style={styles.statusTitlePending}>Verification Pending</Text>
             <Text style={styles.statusSubPending}>
-              Your documents are under review by our safety system. Verification typically completes within 5 minutes.
+              Your identity verification is in progress. Tap below to complete your Persona 3D selfie & ID verification.
             </Text>
+            <Pressable
+              onPress={startVerification}
+              style={({ pressed }) => [
+                styles.verifyBtn,
+                { marginTop: 12, opacity: pressed ? 0.88 : 1 },
+              ]}
+            >
+              <Text style={styles.verifyBtnText}>Complete Persona Verification</Text>
+            </Pressable>
           </View>
         ) : (
           <View style={styles.benefitsCard}>
@@ -177,6 +179,18 @@ export default function HostVerificationScreen() {
           </View>
         )}
       </ScrollView>
+
+      <PersonaVerificationModal
+        visible={showVerificationModal}
+        onClose={() => setShowVerificationModal(false)}
+        onSuccess={() => {
+          setShowVerificationModal(false);
+          setStatus('verified');
+          refreshProfile();
+        }}
+        title="Host Identity Verification"
+        subtitle="Verify your identity with Persona using a government ID and a quick 3D liveness scan."
+      />
     </View>
   );
 }
@@ -252,6 +266,20 @@ const styles = StyleSheet.create({
     color: '#166534',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  resetBtn: {
+    marginTop: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  resetBtnText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: '#15803D',
   },
   statusCardPending: {
     padding: 24,

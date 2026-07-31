@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
 import { KeyboardScreen } from '@/components/keyboard';
+import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
 
 const COMMON_LANGUAGES = [
   'English',
@@ -66,6 +67,7 @@ export default function PersonalInformationScreen() {
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [idUploading, setIdUploading] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -188,40 +190,7 @@ export default function PersonalInformationScreen() {
   };
 
   const handleIdUpload = async () => {
-    if (!user) return;
-    try {
-      const asset = await pickImage(false);
-      if (!asset) return;
-      setIdUploading(true);
-
-      const ext = (asset.fileName?.split('.').pop() ?? asset.uri.split('.').pop() ?? 'jpg')
-        .toLowerCase()
-        .split('?')[0];
-      const filePath = `${user.id}/id_${Math.random()}.${ext}`;
-      const arraybuffer = await fetch(asset.uri).then((r) => r.arrayBuffer());
-
-      const { error: uploadError } = await supabase.storage
-        .from('identity-documents')
-        .upload(filePath, arraybuffer, {
-          contentType: asset.mimeType ?? 'image/jpeg',
-        });
-      if (uploadError) throw uploadError;
-
-      const newBadges = { ...badges, id_url: filePath, id_status: 'pending' };
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ verification_badges: newBadges })
-        .eq('id', user.id);
-      if (updateError) throw updateError;
-
-      setIdUrl(filePath);
-      setBadges(newBadges);
-      Alert.alert('Success', 'Government ID uploaded for verification review.');
-    } catch (e: any) {
-      Alert.alert('Upload failed', e.message ?? 'Something went wrong.');
-    } finally {
-      setIdUploading(false);
-    }
+    setShowVerificationModal(true);
   };
 
   const handleSave = async () => {
@@ -538,6 +507,17 @@ export default function PersonalInformationScreen() {
           </View>
         </View>
       </KeyboardScreen>
+
+      <PersonaVerificationModal
+        visible={showVerificationModal}
+        onClose={() => setShowVerificationModal(false)}
+        onSuccess={() => {
+          setShowVerificationModal(false);
+          refreshProfile();
+        }}
+        title="Identity Verification"
+        subtitle="Verify your identity with Persona using a government ID and a quick 3D liveness scan."
+      />
     </View>
   );
 }

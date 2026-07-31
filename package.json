@@ -8,7 +8,8 @@
   },
   "private": true,
   "dependencies": {
-    "@replit/connectors-sdk": "^0.4.1"
+    "@replit/connectors-sdk": "^0.4.1",
+    "@sentry/react": "^10.69.0"
   },
   "devDependencies": {
     "prettier": "^3.9.5",

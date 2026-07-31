@@ -64,13 +64,7 @@ export default function BecomeHostScreen() {
       return;
     }
 
-    if (!idNumber.trim()) {
-      showAlert({
-        title: 'ID Required',
-        message: 'National ID or Passport number is required for verification.',
-      });
-      return;
-    }
+
 
     setLoading(true);
 
