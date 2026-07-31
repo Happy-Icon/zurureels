@@ -306,8 +306,9 @@ export default function PersonalInformationScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad + 60 }}
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
           showsVerticalScrollIndicator={false}
         >
           {/* Page Title */}

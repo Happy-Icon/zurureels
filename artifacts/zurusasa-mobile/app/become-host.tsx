@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -151,11 +152,17 @@ export default function BecomeHostScreen() {
         <View style={{ width: 32 }} />
       </View>
 
-      <ScrollView
+      <KeyboardAvoidingView
         style={styles.fill}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: bottomPad + 24, gap: 20 }}
-        showsVerticalScrollIndicator={false}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <ScrollView
+          style={styles.fill}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: bottomPad + 60, gap: 20 }}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.heroSection}>
           <View style={[styles.heroIcon, { backgroundColor: `${colors.primary}18` }]}>
             <MaterialCommunityIcons name="home-city-outline" size={32} color={colors.primary} />
@@ -225,7 +232,8 @@ export default function BecomeHostScreen() {
           )}
         </Pressable>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
+  </View>
   );
 }
 

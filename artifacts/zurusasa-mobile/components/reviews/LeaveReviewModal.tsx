@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -141,7 +143,16 @@ export function LeaveReviewModal({
             </View>
           ) : null}
 
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
+          >
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets={true}
+              showsVerticalScrollIndicator={false}
+            >
             {/* STEP 1: OVERALL RATING */}
             {step === 1 ? (
               <View style={styles.stepBlock}>
@@ -271,7 +282,8 @@ export function LeaveReviewModal({
               </View>
             ) : null}
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
+      </View>
       </View>
     </Modal>
   );

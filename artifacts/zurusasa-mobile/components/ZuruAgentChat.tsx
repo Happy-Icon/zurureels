@@ -110,6 +110,7 @@ export function ZuruAgentChat({
             scrollRef.current?.scrollToEnd({ animated: true })
           }
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
           nestedScrollEnabled
         >
           {messages.length === 0 ? (
@@ -150,6 +151,9 @@ export function ZuruAgentChat({
             testID="zuru-chat-input"
             value={input}
             onChangeText={setInput}
+            onFocus={() => {
+              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
+            }}
             placeholder={placeholder ?? `Ask Zuru AI about ${city}...`}
             placeholderTextColor="rgba(255,255,255,0.45)"
             style={styles.input}

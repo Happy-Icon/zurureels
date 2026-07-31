@@ -6,10 +6,10 @@ import React, {
   useState,
 } from 'react';
 import {
-
   Animated,
   Dimensions,
   Easing,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -299,6 +299,27 @@ export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, sendOtp, verifyOtp, refreshProfile } = useAuth();
+  const panelScrollRef = useRef<ScrollView>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      },
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      },
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Pick a random destination on mount (simulates "different every day")
   const [destIndex, setDestIndex] = useState(() =>
@@ -812,7 +833,7 @@ export default function AuthScreen() {
           {
             opacity: cardOpacity,
             transform: [{ translateY: cardSlide }],
-            paddingBottom: Math.max(insets.bottom, 24),
+            paddingBottom: Math.max(insets.bottom, 16),
           },
         ]}
       >
@@ -822,9 +843,13 @@ export default function AuthScreen() {
             style={{ flex: 1 }}
           >
             <ScrollView
+              ref={panelScrollRef}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.panelContent}
+              contentContainerStyle={[
+                styles.panelContent,
+                { paddingBottom: Math.max(insets.bottom + 80, 100) },
+              ]}
             >
               {/* ── LANDING: Auth buttons ─────────────────────────────── */}
               {step === 'landing' && (
@@ -915,6 +940,11 @@ export default function AuthScreen() {
                   onContinue={handleSendOtp}
                   loading={loading}
                   error={error}
+                  onFocusInput={() => {
+                    setTimeout(() => {
+                      panelScrollRef.current?.scrollToEnd({ animated: true });
+                    }, 120);
+                  }}
                 />
               )}
 
@@ -931,6 +961,11 @@ export default function AuthScreen() {
                   error={error}
                   testID="phone-code-input"
                   verifyTestID="verify-phone-button"
+                  onFocusInput={() => {
+                    setTimeout(() => {
+                      panelScrollRef.current?.scrollToEnd({ animated: true });
+                    }, 120);
+                  }}
                 />
               )}
 
@@ -942,6 +977,11 @@ export default function AuthScreen() {
                   onContinue={handleSendEmailOtp}
                   loading={loading}
                   error={error}
+                  onFocusInput={() => {
+                    setTimeout(() => {
+                      panelScrollRef.current?.scrollToEnd({ animated: true });
+                    }, 120);
+                  }}
                 />
               )}
 
@@ -958,6 +998,11 @@ export default function AuthScreen() {
                   error={error}
                   testID="code-input"
                   verifyTestID="verify-button"
+                  onFocusInput={() => {
+                    setTimeout(() => {
+                      panelScrollRef.current?.scrollToEnd({ animated: true });
+                    }, 120);
+                  }}
                 />
               )}
 
@@ -994,6 +1039,7 @@ function PhoneStep({
   onContinue,
   loading,
   error,
+  onFocusInput,
 }: any) {
   const selectedCountry = COUNTRY_OPTIONS.find((c) => c.code === countryCode)!;
   return (
@@ -1028,6 +1074,7 @@ function PhoneStep({
               testID="phone-input"
               value={phone}
               onChangeText={setPhone}
+              onFocus={onFocusInput}
               placeholder="700 000 000"
               placeholderTextColor="rgba(255,255,255,0.3)"
               keyboardType="phone-pad"
@@ -1104,7 +1151,7 @@ function PhoneStep({
 }
 
 // ── EMAIL STEP COMPONENT ──────────────────────────────────────────────────────
-function EmailStep({ email, setEmail, onContinue, loading, error }: any) {
+function EmailStep({ email, setEmail, onContinue, loading, error, onFocusInput }: any) {
   return (
     <>
       <Text style={styles.panelTitle}>Continue with email</Text>
@@ -1120,6 +1167,7 @@ function EmailStep({ email, setEmail, onContinue, loading, error }: any) {
             testID="email-input"
             value={email}
             onChangeText={setEmail}
+            onFocus={onFocusInput}
             placeholder="hello@example.com"
             placeholderTextColor="rgba(255,255,255,0.3)"
             autoCapitalize="none"
@@ -1171,6 +1219,7 @@ function OtpStep({
   error,
   testID,
   verifyTestID,
+  onFocusInput,
 }: any) {
   return (
     <>
@@ -1181,6 +1230,7 @@ function OtpStep({
         testID={testID}
         value={value}
         onChangeText={onChange}
+        onFocus={onFocusInput}
         keyboardType="number-pad"
         maxLength={6}
         placeholder="– – – – – –"
@@ -1323,12 +1373,13 @@ function ProfileFlowScreen({
         <View style={{ width: 40 }} />
       </View>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.whiteContent}
+          automaticallyAdjustKeyboardInsets={true}
+          contentContainerStyle={[styles.whiteContent, { paddingBottom: 160 }]}
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.whiteH1}>Tell us about yourself</Text>
@@ -1595,7 +1646,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 32,
     overflow: 'hidden',
     // Fallback background for Android (BlurView may be faint)
-    backgroundColor: 'rgba(18, 12, 6, 0.82)',
+    backgroundColor: 'rgba(18, 12, 6, 0.92)',
     shadowColor: '#000',
     shadowOpacity: 0.5,
     shadowRadius: 30,

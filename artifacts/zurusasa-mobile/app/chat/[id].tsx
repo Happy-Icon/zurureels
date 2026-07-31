@@ -268,6 +268,7 @@ export default function NativeChatScreen() {
       <KeyboardAvoidingView
         style={styles.fill}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <FlatList
           ref={listRef}
@@ -276,6 +277,8 @@ export default function NativeChatScreen() {
           renderItem={renderMessage}
           contentContainerStyle={styles.threadContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           ListHeaderComponent={
             messages.length > 0 ? (
@@ -326,6 +329,9 @@ export default function NativeChatScreen() {
               testID="message-input"
               value={text}
               onChangeText={setText}
+              onFocus={() => {
+                setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
+              }}
               placeholder="Type a message..."
               placeholderTextColor="#717171"
               multiline
