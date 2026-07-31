@@ -7,7 +7,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
-      "credentialsSource": "local",
+      "credentialsSource": "remote",
       "android": { "buildType": "apk" },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://rjzgzxxdrltlteeshtuw.supabase.co",
@@ -19,7 +19,7 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
-      "credentialsSource": "local",
+      "credentialsSource": "remote",
       "android": { "buildType": "apk" },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://rjzgzxxdrltlteeshtuw.supabase.co",
@@ -31,7 +31,7 @@
     "production": {
       "autoIncrement": true,
       "channel": "production",
-      "credentialsSource": "local",
+      "credentialsSource": "remote",
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://rjzgzxxdrltlteeshtuw.supabase.co",
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqemd6eHhkcmx0bHRlZXNodHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNDc4MjUsImV4cCI6MjA4MzkyMzgyNX0.rRudHu14sWNALKESz2Wwsjn_40xYaStRUlfdXZFVikA",
