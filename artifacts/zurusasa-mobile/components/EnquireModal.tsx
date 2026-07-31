@@ -22,6 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useEnquire } from '@/lib/queries';
 import { supabase } from '@/lib/supabase';
 import { notificationService } from '@/services/notificationService';
+import { GrowingInput } from '@/components/keyboard';
 
 const ORANGE = '#F26522';
 
@@ -364,13 +365,13 @@ export function EnquireModal({
                 <View style={styles.inputSection}>
                   <Text style={styles.inputLabel}>Your message</Text>
                   <View style={styles.inputWrap}>
-                    <TextInput
+                    <GrowingInput
                       value={text}
                       onChangeText={setText}
                       placeholder={`Hi ${hostName.split(' ')[0]}, I'm interested in...`}
                       placeholderTextColor="#9CA3AF"
-                      multiline
-                      maxLength={500}
+                      minHeight={72}
+                      maxHeight={150}
                       style={styles.input}
                       editable={!sending}
                       autoFocus

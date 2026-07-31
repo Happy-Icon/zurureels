@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase, type MessageRow } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
 import { notificationService } from '@/services/notificationService';
+import { GrowingInput } from '@/components/keyboard';
 
 function formatTime(iso: string) {
   const d = new Date(iso);
@@ -325,7 +326,7 @@ export default function NativeChatScreen() {
           </Pressable>
 
           <View style={styles.inputPillBox}>
-            <TextInput
+            <GrowingInput
               testID="message-input"
               value={text}
               onChangeText={setText}
@@ -334,7 +335,8 @@ export default function NativeChatScreen() {
               }}
               placeholder="Type a message..."
               placeholderTextColor="#717171"
-              multiline
+              minHeight={36}
+              maxHeight={120}
               style={styles.composerInputText}
             />
           </View>

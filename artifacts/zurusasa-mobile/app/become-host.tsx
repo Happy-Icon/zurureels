@@ -21,6 +21,8 @@ import { supabase } from '@/lib/supabase';
 
 import { useCustomAlert } from '@/context/CustomAlertContext';
 
+import { KeyboardScreen } from '@/components/keyboard';
+
 export default function BecomeHostScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -152,17 +154,10 @@ export default function BecomeHostScreen() {
         <View style={{ width: 32 }} />
       </View>
 
-      <KeyboardAvoidingView
+      <KeyboardScreen
         style={styles.fill}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: bottomPad + 60, gap: 20 }}
       >
-        <ScrollView
-          style={styles.fill}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: bottomPad + 60, gap: 20 }}
-          keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets={true}
-          showsVerticalScrollIndicator={false}
-        >
         <View style={styles.heroSection}>
           <View style={[styles.heroIcon, { backgroundColor: `${colors.primary}18` }]}>
             <MaterialCommunityIcons name="home-city-outline" size={32} color={colors.primary} />
@@ -231,8 +226,7 @@ export default function BecomeHostScreen() {
             <Text style={styles.submitBtnText}>Submit Host Application</Text>
           )}
         </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardScreen>
   </View>
   );
 }

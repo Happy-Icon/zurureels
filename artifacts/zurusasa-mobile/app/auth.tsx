@@ -34,6 +34,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { supabase } from '@/lib/supabase';
+import { KeyboardScreen, KeyboardModal } from '@/components/keyboard';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
@@ -1372,133 +1373,125 @@ function ProfileFlowScreen({
         <Text style={styles.whiteHeaderTitle}>Finish signing up</Text>
         <View style={{ width: 40 }} />
       </View>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
+      <KeyboardScreen
+        contentContainerStyle={[styles.whiteContent, { paddingBottom: 60 }]}
       >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets={true}
-          contentContainerStyle={[styles.whiteContent, { paddingBottom: 160 }]}
-          showsVerticalScrollIndicator={false}
+        <Text style={styles.whiteH1}>Tell us about yourself</Text>
+        <Text style={styles.whiteBodySub}>
+          Make sure your name matches your ID — it helps with bookings.
+        </Text>
+
+        {/* Name */}
+        <View style={styles.whiteSection}>
+          <Text style={styles.whiteSectionTitle}>Legal name</Text>
+          <View style={styles.whiteFieldGroup}>
+            <View
+              style={[
+                styles.whiteField,
+                { borderBottomWidth: 1, borderBottomColor: '#EBEBEB' },
+              ]}
+            >
+              <Text style={styles.whiteFieldLabel}>First name</Text>
+              <TextInput
+                testID="first-name-input"
+                value={firstName}
+                onChangeText={setFirstName}
+                placeholder="John"
+                placeholderTextColor={HAIR}
+                style={styles.whiteFieldInput}
+              />
+            </View>
+            <View style={styles.whiteField}>
+              <Text style={styles.whiteFieldLabel}>Last name</Text>
+              <TextInput
+                testID="last-name-input"
+                value={lastName}
+                onChangeText={setLastName}
+                placeholder="Doe"
+                placeholderTextColor={HAIR}
+                style={styles.whiteFieldInput}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* DOB */}
+        <View style={styles.whiteSection}>
+          <Text style={styles.whiteSectionTitle}>Date of birth</Text>
+          <View style={styles.whiteFieldGroup}>
+            <View style={styles.whiteField}>
+              <Text style={styles.whiteFieldLabel}>Birthdate</Text>
+              <TextInput
+                testID="dob-input"
+                value={dob}
+                onChangeText={setDob}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={HAIR}
+                keyboardType={
+                  Platform.OS === 'web' ? undefined : 'numbers-and-punctuation'
+                }
+                style={styles.whiteFieldInput}
+              />
+            </View>
+          </View>
+          <Text style={styles.whiteHelpText}>
+            You must be at least 18. Your birthday won't be shared publicly.
+          </Text>
+        </View>
+
+        {/* Email */}
+        <View style={styles.whiteSection}>
+          <Text style={styles.whiteSectionTitle}>Contact email</Text>
+          <View style={styles.whiteFieldGroup}>
+            <View style={styles.whiteField}>
+              <Text style={styles.whiteFieldLabel}>Email</Text>
+              <TextInput
+                testID="profile-email-input"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="hello@example.com"
+                placeholderTextColor={HAIR}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={styles.whiteFieldInput}
+              />
+            </View>
+          </View>
+          <Text style={styles.whiteHelpText}>
+            We'll send trip confirmations and receipts here.
+          </Text>
+        </View>
+
+        {error ? (
+          <View style={styles.whiteErrorRow}>
+            <Feather name="alert-circle" size={13} color="#EF4444" />
+            <Text style={styles.whiteErrorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        <Text style={styles.whiteLegal}>
+          By selecting Agree and continue, you agree to ZuruSasa's{' '}
+          <Text style={styles.whiteLegalLink}>Terms of Service</Text>,{' '}
+          <Text style={styles.whiteLegalLink}>Payments Terms</Text>, and{' '}
+          <Text style={styles.whiteLegalLink}>Privacy Policy</Text>.
+        </Text>
+
+        <Pressable
+          onPress={onCompleteProfile}
+          disabled={loading}
+          style={({ pressed }) => [
+            styles.whiteScreenCta,
+            loading && { opacity: 0.6 },
+            pressed && { opacity: 0.85 },
+          ]}
         >
-          <Text style={styles.whiteH1}>Tell us about yourself</Text>
-          <Text style={styles.whiteBodySub}>
-            Make sure your name matches your ID — it helps with bookings.
-          </Text>
-
-          {/* Name */}
-          <View style={styles.whiteSection}>
-            <Text style={styles.whiteSectionTitle}>Legal name</Text>
-            <View style={styles.whiteFieldGroup}>
-              <View
-                style={[
-                  styles.whiteField,
-                  { borderBottomWidth: 1, borderBottomColor: '#EBEBEB' },
-                ]}
-              >
-                <Text style={styles.whiteFieldLabel}>First name</Text>
-                <TextInput
-                  testID="first-name-input"
-                  value={firstName}
-                  onChangeText={setFirstName}
-                  placeholder="John"
-                  placeholderTextColor={HAIR}
-                  style={styles.whiteFieldInput}
-                />
-              </View>
-              <View style={styles.whiteField}>
-                <Text style={styles.whiteFieldLabel}>Last name</Text>
-                <TextInput
-                  testID="last-name-input"
-                  value={lastName}
-                  onChangeText={setLastName}
-                  placeholder="Doe"
-                  placeholderTextColor={HAIR}
-                  style={styles.whiteFieldInput}
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* DOB */}
-          <View style={styles.whiteSection}>
-            <Text style={styles.whiteSectionTitle}>Date of birth</Text>
-            <View style={styles.whiteFieldGroup}>
-              <View style={styles.whiteField}>
-                <Text style={styles.whiteFieldLabel}>Birthdate</Text>
-                <TextInput
-                  testID="dob-input"
-                  value={dob}
-                  onChangeText={setDob}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={HAIR}
-                  keyboardType={
-                    Platform.OS === 'web' ? undefined : 'numbers-and-punctuation'
-                  }
-                  style={styles.whiteFieldInput}
-                />
-              </View>
-            </View>
-            <Text style={styles.whiteHelpText}>
-              You must be at least 18. Your birthday won't be shared publicly.
-            </Text>
-          </View>
-
-          {/* Email */}
-          <View style={styles.whiteSection}>
-            <Text style={styles.whiteSectionTitle}>Contact email</Text>
-            <View style={styles.whiteFieldGroup}>
-              <View style={styles.whiteField}>
-                <Text style={styles.whiteFieldLabel}>Email</Text>
-                <TextInput
-                  testID="profile-email-input"
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="hello@example.com"
-                  placeholderTextColor={HAIR}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  style={styles.whiteFieldInput}
-                />
-              </View>
-            </View>
-            <Text style={styles.whiteHelpText}>
-              We'll send trip confirmations and receipts here.
-            </Text>
-          </View>
-
-          {error ? (
-            <View style={styles.whiteErrorRow}>
-              <Feather name="alert-circle" size={13} color="#EF4444" />
-              <Text style={styles.whiteErrorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          <Text style={styles.whiteLegal}>
-            By selecting Agree and continue, you agree to ZuruSasa's{' '}
-            <Text style={styles.whiteLegalLink}>Terms of Service</Text>,{' '}
-            <Text style={styles.whiteLegalLink}>Payments Terms</Text>, and{' '}
-            <Text style={styles.whiteLegalLink}>Privacy Policy</Text>.
-          </Text>
-
-          <Pressable
-            onPress={onCompleteProfile}
-            disabled={loading}
-            style={({ pressed }) => [
-              styles.whiteScreenCta,
-              loading && { opacity: 0.6 },
-              pressed && { opacity: 0.85 },
-            ]}
-          >
-            {loading ? (
-              <PremiumLoader />
-            ) : (
-              <Text style={styles.whiteScreenCtaText}>Agree and continue</Text>
-            )}
-          </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          {loading ? (
+            <PremiumLoader />
+          ) : (
+            <Text style={styles.whiteScreenCtaText}>Agree and continue</Text>
+          )}
+        </Pressable>
+      </KeyboardScreen>
     </View>
   );
 }

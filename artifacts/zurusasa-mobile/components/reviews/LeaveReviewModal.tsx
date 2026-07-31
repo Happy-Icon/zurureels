@@ -17,6 +17,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { RatingStars } from '@/components/reviews/RatingStars';
 import { reviewService } from '@/services/reviewService';
 import { useAuth } from '@/context/AuthContext';
+import { GrowingInput } from '@/components/keyboard';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 interface LeaveReviewModalProps {
   visible: boolean;
@@ -216,13 +218,13 @@ export function LeaveReviewModal({
                 <Text style={styles.stepHeading}>Write your review</Text>
                 <Text style={styles.stepSub}>Tell future travelers what you enjoyed most</Text>
 
-                <TextInput
+                <GrowingInput
                   value={comment}
                   onChangeText={setComment}
                   placeholder="Describe your stay, the location, amenities, and host communication..."
                   placeholderTextColor="#9CA3AF"
-                  multiline
-                  numberOfLines={4}
+                  minHeight={90}
+                  maxHeight={200}
                   style={styles.commentInput}
                 />
 

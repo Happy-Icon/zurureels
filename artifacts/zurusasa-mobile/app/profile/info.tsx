@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
+import { KeyboardScreen } from '@/components/keyboard';
 
 const COMMON_LANGUAGES = [
   'English',
@@ -301,299 +302,242 @@ export default function PersonalInformationScreen() {
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.fill}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad + 60 }}
-          keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets={true}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Page Title */}
-          <View style={styles.titleSection}>
-            <Text style={styles.pageTitle}>Personal information</Text>
-            <Text style={styles.pageSub}>
-              Manage your identity, contact details, and emergency contact.
-            </Text>
-          </View>
-
-          {/* 2. Trust Banner (Airbnb Soft Banner) */}
-          <View style={styles.trustBanner}>
-            <View style={styles.trustBannerLeft}>
-              <MaterialCommunityIcons name="shield-check" size={22} color="#EE7D30" />
-              <View style={styles.trustBannerTextWrap}>
-                <Text style={styles.trustBannerTitle}>Trust & Verification</Text>
-                <Text style={styles.trustBannerSub}>
-                  {completeness}% profile complete · {badges.identity ? 'Verified Member' : 'Add ID to complete'}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.trustBadgePill}>
-              <Text style={styles.trustBadgePillText}>{completeness}%</Text>
-            </View>
-          </View>
-
-          {/* 3. Profile Image */}
-          <View style={styles.avatarSection}>
+      <KeyboardScreen
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
+        stickyFooter={
+          <View style={[styles.pinnedBottomBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
             <Pressable
-              testID="avatar-upload"
-              onPress={handleAvatarUpload}
-              disabled={avatarUploading}
-              style={({ pressed }) => [styles.avatarWrap, { opacity: pressed ? 0.85 : 1 }]}
-            >
-              {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-              ) : (
-                <View style={styles.avatarFallback}>
-                  <Feather name="user" size={44} color="#717171" />
-                </View>
-              )}
-              <View style={styles.avatarBadge}>
-                {avatarUploading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Feather name="camera" size={14} color="#FFFFFF" />
-                )}
-              </View>
-            </Pressable>
-            <Text style={styles.avatarLabel}>Profile photo</Text>
-            <Text style={styles.avatarSub}>Clear photo helps hosts and guests recognize you</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* 4. Basic Information (Soft Block Inputs) */}
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionHeading}>Legal info & contact</Text>
-
-            {/* Full Name */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Full Name</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  value={fullName}
-                  onChangeText={setFullName}
-                  placeholder="Enter your legal full name"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.inputText}
-                />
-              </View>
-            </View>
-
-            {/* Phone Number */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Phone Number</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder="e.g. +254 712 345 678"
-                  keyboardType="phone-pad"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.inputText}
-                />
-                {phone.length > 5 ? (
-                  <View style={styles.verifiedInlineRow}>
-                    <Feather name="check-circle" size={15} color="#008A05" />
-                    <Text style={styles.verifiedInlineText}>Added</Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-
-            {/* Email Address (Read-only System field) */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <View style={[styles.inputBox, styles.inputBoxDisabled]}>
-                <TextInput
-                  value={user?.email ?? ''}
-                  editable={false}
-                  style={[styles.inputText, { color: '#717171' }]}
-                />
-                {badges.email ? (
-                  <View style={styles.verifiedInlineRow}>
-                    <Feather name="check-circle" size={15} color="#008A05" />
-                    <Text style={styles.verifiedInlineText}>Verified</Text>
-                  </View>
-                ) : null}
-              </View>
-              <Text style={styles.helperText}>Confirmed through your account sign in</Text>
-            </View>
-
-            {/* Bio */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>About You (Bio)</Text>
-              <View style={[styles.inputBox, styles.textAreaBox]}>
-                <TextInput
-                  value={bio}
-                  onChangeText={setBio}
-                  placeholder="Share a few words about yourself, your travels, or hosting style..."
-                  placeholderTextColor="#9CA3AF"
-                  multiline
-                  style={[styles.inputText, styles.textAreaText]}
-                />
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Languages Spoken */}
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionHeading}>Languages spoken</Text>
-            <View style={styles.chipsRow}>
-              {COMMON_LANGUAGES.map((lang) => {
-                const selected = languages.includes(lang);
-                return (
-                  <Pressable
-                    key={lang}
-                    onPress={() => toggleLanguage(lang)}
-                    style={[
-                      styles.chipItem,
-                      selected ? styles.chipItemSelected : styles.chipItemUnselected,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        { color: selected ? '#EE7D30' : '#222222' },
-                      ]}
-                    >
-                      {lang}
-                    </Text>
-                    {selected ? <Feather name="check" size={13} color="#EE7D30" /> : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* 5. Verification Status & ID Button Row */}
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionHeading}>Identity verification</Text>
-            <Text style={styles.sectionSub}>
-              Required to host experiences or book premium stays on ZuruSasa.
-            </Text>
-
-            <Pressable
-              testID="id-upload-row"
-              onPress={handleIdUpload}
-              disabled={idUploading}
+              testID="save-identity-btn"
+              onPress={handleSave}
+              disabled={saving}
               style={({ pressed }) => [
-                styles.idButtonRow,
-                { opacity: pressed ? 0.8 : 1 },
+                styles.primaryCtaBtn,
+                { opacity: pressed || saving ? 0.85 : 1 },
               ]}
             >
-              <View style={styles.idButtonLeft}>
-                <View style={styles.idIconCircle}>
-                  <Feather
-                    name="file-text"
-                    size={18}
-                    color={badges.identity ? '#008A05' : '#717171'}
-                  />
-                </View>
-                <View style={styles.idTextWrap}>
-                  <Text style={styles.idTitle}>Government ID</Text>
-                  <Text style={styles.idStatusText}>
-                    {badges.identity
-                      ? 'Verified identity'
-                      : idUrl
-                      ? 'Pending review'
-                      : 'Not provided'}
-                  </Text>
-                </View>
-              </View>
-
-              {idUploading ? (
-                <ActivityIndicator size="small" color="#EE7D30" />
-              ) : badges.identity ? (
-                <View style={styles.verifiedInlineRow}>
-                  <Feather name="check-circle" size={16} color="#008A05" />
-                  <Text style={styles.verifiedInlineText}>Verified</Text>
-                </View>
+              {saving ? (
+                <ActivityIndicator color="#ffffff" size="small" />
               ) : (
-                <View style={styles.addInlineRow}>
-                  <Text style={styles.addInlineText}>{idUrl ? 'Under review' : 'Add'}</Text>
-                  <Feather name="chevron-right" size={18} color="#717171" />
-                </View>
+                <Text style={styles.primaryCtaBtnText}>Save changes</Text>
               )}
             </Pressable>
           </View>
+        }
+      >
+        {/* Page Title */}
+        <View style={styles.titleSection}>
+          <Text style={styles.pageTitle}>Personal information</Text>
+          <Text style={styles.pageSub}>
+            Manage your identity, contact details, and emergency contact.
+          </Text>
+        </View>
 
-          <View style={styles.divider} />
-
-          {/* 6. Emergency Contact */}
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionHeading}>Emergency contact</Text>
-            <Text style={styles.sectionSub}>
-              A trusted contact we can reach in case of an urgent emergency during a stay or trip.
-            </Text>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Contact Name</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  value={emergencyContact.name}
-                  onChangeText={(v) => setEmergencyContact((p) => ({ ...p, name: v }))}
-                  placeholder="Full name of contact"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.inputText}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Relationship</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  value={emergencyContact.relationship}
-                  onChangeText={(v) => setEmergencyContact((p) => ({ ...p, relationship: v }))}
-                  placeholder="e.g. Spouse, Parent, Sibling"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.inputText}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Phone Number</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  value={emergencyContact.phone}
-                  onChangeText={(v) => setEmergencyContact((p) => ({ ...p, phone: v }))}
-                  placeholder="e.g. +254 700 000 000"
-                  keyboardType="phone-pad"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.inputText}
-                />
-              </View>
+        {/* 2. Trust Banner (Airbnb Soft Banner) */}
+        <View style={styles.trustBanner}>
+          <View style={styles.trustBannerLeft}>
+            <MaterialCommunityIcons name="shield-check" size={22} color="#EE7D30" />
+            <View style={styles.trustBannerTextWrap}>
+              <Text style={styles.trustBannerTitle}>Trust & Verification</Text>
+              <Text style={styles.trustBannerSub}>
+                {completeness}% profile complete · {badges.identity ? 'Verified Member' : 'Add ID to complete'}
+              </Text>
             </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <View style={styles.trustBadgePill}>
+            <Text style={styles.trustBadgePillText}>{completeness}%</Text>
+          </View>
+        </View>
 
-      {/* 7. Pinned Bottom Sticky Action Bar */}
-      <View style={[styles.pinnedBottomBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-        <Pressable
-          testID="save-identity-btn"
-          onPress={handleSave}
-          disabled={saving}
-          style={({ pressed }) => [
-            styles.primaryCtaBtn,
-            { opacity: pressed || saving ? 0.85 : 1 },
-          ]}
-        >
-          {saving ? (
-            <ActivityIndicator color="#ffffff" size="small" />
-          ) : (
-            <Text style={styles.primaryCtaBtnText}>Save changes</Text>
-          )}
-        </Pressable>
-      </View>
+        {/* 3. Profile Image */}
+        <View style={styles.avatarSection}>
+          <Pressable
+            testID="avatar-upload"
+            onPress={handleAvatarUpload}
+            disabled={avatarUploading}
+            style={({ pressed }) => [styles.avatarWrap, { opacity: pressed ? 0.85 : 1 }]}
+          >
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Feather name="user" size={44} color="#717171" />
+              </View>
+            )}
+            <View style={styles.avatarBadge}>
+              {avatarUploading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Feather name="camera" size={14} color="#FFFFFF" />
+              )}
+            </View>
+          </Pressable>
+          <Text style={styles.avatarLabel}>Profile photo</Text>
+          <Text style={styles.avatarSub}>Clear photo helps hosts and guests recognize you</Text>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* 4. Basic Information (Soft Block Inputs) */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionHeading}>Legal info & contact</Text>
+
+          {/* Full Name */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Full Name</Text>
+            <View style={styles.inputBox}>
+              <TextInput
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="Enter your legal full name"
+                placeholderTextColor="#9CA3AF"
+                style={styles.inputText}
+              />
+            </View>
+          </View>
+
+          {/* Phone Number */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Phone Number</Text>
+            <View style={styles.inputBox}>
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="e.g. +254 712 345 678"
+                keyboardType="phone-pad"
+                placeholderTextColor="#9CA3AF"
+                style={styles.inputText}
+              />
+              {phone.length > 5 ? (
+                <View style={styles.verifiedInlineRow}>
+                  <Feather name="check-circle" size={15} color="#008A05" />
+                  <Text style={styles.verifiedInlineText}>Added</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Email Address (Read-only System field) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Email Address</Text>
+            <View style={[styles.inputBox, styles.inputBoxDisabled]}>
+              <TextInput
+                value={user?.email ?? ''}
+                editable={false}
+                style={[styles.inputText, { color: '#717171' }]}
+              />
+              {badges.email ? (
+                <View style={styles.verifiedInlineRow}>
+                  <Feather name="check-circle" size={15} color="#008A05" />
+                  <Text style={styles.verifiedInlineText}>Verified</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Bio */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>About You (Bio)</Text>
+            <View style={[styles.inputBox, styles.textAreaBox]}>
+              <TextInput
+                value={bio}
+                onChangeText={setBio}
+                placeholder="Share a few words about yourself..."
+                placeholderTextColor="#9CA3AF"
+                multiline
+                style={[styles.inputText, styles.textAreaText]}
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Languages Spoken */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionHeading}>Languages spoken</Text>
+          <View style={styles.chipsRow}>
+            {COMMON_LANGUAGES.map((lang) => {
+              const selected = languages.includes(lang);
+              return (
+                <Pressable
+                  key={lang}
+                  onPress={() => {
+                    if (selected) {
+                      setLanguages(languages.filter((l) => l !== lang));
+                    } else {
+                      setLanguages([...languages, lang]);
+                    }
+                  }}
+                  style={[
+                    styles.chipItem,
+                    selected ? styles.chipItemSelected : styles.chipItemUnselected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: selected ? '#EE7D30' : '#222222' },
+                    ]}
+                  >
+                    {lang}
+                  </Text>
+                  {selected ? <Feather name="check" size={13} color="#EE7D30" /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* 6. Emergency Contact */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionHeading}>Emergency contact</Text>
+          <Text style={styles.sectionSub}>
+            A trusted contact we can reach in case of an urgent emergency.
+          </Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Contact Name</Text>
+            <View style={styles.inputBox}>
+              <TextInput
+                value={emergencyContact.name}
+                onChangeText={(v) => setEmergencyContact((p) => ({ ...p, name: v }))}
+                placeholder="Full name of contact"
+                placeholderTextColor="#9CA3AF"
+                style={styles.inputText}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Relationship</Text>
+            <View style={styles.inputBox}>
+              <TextInput
+                value={emergencyContact.relationship}
+                onChangeText={(v) => setEmergencyContact((p) => ({ ...p, relationship: v }))}
+                placeholder="e.g. Spouse, Parent, Sibling"
+                placeholderTextColor="#9CA3AF"
+                style={styles.inputText}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Phone Number</Text>
+            <View style={styles.inputBox}>
+              <TextInput
+                value={emergencyContact.phone}
+                onChangeText={(v) => setEmergencyContact((p) => ({ ...p, phone: v }))}
+                placeholder="e.g. +254 700 000 000"
+                keyboardType="phone-pad"
+                placeholderTextColor="#9CA3AF"
+                style={styles.inputText}
+              />
+            </View>
+          </View>
+        </View>
+      </KeyboardScreen>
     </View>
   );
 }

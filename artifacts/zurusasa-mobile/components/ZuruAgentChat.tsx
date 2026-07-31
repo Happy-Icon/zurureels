@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useZuruAI } from '@/lib/zuruAI';
+import { GrowingInput } from '@/components/keyboard';
 
 const ORANGE = '#F26522';
 
@@ -147,7 +148,7 @@ export function ZuruAgentChat({
         </ScrollView>
 
         <View style={styles.inputRow}>
-          <TextInput
+          <GrowingInput
             testID="zuru-chat-input"
             value={input}
             onChangeText={setInput}
@@ -156,6 +157,8 @@ export function ZuruAgentChat({
             }}
             placeholder={placeholder ?? `Ask Zuru AI about ${city}...`}
             placeholderTextColor="rgba(255,255,255,0.45)"
+            minHeight={40}
+            maxHeight={100}
             style={styles.input}
             returnKeyType="send"
             onSubmitEditing={handleSend}

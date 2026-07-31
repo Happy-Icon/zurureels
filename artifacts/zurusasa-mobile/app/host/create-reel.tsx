@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { notificationService } from '@/services/notificationService';
+import { KeyboardScreen, GrowingInput } from '@/components/keyboard';
 
 const CATEGORIES = [
   { label: 'Stays & Villas', value: 'stays' },
@@ -424,17 +425,14 @@ export default function CreateReelScreen() {
           {/* Description */}
           <View style={styles.formGroup}>
             <Text style={styles.inputLabel}>Description (Optional)</Text>
-            <TextInput
+            <GrowingInput
               placeholder="Describe what makes this experience special..."
               placeholderTextColor="#9CA3AF"
-              multiline
-              numberOfLines={3}
               value={description}
               onChangeText={setDescription}
+              minHeight={80}
+              maxHeight={180}
               style={[styles.textInput, styles.textAreaInput]}
-              onFocus={() => {
-                scrollViewRef.current?.scrollToEnd({ animated: true });
-              }}
             />
           </View>
         </ScrollView>
