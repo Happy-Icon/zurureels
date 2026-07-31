@@ -43,10 +43,13 @@ interface ReelCardProps {
   height: number;
 }
 
+import { useIsFocused } from '@react-navigation/native';
+
 export function ReelCard({ reel, isActive, height }: ReelCardProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, viewMode } = useAuth();
+  const isScreenFocused = useIsFocused();
   const toggleLike = useToggleLike();
   const toggleSave = useToggleSave();
   const toggleFollow = useToggleFollow();
@@ -75,16 +78,18 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
     isPlaying: player.playing,
   });
 
+  const shouldPlay = isActive && isScreenFocused && viewMode === 'guest';
+
   useEffect(() => {
     if (!videoUrl) return;
-    if (isActive) {
+    if (shouldPlay) {
       setMuted(globalMuted);
       player.muted = globalMuted;
       player.play();
     } else {
       player.pause();
     }
-  }, [isActive, player, videoUrl]);
+  }, [shouldPlay, player, videoUrl]);
 
   const toggleMute = () => {
     const next = !muted;

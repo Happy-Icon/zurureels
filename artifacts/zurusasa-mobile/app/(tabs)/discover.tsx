@@ -53,6 +53,7 @@ const DISCOVERY_CATEGORIES = [
   { id: 'accommodation', label: 'Stays', icon: 'home', categories: ['hotel', 'villa', 'apartment', 'stay', 'parks_camps'] },
   { id: 'events', label: 'Events', icon: 'calendar', categories: ['events', 'food', 'drinks'] },
   { id: 'experiences', label: 'Experiences', icon: 'compass', categories: ['land_adventure', 'air_adventure', 'water_adventure', 'tours', 'boat'] },
+  { id: 'ai', label: 'Zuru AI', icon: 'zap', categories: [] },
 ] as const;
 
 type CategoryId = (typeof DISCOVERY_CATEGORIES)[number]['id'];
@@ -243,7 +244,13 @@ export default function AirbnbDiscoverScreen() {
                 <Pressable
                   key={cat.id}
                   testID={`category-${cat.id}`}
-                  onPress={() => setActiveCategory(cat.id)}
+                  onPress={() => {
+                    if (cat.id === 'ai') {
+                      router.push('/ai' as any);
+                    } else {
+                      setActiveCategory(cat.id);
+                    }
+                  }}
                   style={styles.categoryItem}
                 >
                   <Feather
@@ -356,33 +363,6 @@ export default function AirbnbDiscoverScreen() {
           }
         />
       )}
-
-      {/* Floating Map / Grid Mode Toggle Button */}
-      {!isSearchFocused ? (
-        <Pressable
-          onPress={() => setDiscoverViewMode(discoverViewMode === 'grid' ? 'map' : 'grid')}
-          style={({ pressed }) => [
-            styles.mapToggleFab,
-            pressed && { opacity: 0.88, transform: [{ scale: 0.96 }] },
-          ]}
-        >
-          <Feather
-            name={discoverViewMode === 'grid' ? 'map' : 'grid'}
-            size={16}
-            color="#FFFFFF"
-          />
-          <Text style={styles.mapToggleFabText}>
-            {discoverViewMode === 'grid' ? 'Map View' : 'Grid View'}
-          </Text>
-        </Pressable>
-      ) : null}
-
-      {/* Floating Zuru AI Button */}
-      <AIFloatingButton
-        visible={!isSearchFocused}
-        label="Zuru AI"
-        onPress={() => router.push('/ai' as any)}
-      />
 
       {/* Journey Companion Sheet for Map Directions */}
       {journeyBooking ? (

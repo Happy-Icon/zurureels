@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { HostDashboard } from '@/components/host/HostDashboard';
 import { ReelCard } from '@/components/ReelCard';
+import { useIsFocused } from '@react-navigation/native';
 import { CenteredState, Skeleton } from '@/components/Skeleton';
 import { useReels } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
@@ -26,6 +27,7 @@ export default function ZuruFlowScreen() {
   const router = useRouter();
   const { viewMode } = useAuth();
   const { height } = useWindowDimensions();
+  const isFocused = useIsFocused();
   const { data: reels, isLoading, isError, refetch } = useReels();
   const [activeIndex, setActiveIndex] = useState<number>(0);
 
@@ -45,11 +47,11 @@ export default function ZuruFlowScreen() {
     ({ item, index }: { item: ReelRow; index: number }) => (
       <ReelCard
         reel={item}
-        isActive={index === activeIndex}
+        isActive={isFocused && viewMode === 'guest' && index === activeIndex}
         height={pageHeight}
       />
     ),
-    [activeIndex, pageHeight],
+    [activeIndex, pageHeight, isFocused, viewMode],
   );
 
   if (viewMode === 'host') {

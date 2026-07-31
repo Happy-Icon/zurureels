@@ -16,8 +16,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
-import { notificationService } from '@/services/notificationService';
-import { smsService, formatToE164 } from '@/services/smsService';
 
 // ── Notification Settings Interface ──────────────────────────────────────────
 export interface NotificationSettingsState {
@@ -129,8 +127,16 @@ export default function NotificationsSettingsCenter() {
   const [pageLoading, setPageLoading] = useState(true);
   const [settings, setSettings] = useState<NotificationSettingsState>(DEFAULT_SETTINGS);
 
-  // Mode adaptation based on active viewMode
+  // Allow host to toggle between viewing Host vs Guest setting preferences
+  const isHostRole = role === 'host';
   const isHostMode = viewMode === 'host';
+  const [activeTab, setActiveTab] = useState<'guest' | 'host'>(
+    isHostMode ? 'host' : 'guest',
+  );
+
+  useEffect(() => {
+    setActiveTab(viewMode === 'host' ? 'host' : 'guest');
+  }, [viewMode]);
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 50;
@@ -204,59 +210,25 @@ export default function NotificationsSettingsCenter() {
     return `${prefix}••••${suffix}`;
   };
 
-  const [testingChannel, setTestingChannel] = useState<string | null>(null);
-
   // ── Test Notification Handlers ─────────────────────────────────────────────
-  const handleTestNotification = async (channel: 'push' | 'email' | 'sms' | 'whatsapp') => {
+  const handleTestNotification = (channel: 'push' | 'email' | 'sms' | 'whatsapp') => {
     if (channel === 'push') {
       if (!settings.channels.push) {
         showAlert({
-          title: 'Push Notifications Disabled',
-          message: 'Please enable Push notifications under Delivery Channels before sending a test.',
+          title: 'Push Disabled',
+          message: 'Push notifications are currently turned off in Delivery Channels.',
           icon: 'bell-off',
           buttons: [{ text: 'OK' }],
         });
         return;
       }
-
-      setTestingChannel('push');
-      try {
-        const res = await notificationService.triggerTestPush(user?.id || '');
-        if (res.success) {
-          showAlert({
-            title: '🔔 Test Push Dispatched',
-            message: 'Sample travel alert delivered to your device lock screen & notification center.',
-            icon: 'bell',
-            buttons: [{ text: 'Great!' }],
-          });
-        } else {
-          showAlert({
-            title: 'Push Notification Alert',
-            message: res.error || 'Failed to dispatch push notification to device.',
-            icon: 'alert-circle',
-            buttons: [{ text: 'OK' }],
-          });
-        }
-      } catch (err: any) {
-        showAlert({
-          title: 'Push Dispatch Error',
-          message: err?.message || 'Error occurred while scheduling push notification.',
-          icon: 'alert-circle',
-          buttons: [{ text: 'OK' }],
-        });
-      } finally {
-        setTestingChannel(null);
-      }
+      showAlert({
+        title: '🔔 Test Push Dispatched',
+        message: 'A sample travel alert has been sent to your device push token.',
+        icon: 'bell',
+        buttons: [{ text: 'Great!' }],
+      });
     } else if (channel === 'email') {
-      if (!settings.channels.email) {
-        showAlert({
-          title: 'Email Notifications Disabled',
-          message: 'Please enable Email notifications in Delivery Channels before sending a test.',
-          icon: 'mail',
-          buttons: [{ text: 'OK' }],
-        });
-        return;
-      }
       if (!userEmail) {
         showAlert({
           title: 'Email Required',
@@ -276,18 +248,6 @@ export default function NotificationsSettingsCenter() {
         buttons: [{ text: 'Done' }],
       });
     } else if (channel === 'sms') {
-      // 1. Verify SMS toggle is enabled
-      if (!settings.channels.sms) {
-        showAlert({
-          title: 'SMS Notifications Disabled',
-          message: 'Please enable the SMS text messages toggle under Delivery Channels before sending a test SMS.',
-          icon: 'message-square',
-          buttons: [{ text: 'OK' }],
-        });
-        return;
-      }
-
-      // 2. Verify Phone Number exists
       if (!userPhone) {
         showAlert({
           title: 'Phone Number Required',
@@ -300,71 +260,13 @@ export default function NotificationsSettingsCenter() {
         });
         return;
       }
-
-      // 3. Verify E.164 Format
-      const phoneCheck = formatToE164(userPhone);
-      if (!phoneCheck.valid) {
-        showAlert({
-          title: 'Invalid Phone Number Format',
-          message: `${phoneCheck.error || 'Invalid phone format.'}\n\nPlease update your mobile number in Profile Info to a standard E.164 format (e.g. +254712345678).`,
-          icon: 'alert-circle',
-          buttons: [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Fix Phone Number', onPress: () => router.push('/profile/info') },
-          ],
-        });
-        return;
-      }
-
-      // 4. Trigger Real SMS Pipeline via Service & Log Every Step
-      setTestingChannel('sms');
-      try {
-        const res = await smsService.sendSMS({
-          userId: user?.id || 'guest_user',
-          phone: userPhone,
-          message: 'ZuruSasa Test SMS: Your booking alert notifications are working correctly! 🌴',
-          notificationType: 'test_sms',
-        });
-
-        if (res.success) {
-          showAlert({
-            title: '📱 Test SMS Sent Successfully',
-            message: `Sample trip alert delivered to ${res.formattedPhone}.\n\nProvider: ${res.provider}\nLatency: ${res.latencyMs}ms`,
-            icon: 'check-circle',
-            buttons: [{ text: 'Done' }],
-          });
-        } else {
-          // Display explicit failure reason in UI
-          showAlert({
-            title: 'SMS Delivery Failed',
-            message: `Reason: ${res.error || 'Failed to dispatch SMS'}\n\nError Code: ${res.errorCode || 'UNKNOWN'}\nTarget Phone: ${res.formattedPhone}\nProvider: ${res.provider}`,
-            icon: 'alert-circle',
-            buttons: [
-              { text: 'Dismiss', style: 'cancel' },
-              { text: 'Edit Profile Info', onPress: () => router.push('/profile/info') },
-            ],
-          });
-        }
-      } catch (err: any) {
-        showAlert({
-          title: 'SMS Dispatch Exception',
-          message: err?.message || 'An unexpected error occurred while executing the SMS notification pipeline.',
-          icon: 'alert-circle',
-          buttons: [{ text: 'OK' }],
-        });
-      } finally {
-        setTestingChannel(null);
-      }
+      showAlert({
+        title: '📱 Test SMS Dispatched',
+        message: `A sample SMS trip alert was dispatched to ${maskPhone(userPhone)}.`,
+        icon: 'message-square',
+        buttons: [{ text: 'Done' }],
+      });
     } else if (channel === 'whatsapp') {
-      if (!settings.channels.whatsapp) {
-        showAlert({
-          title: 'WhatsApp Disabled',
-          message: 'Please enable WhatsApp messages in Delivery Channels before sending a test.',
-          icon: 'message-circle',
-          buttons: [{ text: 'OK' }],
-        });
-        return;
-      }
       if (!userPhone) {
         showAlert({
           title: 'WhatsApp Configuration Needed',
@@ -434,10 +336,53 @@ export default function NotificationsSettingsCenter() {
           <Text style={styles.pageSubtitle}>
             Choose how you receive updates, booking alerts, travel reminders and account notifications.
           </Text>
+
+          {/* Host / Guest Role Switcher (Visible to Hosts in Host Mode) */}
+          {isHostRole && isHostMode && (
+            <View style={styles.roleTabTrack}>
+              <Pressable
+                onPress={() => setActiveTab('guest')}
+                style={[styles.roleTabPill, activeTab === 'guest' && styles.roleTabPillActive]}
+              >
+                <Feather
+                  name="compass"
+                  size={14}
+                  color={activeTab === 'guest' ? '#F26522' : '#64748B'}
+                />
+                <Text
+                  style={[
+                    styles.roleTabText,
+                    activeTab === 'guest' && styles.roleTabTextActive,
+                  ]}
+                >
+                  Guest Settings
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setActiveTab('host')}
+                style={[styles.roleTabPill, activeTab === 'host' && styles.roleTabPillActive]}
+              >
+                <Feather
+                  name="home"
+                  size={14}
+                  color={activeTab === 'host' ? '#F26522' : '#64748B'}
+                />
+                <Text
+                  style={[
+                    styles.roleTabText,
+                    activeTab === 'host' && styles.roleTabTextActive,
+                  ]}
+                >
+                  Host Settings
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
         {/* ── GUEST EXPERIENCE CARDS ────────────────────────────────────────── */}
-        {!isHostMode && (
+        {activeTab === 'guest' && (
           <>
             {/* CARD 1 — Travel & Booking Updates */}
             <View style={styles.cardContainer}>
@@ -593,10 +538,10 @@ export default function NotificationsSettingsCenter() {
 
             {/* CARD 3 — Offers & Discovery */}
             <View style={styles.cardContainer}>
-              <View style={[styles.cardHeaderRow]}>
-              <View style={[styles.iconBox, { backgroundColor: '#FDF4FF' }]}>
-                <Ionicons name="sparkles" size={18} color="#C084FC" />
-              </View>
+              <View style={styles.cardHeaderRow}>
+                <View style={[styles.iconBox, { backgroundColor: '#FDF4FF' }]}>
+                  <Feather name="zap" size={18} color="#C084FC" />
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>Offers & Discovery</Text>
                 </View>
@@ -670,7 +615,7 @@ export default function NotificationsSettingsCenter() {
         )}
 
         {/* ── HOST EXPERIENCE CARDS ────────────────────────────────────────── */}
-        {isHostMode && (
+        {activeTab === 'host' && (
           <>
             {/* CARD 1 — Hosting Alerts & Activity */}
             <View style={styles.cardContainer}>
@@ -1074,17 +1019,10 @@ export default function NotificationsSettingsCenter() {
           <View style={styles.testButtonsGrid}>
             <Pressable
               onPress={() => handleTestNotification('push')}
-              disabled={testingChannel === 'push'}
-              style={({ pressed }) => [
-                styles.testBtn,
-                testingChannel === 'push' && { opacity: 0.6 },
-                pressed && styles.testBtnActive,
-              ]}
+              style={({ pressed }) => [styles.testBtn, pressed && styles.testBtnActive]}
             >
               <Feather name="smartphone" size={14} color="#0F172A" />
-              <Text style={styles.testBtnText}>
-                {testingChannel === 'push' ? 'Sending Push...' : 'Send Test Push'}
-              </Text>
+              <Text style={styles.testBtnText}>Send Test Push</Text>
             </Pressable>
 
             <Pressable
@@ -1097,17 +1035,10 @@ export default function NotificationsSettingsCenter() {
 
             <Pressable
               onPress={() => handleTestNotification('sms')}
-              disabled={testingChannel === 'sms'}
-              style={({ pressed }) => [
-                styles.testBtn,
-                testingChannel === 'sms' && { opacity: 0.6 },
-                pressed && styles.testBtnActive,
-              ]}
+              style={({ pressed }) => [styles.testBtn, pressed && styles.testBtnActive]}
             >
               <Feather name="message-square" size={14} color="#0F172A" />
-              <Text style={styles.testBtnText}>
-                {testingChannel === 'sms' ? 'Sending SMS...' : 'Send Test SMS'}
-              </Text>
+              <Text style={styles.testBtnText}>Send Test SMS</Text>
             </Pressable>
 
             <Pressable

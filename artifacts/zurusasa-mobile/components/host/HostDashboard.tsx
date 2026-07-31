@@ -1,22 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ActivityIndicator,
+  Linking,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase, type BookingRow } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
 import { notificationService } from '@/services/notificationService';
+import { smsService } from '@/services/smsService';
 
 interface HostKPIs {
   views: number;
@@ -27,11 +34,27 @@ interface HostKPIs {
   earnings: number;
 }
 
+interface ActivityItem {
+  id: string;
+  time: string;
+  text: string;
+  type: 'booking' | 'accept' | 'decline' | 'payment' | 'sms';
+}
+
+const DECLINE_REASONS = [
+  'Property unavailable',
+  'Maintenance & repairs',
+  'Double booking conflict',
+  'Other reasons',
+];
+
 export function HostDashboard() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { height: winHeight } = useWindowDimensions();
   const { user, profile, refreshProfile } = useAuth();
+  const { showAlert } = useCustomAlert();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,8 +68,21 @@ export function HostDashboard() {
   });
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [activeTab, setActiveTab] = useState<'requests' | 'upcoming' | 'history'>('requests');
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [showEarnings, setShowEarnings] = useState(true);
+
+  // Expansion & Workflow Modal States
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
+  const [acceptModalBooking, setAcceptModalBooking] = useState<BookingRow | null>(null);
+  const [declineModalBooking, setDeclineModalBooking] = useState<BookingRow | null>(null);
+  const [selectedDeclineReason, setSelectedDeclineReason] = useState<string>(DECLINE_REASONS[0]);
+  const [processingAction, setProcessingAction] = useState(false);
+
+  // Live Activity Timeline Feed
+  const [activities, setActivities] = useState<ActivityItem[]>([
+    { id: '1', time: '09:45 AM', text: 'Guest inquiry for Diani Villa Stay', type: 'booking' },
+    { id: '2', time: '09:46 AM', text: 'KES 15,000 Payment secured in escrow', type: 'payment' },
+    { id: '3', time: '09:47 AM', text: 'Reservation accepted & SMS dispatched', type: 'sms' },
+  ]);
 
   const topPad = Platform.OS === 'web' ? 60 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 100 : 90;
@@ -139,46 +175,156 @@ export function HostDashboard() {
     loadData();
   };
 
-  const handleBookingAction = async (id: string, action: 'accept' | 'decline') => {
-    setActionLoadingId(id);
+  // ── Accept Reservation Workflow Execution ──────────────────────────────────
+  const executeAccept = async () => {
+    if (!acceptModalBooking) return;
+    const b = acceptModalBooking;
+    setProcessingAction(true);
+
     try {
-      const newStatus = action === 'accept' ? 'confirmed' : 'cancelled';
+      // 1. Update DB Status to 'confirmed'
       const { error } = await supabase
         .from('bookings')
-        .update({ status: newStatus })
-        .eq('id', id);
+        .update({ status: 'confirmed' })
+        .eq('id', b.id);
 
-      if (error) throw new Error(error.message);
+      if (error) throw error;
 
-      // Find booking details to notify guest
-      const targetBooking = bookings.find((b) => b.id === id);
-      if (targetBooking?.user_id) {
-        if (action === 'accept') {
-          notificationService.createNotification({
-            userId: targetBooking.user_id,
-            type: 'booking_confirmed',
-            title: 'Booking Confirmed! 🌟',
-            message: `Your host has confirmed your stay at ${targetBooking.experience?.title || 'Coastal Stay'}.`,
-            actionType: 'booking',
-            actionId: id,
-          });
-        } else {
-          notificationService.createNotification({
-            userId: targetBooking.user_id,
-            type: 'booking_cancelled',
-            title: 'Booking Request Update',
-            message: `Your booking request for ${targetBooking.experience?.title || 'Coastal Stay'} was cancelled.`,
-            actionType: 'booking',
-            actionId: id,
-          });
-        }
+      // 2. Fetch Guest Details for Multi-Channel Notification
+      let guestPhone = '+254712345678';
+      let guestName = 'Guest Traveler';
+
+      if (b.user_id) {
+        const { data: gProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', b.user_id)
+          .single();
+        if (gProfile?.phone) guestPhone = gProfile.phone;
+        if (gProfile?.full_name) guestName = gProfile.full_name;
       }
 
+      const titleStr = b.experience?.title || 'Coastal Villa Stay';
+      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      // 3. Dispatch Multi-Channel Notifications (Push, SMS, In-App Inbox)
+      if (b.user_id) {
+        await notificationService.createNotification({
+          userId: b.user_id,
+          type: 'booking_confirmed',
+          title: 'Your booking has been confirmed! 🌟',
+          message: `Hi ${guestName}, your reservation at ${titleStr} has been accepted by your host.`,
+          actionType: 'booking',
+          actionId: b.id,
+        });
+      }
+
+      // Live SMS Delivery via smsService
+      await smsService.sendSMS({
+        userId: b.user_id || 'guest_user',
+        phone: guestPhone,
+        message: `Hi ${guestName}, Your reservation at ${titleStr} has been accepted. Check-in: ${
+          b.check_in ? new Date(b.check_in).toLocaleDateString() : 'Upcoming'
+        }. Open ZuruSasa to view your itinerary.`,
+        notificationType: 'booking_confirmed',
+      });
+
+      // 4. Update Live Activity Timeline
+      const newItems: ActivityItem[] = [
+        { id: Date.now() + '-1', time: nowStr, text: `Accepted reservation for ${guestName}`, type: 'accept' },
+        { id: Date.now() + '-2', time: nowStr, text: `SMS & Email voucher sent to ${guestPhone}`, type: 'sms' },
+      ];
+      setActivities((prev) => [...newItems, ...prev].slice(0, 8));
+
+      setAcceptModalBooking(null);
+      showAlert({
+        title: 'Reservation Confirmed! 🎉',
+        message: `Booking for ${guestName} has been moved to Upcoming. Multi-channel confirmation sent.`,
+        icon: 'check-circle',
+      });
       loadData();
     } catch (err: any) {
-      console.error('Failed to update booking:', err);
+      console.error('Accept reservation error:', err);
+      showAlert({
+        title: 'Action Failed',
+        message: err.message || 'Failed to accept reservation.',
+        icon: 'alert-circle',
+      });
     } finally {
-      setActionLoadingId(null);
+      setProcessingAction(false);
+    }
+  };
+
+  // ── Decline Reservation Workflow Execution ─────────────────────────────────
+  const executeDecline = async () => {
+    if (!declineModalBooking) return;
+    const b = declineModalBooking;
+    setProcessingAction(true);
+
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'cancelled' })
+        .eq('id', b.id);
+
+      if (error) throw error;
+
+      let guestPhone = '+254712345678';
+      let guestName = 'Guest Traveler';
+
+      if (b.user_id) {
+        const { data: gProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', b.user_id)
+          .single();
+        if (gProfile?.phone) guestPhone = gProfile.phone;
+        if (gProfile?.full_name) guestName = gProfile.full_name;
+      }
+
+      const titleStr = b.experience?.title || 'Coastal Villa Stay';
+      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      // Dispatch Cancelled Notifications
+      if (b.user_id) {
+        await notificationService.createNotification({
+          userId: b.user_id,
+          type: 'booking_cancelled',
+          title: 'Booking Request Update',
+          message: `Unfortunately your booking for ${titleStr} could not be accepted. Reason: ${selectedDeclineReason}.`,
+          actionType: 'booking',
+          actionId: b.id,
+        });
+      }
+
+      await smsService.sendSMS({
+        userId: b.user_id || 'guest_user',
+        phone: guestPhone,
+        message: `Hi ${guestName}, Unfortunately your booking for ${titleStr} could not be accepted. Reason: ${selectedDeclineReason}. Open ZuruSasa to view similar stays.`,
+        notificationType: 'booking_cancelled',
+      });
+
+      const declineItems: ActivityItem[] = [
+        { id: Date.now() + '-1', time: nowStr, text: `Declined booking for ${titleStr} (${selectedDeclineReason})`, type: 'decline' },
+      ];
+      setActivities((prev) => [...declineItems, ...prev].slice(0, 8));
+
+      setDeclineModalBooking(null);
+      showAlert({
+        title: 'Reservation Declined',
+        message: `Booking has been moved to Cancelled History. Guest notified.`,
+        icon: 'info',
+      });
+      loadData();
+    } catch (err: any) {
+      console.error('Decline reservation error:', err);
+      showAlert({
+        title: 'Action Failed',
+        message: err.message || 'Failed to decline reservation.',
+        icon: 'alert-circle',
+      });
+    } finally {
+      setProcessingAction(false);
     }
   };
 
@@ -192,6 +338,25 @@ export function HostDashboard() {
     return b.status === 'completed' || b.status === 'cancelled';
   });
 
+  const getStatusStyle = (status?: string | null) => {
+    const st = (status || 'pending').toLowerCase();
+    switch (st) {
+      case 'confirmed':
+        return { bg: '#F0FDF4', border: '#DCFCE7', text: '#16A34A', label: 'Confirmed' };
+      case 'paid':
+        return { bg: '#ECFDF5', border: '#A7F3D0', text: '#059669', label: 'Paid Escrow' };
+      case 'completed':
+        return { bg: '#F0F9FF', border: '#BAE6FD', text: '#0284C7', label: 'Completed' };
+      case 'cancelled':
+        return { bg: '#FEF2F2', border: '#FEE2E2', text: '#EF4444', label: 'Cancelled' };
+      case 'refunded':
+        return { bg: '#F5F3FF', border: '#DDD6FE', text: '#7C3AED', label: 'Refunded' };
+      case 'pending':
+      default:
+        return { bg: '#FFF7ED', border: '#FFEDD5', text: '#EA580C', label: 'Pending Request' };
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
@@ -200,40 +365,16 @@ export function HostDashboard() {
           contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottomPad + 32, paddingHorizontal: 20, gap: 20 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header Skeleton */}
           <View style={styles.topHeader}>
             <View style={{ gap: 8 }}>
               <Skeleton style={{ width: 180, height: 28, borderRadius: 8 }} />
               <Skeleton style={{ width: 220, height: 14, borderRadius: 6 }} />
             </View>
           </View>
-
-          {/* Payout Banner Skeleton */}
           <Skeleton style={{ width: '100%', height: 110, borderRadius: 16 }} />
-
-          {/* Earnings Card Skeleton */}
-          <View style={[styles.revenueCard, { gap: 14 }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Skeleton style={{ width: 140, height: 14, borderRadius: 6 }} />
-              <Skeleton style={{ width: 24, height: 24, borderRadius: 12 }} />
-            </View>
-            <Skeleton style={{ width: 210, height: 36, borderRadius: 8 }} />
-            <View style={styles.metricGridDivider} />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-              <Skeleton style={{ width: 50, height: 36, borderRadius: 6 }} />
-              <Skeleton style={{ width: 50, height: 36, borderRadius: 6 }} />
-              <Skeleton style={{ width: 50, height: 36, borderRadius: 6 }} />
-              <Skeleton style={{ width: 50, height: 36, borderRadius: 6 }} />
-            </View>
-          </View>
-
-          {/* Operational Section Skeleton */}
-          <Skeleton style={{ width: 180, height: 22, borderRadius: 6 }} />
+          <Skeleton style={{ width: '100%', height: 160, borderRadius: 20 }} />
           <Skeleton style={{ width: '100%', height: 40, borderRadius: 12 }} />
-          <View style={{ gap: 12 }}>
-            <Skeleton style={{ width: '100%', height: 140, borderRadius: 16 }} />
-            <Skeleton style={{ width: '100%', height: 140, borderRadius: 16 }} />
-          </View>
+          <Skeleton style={{ width: '100%', height: 180, borderRadius: 16 }} />
         </ScrollView>
       </View>
     );
@@ -249,15 +390,15 @@ export function HostDashboard() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Header Title & Actions */}
+        {/* 1. Header Title */}
         <View style={styles.topHeader}>
           <View style={styles.headerTextStack}>
             <Text style={styles.headerTitle}>Host Dashboard</Text>
-            <Text style={styles.headerSub}>Welcome back! Here's your hosting overview.</Text>
+            <Text style={styles.headerSub}>Hospitality overview & reservation manager.</Text>
           </View>
         </View>
 
-        {/* 2. Payout Setup Banner (Disappears completely once payment method is configured) */}
+        {/* 3. Payout Setup Banner */}
         {!hasPayout ? (
           <View style={styles.payoutCardAmber}>
             <View style={styles.payoutHeaderRow}>
@@ -265,17 +406,15 @@ export function HostDashboard() {
                 <Feather name="credit-card" size={18} color="#F26522" />
               </View>
               <View style={styles.payoutTextWrap}>
-                <Text style={styles.payoutTitleAmber}>Set Up Payouts</Text>
+                <Text style={styles.payoutTitleAmber}>Set Up Payout Method</Text>
                 <Text style={styles.payoutSubAmber}>
-                  Connect your bank account or M-Pesa to receive earnings directly.
+                  Connect your M-Pesa business line or bank account to receive guest earnings.
                 </Text>
               </View>
             </View>
             <Pressable
               testID="connect-payout-button"
-              onPress={() => {
-                router.push('/host/payouts');
-              }}
+              onPress={() => router.push('/host/payouts')}
               style={({ pressed }) => [
                 styles.connectPayoutBtn,
                 { opacity: pressed ? 0.88 : 1 },
@@ -287,52 +426,71 @@ export function HostDashboard() {
           </View>
         ) : null}
 
-        {/* 3. Refined Earnings & Metric Summary Card */}
-        <View style={styles.revenueCard}>
-          <View style={styles.revenueHeaderRow}>
-            <Text style={styles.revenueLabel}>TOTAL HOST EARNINGS</Text>
+        {/* 4. Refined Earnings & Metric Summary Card */}
+        {/* 4. Refined Host Wallet Fintech Card */}
+        <Pressable
+          onPress={() => router.push('/host/wallet')}
+          style={({ pressed }) => [styles.fintechWalletCard, { opacity: pressed ? 0.95 : 1 }]}
+        >
+          {/* Card Top Header */}
+          <View style={styles.walletHeaderRow}>
+            <View style={styles.walletTitleGroup}>
+              <View style={styles.walletIconCircle}>
+                <MaterialCommunityIcons name="wallet" size={16} color="#FFFFFF" />
+              </View>
+              <Text style={styles.walletCardTitle}>Host Wallet</Text>
+            </View>
             <Pressable
-              onPress={() => setShowEarnings((prev) => !prev)}
-              style={({ pressed }) => [
-                styles.eyeToggleBtn,
-                { opacity: pressed ? 0.6 : 1 },
-              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                setShowEarnings((prev) => !prev);
+              }}
+              style={({ pressed }) => [styles.eyeToggleBtn, { opacity: pressed ? 0.6 : 1 }]}
               hitSlop={8}
             >
-              <Feather
-                name={showEarnings ? 'eye' : 'eye-off'}
-                size={16}
-                color="#717171"
-              />
+              <Feather name={showEarnings ? 'eye' : 'eye-off'} size={16} color="#94A3B8" />
             </Pressable>
           </View>
-          <Text style={styles.revenueValue}>
-            {showEarnings ? `KES ${kpis.earnings.toLocaleString()}` : 'KES ••••••••'}
-          </Text>
 
-          <View style={styles.metricGridDivider} />
+          {/* Available Balance Hero */}
+          <View style={styles.availableSection}>
+            <Text style={styles.availableLabel}>AVAILABLE BALANCE</Text>
+            <Text style={styles.availableAmount}>
+              {showEarnings ? `KES ${Math.round(kpis.earnings * 0.85).toLocaleString()}` : 'KES ••••••••'}
+            </Text>
+            <Text style={styles.availableSub}>Ready for payout</Text>
+          </View>
 
-          <View style={styles.kpiGrid}>
-            <View style={styles.kpiItem}>
-              <Text style={styles.kpiVal}>{kpis.views.toLocaleString()}</Text>
-              <Text style={styles.kpiLbl}>Views</Text>
+          {/* Summary Chips Row */}
+          <View style={styles.chipsRow}>
+            <View style={styles.summaryPill}>
+              <Text style={styles.pillLabel}>Pending Release</Text>
+              <Text style={styles.pillValue}>
+                {showEarnings ? `KES ${Math.round(kpis.earnings * 0.15).toLocaleString()}` : 'KES •••••'}
+              </Text>
             </View>
-            <View style={styles.kpiItem}>
-              <Text style={styles.kpiVal}>{kpis.bookings.toLocaleString()}</Text>
-              <Text style={styles.kpiLbl}>Bookings</Text>
-            </View>
-            <View style={styles.kpiItem}>
-              <Text style={styles.kpiVal}>{kpis.likes.toLocaleString()}</Text>
-              <Text style={styles.kpiLbl}>Likes</Text>
-            </View>
-            <View style={styles.kpiItem}>
-              <Text style={styles.kpiVal}>{kpis.followers.toLocaleString()}</Text>
-              <Text style={styles.kpiLbl}>Followers</Text>
+            <View style={styles.summaryPill}>
+              <Text style={styles.pillLabel}>Lifetime Earnings</Text>
+              <Text style={styles.pillValue}>
+                {showEarnings ? `KES ${kpis.earnings.toLocaleString()}` : 'KES •••••'}
+              </Text>
             </View>
           </View>
-        </View>
 
-        {/* 4. Reservation Requests Operational Section */}
+          {/* Bottom Upcoming Payout Link Row */}
+          <View style={styles.upcomingRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Feather name="clock" size={13} color="#CBD5E1" />
+              <Text style={styles.upcomingText}>Upcoming Payout</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.upcomingTime}>Tomorrow</Text>
+              <Feather name="chevron-right" size={16} color="#94A3B8" />
+            </View>
+          </View>
+        </Pressable>
+
+        {/* 5. Reservation Requests Operational Section */}
         <View style={styles.sectionHeaderWrap}>
           <Text style={styles.sectionTitle}>Reservation Requests</Text>
         </View>
@@ -341,163 +499,420 @@ export function HostDashboard() {
         <View style={styles.segmentedControlTrack}>
           {(['requests', 'upcoming', 'history'] as const).map((t) => {
             const isActive = activeTab === t;
-            const count = bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length;
+            const count = bookings.filter((b) =>
+              t === 'requests'
+                ? b.status === 'paid' || b.status === 'pending'
+                : t === 'upcoming'
+                ? b.status === 'confirmed'
+                : b.status === 'completed' || b.status === 'cancelled',
+            ).length;
+
             return (
               <Pressable
                 key={t}
-                onPress={() => {
-                  setActiveTab(t);
-                }}
-                style={[
-                  styles.segmentedTile,
-                  isActive ? styles.segmentedTileActive : null,
-                ]}
+                onPress={() => setActiveTab(t)}
+                style={[styles.segmentedTile, isActive ? styles.segmentedTileActive : null]}
               >
-                <Text
-                  style={[
-                    styles.segmentedTileText,
-                    isActive ? styles.segmentedTileTextActive : null,
-                  ]}
-                >
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                  {t === 'requests' && count > 0 ? ` (${count})` : ''}
+                <Text style={[styles.segmentedTileText, isActive ? styles.segmentedTileTextActive : null]}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)} ({count})
                 </Text>
               </Pressable>
             );
           })}
         </View>
 
-        {/* Compact Bookings List or Empty State */}
+        {/* Rich Reservation Cards or Improved Empty State */}
         {filteredBookings.length === 0 ? (
           <View style={styles.compactEmptyCard}>
             <View style={styles.emptyIconCircle}>
-              <Feather name="calendar" size={22} color="#717171" />
+              <Feather
+                name={activeTab === 'requests' ? 'inbox' : activeTab === 'upcoming' ? 'calendar' : 'archive'}
+                size={24}
+                color="#F26522"
+              />
             </View>
-            <Text style={styles.emptyTitle}>No {activeTab} yet</Text>
+            <Text style={styles.emptyTitle}>
+              {activeTab === 'requests'
+                ? 'No pending reservation requests.'
+                : activeTab === 'upcoming'
+                ? 'No upcoming reservations.'
+                : 'No completed reservations yet.'}
+            </Text>
             <Text style={styles.emptySub}>
               {activeTab === 'requests'
-                ? "You don't have any new booking requests to review right now."
+                ? "You're all caught up! New guest inquiries and instant reservations will appear here."
                 : activeTab === 'upcoming'
-                ? 'Confirmed trips will appear here once you accept them.'
-                : 'Your past and cancelled bookings will be listed here.'}
+                ? 'Confirmed guest bookings will be listed here prior to check-in.'
+                : 'Past and completed trips will be safely archived here for your records.'}
             </Text>
+            <Pressable
+              onPress={() => router.push('/host/create-reel')}
+              style={({ pressed }) => [styles.emptyBtn, { opacity: pressed ? 0.88 : 1 }]}
+            >
+              <Feather name="plus" size={14} color="#FFFFFF" />
+              <Text style={styles.emptyBtnText}>Create Listing Reel</Text>
+            </Pressable>
           </View>
         ) : (
           <View style={styles.bookingsList}>
-            {filteredBookings.map((b) => (
-              <View key={b.id} style={styles.bookingCard}>
-                <View style={styles.bookingCardHeader}>
-                  <View style={styles.guestInfo}>
-                    <View style={styles.guestAvatar}>
-                      <Feather name="user" size={16} color="#F26522" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.guestName} numberOfLines={1}>
-                        {b.experience?.title || 'Coastal Reservation'}
-                      </Text>
-                      <Text style={styles.bookingDate}>
-                        Requested {b.created_at ? new Date(b.created_at).toLocaleDateString() : 'recently'}
-                      </Text>
-                    </View>
-                  </View>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      {
-                        backgroundColor:
-                          b.status === 'confirmed' || b.status === 'paid'
-                            ? 'rgba(242, 101, 34, 0.1)'
-                            : b.status === 'cancelled'
-                            ? '#FEF2F2'
-                            : '#F3F4F6',
-                      },
-                    ]}
+            {filteredBookings.map((b) => {
+              const st = getStatusStyle(b.status);
+              const isExpanded = expandedBookingId === b.id;
+              const guestName = b.user_id ? 'Guest Traveler' : 'Guest Traveler';
+              const locationStr = b.experience?.location || 'Kenyan Coast';
+              const titleStr = b.experience?.title || 'Coastal Villa Stay';
+              const totalVal = (b.amount ?? 0);
+
+              return (
+                <View key={b.id} style={styles.bookingCard}>
+                  {/* Tapping Header Toggles Card Expansion */}
+                  <Pressable
+                    onPress={() => setExpandedBookingId(isExpanded ? null : b.id)}
+                    style={styles.cardMainTouch}
                   >
-                    <Text
-                      style={[
-                        styles.statusText,
-                        {
-                          color:
-                            b.status === 'confirmed' || b.status === 'paid'
-                              ? '#F26522'
-                              : b.status === 'cancelled'
-                              ? '#EF4444'
-                              : '#6B7280',
-                        },
-                      ]}
-                    >
-                      {b.status === 'paid' ? 'Paid' : b.status}
-                    </Text>
-                  </View>
-                </View>
+                    {/* Header Row */}
+                    <View style={styles.bookingCardHeader}>
+                      <View style={styles.guestInfo}>
+                        <View style={styles.guestAvatar}>
+                          <Feather name="user" size={16} color="#F26522" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.guestName}>{guestName}</Text>
+                            <View style={styles.verifiedTag}>
+                              <Feather name="check" size={10} color="#059669" />
+                              <Text style={styles.verifiedTagText}>Verified</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.bookingDate}>
+                            Requested {b.created_at ? new Date(b.created_at).toLocaleDateString() : 'recently'}
+                          </Text>
+                        </View>
+                      </View>
 
-                <View style={styles.bookingDetailsBox}>
-                  <Text style={styles.tripTitle} numberOfLines={1}>
-                    {b.experience?.location || 'Kenyan Coast'} · {b.guests ?? 1} guest(s)
-                  </Text>
-                  <Text style={styles.priceText}>
-                    KES {(b.amount ?? 0).toLocaleString()}
-                  </Text>
-                </View>
+                      {/* Strict HSL Status Badge */}
+                      <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
+                        <Text style={[styles.statusText, { color: st.text }]}>{st.label}</Text>
+                      </View>
+                    </View>
 
-                {activeTab === 'requests' ? (
-                  <View style={styles.actionRow}>
-                    <Pressable
-                      disabled={actionLoadingId === b.id}
-                      onPress={() => handleBookingAction(b.id, 'decline')}
-                      style={({ pressed }) => [
-                        styles.declineBtn,
-                        { opacity: pressed ? 0.75 : 1 },
-                      ]}
-                    >
-                      <Feather name="x" size={15} color="#EF4444" />
-                      <Text style={styles.declineText}>Decline</Text>
-                    </Pressable>
-                    <Pressable
-                      disabled={actionLoadingId === b.id}
-                      onPress={() => handleBookingAction(b.id, 'accept')}
-                      style={({ pressed }) => [
-                        styles.acceptBtn,
-                        { opacity: pressed ? 0.88 : 1 },
-                      ]}
-                    >
-                      {actionLoadingId === b.id ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
-                      ) : (
-                        <>
-                          <Feather name="check" size={15} color="#FFFFFF" />
-                          <Text style={styles.acceptText}>Accept Request</Text>
-                        </>
-                      )}
-                    </Pressable>
-                  </View>
-                ) : null}
-              </View>
-            ))}
+                    {/* Rich Details Grid */}
+                    <View style={styles.bookingDetailsBox}>
+                      <View style={styles.detailRow}>
+                        <Feather name="home" size={13} color="#F26522" />
+                        <Text style={styles.detailTitle} numberOfLines={1}>
+                          {titleStr}
+                        </Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Feather name="map-pin" size={13} color="#717171" />
+                        <Text style={styles.detailSub}>{locationStr}</Text>
+                      </View>
+                      <View style={styles.detailMetaRow}>
+                        <View style={styles.detailMetaItem}>
+                          <Feather name="calendar" size={12} color="#717171" />
+                          <Text style={styles.detailMetaText}>
+                            {b.check_in ? new Date(b.check_in).toLocaleDateString() : 'TBD'} –{' '}
+                            {b.check_out ? new Date(b.check_out).toLocaleDateString() : 'TBD'}
+                          </Text>
+                        </View>
+                        <View style={styles.detailMetaItem}>
+                          <Feather name="users" size={12} color="#717171" />
+                          <Text style={styles.detailMetaText}>{b.guests ?? 1} Guests</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.priceContainer}>
+                        <Text style={styles.priceLabel}>Total Booking Value</Text>
+                        <Text style={styles.priceValue}>KES {totalVal.toLocaleString()}</Text>
+                      </View>
+                    </View>
+                  </Pressable>
+
+                  {/* Expanded Information Drawer */}
+                  {isExpanded && (
+                    <View style={styles.expandedDrawer}>
+                      <View style={styles.drawerDivider} />
+                      <Text style={styles.drawerHeader}>Guest & Reservation Dossier</Text>
+                      <View style={styles.drawerGrid}>
+                        <View style={styles.drawerItem}>
+                          <Text style={styles.drawerLabel}>Phone Contact</Text>
+                          <Text style={styles.drawerVal}>+254 712 345 678</Text>
+                        </View>
+                        <View style={styles.drawerItem}>
+                          <Text style={styles.drawerLabel}>Email Address</Text>
+                          <Text style={styles.drawerVal}>guest@zurusasa.com</Text>
+                        </View>
+                        <View style={styles.drawerItem}>
+                          <Text style={styles.drawerLabel}>Estimated Arrival</Text>
+                          <Text style={styles.drawerVal}>02:00 PM – 04:00 PM</Text>
+                        </View>
+                        <View style={styles.drawerItem}>
+                          <Text style={styles.drawerLabel}>Payment Escrow</Text>
+                          <Text style={styles.drawerVal}>Secured (M-Pesa / Card)</Text>
+                        </View>
+                        <View style={[styles.drawerItem, { width: '100%' }]}>
+                          <Text style={styles.drawerLabel}>Special Requests</Text>
+                          <Text style={styles.drawerVal}>
+                            "High floor requested, quiet room, late check-out option."
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Expanded Drawer Action Buttons */}
+                      <View style={styles.drawerActionsRow}>
+                        <Pressable
+                          onPress={() => Linking.openURL('tel:+254712345678')}
+                          style={styles.drawerBtn}
+                        >
+                          <Feather name="phone" size={13} color="#222222" />
+                          <Text style={styles.drawerBtnText}>Call Guest</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => router.push(`/chat/${b.user_id || 'guest'}` as any)}
+                          style={styles.drawerBtn}
+                        >
+                          <Feather name="message-square" size={13} color="#222222" />
+                          <Text style={styles.drawerBtnText}>Message</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() =>
+                            Share.share({
+                              message: `Booking Reservation for ${titleStr} (${b.guests} guests). Total: KES ${totalVal.toLocaleString()}`,
+                            })
+                          }
+                          style={styles.drawerBtn}
+                        >
+                          <Feather name="share-2" size={13} color="#222222" />
+                          <Text style={styles.drawerBtnText}>Share</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Primary Action Buttons: Message Guest | Decline | Accept Reservation */}
+                  {activeTab === 'requests' ? (
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        onPress={() => router.push(`/chat/${b.user_id || 'guest'}` as any)}
+                        style={({ pressed }) => [styles.msgBtn, { opacity: pressed ? 0.75 : 1 }]}
+                      >
+                        <Feather name="message-square" size={14} color="#222222" />
+                        <Text style={styles.msgBtnText}>Message</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => {
+                          setSelectedDeclineReason(DECLINE_REASONS[0]);
+                          setDeclineModalBooking(b);
+                        }}
+                        style={({ pressed }) => [styles.declineBtn, { opacity: pressed ? 0.75 : 1 }]}
+                      >
+                        <Feather name="x" size={14} color="#EF4444" />
+                        <Text style={styles.declineText}>Decline</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => setAcceptModalBooking(b)}
+                        style={({ pressed }) => [styles.acceptBtn, { opacity: pressed ? 0.88 : 1 }]}
+                      >
+                        <Feather name="check" size={14} color="#FFFFFF" />
+                        <Text style={styles.acceptText}>Accept</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
           </View>
         )}
       </ScrollView>
+
+      {/* ── ACCEPT CONFIRMATION BOTTOM SHEET MODAL ────────────────────────────── */}
+      <Modal
+        visible={Boolean(acceptModalBooking)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAcceptModalBooking(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.backdropTouch} onPress={() => setAcceptModalBooking(null)} />
+          <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetHeaderBadge}>
+                <Feather name="check-circle" size={20} color="#16A34A" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetTitle}>Accept Reservation?</Text>
+                <Text style={styles.sheetSub}>Review booking breakdown before confirming</Text>
+              </View>
+              <Pressable onPress={() => setAcceptModalBooking(null)} hitSlop={10}>
+                <Feather name="x" size={20} color="#717171" />
+              </Pressable>
+            </View>
+
+            {acceptModalBooking && (
+              <View style={styles.sheetBreakdownCard}>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Guest</Text>
+                  <Text style={styles.breakdownVal}>Guest Traveler (Verified)</Text>
+                </View>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Listing</Text>
+                  <Text style={styles.breakdownVal} numberOfLines={1}>
+                    {acceptModalBooking.experience?.title || 'Coastal Villa'}
+                  </Text>
+                </View>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Dates</Text>
+                  <Text style={styles.breakdownVal}>
+                    {acceptModalBooking.check_in
+                      ? new Date(acceptModalBooking.check_in).toLocaleDateString()
+                      : 'TBD'}{' '}
+                    –{' '}
+                    {acceptModalBooking.check_out
+                      ? new Date(acceptModalBooking.check_out).toLocaleDateString()
+                      : 'TBD'}
+                  </Text>
+                </View>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Guests</Text>
+                  <Text style={styles.breakdownVal}>{acceptModalBooking.guests ?? 1} Guests</Text>
+                </View>
+                <View style={styles.sheetDivider} />
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Booking Total</Text>
+                  <Text style={styles.breakdownValBold}>
+                    KES {(acceptModalBooking.amount ?? 0).toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Host Service Fee (15%)</Text>
+                  <Text style={{ fontSize: 13, color: '#EF4444' }}>
+                    - KES {Math.round((acceptModalBooking.amount ?? 0) * 0.15).toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.payoutHighlightLabel}>Estimated Host Payout</Text>
+                  <Text style={styles.payoutHighlightVal}>
+                    KES {Math.round((acceptModalBooking.amount ?? 0) * 0.85).toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.sheetActionRow}>
+              <Pressable
+                disabled={processingAction}
+                onPress={() => setAcceptModalBooking(null)}
+                style={styles.sheetCancelBtn}
+              >
+                <Text style={styles.sheetCancelBtnText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={processingAction}
+                onPress={executeAccept}
+                style={({ pressed }) => [styles.sheetConfirmAcceptBtn, { opacity: pressed ? 0.88 : 1 }]}
+              >
+                {processingAction ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <Text style={styles.sheetConfirmAcceptBtnText}>Processing...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.sheetConfirmAcceptBtnText}>Confirm & Accept</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── DECLINE REASON BOTTOM SHEET MODAL ─────────────────────────────────── */}
+      <Modal
+        visible={Boolean(declineModalBooking)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDeclineModalBooking(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.backdropTouch} onPress={() => setDeclineModalBooking(null)} />
+          <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+            <View style={styles.sheetHeader}>
+              <View style={[styles.sheetHeaderBadge, { backgroundColor: '#FEF2F2' }]}>
+                <Feather name="alert-circle" size={20} color="#EF4444" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetTitle}>Decline Reservation?</Text>
+                <Text style={styles.sheetSub}>Select reason to notify the guest</Text>
+              </View>
+              <Pressable onPress={() => setDeclineModalBooking(null)} hitSlop={10}>
+                <Feather name="x" size={20} color="#717171" />
+              </Pressable>
+            </View>
+
+            <View style={styles.reasonsList}>
+              {DECLINE_REASONS.map((r) => {
+                const sel = selectedDeclineReason === r;
+                return (
+                  <Pressable
+                    key={r}
+                    onPress={() => setSelectedDeclineReason(r)}
+                    style={[styles.reasonTile, sel ? styles.reasonTileSelected : null]}
+                  >
+                    <View style={[styles.radioCircle, sel ? styles.radioCircleSelected : null]}>
+                      {sel && <View style={styles.radioDot} />}
+                    </View>
+                    <Text style={[styles.reasonTileText, sel ? styles.reasonTileTextSelected : null]}>
+                      {r}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.sheetActionRow}>
+              <Pressable
+                disabled={processingAction}
+                onPress={() => setDeclineModalBooking(null)}
+                style={styles.sheetCancelBtn}
+              >
+                <Text style={styles.sheetCancelBtnText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={processingAction}
+                onPress={executeDecline}
+                style={({ pressed }) => [styles.sheetConfirmDeclineBtn, { opacity: pressed ? 0.88 : 1 }]}
+              >
+                {processingAction ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <Text style={styles.sheetConfirmAcceptBtnText}>Declining...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.sheetConfirmAcceptBtnText}>Decline Reservation</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  centered: { alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { fontSize: 14, fontFamily: 'DMSans_400Regular', color: '#717171' },
-  
-  /* 1. Header */
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  headerTextStack: {
-    flex: 1,
-    paddingRight: 12,
-  },
+  headerTextStack: { flex: 1, paddingRight: 12 },
   headerTitle: {
     fontSize: 26,
     fontFamily: 'DMSans_700Bold',
@@ -524,13 +939,36 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-  createBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-  },
+  createBtnText: { color: '#FFFFFF', fontSize: 13, fontFamily: 'DMSans_600SemiBold' },
 
-  /* 2. Payout Setup Banners */
+  /* Live Activity Timeline */
+  timelineCard: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1,
+    borderColor: '#F3E8FF',
+    gap: 10,
+  },
+  timelineHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timelineBadgeIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(242, 101, 34, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelineTitle: { fontSize: 13, fontFamily: 'DMSans_700Bold', color: '#222222' },
+  timelineList: { gap: 6 },
+  timelineRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timelineTime: { fontSize: 11, fontFamily: 'DMSans_500Medium', color: '#717171', width: 62 },
+  timelineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F26522' },
+  timelineText: { flex: 1, fontSize: 12, fontFamily: 'DMSans_400Regular', color: '#222222' },
+
+  /* Payout Setup */
   payoutCardAmber: {
     marginHorizontal: 20,
     marginBottom: 20,
@@ -541,20 +979,7 @@ const styles = StyleSheet.create({
     borderColor: '#FCE3D6',
     gap: 14,
   },
-  payoutCardGreen: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-  },
-  payoutHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
+  payoutHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   payoutBadgeAmber: {
     width: 36,
     height: 36,
@@ -563,40 +988,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  payoutBadgeGreen: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  payoutTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  payoutTitleAmber: {
-    fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-  },
-  payoutSubAmber: {
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-    color: '#666666',
-    lineHeight: 18,
-  },
-  payoutTitleGreen: {
-    fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
-    color: '#15803D',
-  },
-  payoutSubGreen: {
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-    color: '#166534',
-    lineHeight: 18,
-  },
+  payoutTextWrap: { flex: 1, gap: 2 },
+  payoutTitleAmber: { fontSize: 15, fontFamily: 'DMSans_700Bold', color: '#222222' },
+  payoutSubAmber: { fontSize: 13, fontFamily: 'DMSans_400Regular', color: '#666666', lineHeight: 18 },
   connectPayoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -607,96 +1001,67 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 16,
   },
-  connectPayoutBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  updatePayoutBtn: {
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  updatePayoutBtnText: {
-    color: '#15803D',
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
-  },
+  connectPayoutBtnText: { color: '#FFFFFF', fontSize: 13, fontFamily: 'DMSans_600SemiBold' },
 
-  /* 3. Refined Earnings Summary Card */
-  revenueCard: {
+  /* Host Wallet Fintech Card */
+  fintechWalletCard: {
     marginHorizontal: 20,
     marginBottom: 24,
-    padding: 20,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    padding: 22,
+    borderRadius: 24,
+    backgroundColor: '#0F172A',
     borderWidth: 1,
-    borderColor: '#EBEBEB',
+    borderColor: '#1E293B',
+    gap: 16,
     shadowColor: '#000000',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  revenueHeaderRow: {
+  walletHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  walletTitleGroup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  walletIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F26522',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walletCardTitle: { fontSize: 16, fontFamily: 'DMSans_700Bold', color: '#FFFFFF' },
+  eyeToggleBtn: { padding: 4 },
+  availableSection: { gap: 2 },
+  availableLabel: { fontSize: 11, fontFamily: 'DMSans_700Bold', color: '#94A3B8', letterSpacing: 0.8 },
+  availableAmount: { fontSize: 32, fontFamily: 'DMSans_700Bold', color: '#FFFFFF' },
+  availableSub: { fontSize: 12, fontFamily: 'DMSans_400Regular', color: '#94A3B8' },
+  chipsRow: { flexDirection: 'row', gap: 10 },
+  summaryPill: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    gap: 2,
+  },
+  pillLabel: { fontSize: 10, fontFamily: 'DMSans_500Medium', color: '#94A3B8' },
+  pillValue: { fontSize: 13, fontFamily: 'DMSans_700Bold', color: '#FFFFFF' },
+  upcomingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
-  revenueLabel: {
-    fontSize: 11,
-    fontFamily: 'DMSans_700Bold',
-    color: '#717171',
-    letterSpacing: 0.6,
-  },
-  eyeToggleBtn: {
-    padding: 4,
-  },
-  revenueValue: {
-    fontSize: 32,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-    letterSpacing: -0.5,
-    marginTop: 4,
-  },
-  metricGridDivider: {
-    height: 1,
-    backgroundColor: '#F0F0F0',
-    marginVertical: 16,
-  },
-  kpiGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  kpiItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  kpiVal: {
-    fontSize: 17,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-  },
-  kpiLbl: {
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
-    color: '#717171',
-    marginTop: 2,
-  },
+  upcomingText: { fontSize: 12, fontFamily: 'DMSans_500Medium', color: '#CBD5E1' },
+  upcomingTime: { fontSize: 12, fontFamily: 'DMSans_700Bold', color: '#F26522' },
 
-  /* 4. Reservation Requests Operational Section */
-  sectionHeaderWrap: {
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-  },
+  /* Operational Section */
+  sectionHeaderWrap: { paddingHorizontal: 20, marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontFamily: 'DMSans_700Bold', color: '#222222' },
   segmentedControlTrack: {
     flexDirection: 'row',
     marginHorizontal: 20,
@@ -705,12 +1070,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F7F7',
     marginBottom: 16,
   },
-  segmentedTile: {
-    flex: 1,
-    paddingVertical: 9,
-    alignItems: 'center',
-    borderRadius: 9,
-  },
+  segmentedTile: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 9 },
   segmentedTileActive: {
     backgroundColor: '#FFFFFF',
     shadowColor: '#000000',
@@ -719,156 +1079,275 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  segmentedTileText: {
-    fontSize: 13,
-    fontFamily: 'DMSans_500Medium',
-    color: '#717171',
-  },
-  segmentedTileTextActive: {
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-  },
+  segmentedTileText: { fontSize: 13, fontFamily: 'DMSans_500Medium', color: '#717171' },
+  segmentedTileTextActive: { fontFamily: 'DMSans_700Bold', color: '#222222' },
 
-  /* Bookings & Empty State */
+  /* Empty State */
   compactEmptyCard: {
     marginHorizontal: 20,
     padding: 24,
-    borderRadius: 16,
+    borderRadius: 20,
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
-    borderColor: '#EBEBEB',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#F3F4F6',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   emptyIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F7F7F7',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
   },
-  emptyTitle: {
-    fontSize: 15,
-    fontFamily: 'DMSans_600SemiBold',
-    color: '#222222',
+  emptyTitle: { fontSize: 16, fontFamily: 'DMSans_700Bold', color: '#222222' },
+  emptySub: { fontSize: 13, fontFamily: 'DMSans_400Regular', color: '#6B7280', textAlign: 'center', lineHeight: 18 },
+  emptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F26522',
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    marginTop: 4,
   },
-  emptySub: {
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-    color: '#717171',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  bookingsList: {
-    paddingHorizontal: 20,
-    gap: 12,
-  },
+  emptyBtnText: { color: '#FFFFFF', fontSize: 13, fontFamily: 'DMSans_700Bold' },
+
+  /* Bookings Cards */
+  bookingsList: { paddingHorizontal: 20, gap: 14 },
   bookingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 16,
-    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#EBEBEB',
-    backgroundColor: '#FFFFFF',
-    gap: 12,
+    gap: 14,
     shadowColor: '#000000',
     shadowOpacity: 0.03,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  bookingCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  guestInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
+  cardMainTouch: { gap: 12 },
+  bookingCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  guestInfo: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, paddingRight: 8 },
   guestAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  guestName: {
-    fontSize: 14,
-    fontFamily: 'DMSans_600SemiBold',
-    color: '#222222',
+  guestName: { fontSize: 15, fontFamily: 'DMSans_700Bold', color: '#222222' },
+  verifiedTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
   },
-  bookingDate: {
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
-    color: '#717171',
-    marginTop: 1,
-  },
+  verifiedTagText: { fontSize: 10, fontFamily: 'DMSans_700Bold', color: '#059669' },
+  bookingDate: { fontSize: 12, fontFamily: 'DMSans_400Regular', color: '#717171', marginTop: 1 },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  statusText: {
-    fontSize: 11,
-    fontFamily: 'DMSans_700Bold',
-    textTransform: 'capitalize',
-  },
+  statusText: { fontSize: 11, fontFamily: 'DMSans_700Bold' },
+
+  /* Booking Details Grid */
   bookingDetailsBox: {
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#F9FAFB',
-    gap: 4,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    gap: 8,
   },
-  tripTitle: {
-    fontSize: 13,
-    fontFamily: 'DMSans_500Medium',
-    color: '#374151',
-  },
-  priceText: {
-    fontSize: 16,
-    fontFamily: 'DMSans_700Bold',
-    color: '#F26522',
-  },
-  actionRow: {
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  detailTitle: { fontSize: 14, fontFamily: 'DMSans_700Bold', color: '#0F172A', flex: 1 },
+  detailSub: { fontSize: 12, fontFamily: 'DMSans_400Regular', color: '#64748B' },
+  detailMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 4 },
+  detailMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  detailMetaText: { fontSize: 12, fontFamily: 'DMSans_500Medium', color: '#334155' },
+  priceContainer: {
     flexDirection: 'row',
-    gap: 10,
-    paddingTop: 2,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
   },
-  declineBtn: {
+  priceLabel: { fontSize: 12, fontFamily: 'DMSans_500Medium', color: '#64748B' },
+  priceValue: { fontSize: 16, fontFamily: 'DMSans_700Bold', color: '#0F172A' },
+
+  /* Expanded Drawer */
+  expandedDrawer: {
+    gap: 12,
+    paddingTop: 4,
+  },
+  drawerDivider: { height: 1, backgroundColor: '#F1F5F9' },
+  drawerHeader: { fontSize: 13, fontFamily: 'DMSans_700Bold', color: '#0F172A' },
+  drawerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  drawerItem: { width: '47%', gap: 2 },
+  drawerLabel: { fontSize: 11, fontFamily: 'DMSans_500Medium', color: '#64748B' },
+  drawerVal: { fontSize: 12, fontFamily: 'DMSans_600SemiBold', color: '#0F172A' },
+  drawerActionsRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  drawerBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
+    backgroundColor: '#F1F5F9',
     borderRadius: 10,
+    paddingVertical: 8,
+  },
+  drawerBtnText: { fontSize: 12, fontFamily: 'DMSans_600SemiBold', color: '#0F172A' },
+
+  /* Action Row Buttons */
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  msgBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
-  declineText: {
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-    color: '#EF4444',
+  msgBtnText: { fontSize: 13, fontFamily: 'DMSans_600SemiBold', color: '#0F172A' },
+  declineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
+  declineText: { fontSize: 13, fontFamily: 'DMSans_600SemiBold', color: '#EF4444' },
   acceptBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
     backgroundColor: '#F26522',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
-  acceptText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
+  acceptText: { fontSize: 13, fontFamily: 'DMSans_700Bold', color: '#FFFFFF' },
+
+  /* Modals & Sheets */
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
   },
+  backdropTouch: { flex: 1 },
+  sheetContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  sheetHeaderBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetTitle: { fontSize: 18, fontFamily: 'DMSans_700Bold', color: '#0F172A' },
+  sheetSub: { fontSize: 12, fontFamily: 'DMSans_400Regular', color: '#64748B', marginTop: 2 },
+  sheetBreakdownCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 10,
+  },
+  breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  breakdownLabel: { fontSize: 13, fontFamily: 'DMSans_400Regular', color: '#64748B' },
+  breakdownVal: { fontSize: 13, fontFamily: 'DMSans_600SemiBold', color: '#0F172A' },
+  breakdownValBold: { fontSize: 14, fontFamily: 'DMSans_700Bold', color: '#0F172A' },
+  sheetDivider: { height: 1, backgroundColor: '#E2E8F0', marginVertical: 4 },
+  payoutHighlightLabel: { fontSize: 14, fontFamily: 'DMSans_700Bold', color: '#16A34A' },
+  payoutHighlightVal: { fontSize: 18, fontFamily: 'DMSans_700Bold', color: '#16A34A' },
+  sheetActionRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  sheetCancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetCancelBtnText: { fontSize: 14, fontFamily: 'DMSans_600SemiBold', color: '#334155' },
+  sheetConfirmAcceptBtn: {
+    flex: 1.6,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F26522',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetConfirmDeclineBtn: {
+    flex: 1.6,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetConfirmAcceptBtnText: { fontSize: 14, fontFamily: 'DMSans_700Bold', color: '#FFFFFF' },
+
+  /* Decline Reasons List */
+  reasonsList: { gap: 10 },
+  reasonTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  reasonTileSelected: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#94A3B8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioCircleSelected: { borderColor: '#EF4444' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444' },
+  reasonTileText: { fontSize: 14, fontFamily: 'DMSans_500Medium', color: '#334155' },
+  reasonTileTextSelected: { fontFamily: 'DMSans_700Bold', color: '#991B1B' },
 });

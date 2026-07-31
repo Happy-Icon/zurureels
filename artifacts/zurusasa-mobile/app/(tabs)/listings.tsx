@@ -2,12 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -17,6 +19,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { supabase, type ReelRow } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { ReelCard } from '@/components/ReelCard';
+import { Skeleton } from '@/components/Skeleton';
 
 interface HostReelItem extends ReelRow {
   title?: string | null;
@@ -31,6 +35,7 @@ export default function HostListingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { height: winHeight } = useWindowDimensions();
   const { user } = useAuth();
   const { showAlert } = useCustomAlert();
 
@@ -38,6 +43,7 @@ export default function HostListingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'published' | 'drafts'>('published');
   const [reels, setReels] = useState<HostReelItem[]>([]);
+  const [selectedPreviewReel, setSelectedPreviewReel] = useState<HostReelItem | null>(null);
 
   const topPad = Platform.OS === 'web' ? 60 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 100 : 90;
@@ -131,7 +137,10 @@ export default function HostListingsScreen() {
 
     return (
       <View style={styles.card}>
-        <View style={styles.thumbnailWrap}>
+        <Pressable
+          onPress={() => setSelectedPreviewReel(item)}
+          style={({ pressed }) => [styles.thumbnailWrap, { opacity: pressed ? 0.88 : 1 }]}
+        >
           {item.thumbnail_url ? (
             <Image source={{ uri: item.thumbnail_url }} style={styles.thumbnail} contentFit="cover" />
           ) : (
@@ -140,27 +149,33 @@ export default function HostListingsScreen() {
             </View>
           )}
 
+          <View style={styles.playBadgeCircle}>
+            <Feather name="play" size={14} color="#FFFFFF" />
+          </View>
+
           {isBookedOut ? (
             <View style={styles.bookedOverlay}>
               <Text style={styles.bookedTagText}>FULLY BOOKED</Text>
             </View>
           ) : null}
-        </View>
+        </Pressable>
 
         <View style={styles.cardContent}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.titleArea}>
-              <Text style={styles.title} numberOfLines={1}>
-                {title}
-              </Text>
-              <View style={styles.locationRow}>
-                <Feather name="map-pin" size={12} color="#717171" />
-                <Text style={styles.locationText} numberOfLines={1}>
-                  {location}
+          <Pressable onPress={() => setSelectedPreviewReel(item)}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.titleArea}>
+                <Text style={styles.title} numberOfLines={1}>
+                  {title}
                 </Text>
+                <View style={styles.locationRow}>
+                  <Feather name="map-pin" size={12} color="#717171" />
+                  <Text style={styles.locationText} numberOfLines={1}>
+                    {location}
+                  </Text>
+                </View>
               </View>
             </View>
-          </View>
+          </Pressable>
 
           <View style={styles.metaRow}>
             {item.category ? (
@@ -212,9 +227,39 @@ export default function HostListingsScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF' }]}>
-        <ActivityIndicator size="large" color="#F26522" />
-        <Text style={styles.loadingText}>Loading host listings…</Text>
+      <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+        {/* Header Bar Skeleton */}
+        <View style={[styles.header, { paddingTop: topPad }]}>
+          <View style={styles.headerTextStack}>
+            <Skeleton style={{ width: 160, height: 26, borderRadius: 6 }} />
+            <Skeleton style={{ width: 220, height: 14, borderRadius: 4, marginTop: 6 }} />
+          </View>
+          <Skeleton style={{ width: 84, height: 38, borderRadius: 20 }} />
+        </View>
+
+        {/* Segmented Control Track Skeleton */}
+        <View style={styles.segmentedControlTrack}>
+          <Skeleton style={{ flex: 1, height: 36, borderRadius: 9, marginHorizontal: 2 }} />
+          <Skeleton style={{ flex: 1, height: 36, borderRadius: 9, marginHorizontal: 2 }} />
+        </View>
+
+        {/* Listings Cards Skeletons */}
+        <View style={{ paddingHorizontal: 20, gap: 14 }}>
+          {[1, 2, 3].map((i) => (
+            <View key={i} style={styles.card}>
+              <Skeleton style={{ width: 100, height: 100, borderRadius: 12 }} />
+              <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
+                <Skeleton style={{ width: '80%', height: 18, borderRadius: 4 }} />
+                <Skeleton style={{ width: '55%', height: 14, borderRadius: 4 }} />
+                <Skeleton style={{ width: '40%', height: 14, borderRadius: 4 }} />
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                  <Skeleton style={{ width: 70, height: 26, borderRadius: 6 }} />
+                  <Skeleton style={{ width: 60, height: 26, borderRadius: 6 }} />
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
       </View>
     );
   }
@@ -311,6 +356,37 @@ export default function HostListingsScreen() {
           </View>
         }
       />
+
+      {/* Reel Preview Modal */}
+      <Modal
+        visible={Boolean(selectedPreviewReel)}
+        animationType="slide"
+        onRequestClose={() => setSelectedPreviewReel(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: '#000000' }}>
+          <Pressable
+            onPress={() => setSelectedPreviewReel(null)}
+            style={{
+              position: 'absolute',
+              top: 50,
+              left: 20,
+              zIndex: 100,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            hitSlop={10}
+          >
+            <Feather name="x" size={24} color="#FFFFFF" />
+          </Pressable>
+          {selectedPreviewReel ? (
+            <ReelCard reel={selectedPreviewReel} isActive={true} height={winHeight} />
+          ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -422,6 +498,17 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: '100%',
     height: '100%',
+  },
+  playBadgeCircle: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   placeholderThumb: {
     width: '100%',

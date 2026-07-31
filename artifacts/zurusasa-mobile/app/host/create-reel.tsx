@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -17,6 +19,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { notificationService } from '@/services/notificationService';
 
 const CATEGORIES = [
   { label: 'Stays & Villas', value: 'stays' },
@@ -34,6 +37,7 @@ export default function CreateReelScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { showAlert } = useCustomAlert();
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const [category, setCategory] = useState('stays');
   const [title, setTitle] = useState('');
@@ -46,6 +50,7 @@ export default function CreateReelScreen() {
   const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatusText, setUploadStatusText] = useState('');
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 16;
@@ -85,6 +90,8 @@ export default function CreateReelScreen() {
   };
 
   const handleSubmit = async () => {
+    Keyboard.dismiss();
+
     if (!user) {
       showAlert({
         title: 'Sign In Required',
@@ -110,7 +117,8 @@ export default function CreateReelScreen() {
     }
 
     setUploading(true);
-    setUploadProgress(15);
+    setUploadProgress(20);
+    setUploadStatusText('Uploading media assets...');
 
     try {
       // 1. Create Experience record
@@ -131,16 +139,21 @@ export default function CreateReelScreen() {
         .single();
 
       if (expError) throw expError;
-      setUploadProgress(50);
+      setUploadProgress(60);
 
-      // 2. Video Upload Link
-      const finalVideoUrl = videoUri || 'https://assets.mixkit.co/videos/preview/mixkit-beach-front-resort-with-palm-trees-41484-large.mp4';
-      const finalThumbUrl = thumbnailUri || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800';
+      // 2. Video & Thumbnail URL Handling
+      const finalVideoUrl =
+        videoUri ||
+        'https://assets.mixkit.co/videos/preview/mixkit-beach-front-resort-with-palm-trees-41484-large.mp4';
+      const finalThumbUrl =
+        thumbnailUri ||
+        'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800';
 
-      setUploadProgress(80);
+      setUploadProgress(85);
+      setUploadStatusText('Processing your reel...');
 
-      // 3. Create Reel Record
-      const { error: reelError } = await supabase
+      // 3. Create Reel Record (initially 'processing')
+      const { data: newReel, error: reelError } = await supabase
         .from('reels')
         .insert({
           user_id: user.id,
@@ -149,8 +162,10 @@ export default function CreateReelScreen() {
           video_url: finalVideoUrl,
           thumbnail_url: finalThumbUrl,
           duration: 20,
-          status: 'published',
-        });
+          status: 'processing',
+        })
+        .select()
+        .single();
 
       if (reelError) throw reelError;
 
@@ -168,13 +183,35 @@ export default function CreateReelScreen() {
       }
 
       setUploadProgress(100);
+
+      // 5. Asynchronously publish reel and trigger live notification
+      setTimeout(async () => {
+        try {
+          if (newReel?.id) {
+            await supabase
+              .from('reels')
+              .update({ status: 'published' })
+              .eq('id', newReel.id);
+          }
+          await notificationService.createNotification({
+            userId: user.id,
+            type: 'booking_confirmed',
+            title: '🎬 Your reel is now live.',
+            message: `"${title.trim()}" has finished processing and is now published on Pulse & ZuruFlow!`,
+            metadata: { action_type: 'discover', action_id: newReel?.id },
+          });
+        } catch (asyncErr) {
+          console.error('Async reel publishing error:', asyncErr);
+        }
+      }, 3000);
+
       showAlert({
-        title: 'Reel Published! 🎉',
-        message: 'Your story is now live for guests to discover.',
+        title: 'Processing your reel...',
+        message: 'Your reel is being formatted and will automatically publish to Pulse shortly. You will receive a notification when it is live.',
         icon: 'check-circle',
         buttons: [
           {
-            text: 'Done',
+            text: 'View My Listings',
             onPress: () => router.replace('/listings'),
           },
         ],
@@ -188,222 +225,244 @@ export default function CreateReelScreen() {
       });
     } finally {
       setUploading(false);
+      setUploadStatusText('');
     }
   };
 
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
-      {/* 1. Header Bar */}
-      <View style={[styles.header, { paddingTop: topPad }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
-          hitSlop={10}
-        >
-          <Feather name="arrow-left" size={22} color="#222222" />
-        </Pressable>
-        <Text style={styles.headerTitle}>Create Listing Reel</Text>
-        <View style={{ width: 38 }} />
-      </View>
-
-      {/* Upload Progress Bar */}
-      {uploading ? (
-        <View style={styles.progressBarTrack}>
-          <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
+    <KeyboardAvoidingView
+      style={styles.fill}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+        {/* 1. Header Bar */}
+        <View style={[styles.header, { paddingTop: topPad }]}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
+            hitSlop={10}
+          >
+            <Feather name="arrow-left" size={22} color="#222222" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Create Listing Reel</Text>
+          <View style={{ width: 38 }} />
         </View>
-      ) : null}
 
-      <ScrollView
-        style={styles.fill}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 110, gap: 20 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Step 1: Media Action Cards (Video & Cover) */}
-        <View style={styles.sectionBlock}>
-          <Text style={styles.sectionHeading}>1. Media Assets</Text>
-          <View style={styles.mediaRow}>
-            {/* Pick Video Action Card */}
-            <Pressable
-              onPress={pickVideo}
-              style={({ pressed }) => [
-                styles.mediaActionCard,
-                videoUri ? styles.mediaActionCardSelected : null,
-                { opacity: pressed ? 0.85 : 1 },
-              ]}
-            >
-              <View style={[styles.mediaBadgeCircle, videoUri ? styles.mediaBadgeActive : null]}>
-                <Feather name={videoUri ? 'check' : 'video'} size={20} color={videoUri ? '#F26522' : '#717171'} />
-              </View>
-              <Text style={styles.mediaCardTitle}>
-                {videoUri ? 'Video Attached' : 'Upload Reel Video'}
-              </Text>
-              <Text style={styles.mediaCardSub}>
-                {videoUri ? 'Tap to change video' : 'MP4 format · Max 60s'}
-              </Text>
-            </Pressable>
-
-            {/* Pick Cover Action Card */}
-            <Pressable
-              onPress={pickThumbnail}
-              style={({ pressed }) => [
-                styles.mediaActionCard,
-                thumbnailUri ? styles.mediaActionCardSelected : null,
-                { opacity: pressed ? 0.85 : 1 },
-              ]}
-            >
-              {thumbnailUri ? (
-                <View style={styles.thumbPreviewWrap}>
-                  <Image source={{ uri: thumbnailUri }} style={styles.thumbPreviewImage} contentFit="cover" />
-                  <View style={styles.thumbChangeOverlay}>
-                    <Feather name="camera" size={14} color="#FFFFFF" />
-                    <Text style={styles.thumbChangeText}>Change</Text>
-                  </View>
-                </View>
-              ) : (
-                <>
-                  <View style={styles.mediaBadgeCircle}>
-                    <Feather name="image" size={20} color="#717171" />
-                  </View>
-                  <Text style={styles.mediaCardTitle}>Pick Cover</Text>
-                  <Text style={styles.mediaCardSub}>9:16 portrait image</Text>
-                </>
-              )}
-            </Pressable>
+        {/* Upload Progress Bar */}
+        {uploading ? (
+          <View style={styles.progressBarTrack}>
+            <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
           </View>
-        </View>
+        ) : null}
 
-        <View style={styles.divider} />
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.fill}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140, gap: 20 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets={true}
+        >
+          {/* Step 1: Media Action Cards (Video & Cover) */}
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeading}>1. Media Assets</Text>
+            <View style={styles.mediaRow}>
+              {/* Pick Video Action Card */}
+              <Pressable
+                onPress={pickVideo}
+                style={({ pressed }) => [
+                  styles.mediaActionCard,
+                  videoUri ? styles.mediaActionCardSelected : null,
+                  { opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                <View style={[styles.mediaBadgeCircle, videoUri ? styles.mediaBadgeActive : null]}>
+                  <Feather name={videoUri ? 'check' : 'video'} size={20} color={videoUri ? '#F26522' : '#717171'} />
+                </View>
+                <Text style={styles.mediaCardTitle}>
+                  {videoUri ? 'Video Attached' : 'Upload Reel Video'}
+                </Text>
+                <Text style={styles.mediaCardSub}>
+                  {videoUri ? 'Tap to change video' : 'MP4 format · Max 60s'}
+                </Text>
+              </Pressable>
 
-        {/* Step 2: Experience Details */}
-        <View style={styles.sectionBlock}>
-          <Text style={styles.sectionHeading}>2. Experience Category</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-            {CATEGORIES.map((c) => {
-              const selected = category === c.value;
-              return (
-                <Pressable
-                  key={c.value}
-                  onPress={() => {
-                    setCategory(c.value);
-                  }}
-                  style={[
-                    styles.categoryChip,
-                    selected ? styles.categoryChipSelected : null,
-                  ]}
-                >
-                  <Text
+              {/* Pick Cover Action Card */}
+              <Pressable
+                onPress={pickThumbnail}
+                style={({ pressed }) => [
+                  styles.mediaActionCard,
+                  thumbnailUri ? styles.mediaActionCardSelected : null,
+                  { opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                {thumbnailUri ? (
+                  <View style={styles.thumbPreviewWrap}>
+                    <Image source={{ uri: thumbnailUri }} style={styles.thumbPreviewImage} contentFit="cover" />
+                    <View style={styles.thumbChangeOverlay}>
+                      <Feather name="camera" size={14} color="#FFFFFF" />
+                      <Text style={styles.thumbChangeText}>Change</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.mediaBadgeCircle}>
+                      <Feather name="image" size={20} color="#717171" />
+                    </View>
+                    <Text style={styles.mediaCardTitle}>Pick Cover</Text>
+                    <Text style={styles.mediaCardSub}>9:16 portrait image</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Step 2: Experience Details */}
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeading}>2. Experience Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {CATEGORIES.map((c) => {
+                const selected = category === c.value;
+                return (
+                  <Pressable
+                    key={c.value}
+                    onPress={() => setCategory(c.value)}
                     style={[
-                      styles.categoryChipText,
-                      selected ? styles.categoryChipTextSelected : null,
+                      styles.categoryChip,
+                      selected ? styles.categoryChipSelected : null,
                     ]}
                   >
-                    {c.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        selected ? styles.categoryChipTextSelected : null,
+                      ]}
+                    >
+                      {c.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
 
-        {/* Listing Title */}
-        <View style={styles.formGroup}>
-          <Text style={styles.inputLabel}>Listing Title *</Text>
-          <TextInput
-            placeholder="e.g. Diani Sunset Villa & Private Pool"
-            placeholderTextColor="#9CA3AF"
-            value={title}
-            onChangeText={setTitle}
-            style={styles.textInput}
-          />
-        </View>
-
-        {/* Location Selector */}
-        <View style={styles.formGroup}>
-          <Text style={styles.inputLabel}>Location *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-            {LOCATIONS.map((loc) => {
-              const sel = location === loc;
-              return (
-                <Pressable
-                  key={loc}
-                  onPress={() => setLocation(loc)}
-                  style={[
-                    styles.locChip,
-                    sel ? styles.locChipSelected : null,
-                  ]}
-                >
-                  <Text style={[styles.locChipText, sel ? styles.locChipTextSelected : null]}>
-                    {loc}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* Price & Price Unit Row */}
-        <View style={styles.rowTwoCol}>
-          <View style={[styles.formGroup, { flex: 1 }]}>
-            <Text style={styles.inputLabel}>Price (KES) *</Text>
+          {/* Listing Title */}
+          <View style={styles.formGroup}>
+            <Text style={styles.inputLabel}>Listing Title *</Text>
             <TextInput
-              placeholder="e.g. 15000"
+              placeholder="e.g. Diani Sunset Villa & Private Pool"
               placeholderTextColor="#9CA3AF"
-              keyboardType="numeric"
-              value={price}
-              onChangeText={setPrice}
+              value={title}
+              onChangeText={setTitle}
               style={styles.textInput}
+              onFocus={() => {
+                scrollViewRef.current?.scrollTo({ y: 220, animated: true });
+              }}
             />
           </View>
 
-          <View style={[styles.formGroup, { width: 130 }]}>
-            <Text style={styles.inputLabel}>Price Unit</Text>
-            <TextInput
-              placeholder="night / trip"
-              placeholderTextColor="#9CA3AF"
-              value={priceUnit}
-              onChangeText={setPriceUnit}
-              style={styles.textInput}
-            />
+          {/* Location Selector */}
+          <View style={styles.formGroup}>
+            <Text style={styles.inputLabel}>Location *</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {LOCATIONS.map((loc) => {
+                const sel = location === loc;
+                return (
+                  <Pressable
+                    key={loc}
+                    onPress={() => setLocation(loc)}
+                    style={[
+                      styles.locChip,
+                      sel ? styles.locChipSelected : null,
+                    ]}
+                  >
+                    <Text style={[styles.locChipText, sel ? styles.locChipTextSelected : null]}>
+                      {loc}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
-        </View>
 
-        {/* Description */}
-        <View style={styles.formGroup}>
-          <Text style={styles.inputLabel}>Description (Optional)</Text>
-          <TextInput
-            placeholder="Describe what makes this experience special..."
-            placeholderTextColor="#9CA3AF"
-            multiline
-            numberOfLines={3}
-            value={description}
-            onChangeText={setDescription}
-            style={[styles.textInput, styles.textAreaInput]}
-          />
-        </View>
-      </ScrollView>
-
-      {/* Sticky Bottom Dock */}
-      <View style={[styles.bottomDock, { paddingBottom: bottomPad }]}>
-        <Pressable
-          disabled={uploading}
-          onPress={handleSubmit}
-          style={({ pressed }) => [
-            styles.publishBtn,
-            { opacity: pressed || uploading ? 0.88 : 1 },
-          ]}
-        >
-          {uploading ? (
-            <View style={styles.uploadingRow}>
-              <ActivityIndicator color="#FFFFFF" size="small" />
-              <Text style={styles.publishBtnText}>Publishing ({uploadProgress}%)...</Text>
+          {/* Price & Price Unit Row */}
+          <View style={styles.rowTwoCol}>
+            <View style={[styles.formGroup, { flex: 1 }]}>
+              <Text style={styles.inputLabel}>Price (KES) *</Text>
+              <TextInput
+                placeholder="e.g. 15000"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="numeric"
+                value={price}
+                onChangeText={setPrice}
+                style={styles.textInput}
+                onFocus={() => {
+                  scrollViewRef.current?.scrollTo({ y: 340, animated: true });
+                }}
+              />
             </View>
-          ) : (
-            <Text style={styles.publishBtnText}>Publish Reel</Text>
-          )}
-        </Pressable>
+
+            <View style={[styles.formGroup, { width: 130 }]}>
+              <Text style={styles.inputLabel}>Price Unit</Text>
+              <TextInput
+                placeholder="night / trip"
+                placeholderTextColor="#9CA3AF"
+                value={priceUnit}
+                onChangeText={setPriceUnit}
+                style={styles.textInput}
+                onFocus={() => {
+                  scrollViewRef.current?.scrollTo({ y: 340, animated: true });
+                }}
+              />
+            </View>
+          </View>
+
+          {/* Description */}
+          <View style={styles.formGroup}>
+            <Text style={styles.inputLabel}>Description (Optional)</Text>
+            <TextInput
+              placeholder="Describe what makes this experience special..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+              numberOfLines={3}
+              value={description}
+              onChangeText={setDescription}
+              style={[styles.textInput, styles.textAreaInput]}
+              onFocus={() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }}
+            />
+          </View>
+        </ScrollView>
+
+        {/* Sticky Bottom Dock */}
+        <View style={[styles.bottomDock, { paddingBottom: bottomPad }]}>
+          <Pressable
+            disabled={uploading}
+            onPress={handleSubmit}
+            style={({ pressed }) => [
+              styles.publishBtn,
+              { opacity: pressed || uploading ? 0.88 : 1 },
+            ]}
+          >
+            {uploading ? (
+              <View style={styles.uploadingRow}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={styles.publishBtnText}>
+                  {uploadStatusText || `Uploading (${uploadProgress}%)...`}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.publishBtnText}>Publish Reel</Text>
+            )}
+          </Pressable>
+        </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -588,10 +647,6 @@ const styles = StyleSheet.create({
 
   /* Bottom Dock */
   bottomDock: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: '#FFFFFF',
     paddingTop: 12,
     paddingHorizontal: 20,
