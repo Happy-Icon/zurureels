@@ -484,7 +484,12 @@ export default function AuthScreen() {
       if (err) throw err;
       setStep('otp');
     } catch (e: any) {
-      setError(e.message || 'Failed to send code. Please try again.');
+      const msg = e?.message || '';
+      if (/maximum time|Failed to reach hook/i.test(msg)) {
+        setError('SMS gateway response timed out (Supabase Auth Hook). Please try Email OTP or try again.');
+      } else {
+        setError(msg || 'Failed to send code. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -503,7 +508,12 @@ export default function AuthScreen() {
       setShowMoreOptions(false);
       setOtp('');
     } catch (e: any) {
-      setError(e.message || 'Failed to resend code.');
+      const msg = e?.message || '';
+      if (/maximum time|Failed to reach hook/i.test(msg)) {
+        setError('SMS gateway response timed out (Supabase Auth Hook). Please try Email OTP or try again.');
+      } else {
+        setError(msg || 'Failed to resend code.');
+      }
     } finally {
       setLoading(false);
     }

@@ -172,14 +172,19 @@ export default function SecurityCenterScreen() {
 
           <View style={styles.row}>
             <View style={styles.rowTextCol}>
-              <Text style={styles.rowTitle}>Passkeys & Biometrics</Text>
-              <Text style={styles.rowSub}>Log in faster using Face ID, Touch ID, or device PIN</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.rowTitle}>Passkeys & Biometrics</Text>
+                <View style={styles.comingSoonBadge}>
+                  <Text style={styles.comingSoonText}>Coming Soon</Text>
+                </View>
+              </View>
+              <Text style={styles.rowSub}>Face ID, Touch ID, and hardware passkeys will be enabled in an upcoming security release.</Text>
             </View>
             <Switch
-              value={passkeysEnabled}
-              onValueChange={setPasskeysEnabled}
+              value={false}
+              disabled={true}
               trackColor={{ false: '#E2E8F0', true: '#F26522' }}
-              thumbColor="#FFFFFF"
+              thumbColor="#94A3B8"
             />
           </View>
         </View>
@@ -443,7 +448,20 @@ const styles = StyleSheet.create({
   activeBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#047857',
+    color: '#059669',
+  },
+  comingSoonBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  comingSoonText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
   },
   logoutBtn: {
     flexDirection: 'row',

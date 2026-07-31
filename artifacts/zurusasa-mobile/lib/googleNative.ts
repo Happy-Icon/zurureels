@@ -108,11 +108,11 @@ export async function signInWithGoogleNatively(): Promise<NativeGoogleResult> {
     }
     const msg = e instanceof Error ? e.message : String(e);
     if (/DEVELOPER_ERROR|\b10\b/.test(msg)) {
-      // Classic signature mismatch: the APK isn't signed with a certificate
-      // registered on an Android OAuth client in the Google Cloud project.
-      throw new Error(
-        'Google rejected this app build (DEVELOPER_ERROR). Check that the Android OAuth client uses package com.zurureels.app and the SHA-1 of the keystore that signed this APK.',
-      );
+      return {
+        status: 'unavailable',
+        configError: false,
+        reason: 'Native Google Sign-In unavailable (DEVELOPER_ERROR: Android SHA-1 mismatch). Falling back to WebBrowser OAuth.',
+      };
     }
     throw e;
   }
