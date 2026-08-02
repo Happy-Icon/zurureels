@@ -92,25 +92,25 @@ export default function HostWalletScreen() {
       return;
     }
     try {
-      // 1. Read real payout method from profile metadata
-      const meta = (profile?.metadata ?? {}) as Record<string, any>;
-      const existingSub = meta.paystack_subaccount_code;
-      const bankNum = meta.bank_account_number;
-      const bCode = meta.bank_code || '744';
+      // 1. Read real active payout recipient from host_payout_recipients table
+      const { data: recData } = await supabase
+        .from('host_payout_recipients')
+        .select('id, recipient_code, account_name, account_number, bank_code')
+        .eq('host_id', user.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
 
-      if (bankNum || existingSub) {
-        const isMpesa = bCode === '744';
-        const bankName = KENYAN_BANKS.find((b) => b.code === bCode)?.name || 'Bank Account';
-        setPayoutMethods([
-          {
-            id: 'primary-meta',
-            type: isMpesa ? 'mpesa' : 'bank',
-            name: isMpesa ? 'Primary M-Pesa Account' : bankName,
-            details: bankNum ? (bankNum.length > 6 ? `••••${bankNum.slice(-4)}` : bankNum) : 'Configured',
-            isDefault: true,
+      if (recData && recData.length > 0) {
+        setPayoutMethods(
+          recData.map((r, i) => ({
+            id: r.id,
+            type: r.bank_code === 'MPESA' ? 'mpesa' : 'bank',
+            name: r.bank_code === 'MPESA' ? 'M-Pesa Payout Account' : 'Bank Account',
+            details: r.account_number ? (r.account_number.length > 6 ? `••••${r.account_number.slice(-4)}` : r.account_number) : 'Configured',
+            isDefault: i === 0,
             verified: true,
-          },
-        ]);
+          }))
+        );
       } else {
         setPayoutMethods([]);
       }
@@ -174,7 +174,6 @@ export default function HostWalletScreen() {
             monthCount += 1;
           }
 
-          // Real transaction entry for completed booking
           realTxList.push({
             id: `tx-income-${b.id}`,
             title: `Booking Completed — ${b.experience?.title || 'Stay'}`,
@@ -257,7 +256,7 @@ export default function HostWalletScreen() {
     });
   };
 
-  // Add new payout method & save to Supabase profile metadata
+  // Add new payout method & register with Paystack Transfer Recipient Edge Function
   const handleAddPayoutMethod = async () => {
     const isVerified = profile?.verification_status === 'verified' || user?.user_metadata?.verification_status === 'verified';
     if (!isVerified) {
@@ -275,45 +274,54 @@ export default function HostWalletScreen() {
 
     setSavingMethod(true);
     try {
-      const bankObj = KENYAN_BANKS.find((b) => b.code === newBankCode) || KENYAN_BANKS[0];
+      // Call create-host-recipient Edge Function to onboard host payout account securely with Paystack
+      const { data, error } = await supabase.functions.invoke('create-host-recipient', {
+        body: {
+          accountName: profile?.full_name || user?.email || 'Zuru Host',
+          accountNumber: newNumber.trim(),
+          bankCode: newBankCode || 'MPESA',
+        },
+      });
 
-      // Save to Supabase profile metadata
-      const currentMeta = (profile?.metadata ?? {}) as Record<string, unknown>;
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          metadata: {
-            ...currentMeta,
-            bank_account_number: newNumber.trim(),
-            bank_code: newBankCode,
-            paystack_subaccount_code: `SUB_${Date.now()}`,
-          },
-        })
-        .eq('id', user?.id);
+      if (error) {
+        let errorMessage = error.message;
+        try {
+          if ('context' in error && error.context) {
+            const errBody = await (error.context as Response).json();
+            if (errBody?.error) errorMessage = errBody.error;
+          }
+        } catch {}
+        throw new Error(errorMessage || 'Failed to configure payout method with Paystack');
+      }
 
-      if (error) throw error;
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      const rec = data?.recipient;
+      const bankObj = KENYAN_BANKS.find((b) => b.code === (rec?.bank_code || newBankCode)) || KENYAN_BANKS[0];
 
       const newMethod: PayoutMethod = {
-        id: Date.now().toString(),
+        id: rec?.id || Date.now().toString(),
         type: newMethodType,
         name: newMethodType === 'mpesa' ? 'Safaricom M-PESA' : bankObj.name,
         details: newNumber.length > 6 ? `••••${newNumber.slice(-4)}` : newNumber,
-        isDefault: payoutMethods.length === 0,
+        isDefault: true,
         verified: true,
       };
 
-      setPayoutMethods((prev) => [...prev, newMethod]);
+      setPayoutMethods([newMethod]);
       setNewNumber('');
       setShowManageModal(false);
-      refreshProfile();
+      fetchWalletData();
       showAlert({
-        title: 'Payout Method Saved! 🎉',
-        message: `${newMethod.name} is now saved as your payout destination.`,
+        title: 'Payout Method Registered! 🎉',
+        message: `${newMethod.name} is now active for automatic Paystack transfer payouts.`,
         icon: 'check-circle',
       });
     } catch (e: any) {
       showAlert({
-        title: 'Error',
+        title: 'Payout Onboarding Error',
         message: e.message || 'Failed to save payout method.',
       });
     } finally {

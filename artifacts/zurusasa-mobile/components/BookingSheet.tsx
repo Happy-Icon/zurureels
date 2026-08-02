@@ -30,6 +30,17 @@ import { PriceBreakdown } from '@/components/booking/PriceBreakdown';
 const ORANGE = '#F26522';
 const DAY_MS = 86_400_000;
 
+function generateUUID(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -175,9 +186,14 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
     setTimeout(() => setActiveSection('guests'), 200);
   };
 
-  // ── Payment flows (unchanged from original) ───────────────────────────────
+  // ── Secure Server-Owned Paystack Payment Flow ─────────────────────────────
   const startStkFlow = async () => {
+    const experienceId = exp?.id || reel.experience_id;
     if (!from) return;
+    if (!experienceId) {
+      Alert.alert('Listing unavailable', "This experience listing details are incomplete.");
+      return;
+    }
     if (!hostId) {
       Alert.alert('Host unavailable', "This listing doesn't have a host configured yet.");
       return;
@@ -196,68 +212,96 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
 
     setPhase('sending');
     try {
-      const { data, error } = await supabase.functions.invoke('initiate-paystack-stk', {
+      // 1. Server calculates quote (locking listing & computing KES minor units)
+      const checkInDate = new Date(from);
+      checkInDate.setHours(12, 0, 0, 0);
+
+      const checkOutDate = to ? new Date(to) : addDays(from, 1);
+      checkOutDate.setHours(11, 0, 0, 0);
+
+      const quoteIdempotencyKey = generateUUID();
+      const { data: quote, error: quoteError } = await supabase.rpc('create_booking_quote', {
+        p_experience_id: experienceId,
+        p_check_in: checkInDate.toISOString(),
+        p_check_out: checkOutDate.toISOString(),
+        p_guest_count: Math.max(1, totalGuests),
+        p_idempotency_key: quoteIdempotencyKey,
+      });
+
+      if (quoteError || !quote) {
+        console.error('create_booking_quote RPC error:', quoteError);
+        throw new Error(quoteError?.message ?? 'Failed to prepare booking quote');
+      }
+
+      // 2. Initiate Paystack charge using server-owned amount & reference
+      const paymentIdempotencyKey = generateUUID();
+      const { data, error } = await supabase.functions.invoke('create-booking-payment', {
         body: {
+          quoteId: quote.id,
           phone,
-          amount: baseTotal,
-          experience_id: exp!.id,
-          trip_title: title,
-          guests: totalGuests,
-          check_in: from.toISOString(),
-          check_out: (to ?? addDays(from, 1)).toISOString(),
+          idempotencyKey: paymentIdempotencyKey,
         },
       });
-      if (error || data?.error) {
-        throw new Error((data?.error as string) ?? error?.message ?? 'Failed to initiate payment');
+
+      if (error) {
+        let errorMessage = error.message;
+        try {
+          if ('context' in error && error.context) {
+            const errBody = await (error.context as Response).json();
+            if (errBody?.error) errorMessage = errBody.error;
+          }
+        } catch {}
+        throw new Error(errorMessage || 'Failed to initiate payment');
       }
-      const bookingId: string | undefined = data?.booking?.id;
-      if (!bookingId) throw new Error('Payment could not be started.');
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      const attemptId: string | undefined = data?.attemptId;
+      if (!attemptId) throw new Error('Payment attempt could not be created');
 
       setPhase('pin');
       let attempts = 0;
       pollRef.current = setInterval(async () => {
         attempts++;
+
+        // Check if booking was settled authoritatively by server webhook
         const { data: b } = await supabase
           .from('bookings')
-          .select('status')
-          .eq('id', bookingId)
-          .single();
-        if (b?.status === 'paid') {
+          .select('id, status')
+          .eq('quote_id', quote.id)
+          .maybeSingle();
+
+        if (b?.status === 'paid' || b?.status === 'confirmed') {
           stopPolling();
           queryClient.invalidateQueries({ queryKey: ['bookings'] });
-          if (user) {
-            notificationService.createNotification({
-              userId: user.id,
-              type: 'payment_success',
-              title: 'Payment Received! 🎉',
-              message: `Your payment of KES ${baseTotal.toLocaleString()} for ${title} was successful.`,
-              actionType: 'booking',
-              actionId: bookingId,
-            });
-            if (hostId) {
-              notificationService.createNotification({
-                userId: hostId,
-                type: 'booking_request',
-                title: 'New Booking Request',
-                message: `You received a new reservation request for ${title}.`,
-                actionType: 'booking',
-                actionId: bookingId,
-              });
-            }
-          }
           setSuccessKind('paid');
           setPhase('success');
-        } else if (b?.status === 'failed') {
+          return;
+        }
+
+        // Check payment attempt status
+        const { data: pa } = await supabase
+          .from('payment_attempts')
+          .select('status')
+          .eq('id', attemptId)
+          .maybeSingle();
+
+        if (pa?.status === 'failed' || pa?.status === 'cancelled' || pa?.status === 'expired') {
           stopPolling();
           setPhase('idle');
           Alert.alert('Payment failed', 'The M-Pesa payment was cancelled or declined.');
-        } else if (attempts >= 20) {
+          return;
+        }
+
+        if (attempts >= 20) {
           stopPolling();
           setPhase('idle');
           queryClient.invalidateQueries({ queryKey: ['bookings'] });
           Alert.alert(
             'Still processing',
-            'Payment confirmation is taking longer than expected. We will update your booking once the network confirms it — check Transactions & Receipts.',
+            'Payment confirmation is taking longer than expected. We will update your booking once the network confirms it — check My Bookings.',
           );
           handleDone();
         }

@@ -1,0 +1,14 @@
+# Supabase configuration for ZuruReels mobile project
+project_id = "rjzgzxxdrltlteeshtuw"
+
+[functions.create-booking-payment]
+verify_jwt = true
+
+[functions.paystack-webhook]
+verify_jwt = false
+
+[functions.create-host-recipient]
+verify_jwt = true
+
+[functions.process-host-payouts]
+verify_jwt = false

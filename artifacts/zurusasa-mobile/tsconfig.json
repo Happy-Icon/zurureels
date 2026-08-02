@@ -15,6 +15,10 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],
+  "exclude": [
+    "node_modules",
+    "supabase"
+  ],
   "references": [
     {
       "path": "../../lib/api-client-react"

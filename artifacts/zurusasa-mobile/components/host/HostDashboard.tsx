@@ -182,11 +182,10 @@ export function HostDashboard() {
     setProcessingAction(true);
 
     try {
-      // 1. Update DB Status to 'confirmed'
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'confirmed' })
-        .eq('id', b.id);
+      // 1. Update DB Status to 'confirmed' via server RPC
+      const { error } = await supabase.rpc('host_confirm_booking', {
+        p_booking_id: b.id,
+      });
 
       if (error) throw error;
 
@@ -262,10 +261,10 @@ export function HostDashboard() {
     setProcessingAction(true);
 
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'cancelled' })
-        .eq('id', b.id);
+      const { error } = await supabase.rpc('host_cancel_booking', {
+        p_booking_id: b.id,
+        p_reason: 'Host declined reservation request',
+      });
 
       if (error) throw error;
 
