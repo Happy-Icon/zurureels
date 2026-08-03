@@ -110,8 +110,9 @@ export async function signInWithGoogleNatively(): Promise<NativeGoogleResult> {
     if (/DEVELOPER_ERROR|\b10\b/.test(msg)) {
       return {
         status: 'unavailable',
-        configError: false,
-        reason: 'Native Google Sign-In unavailable (DEVELOPER_ERROR: Android SHA-1 mismatch). Falling back to WebBrowser OAuth.',
+        configError: true,
+        reason:
+          'Google Sign-In SHA-1 Mismatch (DEVELOPER_ERROR 10). Ensure your Android build SHA-1 fingerprint is registered in Google Cloud Console under package com.zurureels.app.',
       };
     }
     throw e;

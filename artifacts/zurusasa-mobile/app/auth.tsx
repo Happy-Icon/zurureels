@@ -643,7 +643,7 @@ export default function AuthScreen() {
           return;
         }
         if (native.status === 'cancelled') return;
-        if (native.configError) {
+        if (native.status === 'unavailable') {
           setError(native.reason);
           return;
         }
