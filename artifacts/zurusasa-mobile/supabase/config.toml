@@ -12,3 +12,6 @@ verify_jwt = true
 
 [functions.process-host-payouts]
 verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = true

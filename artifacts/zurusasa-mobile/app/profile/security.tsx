@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
+  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -21,15 +21,22 @@ import { Skeleton } from '@/components/Skeleton';
 export default function SecurityCenterScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { showAlert } = useCustomAlert();
 
   const [pageLoading, setPageLoading] = useState(true);
-  const [twoFactor, setTwoFactor] = useState(false);
-  const [passkeysEnabled, setPasskeysEnabled] = useState(true);
-  const [loginAlerts, setLoginAlerts] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  // Settings State
+  const [publicProfile, setPublicProfile] = useState(true);
+  const [activityStatus, setActivityStatus] = useState(true);
+  const [searchIndexing, setSearchIndexing] = useState(false);
+  const [analyticsSharing, setAnalyticsSharing] = useState(true);
+  const [twoFactor, setTwoFactor] = useState(false);
+  const [loginAlerts, setLoginAlerts] = useState(true);
+  const [accountStatus, setAccountStatus] = useState<'active' | 'deactivated' | 'pending_deletion' | 'deleted'>('active');
+
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
   const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 50;
 
   const deviceLabel =
@@ -41,20 +48,34 @@ export default function SecurityCenterScreen() {
 
   useEffect(() => {
     const fetchSettings = async () => {
-      if (!user) return;
+      if (!user) {
+        setPageLoading(false);
+        return;
+      }
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('security_settings')
+          .select('security_settings, privacy_settings, account_status')
           .eq('id', user.id)
           .single();
-        if (data?.security_settings) {
-          const s = data.security_settings as any;
-          setTwoFactor(s.two_factor || false);
-          setLoginAlerts(s.login_alerts !== undefined ? s.login_alerts : true);
+
+        if (data) {
+          if (data.account_status) setAccountStatus(data.account_status as any);
+          if (data.security_settings) {
+            const s = data.security_settings as any;
+            setTwoFactor(s.two_factor || false);
+            setLoginAlerts(s.login_alerts !== undefined ? s.login_alerts : true);
+          }
+          if (data.privacy_settings) {
+            const p = data.privacy_settings as any;
+            setPublicProfile(p.public_profile !== undefined ? p.public_profile : true);
+            setActivityStatus(p.show_activity_status !== undefined ? p.show_activity_status : true);
+            setSearchIndexing(p.search_engine_indexing !== undefined ? p.search_engine_indexing : false);
+            setAnalyticsSharing(p.analytics_sharing !== undefined ? p.analytics_sharing : true);
+          }
         }
       } catch (e) {
-        console.error('Error fetching security settings:', e);
+        console.error('Error fetching settings:', e);
       } finally {
         setPageLoading(false);
       }
@@ -62,59 +83,188 @@ export default function SecurityCenterScreen() {
     fetchSettings();
   }, [user]);
 
-  const autoSaveSecurity = async (tf: boolean, la: boolean) => {
+  const autoSaveSettings = async (
+    tf: boolean,
+    la: boolean,
+    pub: boolean,
+    act: boolean,
+    idx: boolean,
+    ana: boolean
+  ) => {
     if (!user) return;
     try {
       await supabase
         .from('profiles')
         .update({
-          security_settings: {
-            two_factor: tf,
-            login_alerts: la,
+          security_settings: { two_factor: tf, login_alerts: la },
+          privacy_settings: {
+            public_profile: pub,
+            show_activity_status: act,
+            search_engine_indexing: idx,
+            analytics_sharing: ana,
           },
-        })
+        } as any)
         .eq('id', user.id);
     } catch (e) {
-      console.error('Auto-save security error:', e);
+      console.error('Auto-save error:', e);
     }
   };
 
-  const handleToggle2FA = (val: boolean) => {
-    setTwoFactor(val);
-    autoSaveSecurity(val, loginAlerts);
-  };
+  const handleTogglePrivacy = (key: 'pub' | 'act' | 'idx' | 'ana', val: boolean) => {
+    const nextPub = key === 'pub' ? val : publicProfile;
+    const nextAct = key === 'act' ? val : activityStatus;
+    const nextIdx = key === 'idx' ? val : searchIndexing;
+    const nextAna = key === 'ana' ? val : analyticsSharing;
 
-  const handleToggleAlerts = (val: boolean) => {
-    setLoginAlerts(val);
-    autoSaveSecurity(twoFactor, val);
+    if (key === 'pub') setPublicProfile(val);
+    if (key === 'act') setActivityStatus(val);
+    if (key === 'idx') setSearchIndexing(val);
+    if (key === 'ana') setAnalyticsSharing(val);
+
+    autoSaveSettings(twoFactor, loginAlerts, nextPub, nextAct, nextIdx, nextAna);
   };
 
   const handleChangePassword = () => {
     showAlert({
-      title: '🔑 Reset Password Request',
-      message: `A password reset link will be sent to ${user?.email || 'your registered email'}.`,
+      title: 'Reset password',
+      message: `A password reset link will be sent to ${user?.email || 'your email'}.`,
       icon: 'key',
       buttons: [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Send Reset Link', onPress: () => supabase.auth.resetPasswordForEmail(user?.email || '') },
+        {
+          text: 'Send reset link',
+          onPress: async () => {
+            if (user?.email) {
+              await supabase.auth.resetPasswordForEmail(user.email);
+            }
+          },
+        },
       ],
     });
   };
 
-  const handleLogoutDevice = () => {
-    Alert.alert('Log Out Active Session', 'Are you sure you want to terminate this active device session?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => supabase.auth.signOut() },
-    ]);
+  const handleDeactivateToggle = () => {
+    if (!user) return;
+
+    if (accountStatus === 'deactivated') {
+      showAlert({
+        title: 'Reactivate account',
+        message: 'Reactivating your account will restore your public profile and unhide your listings.',
+        icon: 'rotate-ccw',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Reactivate',
+            onPress: async () => {
+              setActionLoading(true);
+              try {
+                const { data, error } = await supabase.rpc('reactivate_account', { p_user_id: user.id });
+                if (error) throw error;
+                setAccountStatus('active');
+                showAlert({ title: 'Account reactivated', message: data?.message || 'Your account is active.', icon: 'check-circle' });
+              } catch (err: any) {
+                showAlert({ title: 'Error', message: err.message });
+              } finally {
+                setActionLoading(false);
+              }
+            },
+          },
+        ],
+      });
+    } else {
+      showAlert({
+        title: 'Deactivate account',
+        message: 'Your profile and listings will be hidden. Existing reservations continue normally. You can reactivate anytime.',
+        icon: 'power',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Confirm deactivation',
+            style: 'destructive',
+            onPress: async () => {
+              setActionLoading(true);
+              try {
+                const { data, error } = await supabase.rpc('deactivate_account', { p_user_id: user.id });
+                if (error) throw error;
+                setAccountStatus('deactivated');
+                showAlert({ title: 'Account deactivated', message: data?.message || 'Your account is deactivated.', icon: 'check-circle' });
+              } catch (err: any) {
+                showAlert({ title: 'Error', message: err.message });
+              } finally {
+                setActionLoading(false);
+              }
+            },
+          },
+        ],
+      });
+    }
+  };
+
+  const handleDeleteRequest = async () => {
+    if (!user) return;
+
+    setActionLoading(true);
+    try {
+      const { data: eligibility, error } = await supabase.rpc('check_deletion_eligibility', {
+        p_user_id: user.id,
+      });
+
+      if (error) throw error;
+      const res = eligibility as { can_delete: boolean; blockers: any[] };
+
+      if (!res.can_delete && res.blockers.length > 0) {
+        const blockerText = res.blockers.map((b: any) => `• ${b.message}`).join('\n');
+        showAlert({
+          title: "Account cannot be deleted yet",
+          message: `Complete outstanding obligations first:\n\n${blockerText}`,
+          icon: 'alert-triangle',
+          buttons: [
+            { text: 'View reservations', onPress: () => router.push('/reservations') },
+            { text: 'Close', style: 'cancel' },
+          ],
+        });
+        return;
+      }
+
+      showAlert({
+        title: 'Delete account permanently?',
+        message: 'WARNING: All personal data, saved items, and profile details will be permanently removed.',
+        icon: 'trash-2',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Permanently delete',
+            style: 'destructive',
+            onPress: async () => {
+              setActionLoading(true);
+              try {
+                const { error: fnError } = await supabase.functions.invoke('delete-account', { method: 'POST' });
+                if (fnError) throw fnError;
+                await signOut();
+                showAlert({ title: 'Account deleted', message: 'Your account was deleted.', icon: 'check-circle' });
+              } catch (fnErr: any) {
+                showAlert({ title: 'Deletion error', message: fnErr.message });
+              } finally {
+                setActionLoading(false);
+              }
+            },
+          },
+        ],
+      });
+    } catch (err: any) {
+      showAlert({ title: 'Error', message: err.message });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (pageLoading) {
     return (
-      <View style={[styles.container, { paddingTop: topPad, paddingHorizontal: 20, gap: 16 }]}>
+      <View style={[styles.container, { paddingTop: topPad, paddingHorizontal: 24, gap: 16 }]}>
         <Skeleton style={{ height: 40, width: 40, borderRadius: 20 }} />
         <Skeleton style={{ height: 32, width: 220, borderRadius: 8 }} />
-        <Skeleton style={{ height: 90, borderRadius: 20 }} />
-        <Skeleton style={{ height: 140, borderRadius: 20 }} />
+        <Skeleton style={{ height: 160, borderRadius: 16 }} />
+        <Skeleton style={{ height: 140, borderRadius: 16 }} />
       </View>
     );
   }
@@ -124,14 +274,16 @@ export default function SecurityCenterScreen() {
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          testID="security-back-btn"
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.push('/profile');
+          }}
           style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={20} color="#0F172A" />
+          <Feather name="arrow-left" size={20} color="#000000" />
         </Pressable>
-        <Text style={styles.headerTitle}>Security</Text>
-        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView
@@ -139,126 +291,173 @@ export default function SecurityCenterScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
       >
         <View style={styles.titleSection}>
-          <Text style={styles.pageTitle}>Security Center</Text>
-          <Text style={styles.pageSubtitle}>
-            Protect your ZuruSasa account with passkeys, two-factor authentication, and device login alerts.
-          </Text>
+          <Text style={styles.pageTitle}>Login & security</Text>
         </View>
 
-        {/* ── CARD 1: ACCOUNT ACCESS & PASSWORDS ─────────────────────────────── */}
-        <View style={styles.cardContainer}>
-          <View style={styles.cardHeaderRow}>
-            <View style={[styles.iconBox, { backgroundColor: '#F0F9FF' }]}>
-              <Feather name="key" size={18} color="#0284C7" />
-            </View>
-            <Text style={styles.cardTitle}>Account Authentication</Text>
-          </View>
-
-          <Pressable
-            onPress={handleChangePassword}
-            style={({ pressed }) => [styles.actionRow, pressed && styles.actionRowActive]}
-          >
-            <View style={styles.actionIconBox}>
-              <Feather name="lock" size={16} color="#0F172A" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.actionTitle}>Change Password</Text>
-              <Text style={styles.actionSub}>Update your login password and security credentials</Text>
-            </View>
-            <Feather name="chevron-right" size={18} color="#94A3B8" />
-          </Pressable>
-
-          <View style={styles.divider} />
-
-          <View style={styles.row}>
-            <View style={styles.rowTextCol}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.rowTitle}>Passkeys & Biometrics</Text>
-                <View style={styles.comingSoonBadge}>
-                  <Text style={styles.comingSoonText}>Coming Soon</Text>
-                </View>
+        {/* ── SECTION 1: LOGIN ─────────────────────────────────────────────── */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>Login</Text>
+          <View style={styles.menuRowsGroup}>
+            <Pressable
+              onPress={handleChangePassword}
+              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+            >
+              <View style={styles.menuTextStack}>
+                <Text style={styles.menuRowTitle}>Password</Text>
+                <Text style={styles.menuRowSub}>Updated recently</Text>
               </View>
-              <Text style={styles.rowSub}>Face ID, Touch ID, and hardware passkeys will be enabled in an upcoming security release.</Text>
+              <Text style={styles.actionText}>Update</Text>
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <View style={styles.toggleRow}>
+              <View style={styles.menuTextStack}>
+                <Text style={styles.menuRowTitle}>Two-factor authentication</Text>
+                <Text style={styles.menuRowSub}>Add an extra layer of security to your account</Text>
+              </View>
+              <Switch
+                value={twoFactor}
+                onValueChange={(val) => {
+                  setTwoFactor(val);
+                  autoSaveSettings(val, loginAlerts, publicProfile, activityStatus, searchIndexing, analyticsSharing);
+                }}
+                trackColor={{ false: '#E5E7EB', true: '#000000' }}
+                thumbColor="#FFFFFF"
+              />
             </View>
-            <Switch
-              value={false}
-              disabled={true}
-              trackColor={{ false: '#E2E8F0', true: '#F26522' }}
-              thumbColor="#94A3B8"
-            />
+
+            <View style={styles.divider} />
+
+            <View style={styles.toggleRow}>
+              <View style={styles.menuTextStack}>
+                <Text style={styles.menuRowTitle}>Login alerts</Text>
+                <Text style={styles.menuRowSub}>Receive alerts for new device sign-ins</Text>
+              </View>
+              <Switch
+                value={loginAlerts}
+                onValueChange={(val) => {
+                  setLoginAlerts(val);
+                  autoSaveSettings(twoFactor, val, publicProfile, activityStatus, searchIndexing, analyticsSharing);
+                }}
+                trackColor={{ false: '#E5E7EB', true: '#000000' }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
           </View>
         </View>
 
-        {/* ── CARD 2: MULTI-FACTOR AUTH & ALERTS ──────────────────────────────── */}
-        <View style={styles.cardContainer}>
-          <View style={styles.cardHeaderRow}>
-            <View style={[styles.iconBox, { backgroundColor: '#ECFDF5' }]}>
-              <Feather name="shield" size={18} color="#059669" />
+        {/* ── SECTION 2: DEVICE HISTORY ────────────────────────────────────── */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>Device history</Text>
+          <View style={styles.menuRowsGroup}>
+            <View style={styles.menuRow}>
+              <View style={styles.menuTextStack}>
+                <Text style={styles.menuRowTitle}>{deviceLabel}</Text>
+                <Text style={styles.menuRowSub}>Active session · Current device</Text>
+              </View>
+              <Feather name="check" size={18} color="#059669" />
             </View>
-            <Text style={styles.cardTitle}>Protection & 2FA</Text>
-          </View>
-
-          <View style={styles.row}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowTitle}>Two-Factor Authentication (2FA)</Text>
-              <Text style={styles.rowSub}>Require a verification code on new device sign-in</Text>
-            </View>
-            <Switch
-              value={twoFactor}
-              onValueChange={handleToggle2FA}
-              trackColor={{ false: '#E2E8F0', true: '#F26522' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.row}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.rowTitle}>Unrecognized Device Login Alerts</Text>
-              <Text style={styles.rowSub}>Instant notification when a new device accesses your account</Text>
-            </View>
-            <Switch
-              value={loginAlerts}
-              onValueChange={handleToggleAlerts}
-              trackColor={{ false: '#E2E8F0', true: '#F26522' }}
-              thumbColor="#FFFFFF"
-            />
           </View>
         </View>
 
-        {/* ── CARD 3: ACTIVE SESSIONS ─────────────────────────────────────────── */}
-        <View style={styles.cardContainer}>
-          <View style={styles.cardHeaderRow}>
-            <View style={[styles.iconBox, { backgroundColor: '#F5F3FF' }]}>
-              <Feather name="smartphone" size={18} color="#7C3AED" />
+        {/* ── SECTION 3: PRIVACY ───────────────────────────────────────────── */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>Privacy & sharing</Text>
+          <View style={styles.menuRowsGroup}>
+            <View style={styles.toggleRow}>
+              <View style={styles.menuTextStack}>
+                <Text style={styles.menuRowTitle}>Public profile visibility</Text>
+                <Text style={styles.menuRowSub}>Show profile page to non-authenticated users</Text>
+              </View>
+              <Switch
+                value={publicProfile}
+                onValueChange={(v) => handleTogglePrivacy('pub', v)}
+                trackColor={{ false: '#E5E7EB', true: '#000000' }}
+                thumbColor="#FFFFFF"
+              />
             </View>
-            <Text style={styles.cardTitle}>Active Sessions</Text>
+
+            <View style={styles.divider} />
+
+            <View style={styles.toggleRow}>
+              <View style={styles.menuTextStack}>
+                <Text style={styles.menuRowTitle}>Activity status</Text>
+                <Text style={styles.menuRowSub}>Show when you're online to guests and hosts</Text>
+              </View>
+              <Switch
+                value={activityStatus}
+                onValueChange={(v) => handleTogglePrivacy('act', v)}
+                trackColor={{ false: '#E5E7EB', true: '#000000' }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.toggleRow}>
+              <View style={styles.menuTextStack}>
+                <Text style={styles.menuRowTitle}>Search engine indexing</Text>
+                <Text style={styles.menuRowSub}>Allow search engines (Google, Bing) to index host profile</Text>
+              </View>
+              <Switch
+                value={searchIndexing}
+                onValueChange={(v) => handleTogglePrivacy('idx', v)}
+                trackColor={{ false: '#E5E7EB', true: '#000000' }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
           </View>
+        </View>
 
-          <View style={styles.sessionRow}>
-            <View style={styles.sessionIconBox}>
-              <Feather name={Platform.OS === 'web' ? 'monitor' : 'smartphone'} size={18} color="#0F172A" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sessionTitle}>{deviceLabel}</Text>
-              <Text style={styles.sessionSub}>Active now · Mombasa, Kenya</Text>
-            </View>
-            <View style={styles.activeBadge}>
-              <View style={styles.greenDot} />
-              <Text style={styles.activeBadgeText}>Current</Text>
-            </View>
+        {/* ── SECTION 4: DANGER ZONE (Account Lifecycle) ────────────────────── */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>Account management</Text>
+          <View style={styles.menuRowsGroup}>
+            {/* Deactivate Account */}
+            <Pressable
+              onPress={handleDeactivateToggle}
+              disabled={actionLoading}
+              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+            >
+              <View style={styles.menuTextStack}>
+                <Text style={styles.menuRowTitle}>
+                  {accountStatus === 'deactivated' ? 'Reactivate account' : 'Deactivate account'}
+                </Text>
+                <Text style={styles.menuRowSub}>
+                  {accountStatus === 'deactivated'
+                    ? 'Restore public profile and unhide listings'
+                    : 'Temporarily hide profile and listings from search'}
+                </Text>
+              </View>
+              {actionLoading ? (
+                <ActivityIndicator size="small" color="#000000" />
+              ) : (
+                <Feather name="chevron-right" size={18} color="#94A3B8" />
+              )}
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            {/* Delete Account */}
+            <Pressable
+              onPress={handleDeleteRequest}
+              disabled={actionLoading}
+              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+            >
+              <View style={styles.menuTextStack}>
+                <Text style={[styles.menuRowTitle, { color: '#E11D48' }]}>Delete account</Text>
+                <Text style={styles.menuRowSub}>
+                  Permanently delete your account and personal data
+                </Text>
+              </View>
+              {actionLoading ? (
+                <ActivityIndicator size="small" color="#E11D48" />
+              ) : (
+                <Feather name="chevron-right" size={18} color="#E11D48" />
+              )}
+            </Pressable>
           </View>
-
-          <View style={styles.divider} />
-
-          <Pressable
-            onPress={handleLogoutDevice}
-            style={({ pressed }) => [styles.logoutBtn, pressed && styles.logoutBtnActive]}
-          >
-            <Feather name="log-out" size={16} color="#EF4444" />
-            <Text style={styles.logoutBtnText}>Log Out Active Session</Text>
-          </Pressable>
         </View>
       </ScrollView>
     </View>
@@ -271,211 +470,85 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   header: {
-    height: 56,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   backBtnActive: {
-    backgroundColor: '#E2E8F0',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0F172A',
+    backgroundColor: '#E5E7EB',
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingTop: 12,
   },
   titleSection: {
     marginBottom: 24,
   },
   pageTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.5,
+    color: '#000000',
+    letterSpacing: -0.8,
   },
-  pageSubtitle: {
-    fontSize: 14,
-    color: '#64748B',
-    marginTop: 6,
-    lineHeight: 20,
+  sectionBlock: {
+    marginBottom: 24,
   },
-  cardContainer: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 12,
+  },
+  menuRowsGroup: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.04,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 2,
-      },
-      web: {
-        boxShadow: '0 4px 12px rgba(15, 23, 42, 0.04)',
-      },
-    }),
   },
-  cardHeaderRow: {
+  menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingVertical: 16,
   },
-  iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  toggleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
   },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0F172A',
+  menuRowPressed: {
+    opacity: 0.6,
+  },
+  menuTextStack: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  menuRowTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000000',
+  },
+  menuRowSub: {
+    fontSize: 13,
+    color: '#717171',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  actionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+    textDecorationLine: 'underline',
   },
   divider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginVertical: 16,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  rowTextCol: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  rowTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  rowSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  actionRowActive: {
-    backgroundColor: '#F8FAFC',
-  },
-  actionIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  actionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  actionSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  sessionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sessionIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  sessionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  sessionSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  activeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
-  },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  activeBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  comingSoonBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  comingSoonText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 8,
-  },
-  logoutBtnActive: {
-    opacity: 0.7,
-  },
-  logoutBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#EF4444',
+    marginVertical: 2,
   },
 });
