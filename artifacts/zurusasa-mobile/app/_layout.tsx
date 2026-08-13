@@ -42,9 +42,14 @@ function RootLayoutNav() {
         if (Notifs?.addNotificationResponseReceivedListener) {
           sub = Notifs.addNotificationResponseReceivedListener((response: any) => {
             const data = response?.notification?.request?.content?.data;
-            const conversationId = data?.actionId || data?.conversationId;
+            const actionType = data?.actionType || data?.type;
+            const conversationId = data?.conversationId || (actionType === 'chat' ? data?.actionId : null);
+            const bookingId = data?.bookingId || (actionType === 'booking' ? data?.actionId : null);
+
             if (conversationId) {
               router.push(`/chat/${conversationId}`);
+            } else if (bookingId || actionType === 'booking') {
+              router.push('/reservations');
             }
           });
         }
