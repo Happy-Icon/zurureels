@@ -192,16 +192,17 @@ export const notificationService = {
       // 1. Check user notification settings
       const { data: profile } = await supabase
         .from('profiles')
-        .select('push_token, notifications_enabled')
+        .select('metadata')
         .eq('id', recipientId)
         .maybeSingle();
 
-      if (profile?.notifications_enabled === false) {
+      const notifMeta = (profile?.metadata ?? {}) as Record<string, unknown>;
+      if (notifMeta?.notifications_enabled === false) {
         console.log(`Push notification skipped: User ${recipientId} has notifications disabled.`);
         return;
       }
 
-      // Collect distinct tokens (user_devices is canonical source)
+      // Collect distinct tokens from user_devices (canonical table)
       const tokens = new Set<string>();
 
       try {
@@ -221,11 +222,6 @@ export const notificationService = {
         console.warn('user_devices query note:', devErr);
       }
 
-      // Fallback check on profiles.push_token if user_devices had no entries
-      if (tokens.size === 0 && profile?.push_token && typeof profile.push_token === 'string') {
-        tokens.add(profile.push_token);
-      }
-
       if (tokens.size === 0) {
         return;
       }
@@ -241,7 +237,7 @@ export const notificationService = {
   },
 
   /**
-   * Register push token for Expo notifications
+   * Register push token for Expo notifications into user_devices table
    */
   async registerPushToken(userId: string): Promise<string | null> {
     if (Platform.OS === 'web' || isExpoGo || !Notifications) return null;
@@ -263,32 +259,9 @@ export const notificationService = {
       const tokenData = await Notifications.getExpoPushTokenAsync();
       const token = tokenData.data;
 
-      // Save token to profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('metadata')
-        .eq('id', userId)
-        .maybeSingle();
-
-      const currentMeta = (profile?.metadata ?? {}) as Record<string, unknown>;
-
-      await supabase
-        .from('profiles')
-        .update({
-          push_token: token,
-          device_type: Platform.OS,
-          notifications_enabled: true,
-          metadata: {
-            ...currentMeta,
-            push_token: token,
-            device_type: Platform.OS,
-          },
-        })
-        .eq('id', userId);
-
-      // Upsert into user_devices table if present
+      // Save token into canonical user_devices table
       try {
-        await supabase.from('user_devices').upsert(
+        const { error } = await supabase.from('user_devices').upsert(
           {
             user_id: userId,
             push_token: token,
@@ -297,8 +270,11 @@ export const notificationService = {
           },
           { onConflict: 'user_id,push_token' },
         );
+        if (error) {
+          console.warn('user_devices upsert warning:', error.message);
+        }
       } catch (e) {
-        // Ignore if user_devices table missing
+        console.warn('user_devices registration note:', e);
       }
 
       return token;

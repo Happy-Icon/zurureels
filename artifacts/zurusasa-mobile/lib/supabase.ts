@@ -230,10 +230,21 @@ export interface NotificationRow {
   title: string;
   message: string;
   image_url?: string | null;
+  data?: Record<string, unknown> | null;
   action_type?: NotificationActionType | null;
   action_id?: string | null;
   metadata?: Record<string, unknown> | null;
   is_read: boolean;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface UserDeviceRow {
+  id: string;
+  user_id: string;
+  push_token: string;
+  device_type?: string | null;
+  is_active?: boolean;
+  created_at?: string;
   updated_at?: string;
 }

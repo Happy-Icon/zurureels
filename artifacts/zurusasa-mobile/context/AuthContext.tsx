@@ -9,6 +9,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, type ProfileRow } from '@/lib/supabase';
 
+import { notificationService } from '@/services/notificationService';
+
 interface AuthContextValue {
   session: Session | null;
   user: User | null;
@@ -49,6 +51,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('id', userId)
       .maybeSingle();
     setProfile((data as ProfileRow | null) ?? null);
+
+    // Register Expo push token into user_devices canonical store
+    notificationService.registerPushToken(userId).catch((err) => {
+      console.warn('Push token registration note:', err);
+    });
 
     // Also check if user has created any listings
     const { count } = await supabase
