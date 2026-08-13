@@ -75,7 +75,6 @@ export default function SecurityCenterScreen() {
             const s = data.security_settings as any;
             setTwoFactor(s.two_factor || false);
             setLoginAlerts(s.login_alerts !== undefined ? s.login_alerts : true);
-            if (s.passkey_enabled) setPasskeyEnabled(true);
           }
           if (data.privacy_settings) {
             const p = data.privacy_settings as any;
@@ -86,9 +85,13 @@ export default function SecurityCenterScreen() {
           }
         }
 
-        if (passkeyRes) {
-          setPasskeys(passkeyRes.passkeys);
-          if (passkeyRes.hasPasskey) setPasskeyEnabled(true);
+        // Passkey state is strictly determined by real server WebAuthn credentials
+        if (passkeyRes && passkeyRes.hasPasskey) {
+          setPasskeys(passkeyRes.passkeys || []);
+          setPasskeyEnabled(true);
+        } else {
+          setPasskeys([]);
+          setPasskeyEnabled(false);
         }
       } catch (e) {
         console.error('Error fetching settings:', e);

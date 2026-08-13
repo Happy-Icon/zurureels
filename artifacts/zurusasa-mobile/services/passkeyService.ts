@@ -233,54 +233,36 @@ export const passkeyService = {
   },
 
   /**
-   * Lists registered passkey credentials for the current user
+   * Lists registered passkey credentials for the current user from Supabase Auth server
    */
   async listPasskeys(): Promise<{ passkeys: PasskeyCredential[]; hasPasskey: boolean }> {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return { passkeys: [], hasPasskey: false };
 
-      // 1. Try listing from Supabase passkey API if supported
+      // Query real WebAuthn passkey credentials from Supabase Auth server (Canonical Source of Truth)
       try {
         if ((supabase.auth as any).passkey?.list) {
           const { data, error } = await (supabase.auth as any).passkey.list();
-          if (!error && Array.isArray(data) && data.length > 0) {
-            return {
-              passkeys: data.map((d: any) => ({
-                id: d.id,
-                name: d.friendly_name || d.name || 'Device Passkey',
-                created_at: d.created_at,
-                last_used_at: d.last_used_at,
-              })),
-              hasPasskey: true,
-            };
+          if (!error && Array.isArray(data)) {
+            if (data.length > 0) {
+              return {
+                passkeys: data.map((d: any) => ({
+                  id: d.id,
+                  name: d.friendly_name || d.name || 'Device Passkey',
+                  created_at: d.created_at,
+                  last_used_at: d.last_used_at,
+                })),
+                hasPasskey: true,
+              };
+            } else {
+              // Server confirms 0 registered credentials
+              return { passkeys: [], hasPasskey: false };
+            }
           }
         }
       } catch (listErr) {
         console.warn('[Passkey] passkey.list API note:', listErr);
-      }
-
-      // 2. Check profile security_settings fallback
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('security_settings')
-        .eq('id', userData.user.id)
-        .maybeSingle();
-
-      const sec = (profile?.security_settings ?? {}) as Record<string, unknown>;
-      const isEnabled = sec?.passkey_enabled === true;
-
-      if (isEnabled) {
-        return {
-          passkeys: [
-            {
-              id: 'primary-passkey',
-              name: (sec?.passkey_name as string) || `${Platform.OS === 'ios' ? 'iCloud Keychain' : Platform.OS === 'android' ? 'Google Password Manager' : 'Browser'} Passkey`,
-              created_at: sec?.passkey_registered_at as string,
-            },
-          ],
-          hasPasskey: true,
-        };
       }
 
       return { passkeys: [], hasPasskey: false };
@@ -298,15 +280,21 @@ export const passkeyService = {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return { success: false, error: 'Not authenticated' };
 
-      // 1. Delete from Supabase passkey API if real ID is available
-      if (passkeyId && passkeyId !== 'primary-passkey') {
-        try {
-          if ((supabase.auth as any).passkey?.delete) {
-            await (supabase.auth as any).passkey.delete(passkeyId);
+      // 1. Fetch and delete real passkey credentials from Supabase Auth server
+      try {
+        if ((supabase.auth as any).passkey?.list && (supabase.auth as any).passkey?.delete) {
+          const { data: serverPasskeys } = await (supabase.auth as any).passkey.list();
+          if (Array.isArray(serverPasskeys) && serverPasskeys.length > 0) {
+            for (const p of serverPasskeys) {
+              const targetId = p.id || p.credential_id;
+              if (targetId && (targetId === passkeyId || !passkeyId || passkeyId === 'primary-passkey')) {
+                await (supabase.auth as any).passkey.delete({ passkeyId: targetId });
+              }
+            }
           }
-        } catch (delErr) {
-          console.warn('[Passkey] passkey.delete note:', delErr);
         }
+      } catch (delErr) {
+        console.warn('[Passkey] passkey.delete note:', delErr);
       }
 
       // 2. Clear security settings flag in profile
