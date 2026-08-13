@@ -142,36 +142,56 @@ export const notificationService = {
    */
   async createNotification(params: CreateNotificationParams): Promise<NotificationRow | null> {
     try {
+      // 1. Build canonical payload using standard columns (user_id, type, title, message, metadata, is_read)
+      const metadataPayload: Record<string, unknown> = {
+        ...(params.metadata ?? {}),
+        ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
+        ...(params.actionType ? { action_type: params.actionType } : {}),
+        ...(params.actionId ? { action_id: params.actionId } : {}),
+      };
+
       const insertPayload: Record<string, any> = {
         user_id: params.userId,
         type: params.type,
         title: params.title,
         message: params.message,
-        image_url: params.imageUrl ?? null,
-        data: {
-          ...(params.metadata ?? {}),
-          ...(params.actionType ? { action_type: params.actionType } : {}),
-          ...(params.actionId ? { action_id: params.actionId } : {}),
-        },
-        metadata: {
-          ...(params.metadata ?? {}),
-          ...(params.actionType ? { action_type: params.actionType } : {}),
-          ...(params.actionId ? { action_id: params.actionId } : {}),
-        },
+        metadata: metadataPayload,
         is_read: false,
       };
+
+      let insertedData: NotificationRow | null = null;
 
       const { data, error } = await supabase
         .from('notifications')
         .insert(insertPayload)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) {
-        console.warn('[Push] Notification DB insert warning:', error?.message || error);
+        console.warn('[Push] Primary notification insert warning:', error.message || error);
+
+        // Fallback: minimal insert with just core columns
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: params.userId,
+            type: params.type,
+            title: params.title,
+            message: params.message,
+          })
+          .select()
+          .maybeSingle();
+
+        if (fallbackError) {
+          console.warn('[Push] Fallback notification insert warning:', fallbackError.message || fallbackError);
+        } else {
+          insertedData = fallbackData as NotificationRow;
+        }
+      } else {
+        insertedData = data as NotificationRow;
       }
 
-      // Trigger push notification to recipient's registered devices (non-blocking)
+      // 2. Trigger push notification to recipient's registered devices (non-blocking)
       this.sendPushNotificationForUser(
         params.userId,
         params.title,
@@ -186,7 +206,7 @@ export const notificationService = {
         console.warn('[Push] Push delivery warning:', pushErr);
       });
 
-      return (data as NotificationRow) ?? null;
+      return insertedData;
     } catch (err) {
       console.warn('[Push] Error creating notification:', err);
       return null;
