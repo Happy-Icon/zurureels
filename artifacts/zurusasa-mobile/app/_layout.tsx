@@ -32,15 +32,26 @@ function RootLayoutNav() {
   useEffect(() => {
     let sub: any = null;
     try {
-      const Constants = require('expo-constants').default;
-      const isExpoGo =
-        Constants?.executionEnvironment === 'storeClient' ||
-        Constants?.appOwnership === 'expo';
+      const Notifs = require('expo-notifications');
+      if (Notifs?.addNotificationResponseReceivedListener) {
+        sub = Notifs.addNotificationResponseReceivedListener((response: any) => {
+          const data = response?.notification?.request?.content?.data;
+          const actionType = data?.actionType || data?.type;
+          const conversationId = data?.conversationId || (actionType === 'chat' ? data?.actionId : null);
+          const bookingId = data?.bookingId || (actionType === 'booking' ? data?.actionId : null);
 
-      if (!isExpoGo) {
-        const Notifs = require('expo-notifications');
-        if (Notifs?.addNotificationResponseReceivedListener) {
-          sub = Notifs.addNotificationResponseReceivedListener((response: any) => {
+          if (conversationId) {
+            router.push(`/chat/${conversationId}`);
+          } else if (bookingId || actionType === 'booking') {
+            router.push('/reservations');
+          }
+        });
+      }
+
+      // Cold-start notification tap deep-linking
+      if (Notifs?.getLastNotificationResponseAsync) {
+        Notifs.getLastNotificationResponseAsync().then((response: any) => {
+          if (response) {
             const data = response?.notification?.request?.content?.data;
             const actionType = data?.actionType || data?.type;
             const conversationId = data?.conversationId || (actionType === 'chat' ? data?.actionId : null);
@@ -51,11 +62,11 @@ function RootLayoutNav() {
             } else if (bookingId || actionType === 'booking') {
               router.push('/reservations');
             }
-          });
-        }
+          }
+        }).catch((e: any) => console.log('[Push] Cold start notification note:', e));
       }
     } catch (e) {
-      console.warn('Push tap listener setup note:', e);
+      console.warn('[Push] Tap listener setup note:', e);
     }
 
     return () => {

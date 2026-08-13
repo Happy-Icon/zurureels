@@ -1,39 +1,35 @@
 import { Platform } from 'react-native';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
+import Constants from 'expo-constants';
 import { supabase, type NotificationRow, type NotificationType, type NotificationActionType } from '@/lib/supabase';
 
-const isExpoGo =
-  Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
-  (Constants as any).appOwnership === 'expo';
+const EAS_PROJECT_ID = '7288bdeb-4a70-4035-9563-587a72f32534';
 
 let Notifications: any = null;
-if (!isExpoGo) {
-  try {
-    Notifications = require('expo-notifications');
+try {
+  Notifications = require('expo-notifications');
 
-    // 1. Configure foreground notification behavior
-    Notifications?.setNotificationHandler?.({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
-    });
+  // 1. Configure foreground notification display behavior
+  Notifications?.setNotificationHandler?.({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
 
-    // 2. Configure Android high importance notification channel
-    if (Platform.OS === 'android' && Notifications?.setNotificationChannelAsync) {
-      Notifications.setNotificationChannelAsync('default', {
-        name: 'Default Channel',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#F26522',
-        sound: 'default',
-        showBadge: true,
-      }).catch((err: any) => console.warn('[Push] Android channel setup note:', err));
-    }
-  } catch (e) {
-    console.log('[Push] Notifications handler config note:', e);
+  // 2. Configure Android high-importance notification channel
+  if (Platform.OS === 'android' && Notifications?.setNotificationChannelAsync) {
+    Notifications.setNotificationChannelAsync('default', {
+      name: 'Default Channel',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#F26522',
+      sound: 'default',
+      showBadge: true,
+    }).catch((err: any) => console.warn('[Push] Android channel setup note:', err?.message || err));
   }
+} catch (e) {
+  console.log('[Push] expo-notifications initialization note:', e);
 }
 
 export interface CreateNotificationParams {
@@ -49,7 +45,7 @@ export interface CreateNotificationParams {
 
 export const notificationService = {
   /**
-   * Fetch all notifications for a user
+   * Fetch all in-app notifications for a user
    */
   async fetchNotifications(userId: string): Promise<NotificationRow[]> {
     try {
@@ -62,7 +58,7 @@ export const notificationService = {
       if (error) throw error;
       return (data as NotificationRow[]) ?? [];
     } catch (err) {
-      console.warn('Error fetching notifications:', err);
+      console.warn('[Push] Error fetching notifications:', err);
       return [];
     }
   },
@@ -81,7 +77,7 @@ export const notificationService = {
       if (error) throw error;
       return count ?? 0;
     } catch (err) {
-      console.warn('Error fetching unread notification count:', err);
+      console.warn('[Push] Error fetching unread count:', err);
       return 0;
     }
   },
@@ -99,7 +95,7 @@ export const notificationService = {
       if (error) throw error;
       return true;
     } catch (err) {
-      console.warn('Error marking notification as read:', err);
+      console.warn('[Push] Error marking notification read:', err);
       return false;
     }
   },
@@ -118,7 +114,7 @@ export const notificationService = {
       if (error) throw error;
       return true;
     } catch (err) {
-      console.warn('Error marking all notifications as read:', err);
+      console.warn('[Push] Error marking all notifications read:', err);
       return false;
     }
   },
@@ -136,13 +132,13 @@ export const notificationService = {
       if (error) throw error;
       return true;
     } catch (err) {
-      console.warn('Error deleting notification:', err);
+      console.warn('[Push] Error deleting notification:', err);
       return false;
     }
   },
 
   /**
-   * Create a new notification entry (DB + Push trigger to recipient devices)
+   * Create a new in-app notification entry and trigger native push
    */
   async createNotification(params: CreateNotificationParams): Promise<NotificationRow | null> {
     try {
@@ -192,13 +188,13 @@ export const notificationService = {
 
       return (data as NotificationRow) ?? null;
     } catch (err) {
-      console.warn('Error creating notification:', err);
+      console.warn('[Push] Error creating notification:', err);
       return null;
     }
   },
 
   /**
-   * Send push notification to all registered active devices for a user
+   * Send push notification to all registered active devices for a recipient
    */
   async sendPushNotificationForUser(
     recipientId: string,
@@ -223,7 +219,7 @@ export const notificationService = {
         return;
       }
 
-      // 2. Query active device tokens from user_devices
+      // 2. Query active device tokens from canonical user_devices table
       const { data: devices, error: devErr } = await supabase
         .from('user_devices')
         .select('push_token')
@@ -249,7 +245,7 @@ export const notificationService = {
         return;
       }
 
-      // 3. Send Expo push notification to all unique active tokens
+      // 3. Dispatch push notification to all registered active devices
       let validTokensCount = 0;
       for (const token of tokens) {
         if (!token || typeof token !== 'string') continue;
@@ -263,12 +259,13 @@ export const notificationService = {
   },
 
   /**
-   * Register Expo push token into user_devices table
+   * Register or refresh Expo push token in canonical user_devices table
    */
   async registerPushToken(userId: string): Promise<string | null> {
-    if (Platform.OS === 'web' || isExpoGo || !Notifications) return null;
+    if (Platform.OS === 'web' || !Notifications) return null;
 
     try {
+      // 1. Permission request & detection
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
 
@@ -283,12 +280,28 @@ export const notificationService = {
       }
       console.log('[Push] Permission: granted');
 
-      // Fetch Expo Push Token (with EAS projectId fallback)
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-      const tokenData = await Notifications.getExpoPushTokenAsync(
-        projectId ? { projectId } : undefined,
-      );
-      const token = tokenData.data;
+      // 2. Configure Android channel if on Android
+      if (Platform.OS === 'android' && Notifications?.setNotificationChannelAsync) {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default Channel',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#F26522',
+          sound: 'default',
+          showBadge: true,
+        });
+      }
+
+      // 3. Fetch Expo Push Token with EAS Project ID
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ??
+        (Constants as any).easConfig?.projectId ??
+        EAS_PROJECT_ID;
+
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId,
+      });
+      const token = tokenData?.data;
 
       if (!token) {
         console.log('[Push] Token received: NO');
@@ -298,7 +311,7 @@ export const notificationService = {
       const fingerprint = token.length > 10 ? `...${token.slice(-6)}` : 'token';
       console.log(`[Push] Token received: YES (fingerprint: ${fingerprint})`);
 
-      // Save token into canonical user_devices table
+      // 4. Upsert token into canonical user_devices table
       const { error } = await supabase.from('user_devices').upsert(
         {
           user_id: userId,
@@ -317,21 +330,21 @@ export const notificationService = {
 
       console.log('[Push] Token registration: SUCCESS');
       return token;
-    } catch (err) {
-      console.warn('[Push] Error registering push token:', err);
+    } catch (err: any) {
+      console.warn('[Push] Error registering push token:', err?.message || err);
       return null;
     }
   },
 
   /**
-   * Trigger push notification via Expo Push API and handle tickets/receipts
+   * Send push notification via Expo Push API and handle tickets/receipts
    */
   async sendPushNotification(
     pushToken: string,
     title: string,
     body: string,
     data?: Record<string, unknown>,
-  ) {
+  ): Promise<{ status: 'ok' | 'error'; ticketId?: string; error?: string }> {
     try {
       console.log('[Push] Sending Expo request');
       const response = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -353,6 +366,12 @@ export const notificationService = {
         }),
       });
 
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn(`[Push] Expo HTTP error (${response.status}):`, errText);
+        return { status: 'error', error: `HTTP ${response.status}: ${errText}` };
+      }
+
       const resJson = await response.json();
       console.log('[Push] Expo ticket received');
 
@@ -361,61 +380,65 @@ export const notificationService = {
       if (ticket?.status === 'ok') {
         console.log(`[Push] Ticket status: ok (ticketId: ${ticket.id || 'ok'})`);
         console.log('[Push] Receipt status: ok');
+        return { status: 'ok', ticketId: ticket.id };
       } else if (ticket?.status === 'error') {
-        console.warn(`[Push] Expo ticket error: ${ticket.message || ticket.details?.error || 'Unknown'}`);
-        // If device is not registered, mark inactive in user_devices
-        if (ticket.details?.error === 'DeviceNotRegistered' || ticket.details?.error === 'InvalidCredentials') {
-          console.log('[Push] Invalid Expo token — deactivating device token');
+        const errorDetail = ticket.message || ticket.details?.error || 'Unknown Expo push error';
+        console.warn(`[Push] Expo ticket error: ${errorDetail}`);
+
+        // Deactivate unregistered or invalid device tokens
+        if (
+          ticket.details?.error === 'DeviceNotRegistered' ||
+          ticket.details?.error === 'InvalidCredentials'
+        ) {
+          console.log('[Push] Invalid Expo token — deactivating device token in user_devices');
           await supabase
             .from('user_devices')
             .update({ is_active: false })
             .eq('push_token', pushToken);
         }
+        return { status: 'error', error: errorDetail };
       }
-    } catch (err) {
-      console.warn('[Push] Error sending push notification via Expo:', err);
+
+      return { status: 'ok' };
+    } catch (err: any) {
+      console.warn('[Push] Error sending push notification via Expo:', err?.message || err);
+      return { status: 'error', error: err?.message || 'Network error' };
     }
   },
 
   /**
-   * Triggers a real test push notification locally on device & creates inbox notification entry
+   * Triggers a test push notification locally & creates in-app notification
    */
   async triggerTestPush(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      let scheduledOnDevice = false;
-
-      // In standalone builds or dev client, trigger local push banner via expo-notifications
-      if (!isExpoGo) {
+      // Trigger local push banner on device if Notifications is available
+      if (Notifications?.scheduleNotificationAsync) {
         try {
-          const Notifs = require('expo-notifications');
-          if (Notifs && Notifs.scheduleNotificationAsync) {
-            const { status: existingStatus } = await Notifs.getPermissionsAsync();
-            let finalStatus = existingStatus;
+          const { status: existingStatus } = await Notifications.getPermissionsAsync();
+          let finalStatus = existingStatus;
 
-            if (existingStatus !== 'granted') {
-              const { status } = await Notifs.requestPermissionsAsync();
-              finalStatus = status;
-            }
+          if (existingStatus !== 'granted') {
+            const { status } = await Notifications.requestPermissionsAsync();
+            finalStatus = status;
+          }
 
-            if (finalStatus === 'granted') {
-              await Notifs.scheduleNotificationAsync({
-                content: {
-                  title: '🌴 ZuruSasa Coastal Alert',
-                  body: 'Test Push Notification: Your booking alerts and trip reminders are working correctly!',
-                  sound: 'default',
-                  data: { type: 'test_push', timestamp: new Date().toISOString() },
-                },
-                trigger: null,
-              });
-              scheduledOnDevice = true;
-            }
+          if (finalStatus === 'granted') {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: '🌴 ZuruSasa Coastal Alert',
+                body: 'Test Push Notification: Your booking alerts and trip reminders are working correctly!',
+                sound: 'default',
+                data: { type: 'test_push', timestamp: new Date().toISOString() },
+              },
+              trigger: null,
+            });
           }
         } catch (e) {
           console.warn('[Push] Local push scheduling note:', e);
         }
       }
 
-      // Create an entry in Supabase database so it appears in the Notification Inbox
+      // Create an entry in Supabase notifications table
       if (userId) {
         await this.createNotification({
           userId,
@@ -424,13 +447,6 @@ export const notificationService = {
           message: 'Your push notification channel is active and receiving travel alerts.',
           actionType: 'booking',
         });
-      }
-
-      if (isExpoGo) {
-        return {
-          success: true,
-          error: 'Test notification added to your Inbox! (Note: Native OS lock screen banners require a Development Build or Standalone APK in Expo SDK 53)',
-        };
       }
 
       return { success: true };
@@ -443,4 +459,3 @@ export const notificationService = {
     }
   },
 };
-

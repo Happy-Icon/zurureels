@@ -793,6 +793,32 @@ export function useGuestCancelBooking() {
         p_reason: reason ?? 'Guest cancelled reservation',
       });
       if (error) throw new Error(error.message);
+
+      // Trigger push notification to host safely (non-blocking)
+      const bookingData = data as BookingRow;
+      if (bookingData?.experience_id) {
+        (async () => {
+          try {
+            const { data: exp } = await supabase
+              .from('experiences')
+              .select('user_id')
+              .eq('id', bookingData.experience_id)
+              .maybeSingle();
+
+            if (exp?.user_id) {
+              await notificationService.sendPushNotificationForUser(
+                exp.user_id,
+                'Reservation Cancelled',
+                `Reservation for "${bookingData.trip_title || 'your trip'}" was cancelled by the guest.`,
+                { actionType: 'booking', bookingId },
+              );
+            }
+          } catch (e) {
+            console.warn('Host notification dispatch warning:', e);
+          }
+        })();
+      }
+
       return data;
     },
     onSuccess: () => {
