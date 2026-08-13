@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +23,7 @@ import { useCustomAlert } from '@/context/CustomAlertContext';
 import { notificationService } from '@/services/notificationService';
 import { KeyboardScreen, GrowingInput } from '@/components/keyboard';
 import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { uploadToCloudinaryMobile, getCloudinaryVideoThumbnail } from '@/lib/cloudinaryUpload';
 import { invalidateServerCache } from '@/lib/redis';
 
@@ -35,6 +37,45 @@ const CATEGORIES = [
 ];
 
 const LOCATIONS = ['Diani', 'Watamu', 'Lamu', 'Mombasa', 'Malindi', 'Kilifi'];
+
+function InlineVideoPreview({ uri, onChangeVideo }: { uri: string; onChangeVideo: () => void }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+  });
+
+  const [playing, setPlaying] = useState(false);
+
+  const togglePlay = () => {
+    if (playing) {
+      player.pause();
+      setPlaying(false);
+    } else {
+      player.play();
+      setPlaying(true);
+    }
+  };
+
+  return (
+    <View style={styles.videoPreviewWrap}>
+      <VideoView
+        player={player}
+        style={styles.videoPreviewView}
+        contentFit="cover"
+        nativeControls={false}
+      />
+      <Pressable style={styles.videoPlayOverlay} onPress={togglePlay}>
+        <View style={styles.videoPlayBtnCircle}>
+          <Feather name={playing ? 'pause' : 'play'} size={22} color="#FFFFFF" />
+        </View>
+      </Pressable>
+
+      <Pressable style={styles.videoChangeBadge} onPress={onChangeVideo}>
+        <Feather name="refresh-cw" size={12} color="#FFFFFF" />
+        <Text style={styles.videoChangeBadgeText}>Change Video</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export default function CreateReelScreen() {
   const insets = useSafeAreaInsets();
@@ -56,9 +97,33 @@ export default function CreateReelScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatusText, setUploadStatusText] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [showVideoSourceModal, setShowVideoSourceModal] = useState(false);
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 16;
+
+  const recordVideoLive = async () => {
+    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (cameraStatus !== 'granted') {
+      showAlert({
+        title: 'Permission Required',
+        message: 'Please grant camera access to record live reels.',
+      });
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['videos'],
+      allowsEditing: true,
+      videoMaxDuration: 60,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setVideoUri(result.assets[0].uri);
+    }
+  };
 
   const pickVideo = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -111,6 +176,22 @@ export default function CreateReelScreen() {
       return;
     }
 
+    if (!videoUri) {
+      showAlert({
+        title: 'Missing Reel Video',
+        message: 'Please record a live reel or select a video from your gallery before publishing.',
+      });
+      return;
+    }
+
+    if (!category) {
+      showAlert({
+        title: 'Missing Category',
+        message: 'Please select an experience category.',
+      });
+      return;
+    }
+
     if (!title.trim()) {
       showAlert({
         title: 'Missing Title',
@@ -119,17 +200,25 @@ export default function CreateReelScreen() {
       return;
     }
 
-    if (!price || isNaN(Number(price))) {
+    if (!location) {
       showAlert({
-        title: 'Missing Price',
-        message: 'Please enter a valid numeric price (KES).',
+        title: 'Missing Location',
+        message: 'Please select a location for your experience.',
+      });
+      return;
+    }
+
+    if (!price || isNaN(Number(price)) || Number(price) <= 0) {
+      showAlert({
+        title: 'Invalid Price',
+        message: 'Please enter a valid numeric price (e.g. 5000).',
       });
       return;
     }
 
     setUploading(true);
     setUploadProgress(20);
-    setUploadStatusText('Uploading media assets...');
+    setUploadStatusText('Publishing Reel...');
 
     try {
       // 1. Create Experience record
@@ -151,7 +240,7 @@ export default function CreateReelScreen() {
 
       if (expError) throw expError;
       setUploadProgress(40);
-      setUploadStatusText('Uploading media assets...');
+      setUploadStatusText('Publishing Reel...');
 
       // 2. Video & Thumbnail Upload to Cloudinary
       let finalVideoUrl =
@@ -165,7 +254,7 @@ export default function CreateReelScreen() {
           finalThumbUrl = getCloudinaryVideoThumbnail(videoUri);
         } else {
           try {
-            setUploadStatusText('Uploading video to Cloudinary...');
+            setUploadStatusText('Publishing Reel...');
             const cRes = await uploadToCloudinaryMobile(videoUri, {
               resourceType: 'video',
               folder: 'reels',
@@ -175,7 +264,7 @@ export default function CreateReelScreen() {
             finalThumbUrl = getCloudinaryVideoThumbnail(cRes.secure_url);
           } catch (cErr: any) {
             console.error('Cloudinary video upload error:', cErr);
-            throw new Error(`Cloudinary upload failed: ${cErr?.message || cErr}`);
+            throw new Error(`Publishing failed: ${cErr?.message || cErr}`);
           }
         }
       }
@@ -185,7 +274,7 @@ export default function CreateReelScreen() {
           finalThumbUrl = thumbnailUri;
         } else {
           try {
-            setUploadStatusText('Uploading thumbnail to Cloudinary...');
+            setUploadStatusText('Publishing Reel...');
             const cThumbRes = await uploadToCloudinaryMobile(thumbnailUri, {
               resourceType: 'image',
               folder: 'reels',
@@ -198,9 +287,9 @@ export default function CreateReelScreen() {
       }
 
       setUploadProgress(85);
-      setUploadStatusText('Publishing your reel...');
+      setUploadStatusText('Publishing Reel...');
 
-      // 3. Create Reel Record (status: 'active' for immediate Discover visibility)
+      // 3. Create Reel Record (status: 'published' for Discover & Host Listings visibility)
       const { data: newReel, error: reelError } = await supabase
         .from('reels')
         .insert({
@@ -210,7 +299,7 @@ export default function CreateReelScreen() {
           video_url: finalVideoUrl,
           thumbnail_url: finalThumbUrl,
           duration: 20,
-          status: 'active',
+          status: 'published',
           processing_status: 'completed',
         })
         .select()
@@ -309,25 +398,27 @@ export default function CreateReelScreen() {
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionHeading}>1. Media Assets</Text>
             <View style={styles.mediaRow}>
-              {/* Pick Video Action Card */}
-              <Pressable
-                onPress={pickVideo}
-                style={({ pressed }) => [
-                  styles.mediaActionCard,
-                  videoUri ? styles.mediaActionCardSelected : null,
-                  { opacity: pressed ? 0.85 : 1 },
-                ]}
-              >
-                <View style={[styles.mediaBadgeCircle, videoUri ? styles.mediaBadgeActive : null]}>
-                  <Feather name={videoUri ? 'check' : 'video'} size={20} color={videoUri ? '#F26522' : '#717171'} />
-                </View>
-                <Text style={styles.mediaCardTitle}>
-                  {videoUri ? 'Video Attached' : 'Upload Reel Video'}
-                </Text>
-                <Text style={styles.mediaCardSub}>
-                  {videoUri ? 'Tap to change video' : 'MP4 format · Max 60s'}
-                </Text>
-              </Pressable>
+              {/* Pick/Record Video Action Card or Inline Player */}
+              {videoUri ? (
+                <InlineVideoPreview
+                  uri={videoUri}
+                  onChangeVideo={() => setShowVideoSourceModal(true)}
+                />
+              ) : (
+                <Pressable
+                  onPress={() => setShowVideoSourceModal(true)}
+                  style={({ pressed }) => [
+                    styles.mediaActionCard,
+                    { opacity: pressed ? 0.85 : 1 },
+                  ]}
+                >
+                  <View style={styles.mediaBadgeCircle}>
+                    <Feather name="video" size={20} color="#717171" />
+                  </View>
+                  <Text style={styles.mediaCardTitle}>Select Reel Video</Text>
+                  <Text style={styles.mediaCardSub}>Record or choose gallery</Text>
+                </Pressable>
+              )}
 
               {/* Pick Cover Action Card */}
               <Pressable
@@ -498,6 +589,62 @@ export default function CreateReelScreen() {
             )}
           </Pressable>
         </View>
+
+        {/* Video Source Selection Modal (Record vs Gallery) */}
+        <Modal
+          visible={showVideoSourceModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowVideoSourceModal(false)}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowVideoSourceModal(false)}>
+            <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
+              <Text style={styles.modalTitle}>Choose Reel Source</Text>
+              <Text style={styles.modalSubtitle}>Record a live video or choose an existing video file</Text>
+
+              <Pressable
+                style={styles.modalOptionBtn}
+                onPress={() => {
+                  setShowVideoSourceModal(false);
+                  recordVideoLive();
+                }}
+              >
+                <View style={[styles.modalIconWrap, { backgroundColor: '#FFF0ED' }]}>
+                  <Feather name="video" size={22} color="#F26522" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalOptionTitle}>Record Reel (Live Camera)</Text>
+                  <Text style={styles.modalOptionSub}>Record up to 60 seconds using camera</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color="#999" />
+              </Pressable>
+
+              <Pressable
+                style={styles.modalOptionBtn}
+                onPress={() => {
+                  setShowVideoSourceModal(false);
+                  pickVideo();
+                }}
+              >
+                <View style={[styles.modalIconWrap, { backgroundColor: '#F3F4F6' }]}>
+                  <Feather name="folder" size={22} color="#4B5563" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalOptionTitle}>Choose from Gallery</Text>
+                  <Text style={styles.modalOptionSub}>Select an existing MP4 video from device</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color="#999" />
+              </Pressable>
+
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => setShowVideoSourceModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
 
         <PersonaVerificationModal
           visible={showVerificationModal}
@@ -719,5 +866,115 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+
+  /* Modal Styles */
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 36,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#6B7280',
+    marginBottom: 20,
+  },
+  modalOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 12,
+    gap: 12,
+  },
+  modalIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalOptionTitle: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    color: '#111827',
+  },
+  modalOptionSub: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  modalCancelBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    color: '#6B7280',
+  },
+
+  /* Inline Video Preview Styles */
+  videoPreviewWrap: {
+    flex: 1,
+    height: 150,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+    position: 'relative',
+  },
+  videoPreviewView: {
+    width: '100%',
+    height: '100%',
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+  },
+  videoPlayBtnCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(242, 101, 34, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 2,
+  },
+  videoChangeBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  videoChangeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'DMSans_700Bold',
   },
 });

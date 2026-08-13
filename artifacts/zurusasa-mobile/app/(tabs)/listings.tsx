@@ -124,7 +124,7 @@ export default function HostListingsScreen() {
   };
 
   const filteredReels = reels.filter((r) => {
-    if (activeTab === 'published') return r.status === 'published' || !r.status;
+    if (activeTab === 'published') return r.status === 'published' || r.status === 'active' || !r.status;
     return r.status === 'draft';
   });
 
