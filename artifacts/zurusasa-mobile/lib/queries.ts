@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchServerCachedQuery } from '@/lib/redis';
+import { notificationService } from '@/services/notificationService';
 import {
   supabase,
   type BookingRow,
@@ -93,20 +94,47 @@ export function useCreateBooking() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateBookingInput) => {
-      const { error } = await supabase.from('bookings').insert({
-        user_id: input.userId,
-        experience_id: input.experienceId,
-        reel_id: input.reelId ?? null,
-        trip_title: input.tripTitle,
-        // amount + trip_title are NOT NULL in the bookings schema
-        amount: input.amount ?? 0,
-        guests: input.guests,
-        check_in: input.checkIn ?? new Date().toISOString(),
-        check_out:
-          input.checkOut ?? new Date(Date.now() + 86_400_000).toISOString(),
-        status: 'pending',
-      });
+      const { data, error } = await supabase
+        .from('bookings')
+        .insert({
+          user_id: input.userId,
+          experience_id: input.experienceId,
+          reel_id: input.reelId ?? null,
+          trip_title: input.tripTitle,
+          amount: input.amount ?? 0,
+          guests: input.guests,
+          check_in: input.checkIn ?? new Date().toISOString(),
+          check_out:
+            input.checkOut ?? new Date(Date.now() + 86_400_000).toISOString(),
+          status: 'pending',
+        })
+        .select('id, experience_id, trip_title')
+        .single();
+
       if (error) throw new Error(error.message);
+
+      // Notify Host of new booking request
+      if (data?.experience_id) {
+        const { data: exp } = await supabase
+          .from('experiences')
+          .select('user_id')
+          .eq('id', data.experience_id)
+          .maybeSingle();
+
+        if (exp?.user_id && exp.user_id !== input.userId) {
+          notificationService
+            .createNotification({
+              userId: exp.user_id,
+              type: 'booking_request',
+              title: 'New Booking Request 📅',
+              message: `You have a new booking request for "${input.tripTitle || 'your experience'}"`,
+              actionType: 'booking',
+              actionId: data.id,
+            })
+            .catch((e) => console.warn('Booking request notification warning:', e));
+        }
+      }
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
@@ -225,8 +253,8 @@ export function useToggleLike() {
       } else {
         const { error } = await supabase
           .from('reel_likes')
-          .insert({ reel_id: reelId, user_id: userId });
-        if (error) throw new Error(error.message);
+          .upsert({ reel_id: reelId, user_id: userId }, { onConflict: 'user_id,reel_id' });
+        if (error && error.code !== '23505') throw new Error(error.message);
       }
     },
     onMutate: async ({ reelId, userId, liked }) => {
@@ -701,11 +729,25 @@ export function useHostConfirmBooking() {
         p_booking_id: bookingId,
       });
       if (error) throw new Error(error.message);
+
+      // Trigger push notification to guest safely (non-blocking)
+      const bookingData = data as BookingRow;
+      if (bookingData?.user_id) {
+        notificationService
+          .sendPushNotificationForUser(
+            bookingData.user_id,
+            'Reservation Confirmed! 🎉',
+            `Your reservation for "${bookingData.trip_title || 'your trip'}" was confirmed by the host.`,
+            { actionType: 'booking', bookingId },
+          )
+          .catch((e) => console.warn('Push delivery warning:', e));
+      }
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
     },
   });
 }
@@ -714,15 +756,48 @@ export function useHostDeclineBooking() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ bookingId, reason }: { bookingId: string; reason?: string }) => {
-      const { data, error } = await supabase.rpc('host_cancel_booking', {
+      const { data, error } = await supabase.rpc('host_decline_booking', {
         p_booking_id: bookingId,
         p_reason: reason ?? 'Host declined reservation request',
+      });
+      if (error) throw new Error(error.message);
+
+      // Trigger push notification to guest safely (non-blocking)
+      const bookingData = data as BookingRow;
+      if (bookingData?.user_id) {
+        notificationService
+          .sendPushNotificationForUser(
+            bookingData.user_id,
+            'Reservation Declined',
+            `Your reservation for "${bookingData.trip_title || 'your trip'}" was declined by the host.`,
+            { actionType: 'booking', bookingId },
+          )
+          .catch((e) => console.warn('Push delivery warning:', e));
+      }
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+    },
+  });
+}
+
+export function useGuestCancelBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ bookingId, reason }: { bookingId: string; reason?: string }) => {
+      const { data, error } = await supabase.rpc('guest_cancel_booking', {
+        p_booking_id: bookingId,
+        p_reason: reason ?? 'Guest cancelled reservation',
       });
       if (error) throw new Error(error.message);
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
     },
   });

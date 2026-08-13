@@ -180,7 +180,7 @@ export const notificationService = {
   },
 
   /**
-   * Send push notification to all registered devices for a user
+   * Send push notification to all registered devices for a user (canonical: user_devices)
    */
   async sendPushNotificationForUser(
     recipientId: string,
@@ -201,20 +201,16 @@ export const notificationService = {
         return;
       }
 
-      // Collect distinct tokens for multi-device support
+      // Collect distinct tokens (user_devices is canonical source)
       const tokens = new Set<string>();
-      if (profile?.push_token && typeof profile.push_token === 'string') {
-        tokens.add(profile.push_token);
-      }
 
-      // 2. Query user_devices table for registered devices
       try {
         const { data: devices } = await supabase
           .from('user_devices')
           .select('push_token')
           .eq('user_id', recipientId);
 
-        if (devices) {
+        if (devices && devices.length > 0) {
           for (const d of devices) {
             if (d.push_token && typeof d.push_token === 'string') {
               tokens.add(d.push_token);
@@ -222,14 +218,19 @@ export const notificationService = {
           }
         }
       } catch (devErr) {
-        // user_devices table optional check; ignore schema missing errors
+        console.warn('user_devices query note:', devErr);
+      }
+
+      // Fallback check on profiles.push_token if user_devices had no entries
+      if (tokens.size === 0 && profile?.push_token && typeof profile.push_token === 'string') {
+        tokens.add(profile.push_token);
       }
 
       if (tokens.size === 0) {
         return;
       }
 
-      // 3. Send to all unique registered push tokens for this user
+      // Send to all unique registered push tokens for this user
       for (const token of tokens) {
         if (!token || typeof token !== 'string') continue;
         await this.sendPushNotification(token, title, body, data);
