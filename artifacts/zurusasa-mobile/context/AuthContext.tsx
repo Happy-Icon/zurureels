@@ -40,13 +40,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const [hasListings, setHasListings] = useState<boolean>(false);
+
   const loadProfile = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, email, phone, role, verification_status, metadata')
+      .select('id, full_name, email, phone, role, host_role, verification_status, metadata')
       .eq('id', userId)
       .maybeSingle();
     setProfile((data as ProfileRow | null) ?? null);
+
+    // Also check if user has created any listings
+    const { count } = await supabase
+      .from('experiences')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    setHasListings((count ?? 0) > 0);
   }, []);
 
   useEffect(() => {
@@ -64,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadProfile(newSession.user.id);
       } else {
         setProfile(null);
+        setHasListings(false);
       }
     });
 
@@ -74,8 +85,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const user = session?.user ?? null;
   const meta = (user?.user_metadata ?? {}) as Record<string, unknown>;
+  const profRecord = (profile as Record<string, any>) ?? {};
+
   const role: 'guest' | 'host' | 'admin' | null = user
-    ? (profile?.role === 'host' || meta.role === 'host' ? 'host' : (profile?.role as any) || (meta.role as any) || 'guest')
+    ? (profRecord.role === 'host' ||
+       profRecord.host_role === 'host' ||
+       meta.role === 'host' ||
+       meta.host_role === 'host' ||
+       hasListings
+        ? 'host'
+        : (profRecord.role as any) || (meta.role as any) || 'guest')
     : null;
 
   const hasPass = (profile?.metadata as { has_pass?: boolean } | null)?.has_pass === true;

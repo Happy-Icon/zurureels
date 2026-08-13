@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { supabase, type ReelRow } from '@/lib/supabase';
+import { invalidateServerCache } from '@/lib/redis';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { ReelCard } from '@/components/ReelCard';
 import { Skeleton } from '@/components/Skeleton';
@@ -85,6 +86,7 @@ export default function HostListingsScreen() {
         .eq('id', item.id);
 
       if (error) throw error;
+      invalidateServerCache('invalidate_reels_feed').catch(() => null);
       fetchListings();
     } catch (err: any) {
       showAlert({
@@ -272,19 +274,28 @@ export default function HostListingsScreen() {
           <Text style={styles.headerTitle}>Host Listings</Text>
           <Text style={styles.headerSub}>Manage your accommodation and tour reels.</Text>
         </View>
-        <Pressable
-          testID="create-listing-btn"
-          onPress={() => {
-            router.push('/host/create-reel');
-          }}
-          style={({ pressed }) => [
-            styles.createBtn,
-            { opacity: pressed ? 0.88 : 1 },
-          ]}
-        >
-          <Feather name="plus" size={15} color="#FFFFFF" />
-          <Text style={styles.createBtnText}>Create</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <Pressable
+            testID="calendar-btn"
+            onPress={() => router.push('/host/calendar' as any)}
+            style={({ pressed }) => [styles.calendarHeaderBtn, pressed && { opacity: 0.8 }]}
+          >
+            <Feather name="calendar" size={16} color="#000000" />
+          </Pressable>
+          <Pressable
+            testID="create-listing-btn"
+            onPress={() => {
+              router.push('/host/create-reel');
+            }}
+            style={({ pressed }) => [
+              styles.createBtn,
+              { opacity: pressed ? 0.88 : 1 },
+            ]}
+          >
+            <Feather name="plus" size={15} color="#FFFFFF" />
+            <Text style={styles.createBtnText}>Create</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* 2. Segmented Tab Control */}
@@ -660,5 +671,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontFamily: 'DMSans_600SemiBold',
+  },
+  calendarHeaderBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

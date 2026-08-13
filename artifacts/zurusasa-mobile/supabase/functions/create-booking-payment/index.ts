@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit } from '../_shared/rateLimiter.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,6 +55,12 @@ Deno.serve(async (request) => {
   });
   const { data: { user }, error: userError } = await userClient.auth.getUser();
   if (userError || !user) return json({ error: 'Authentication is required' }, 401);
+
+  // Enforce server-side rate limit: max 5 checkout requests per 60 seconds
+  const rl = await checkRateLimit(request, 'checkout_payment', 5, 60, user.id);
+  if (!rl.allowed) {
+    return json({ error: 'Too many payment requests. Please wait a moment before trying again.' }, 429);
+  }
 
   let input: { quoteId?: string; phone?: string; idempotencyKey?: string };
   try {

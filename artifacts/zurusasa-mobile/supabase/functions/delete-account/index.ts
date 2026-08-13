@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit } from '../_shared/rateLimiter.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,6 +34,12 @@ Deno.serve(async (request) => {
 
   const { data: { user }, error: userError } = await userClient.auth.getUser();
   if (userError || !user) return json({ error: 'Authentication is required' }, 401);
+
+  // Enforce Rate Limit: max 3 requests per 5 minutes per user
+  const rl = await checkRateLimit(request, 'delete_account', 3, 300, user.id);
+  if (!rl.allowed) {
+    return json({ error: 'Too many account deletion requests. Please wait a few minutes.' }, 429);
+  }
 
   // ── 2. Admin client (service-role) for storage + auth deletion ───────────
   const admin = createClient(url, serviceRoleKey, {

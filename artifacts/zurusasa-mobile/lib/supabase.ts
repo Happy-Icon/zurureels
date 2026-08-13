@@ -140,6 +140,7 @@ export interface BookingRow {
   user_id: string | null;
   experience_id: string | null;
   reel_id: string | null;
+  trip_title?: string | null;
   amount: number | null;
   status: string | null;
   check_in: string | null;
@@ -150,6 +151,17 @@ export interface BookingRow {
     ExperienceRow,
     'id' | 'title' | 'location' | 'current_price' | 'price_unit' | 'image_url' | 'entity_name'
   > | null;
+}
+
+export interface HostBlockedDateRow {
+  id: string;
+  experience_id: string;
+  host_id: string;
+  start_date: string;
+  end_date: string;
+  reason: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface EventRow {

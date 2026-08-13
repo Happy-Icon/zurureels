@@ -22,6 +22,8 @@ import { useCustomAlert } from '@/context/CustomAlertContext';
 import { notificationService } from '@/services/notificationService';
 import { KeyboardScreen, GrowingInput } from '@/components/keyboard';
 import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
+import { uploadToCloudinaryMobile, getCloudinaryVideoThumbnail } from '@/lib/cloudinaryUpload';
+import { invalidateServerCache } from '@/lib/redis';
 
 const CATEGORIES = [
   { label: 'Stays & Villas', value: 'stays' },
@@ -148,20 +150,57 @@ export default function CreateReelScreen() {
         .single();
 
       if (expError) throw expError;
-      setUploadProgress(60);
+      setUploadProgress(40);
+      setUploadStatusText('Uploading media assets...');
 
-      // 2. Video & Thumbnail URL Handling
-      const finalVideoUrl =
-        videoUri ||
+      // 2. Video & Thumbnail Upload to Cloudinary
+      let finalVideoUrl =
         'https://assets.mixkit.co/videos/preview/mixkit-beach-front-resort-with-palm-trees-41484-large.mp4';
-      const finalThumbUrl =
-        thumbnailUri ||
+      let finalThumbUrl =
         'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800';
 
-      setUploadProgress(85);
-      setUploadStatusText('Processing your reel...');
+      if (videoUri) {
+        if (videoUri.startsWith('http://') || videoUri.startsWith('https://')) {
+          finalVideoUrl = videoUri;
+          finalThumbUrl = getCloudinaryVideoThumbnail(videoUri);
+        } else {
+          try {
+            setUploadStatusText('Uploading video to Cloudinary...');
+            const cRes = await uploadToCloudinaryMobile(videoUri, {
+              resourceType: 'video',
+              folder: 'reels',
+              onProgress: (percent) => setUploadProgress(40 + Math.round(percent * 0.4)),
+            });
+            finalVideoUrl = cRes.secure_url;
+            finalThumbUrl = getCloudinaryVideoThumbnail(cRes.secure_url);
+          } catch (cErr: any) {
+            console.error('Cloudinary video upload error:', cErr);
+            throw new Error(`Cloudinary upload failed: ${cErr?.message || cErr}`);
+          }
+        }
+      }
 
-      // 3. Create Reel Record (initially 'processing')
+      if (thumbnailUri) {
+        if (thumbnailUri.startsWith('http://') || thumbnailUri.startsWith('https://')) {
+          finalThumbUrl = thumbnailUri;
+        } else {
+          try {
+            setUploadStatusText('Uploading thumbnail to Cloudinary...');
+            const cThumbRes = await uploadToCloudinaryMobile(thumbnailUri, {
+              resourceType: 'image',
+              folder: 'reels',
+            });
+            finalThumbUrl = cThumbRes.secure_url;
+          } catch (cErr: any) {
+            console.warn('Custom thumbnail upload warning, using generated frame:', cErr);
+          }
+        }
+      }
+
+      setUploadProgress(85);
+      setUploadStatusText('Publishing your reel...');
+
+      // 3. Create Reel Record (status: 'active' for immediate Discover visibility)
       const { data: newReel, error: reelError } = await supabase
         .from('reels')
         .insert({
@@ -171,12 +210,16 @@ export default function CreateReelScreen() {
           video_url: finalVideoUrl,
           thumbnail_url: finalThumbUrl,
           duration: 20,
-          status: 'processing',
+          status: 'active',
+          processing_status: 'completed',
         })
         .select()
         .single();
 
       if (reelError) throw reelError;
+
+      // Invalidate Redis reels feed cache via server-side Edge Function
+      invalidateServerCache('invalidate_reels_feed').catch(() => null);
 
       // 4. Create Event Record if category is 'events'
       if (category === 'events') {
@@ -193,26 +236,14 @@ export default function CreateReelScreen() {
 
       setUploadProgress(100);
 
-      // 5. Asynchronously publish reel and trigger live notification
-      setTimeout(async () => {
-        try {
-          if (newReel?.id) {
-            await supabase
-              .from('reels')
-              .update({ status: 'published' })
-              .eq('id', newReel.id);
-          }
-          await notificationService.createNotification({
-            userId: user.id,
-            type: 'booking_confirmed',
-            title: '🎬 Your reel is now live.',
-            message: `"${title.trim()}" has finished processing and is now published on Pulse & ZuruFlow!`,
-            metadata: { action_type: 'discover', action_id: newReel?.id },
-          });
-        } catch (asyncErr) {
-          console.error('Async reel publishing error:', asyncErr);
-        }
-      }, 3000);
+      // Trigger notification
+      await notificationService.createNotification({
+        userId: user.id,
+        type: 'booking_confirmed',
+        title: '🎬 Your reel is live!',
+        message: `"${title.trim()}" is now live on Pulse & Discover!`,
+        metadata: { action_type: 'discover', action_id: newReel?.id },
+      });
 
       showAlert({
         title: 'Processing your reel...',

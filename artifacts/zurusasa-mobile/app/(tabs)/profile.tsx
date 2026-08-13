@@ -86,7 +86,8 @@ export default function ProfileScreen() {
     'Traveler';
   const avatarUrl = (profile?.metadata as { avatar_url?: string } | null)?.avatar_url;
   const initial = displayName.charAt(0).toUpperCase();
-  const isHost = role === 'host';
+  const isHostUser = role === 'host';
+  const isHostMode = isHostUser && viewMode === 'host';
 
   const handleSignOut = () => {
     showAlert({
@@ -138,16 +139,37 @@ export default function ProfileScreen() {
     },
     {
       id: 'payments',
-      title: 'Payments & payouts',
+      title: viewMode === 'host' ? 'Payout methods' : 'Payments & payouts',
       icon: 'credit-card',
       route: '/profile/payments',
     },
-    {
-      id: 'switch_mode',
-      title: viewMode === 'host' ? 'Switch to Guest mode' : 'Switch to Host mode',
-      icon: 'refresh-cw',
-      action: () => switchViewMode(viewMode === 'host' ? 'guest' : 'host'),
-    },
+    ...(isHostMode
+      ? [
+          {
+            id: 'calendar',
+            title: 'Host calendar',
+            icon: 'calendar' as const,
+            route: '/host/calendar' as Href,
+          },
+        ]
+      : []),
+    ...(isHostUser
+      ? [
+          {
+            id: 'switch_mode',
+            title: viewMode === 'host' ? 'Switch to Guest mode' : 'Switch to Host mode',
+            icon: 'refresh-cw' as const,
+            action: () => switchViewMode(viewMode === 'host' ? 'guest' : 'host'),
+          },
+        ]
+      : [
+          {
+            id: 'become_host_menu',
+            title: 'Become a host',
+            icon: 'home' as const,
+            route: '/become-host' as Href,
+          },
+        ]),
     {
       id: 'refer_host',
       title: 'Refer a host',
@@ -210,7 +232,7 @@ export default function ProfileScreen() {
             )}
           </View>
           <Text style={styles.userName}>{displayName}</Text>
-          <Text style={styles.userRole}>{isHost ? 'Host' : 'Guest'}</Text>
+          <Text style={styles.userRole}>{isHostMode ? 'Host' : 'Guest'}</Text>
         </View>
 
         {/* ── QUICK CARDS (2 per row) ─────────────────────────────────────────── */}
@@ -243,7 +265,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* ── BECOME A HOST CARD ──────────────────────────────────────────────── */}
-        {!isHost && (
+        {!isHostUser && (
           <Pressable
             onPress={() => router.push('/become-host')}
             style={({ pressed }) => [styles.becomeHostCard, pressed && { opacity: 0.95 }]}

@@ -19,17 +19,24 @@ import { HostDashboard } from '@/components/host/HostDashboard';
 import { ReelCard } from '@/components/ReelCard';
 import { useIsFocused } from '@react-navigation/native';
 import { CenteredState, Skeleton } from '@/components/Skeleton';
-import { useReels } from '@/lib/queries';
+import { useReels, useBatchReelInteractions } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
 
 export default function ZuruFlowScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { viewMode } = useAuth();
+  const { user, viewMode } = useAuth();
   const { height } = useWindowDimensions();
   const isFocused = useIsFocused();
   const { data: reels, isLoading, isError, refetch } = useReels();
   const [activeIndex, setActiveIndex] = useState<number>(0);
+
+  const reelIds = React.useMemo(() => (reels ?? []).map((r) => r.id), [reels]);
+  const { data: interactionsMap } = useBatchReelInteractions(
+    reelIds,
+    user?.id,
+    isFocused && viewMode === 'guest'
+  );
 
   const pageHeight = height;
   const topInset = Platform.OS === 'web' ? 14 : insets.top;
@@ -49,9 +56,10 @@ export default function ZuruFlowScreen() {
         reel={item}
         isActive={isFocused && viewMode === 'guest' && index === activeIndex}
         height={pageHeight}
+        prefetchInteractions={interactionsMap?.[item.id]}
       />
     ),
-    [activeIndex, pageHeight, isFocused, viewMode],
+    [activeIndex, pageHeight, isFocused, viewMode, interactionsMap],
   );
 
   if (viewMode === 'host') {

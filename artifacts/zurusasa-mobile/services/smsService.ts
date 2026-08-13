@@ -116,7 +116,7 @@ export const smsService = {
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
-            Authorization: `Bearer ${process.env.EXPO_PUBLIC_SMS_API_KEY || ''}`,
+            Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || ''}`,
           },
           body: JSON.stringify({
             userId: params.userId,

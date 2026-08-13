@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchServerCachedQuery } from '@/lib/redis';
 import {
   supabase,
   type BookingRow,
   type ConversationRow,
   type EventRow,
   type ExperienceRow,
+  type HostBlockedDateRow,
   type ReelRow,
 } from '@/lib/supabase';
 
@@ -12,18 +14,20 @@ export function useReels() {
   return useQuery<ReelRow[]>({
     queryKey: ['reels'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('reels')
-        .select(
-          `*,
-          experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
-          host:profiles!reels_user_id_profiles_fkey(full_name, verification_status, metadata)`,
-        )
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(30);
-      if (error) throw new Error(error.message);
-      return (data as unknown as ReelRow[]) ?? [];
+      return fetchServerCachedQuery('get_reels_feed', async () => {
+        const { data, error } = await supabase
+          .from('reels')
+          .select(
+            `*,
+            experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
+            host:profiles!reels_user_id_profiles_fkey(full_name, verification_status, metadata)`,
+          )
+          .in('status', ['active', 'published'])
+          .order('created_at', { ascending: false })
+          .limit(30);
+        if (error) throw new Error(error.message);
+        return (data as unknown as ReelRow[]) ?? [];
+      });
     },
   });
 }
@@ -32,18 +36,24 @@ export function useExperiences(category?: string | null) {
   return useQuery<ExperienceRow[]>({
     queryKey: ['experiences', category ?? 'all'],
     queryFn: async () => {
-      let query = supabase
-        .from('experiences')
-        .select(
-          'id, title, description, location, current_price, price_unit, entity_name, category, availability_status, metadata',
-        )
-        .limit(50);
-      if (category) {
-        query = query.eq('category', category);
-      }
-      const { data, error } = await query;
-      if (error) throw new Error(error.message);
-      return (data as ExperienceRow[]) ?? [];
+      return fetchServerCachedQuery(
+        'get_experiences',
+        async () => {
+          let query = supabase
+            .from('experiences')
+            .select(
+              'id, title, description, location, current_price, price_unit, entity_name, category, availability_status, metadata',
+            )
+            .limit(50);
+          if (category) {
+            query = query.eq('category', category);
+          }
+          const { data, error } = await query;
+          if (error) throw new Error(error.message);
+          return (data as ExperienceRow[]) ?? [];
+        },
+        { category: category ?? 'all' }
+      );
     },
   });
 }
@@ -119,6 +129,44 @@ const interactionsKey = (reelId: string, userId: string | undefined) => [
   userId ?? 'anon',
 ];
 
+export function useBatchReelInteractions(
+  reelIds: string[],
+  userId: string | undefined,
+  enabled = true
+) {
+  return useQuery<Record<string, ReelInteractions>>({
+    queryKey: ['batch-reel-interactions', reelIds.slice().sort().join(','), userId ?? 'anon'],
+    enabled: enabled && reelIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_reel_interactions', {
+        p_reel_ids: reelIds,
+      });
+
+      if (error) {
+        // Fallback gracefully if RPC is not yet applied
+        const resultMap: Record<string, ReelInteractions> = {};
+        for (const id of reelIds) {
+          resultMap[id] = { likeCount: 0, liked: false, saved: false, following: false };
+        }
+        return resultMap;
+      }
+
+      const resultMap: Record<string, ReelInteractions> = {};
+      ((data ?? []) as any[]).forEach((row) => {
+        resultMap[row.reel_id] = {
+          likeCount: Number(row.like_count || 0),
+          liked: Boolean(row.liked),
+          saved: Boolean(row.saved),
+          following: Boolean(row.following),
+        };
+      });
+
+      return resultMap;
+    },
+  });
+}
+
 export function useReelInteractions(
   reelId: string,
   hostId: string | null | undefined,
@@ -130,48 +178,26 @@ export function useReelInteractions(
     enabled,
     staleTime: 30_000,
     queryFn: async () => {
-      const countRes = await supabase
-        .from('reel_likes')
-        .select('*', { count: 'exact', head: true })
-        .eq('reel_id', reelId);
-      if (countRes.error) throw new Error(countRes.error.message);
+      const { data, error } = await supabase.rpc('get_reel_interactions', {
+        p_reel_ids: [reelId],
+      });
 
-      let liked = false;
-      let saved = false;
-      let following = false;
-
-      if (userId) {
-        const likedRes = await supabase
+      if (error || !data || data.length === 0) {
+        // Fallback for missing RPC
+        const countRes = await supabase
           .from('reel_likes')
-          .select('reel_id')
-          .eq('reel_id', reelId)
-          .eq('user_id', userId)
-          .limit(1);
-        if (likedRes.error) throw new Error(likedRes.error.message);
-        liked = (likedRes.data ?? []).length > 0;
-
-        const savedRes = await supabase
-          .from('reel_saves')
-          .select('reel_id')
-          .eq('reel_id', reelId)
-          .eq('user_id', userId)
-          .limit(1);
-        if (savedRes.error) throw new Error(savedRes.error.message);
-        saved = (savedRes.data ?? []).length > 0;
-
-        if (hostId && hostId !== userId) {
-          const followRes = await supabase
-            .from('user_follows')
-            .select('follower_id')
-            .eq('follower_id', userId)
-            .eq('following_id', hostId)
-            .limit(1);
-          if (followRes.error) throw new Error(followRes.error.message);
-          following = (followRes.data ?? []).length > 0;
-        }
+          .select('id', { count: 'exact', head: true })
+          .eq('reel_id', reelId);
+        return { likeCount: countRes.count ?? 0, liked: false, saved: false, following: false };
       }
 
-      return { likeCount: countRes.count ?? 0, liked, saved, following };
+      const row = (data as any[])[0];
+      return {
+        likeCount: Number(row.like_count || 0),
+        liked: Boolean(row.liked),
+        saved: Boolean(row.saved),
+        following: Boolean(row.following),
+      };
     },
   });
 }
@@ -410,7 +436,8 @@ export function useSavedEvents(userId: string | undefined) {
         .from('event_subscribers')
         .select('event_id, events(*)')
         .eq('user_id', userId!)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
       if (error) throw new Error(error.message);
       return ((data ?? []) as unknown as { events: EventRow | null }[])
         .map((row) => row.events)
@@ -431,7 +458,8 @@ export function useConversations(userId: string | undefined) {
         .from('conversations')
         .select('id, participant_one, participant_two, last_message_at, created_at')
         .or(`participant_one.eq.${userId},participant_two.eq.${userId}`)
-        .order('last_message_at', { ascending: false, nullsFirst: false });
+        .order('last_message_at', { ascending: false, nullsFirst: false })
+        .limit(50);
       if (convs.error) throw new Error(convs.error.message);
       const rows = (convs.data ?? []) as {
         id: string;
@@ -475,6 +503,199 @@ export function useConversations(userId: string | undefined) {
           },
         };
       });
+    },
+  });
+}
+
+// ---- Host Calendar Queries & Mutations ----
+
+export function useHostListings(userId: string | undefined) {
+  return useQuery<ExperienceRow[]>({
+    queryKey: ['host-listings', userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('experiences')
+        .select('id, title, location, current_price, price_unit, image_url, availability_status, entity_name, category')
+        .eq('user_id', userId!)
+        .order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      return (data as ExperienceRow[]) ?? [];
+    },
+  });
+}
+
+export function useHostCalendarBookings(
+  userId: string | undefined,
+  experienceId: string | null,
+  startDate?: string,
+  endDate?: string
+) {
+  return useQuery<BookingRow[]>({
+    queryKey: ['host-calendar-bookings', userId, experienceId ?? 'all', startDate ?? 'all', endDate ?? 'all'],
+    enabled: !!userId,
+    queryFn: async () => {
+      let query = supabase
+        .from('bookings')
+        .select(`
+          id, user_id, experience_id, reel_id, trip_title, amount, status, check_in, check_out, guests, created_at,
+          experience:experiences(id, title, location, current_price, price_unit, image_url)
+        `)
+        .neq('status', 'cancelled');
+
+      if (experienceId && experienceId !== 'all') {
+        query = query.eq('experience_id', experienceId);
+      } else {
+        const { data: expData } = await supabase
+          .from('experiences')
+          .select('id')
+          .eq('user_id', userId!);
+
+        const expIds = (expData ?? []).map((e) => e.id);
+        if (expIds.length === 0) return [];
+        query = query.in('experience_id', expIds);
+      }
+
+      if (startDate && endDate) {
+        query = query.lt('check_in', endDate).gt('check_out', startDate);
+      }
+
+      const { data, error } = await query.order('check_in', { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data as unknown as BookingRow[]) ?? [];
+    },
+  });
+}
+
+export function useHostBlockedDates(
+  userId: string | undefined,
+  experienceId: string | null,
+  startDate?: string,
+  endDate?: string
+) {
+  return useQuery<HostBlockedDateRow[]>({
+    queryKey: ['host-blocked-dates', userId, experienceId ?? 'all', startDate ?? 'all', endDate ?? 'all'],
+    enabled: !!userId,
+    queryFn: async () => {
+      let query = supabase
+        .from('host_blocked_dates')
+        .select('id, experience_id, host_id, start_date, end_date, reason, created_at, updated_at')
+        .eq('host_id', userId!);
+
+      if (experienceId && experienceId !== 'all') {
+        query = query.eq('experience_id', experienceId);
+      }
+
+      if (startDate && endDate) {
+        query = query.lt('start_date', endDate).gt('end_date', startDate);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        return [];
+      }
+      return (data as HostBlockedDateRow[]) ?? [];
+    },
+  });
+}
+
+export function useBlockHostDates() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      experienceId,
+      startDate,
+      endDate,
+      reason,
+    }: {
+      experienceId: string;
+      startDate: string;
+      endDate: string;
+      reason: string;
+    }) => {
+      const { data, error } = await supabase.rpc('block_host_dates', {
+        p_experience_id: experienceId,
+        p_start_date: startDate,
+        p_end_date: endDate,
+        p_reason: reason,
+      });
+
+      if (error) {
+        if (error.code === 'P0001') {
+          throw new Error(error.message || 'Dates contain active or pending reservations and cannot be blocked.');
+        }
+        const { data: userRes } = await supabase.auth.getUser();
+        const hostId = userRes.user?.id;
+        if (!hostId) throw new Error('Authentication required');
+
+        const { error: insertErr } = await supabase.from('host_blocked_dates').insert({
+          experience_id: experienceId,
+          host_id: hostId,
+          start_date: startDate,
+          end_date: endDate,
+          reason,
+        });
+        if (insertErr) throw new Error(insertErr.message);
+        return data;
+      }
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['host-blocked-dates'] });
+    },
+  });
+}
+
+export function useUnblockHostDates() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ blockId }: { blockId: string }) => {
+      const { error } = await supabase.rpc('unblock_host_dates', {
+        p_block_id: blockId,
+      });
+
+      if (error) {
+        const { error: delErr } = await supabase.from('host_blocked_dates').delete().eq('id', blockId);
+        if (delErr) throw new Error(delErr.message);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['host-blocked-dates'] });
+    },
+  });
+}
+
+export function useHostConfirmBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { data, error } = await supabase.rpc('host_confirm_booking', {
+        p_booking_id: bookingId,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
+    },
+  });
+}
+
+export function useHostDeclineBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ bookingId, reason }: { bookingId: string; reason?: string }) => {
+      const { data, error } = await supabase.rpc('host_cancel_booking', {
+        p_booking_id: bookingId,
+        p_reason: reason ?? 'Host declined reservation request',
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
     },
   });
 }

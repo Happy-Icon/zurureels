@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,7 @@ import {
   useToggleFollow,
   useToggleLike,
   useToggleSave,
+  type ReelInteractions,
 } from '@/lib/queries';
 import { BookingSheet } from '@/components/BookingSheet';
 import { ReelInfoSheet } from '@/components/ReelInfoSheet';
@@ -41,11 +42,28 @@ interface ReelCardProps {
   reel: ReelRow;
   isActive: boolean;
   height: number;
+  prefetchInteractions?: ReelInteractions;
 }
 
 import { useIsFocused } from '@react-navigation/native';
 
-export function ReelCard({ reel, isActive, height }: ReelCardProps) {
+function getOptimizedCloudinaryVideoUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (url.includes('res.cloudinary.com') && url.includes('/upload/') && !url.includes('f_auto')) {
+    return url.replace('/upload/', '/upload/f_auto,q_auto,w_720/');
+  }
+  return url;
+}
+
+function getOptimizedCloudinaryImageUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (url.includes('res.cloudinary.com') && url.includes('/upload/') && !url.includes('f_auto')) {
+    return url.replace('/upload/', '/upload/f_auto,q_auto,w_600/');
+  }
+  return url;
+}
+
+export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelCardProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, viewMode } = useAuth();
@@ -60,14 +78,16 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
   const [bookingOpen, setBookingOpen] = useState<boolean>(false);
 
   const hostId = reel.user_id ?? null;
-  const { data: inter } = useReelInteractions(
+  const { data: interFallback } = useReelInteractions(
     reel.id,
     hostId,
     user?.id,
-    isActive,
+    isActive && !prefetchInteractions,
   );
+  const inter = prefetchInteractions ?? interFallback;
 
-  const videoUrl = reel.video_url ?? '';
+  const videoUrl = useMemo(() => getOptimizedCloudinaryVideoUrl(reel.video_url), [reel.video_url]);
+  const thumbnailUrl = useMemo(() => getOptimizedCloudinaryImageUrl(reel.thumbnail_url), [reel.thumbnail_url]);
 
   const player = useVideoPlayer(videoUrl, (p) => {
     p.loop = true;
@@ -224,9 +244,9 @@ export function ReelCard({ reel, isActive, height }: ReelCardProps) {
   return (
     <View style={[styles.page, { height }]}>
       {/* Full-bleed video / thumbnail */}
-      {reel.thumbnail_url ? (
+      {thumbnailUrl ? (
         <Image
-          source={{ uri: reel.thumbnail_url }}
+          source={{ uri: thumbnailUrl }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
         />
