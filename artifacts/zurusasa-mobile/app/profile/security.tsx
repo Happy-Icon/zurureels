@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase } from '@/lib/supabase';
+import { passkeyService, type PasskeyCredential } from '@/services/passkeyService';
 import { Skeleton } from '@/components/Skeleton';
 
 export default function SecurityCenterScreen() {
@@ -36,6 +37,11 @@ export default function SecurityCenterScreen() {
   const [loginAlerts, setLoginAlerts] = useState(true);
   const [accountStatus, setAccountStatus] = useState<'active' | 'deactivated' | 'pending_deletion' | 'deleted'>('active');
 
+  // Passkey State
+  const [passkeyEnabled, setPasskeyEnabled] = useState(false);
+  const [passkeys, setPasskeys] = useState<PasskeyCredential[]>([]);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
   const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 50;
 
@@ -53,18 +59,23 @@ export default function SecurityCenterScreen() {
         return;
       }
       try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('security_settings, privacy_settings, account_status')
-          .eq('id', user.id)
-          .single();
+        const [profileRes, passkeyRes] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('security_settings, privacy_settings, account_status')
+            .eq('id', user.id)
+            .single(),
+          passkeyService.listPasskeys(),
+        ]);
 
+        const data = profileRes.data;
         if (data) {
           if (data.account_status) setAccountStatus(data.account_status as any);
           if (data.security_settings) {
             const s = data.security_settings as any;
             setTwoFactor(s.two_factor || false);
             setLoginAlerts(s.login_alerts !== undefined ? s.login_alerts : true);
+            if (s.passkey_enabled) setPasskeyEnabled(true);
           }
           if (data.privacy_settings) {
             const p = data.privacy_settings as any;
@@ -74,6 +85,11 @@ export default function SecurityCenterScreen() {
             setAnalyticsSharing(p.analytics_sharing !== undefined ? p.analytics_sharing : true);
           }
         }
+
+        if (passkeyRes) {
+          setPasskeys(passkeyRes.passkeys);
+          if (passkeyRes.hasPasskey) setPasskeyEnabled(true);
+        }
       } catch (e) {
         console.error('Error fetching settings:', e);
       } finally {
@@ -82,6 +98,78 @@ export default function SecurityCenterScreen() {
     };
     fetchSettings();
   }, [user]);
+
+  const handleEnablePasskey = async () => {
+    setPasskeyLoading(true);
+    try {
+      const res = await passkeyService.register();
+      if (res.cancelled) {
+        setPasskeyLoading(false);
+        return;
+      }
+      if (!res.success) {
+        showAlert({
+          title: 'Passkey Setup',
+          message: res.error || 'Could not register passkey on this device.',
+          icon: 'alert-triangle',
+        });
+        setPasskeyLoading(false);
+        return;
+      }
+      setPasskeyEnabled(true);
+      const passkeyRes = await passkeyService.listPasskeys();
+      setPasskeys(passkeyRes.passkeys);
+      showAlert({
+        title: 'Passkey Enabled',
+        message: 'Your passkey is now registered. You can use Face ID, Touch ID, or your device screen lock to sign in quickly and securely.',
+        icon: 'check-circle',
+      });
+    } catch (err: any) {
+      showAlert({
+        title: 'Passkey Setup Error',
+        message: err?.message || 'Failed to register passkey.',
+        icon: 'alert-triangle',
+      });
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
+  const handleRemovePasskey = () => {
+    showAlert({
+      title: 'Remove Passkey',
+      message: 'Are you sure you want to remove your registered passkey from this device? You can re-enable it at any time.',
+      icon: 'key',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setPasskeyLoading(true);
+            try {
+              const firstId = passkeys[0]?.id;
+              await passkeyService.removePasskey(firstId);
+              setPasskeyEnabled(false);
+              setPasskeys([]);
+              showAlert({
+                title: 'Passkey Removed',
+                message: 'Your passkey has been removed from this device.',
+                icon: 'check-circle',
+              });
+            } catch (err: any) {
+              showAlert({
+                title: 'Error',
+                message: err?.message || 'Failed to remove passkey.',
+              });
+            } finally {
+              setPasskeyLoading(false);
+            }
+          },
+        },
+      ],
+    });
+  };
 
   const autoSaveSettings = async (
     tf: boolean,
@@ -298,6 +386,46 @@ export default function SecurityCenterScreen() {
         <View style={styles.sectionBlock}>
           <Text style={styles.sectionTitle}>Login</Text>
           <View style={styles.menuRowsGroup}>
+            {/* Passkeys (Biometrics) */}
+            <View style={styles.menuRow}>
+              <View style={styles.menuTextStack}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.menuRowTitle}>Passkeys (Biometrics)</Text>
+                  {passkeyEnabled && (
+                    <View style={styles.activeBadge}>
+                      <Text style={styles.activeBadgeText}>ACTIVE</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.menuRowSub}>
+                  {passkeyEnabled
+                    ? `Registered on ${passkeys[0]?.name || 'this device'} · Face ID / Touch ID sign-in active`
+                    : 'Sign in faster using Face ID, Touch ID, or screen lock'}
+                </Text>
+              </View>
+              {passkeyLoading ? (
+                <ActivityIndicator size="small" color="#000000" />
+              ) : passkeyEnabled ? (
+                <Pressable
+                  onPress={handleRemovePasskey}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.passkeyRemoveBtn, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.passkeyRemoveText}>Remove</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={handleEnablePasskey}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.passkeyEnableBtn, pressed && { opacity: 0.8 }]}
+                >
+                  <Text style={styles.passkeyEnableText}>Enable</Text>
+                </Pressable>
+              )}
+            </View>
+
+            <View style={styles.divider} />
+
             <Pressable
               onPress={handleChangePassword}
               style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
@@ -550,5 +678,39 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F1F5F9',
     marginVertical: 2,
+  },
+  activeBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803D',
+    letterSpacing: 0.5,
+  },
+  passkeyEnableBtn: {
+    backgroundColor: '#000000',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  passkeyEnableText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  passkeyRemoveBtn: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  passkeyRemoveText: {
+    color: '#DC2626',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

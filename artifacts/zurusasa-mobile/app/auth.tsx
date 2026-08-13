@@ -34,6 +34,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { supabase } from '@/lib/supabase';
+import { passkeyService } from '@/services/passkeyService';
 import { KeyboardScreen, KeyboardModal } from '@/components/keyboard';
 
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -688,11 +689,28 @@ export default function AuthScreen() {
 
   const handlePasskeyLogin = async () => {
     resetMessages();
+    setLoading(true);
     try {
-      const { error: err } = await (supabase.auth as any).signInWithPasskey();
-      if (err) throw err;
+      const result = await passkeyService.signIn();
+
+      if (result.cancelled) {
+        setLoading(false);
+        return;
+      }
+
+      if (!result.success) {
+        setLoading(false);
+        setError(result.error || 'Failed to authenticate with passkey.');
+        return;
+      }
+
+      if (result.user) {
+        await routeAfterLogin(result.user.id);
+      }
     } catch (e: any) {
-      setError(e.message || 'Failed to log in with passkey.');
+      setError(e?.message || 'Failed to log in with passkey.');
+    } finally {
+      setLoading(false);
     }
   };
 
