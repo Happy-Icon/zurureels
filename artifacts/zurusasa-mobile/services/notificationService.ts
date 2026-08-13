@@ -258,10 +258,10 @@ export const notificationService = {
         return;
       }
 
-      // 2. Query active device tokens from canonical user_devices table
+      // 2. Query active device tokens from user_devices (supports both push_token and legacy device_token)
       const { data: devices, error: devErr } = await supabase
         .from('user_devices')
-        .select('push_token')
+        .select('push_token, device_token')
         .eq('user_id', recipientId)
         .eq('is_active', true);
 
@@ -271,9 +271,10 @@ export const notificationService = {
 
       const tokens = new Set<string>();
       if (devices && devices.length > 0) {
-        for (const d of devices) {
-          if (d.push_token && typeof d.push_token === 'string') {
-            tokens.add(d.push_token);
+        for (const d of devices as any[]) {
+          const t = d.push_token || d.device_token;
+          if (t && typeof t === 'string' && t.trim().length > 0) {
+            tokens.add(t.trim());
           }
         }
       }
@@ -350,7 +351,6 @@ export const notificationService = {
           token = fallbackToken?.data ?? null;
         } catch (fallbackErr: any) {
           console.log('[Push] Push token fallback note:', fallbackErr?.message || fallbackErr);
-          // In Expo Go or simulator where credentials are not bound, create dev device identifier
           token = `ExponentPushToken[dev_${Platform.OS}_${userId.slice(0, 8)}]`;
         }
       }
@@ -363,7 +363,7 @@ export const notificationService = {
       const fingerprint = token.length > 10 ? `...${token.slice(-6)}` : token;
       console.log(`[Push] Token received: YES (fingerprint: ${fingerprint})`);
 
-      // 4. Save token into canonical user_devices table via RPC first
+      // 4. Save token into user_devices table via RPC first
       let saved = false;
       try {
         const { data: rpcData, error: rpcErr } = await supabase.rpc('register_device_push_token', {
@@ -382,13 +382,13 @@ export const notificationService = {
       }
 
       if (!saved) {
-        // Fallback: Direct select & insert/update in user_devices
+        // Fallback: Direct select & insert/update setting BOTH push_token and device_token
         try {
           const { data: existingDevice } = await supabase
             .from('user_devices')
             .select('id')
             .eq('user_id', userId)
-            .eq('push_token', token)
+            .or(`push_token.eq.${token},device_token.eq.${token}`)
             .maybeSingle();
 
           if (existingDevice?.id) {
@@ -396,6 +396,8 @@ export const notificationService = {
               .from('user_devices')
               .update({
                 is_active: true,
+                push_token: token,
+                device_token: token,
                 device_type: Platform.OS,
                 updated_at: new Date().toISOString(),
               })
@@ -413,6 +415,7 @@ export const notificationService = {
               .insert({
                 user_id: userId,
                 push_token: token,
+                device_token: token,
                 device_type: Platform.OS,
                 is_active: true,
                 updated_at: new Date().toISOString(),
@@ -495,7 +498,7 @@ export const notificationService = {
           await supabase
             .from('user_devices')
             .update({ is_active: false })
-            .eq('push_token', pushToken);
+            .or(`push_token.eq.${pushToken},device_token.eq.${pushToken}`);
         }
         return { status: 'error', error: errorDetail };
       }
