@@ -142,7 +142,6 @@ export const notificationService = {
    */
   async createNotification(params: CreateNotificationParams): Promise<NotificationRow | null> {
     try {
-      // 1. Build canonical payload using standard columns (user_id, type, title, message, metadata, is_read)
       const metadataPayload: Record<string, unknown> = {
         ...(params.metadata ?? {}),
         ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
@@ -150,48 +149,50 @@ export const notificationService = {
         ...(params.actionId ? { action_id: params.actionId } : {}),
       };
 
-      const insertPayload: Record<string, any> = {
-        user_id: params.userId,
-        type: params.type,
-        title: params.title,
-        message: params.message,
-        metadata: metadataPayload,
-        is_read: false,
-      };
+      let insertedId: string | null = null;
 
-      let insertedData: NotificationRow | null = null;
+      // 1. Try Security Definer RPC first (bypasses RLS cross-user restrictions)
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('send_notification', {
+          p_user_id: params.userId,
+          p_type: params.type,
+          p_title: params.title,
+          p_message: params.message,
+          p_metadata: metadataPayload,
+        });
 
-      const { data, error } = await supabase
-        .from('notifications')
-        .insert(insertPayload)
-        .select()
-        .maybeSingle();
+        if (!rpcErr && rpcRes && (rpcRes as any).success) {
+          insertedId = (rpcRes as any).id ?? null;
+        } else if (rpcErr) {
+          console.warn('[Push] send_notification RPC note:', rpcErr.message || rpcErr);
+        }
+      } catch (rpcCatch) {
+        // Continue to direct insert fallback
+      }
 
-      if (error) {
-        console.warn('[Push] Primary notification insert warning:', error.message || error);
-
-        // Fallback: minimal insert with just core columns
-        const { data: fallbackData, error: fallbackError } = await supabase
+      // 2. Direct table insert fallback if RPC was not available
+      if (!insertedId) {
+        const { data, error } = await supabase
           .from('notifications')
           .insert({
             user_id: params.userId,
             type: params.type,
             title: params.title,
             message: params.message,
+            metadata: metadataPayload,
+            is_read: false,
           })
           .select()
           .maybeSingle();
 
-        if (fallbackError) {
-          console.warn('[Push] Fallback notification insert warning:', fallbackError.message || fallbackError);
-        } else {
-          insertedData = fallbackData as NotificationRow;
+        if (error) {
+          console.warn('[Push] Direct notification insert note:', error.message || error);
+        } else if (data) {
+          insertedId = (data as NotificationRow).id;
         }
-      } else {
-        insertedData = data as NotificationRow;
       }
 
-      // 2. Trigger push notification to recipient's registered devices (non-blocking)
+      // 3. Trigger push notification to recipient's registered devices (non-blocking)
       this.sendPushNotificationForUser(
         params.userId,
         params.title,
@@ -206,7 +207,7 @@ export const notificationService = {
         console.warn('[Push] Push delivery warning:', pushErr);
       });
 
-      return insertedData;
+      return insertedId ? ({ id: insertedId, user_id: params.userId, type: params.type, title: params.title, message: params.message, is_read: false, created_at: new Date().toISOString() } as NotificationRow) : null;
     } catch (err) {
       console.warn('[Push] Error creating notification:', err);
       return null;
