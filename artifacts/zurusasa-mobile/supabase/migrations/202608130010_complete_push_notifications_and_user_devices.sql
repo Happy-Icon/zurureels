@@ -187,24 +187,45 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'user_id is required');
   END IF;
 
-  INSERT INTO public.notifications (
-    user_id,
-    type,
-    title,
-    message,
-    metadata
-  ) VALUES (
-    p_user_id,
-    COALESCE(p_type, 'notification'),
-    COALESCE(p_title, 'New Notification'),
-    COALESCE(p_message, ''),
-    COALESCE(p_metadata, '{}'::jsonb)
-  )
-  RETURNING id INTO v_id;
+  BEGIN
+    INSERT INTO public.notifications (
+      user_id,
+      type,
+      title,
+      message,
+      metadata,
+      is_read
+    ) VALUES (
+      p_user_id,
+      COALESCE(p_type, 'notification'),
+      COALESCE(p_title, 'New Notification'),
+      COALESCE(p_message, ''),
+      COALESCE(p_metadata, '{}'::jsonb),
+      false
+    )
+    RETURNING id INTO v_id;
 
-  RETURN jsonb_build_object('success', true, 'id', v_id);
-EXCEPTION WHEN OTHERS THEN
-  RETURN jsonb_build_object('success', false, 'error', SQLERRM);
+    RETURN jsonb_build_object('success', true, 'id', v_id);
+  EXCEPTION WHEN OTHERS THEN
+    BEGIN
+      INSERT INTO public.notifications (
+        user_id,
+        type,
+        title,
+        message
+      ) VALUES (
+        p_user_id,
+        COALESCE(p_type, 'notification'),
+        COALESCE(p_title, 'New Notification'),
+        COALESCE(p_message, '')
+      )
+      RETURNING id INTO v_id;
+
+      RETURN jsonb_build_object('success', true, 'id', v_id);
+    EXCEPTION WHEN OTHERS THEN
+      RETURN jsonb_build_object('success', false, 'error', SQLERRM);
+    END;
+  END;
 END;
 $$;
 

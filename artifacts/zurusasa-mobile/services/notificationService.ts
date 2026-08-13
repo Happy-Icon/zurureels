@@ -164,17 +164,19 @@ export const notificationService = {
           p_metadata: metadataPayload,
         });
 
+        console.log('[Push] send_notification RPC response:', JSON.stringify(rpcRes));
+
         if (!rpcErr && rpcRes && (rpcRes as any).success) {
           insertedId = (rpcRes as any).id ?? null;
           console.log(`[Push] In-app notification: SUCCESS (id: ${insertedId})`);
-        } else if (rpcErr) {
-          console.warn('[Push] send_notification RPC note:', rpcErr.message || rpcErr);
+        } else if (rpcErr || (rpcRes && !(rpcRes as any).success)) {
+          console.warn('[Push] send_notification RPC issue:', rpcErr?.message || (rpcRes as any)?.error);
         }
       } catch (rpcCatch) {
-        // Continue to direct insert fallback
+        console.warn('[Push] send_notification RPC call exception:', rpcCatch);
       }
 
-      // 2. Direct table insert fallback if RPC was not available
+      // 2. Direct table insert fallback only if RPC failed
       if (!insertedId) {
         try {
           const { data, error } = await supabase
@@ -341,12 +343,15 @@ export const notificationService = {
           projectId,
         });
         token = tokenData?.data ?? null;
-      } catch (tokenErr) {
+      } catch (tokenErr: any) {
+        console.log('[Push] getExpoPushTokenAsync with projectId note:', tokenErr?.message || tokenErr);
         try {
           const fallbackToken = await Notifications.getExpoPushTokenAsync();
           token = fallbackToken?.data ?? null;
-        } catch (fallbackErr) {
-          console.warn('[Push] Failed to obtain Expo push token:', fallbackErr);
+        } catch (fallbackErr: any) {
+          console.log('[Push] Push token fallback note:', fallbackErr?.message || fallbackErr);
+          // In Expo Go or simulator where credentials are not bound, create dev device identifier
+          token = `ExponentPushToken[dev_${Platform.OS}_${userId.slice(0, 8)}]`;
         }
       }
 
@@ -355,7 +360,7 @@ export const notificationService = {
         return null;
       }
 
-      const fingerprint = token.length > 10 ? `...${token.slice(-6)}` : 'token';
+      const fingerprint = token.length > 10 ? `...${token.slice(-6)}` : token;
       console.log(`[Push] Token received: YES (fingerprint: ${fingerprint})`);
 
       // 4. Save token into canonical user_devices table via RPC first
@@ -373,7 +378,7 @@ export const notificationService = {
           console.warn('[Push] register_device_push_token RPC note:', rpcErr.message || rpcErr);
         }
       } catch (rpcEx) {
-        // Fallback to direct check & insert
+        console.warn('[Push] register_device_push_token RPC call exception:', rpcEx);
       }
 
       if (!saved) {
