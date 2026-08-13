@@ -142,6 +142,9 @@ export const notificationService = {
    */
   async createNotification(params: CreateNotificationParams): Promise<NotificationRow | null> {
     try {
+      console.log(`[Push] Event: ${params.type}`);
+      console.log(`[Push] Recipient: ${params.userId ? `${params.userId.slice(0, 8)}...` : 'none'}`);
+
       const metadataPayload: Record<string, unknown> = {
         ...(params.metadata ?? {}),
         ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
@@ -151,7 +154,7 @@ export const notificationService = {
 
       let insertedId: string | null = null;
 
-      // 1. Try Security Definer RPC first (bypasses RLS cross-user restrictions)
+      // 1. Create In-App Notification via Security Definer RPC first
       try {
         const { data: rpcRes, error: rpcErr } = await supabase.rpc('send_notification', {
           p_user_id: params.userId,
@@ -163,6 +166,7 @@ export const notificationService = {
 
         if (!rpcErr && rpcRes && (rpcRes as any).success) {
           insertedId = (rpcRes as any).id ?? null;
+          console.log(`[Push] In-app notification: SUCCESS (id: ${insertedId})`);
         } else if (rpcErr) {
           console.warn('[Push] send_notification RPC note:', rpcErr.message || rpcErr);
         }
@@ -172,27 +176,32 @@ export const notificationService = {
 
       // 2. Direct table insert fallback if RPC was not available
       if (!insertedId) {
-        const { data, error } = await supabase
-          .from('notifications')
-          .insert({
-            user_id: params.userId,
-            type: params.type,
-            title: params.title,
-            message: params.message,
-            metadata: metadataPayload,
-            is_read: false,
-          })
-          .select()
-          .maybeSingle();
+        try {
+          const { data, error } = await supabase
+            .from('notifications')
+            .insert({
+              user_id: params.userId,
+              type: params.type,
+              title: params.title,
+              message: params.message,
+              metadata: metadataPayload,
+              is_read: false,
+            })
+            .select()
+            .maybeSingle();
 
-        if (error) {
-          console.warn('[Push] Direct notification insert note:', error.message || error);
-        } else if (data) {
-          insertedId = (data as NotificationRow).id;
+          if (error) {
+            console.warn('[Push] Direct notification insert note:', error.message || error);
+          } else if (data) {
+            insertedId = (data as NotificationRow).id;
+            console.log(`[Push] In-app notification: SUCCESS (id: ${insertedId})`);
+          }
+        } catch (insertEx) {
+          console.warn('[Push] Direct notification insert exception:', insertEx);
         }
       }
 
-      // 3. Trigger push notification to recipient's registered devices (non-blocking)
+      // 3. Trigger native push notification to recipient's registered devices (non-blocking)
       this.sendPushNotificationForUser(
         params.userId,
         params.title,
@@ -207,7 +216,17 @@ export const notificationService = {
         console.warn('[Push] Push delivery warning:', pushErr);
       });
 
-      return insertedId ? ({ id: insertedId, user_id: params.userId, type: params.type, title: params.title, message: params.message, is_read: false, created_at: new Date().toISOString() } as NotificationRow) : null;
+      return insertedId
+        ? ({
+            id: insertedId,
+            user_id: params.userId,
+            type: params.type,
+            title: params.title,
+            message: params.message,
+            is_read: false,
+            created_at: new Date().toISOString(),
+          } as NotificationRow)
+        : null;
     } catch (err) {
       console.warn('[Push] Error creating notification:', err);
       return null;
@@ -224,9 +243,6 @@ export const notificationService = {
     data?: Record<string, unknown>,
   ) {
     try {
-      console.log(`[Push] Event: ${data?.type || 'notification'}`);
-      console.log(`[Push] Recipient: ${recipientId ? `${recipientId.slice(0, 8)}...` : 'none'}`);
-
       // 1. Check user notification settings in metadata
       const { data: profile } = await supabase
         .from('profiles')
@@ -260,9 +276,9 @@ export const notificationService = {
         }
       }
 
-      console.log(`[Push] Active devices: ${tokens.size}`);
+      console.log(`[Push] Active devices found: ${tokens.size}`);
       if (tokens.size === 0) {
-        console.log('[Push] No registered devices');
+        console.log(`[Push] No registered devices for recipient ${recipientId ? `${recipientId.slice(0, 8)}...` : 'unknown'} (In-app notification preserved)`);
         return;
       }
 
@@ -273,7 +289,7 @@ export const notificationService = {
         validTokensCount++;
         await this.sendPushNotification(token, title, body, data);
       }
-      console.log(`[Push] Valid Expo tokens: ${validTokensCount}`);
+      console.log(`[Push] Valid Expo tokens dispatched: ${validTokensCount}`);
     } catch (err) {
       console.warn('[Push] Error sending push notification for user:', err);
     }
@@ -319,10 +335,20 @@ export const notificationService = {
         (Constants as any).easConfig?.projectId ??
         EAS_PROJECT_ID;
 
-      const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId,
-      });
-      const token = tokenData?.data;
+      let token: string | null = null;
+      try {
+        const tokenData = await Notifications.getExpoPushTokenAsync({
+          projectId,
+        });
+        token = tokenData?.data ?? null;
+      } catch (tokenErr) {
+        try {
+          const fallbackToken = await Notifications.getExpoPushTokenAsync();
+          token = fallbackToken?.data ?? null;
+        } catch (fallbackErr) {
+          console.warn('[Push] Failed to obtain Expo push token:', fallbackErr);
+        }
+      }
 
       if (!token) {
         console.log('[Push] Token received: NO');
@@ -332,24 +358,73 @@ export const notificationService = {
       const fingerprint = token.length > 10 ? `...${token.slice(-6)}` : 'token';
       console.log(`[Push] Token received: YES (fingerprint: ${fingerprint})`);
 
-      // 4. Upsert token into canonical user_devices table
-      const { error } = await supabase.from('user_devices').upsert(
-        {
-          user_id: userId,
-          push_token: token,
-          device_type: Platform.OS,
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,push_token' },
-      );
+      // 4. Save token into canonical user_devices table via RPC first
+      let saved = false;
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('register_device_push_token', {
+          p_push_token: token,
+          p_device_type: Platform.OS,
+        });
 
-      if (error) {
-        console.warn('[Push] Token registration error:', error.message);
-        return null;
+        if (!rpcErr && (rpcData as any)?.success) {
+          console.log(`[Push] Token registration: SUCCESS (deviceId: ${(rpcData as any)?.id || 'registered'})`);
+          saved = true;
+        } else if (rpcErr) {
+          console.warn('[Push] register_device_push_token RPC note:', rpcErr.message || rpcErr);
+        }
+      } catch (rpcEx) {
+        // Fallback to direct check & insert
       }
 
-      console.log('[Push] Token registration: SUCCESS');
+      if (!saved) {
+        // Fallback: Direct select & insert/update in user_devices
+        try {
+          const { data: existingDevice } = await supabase
+            .from('user_devices')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('push_token', token)
+            .maybeSingle();
+
+          if (existingDevice?.id) {
+            const { error: updateErr } = await supabase
+              .from('user_devices')
+              .update({
+                is_active: true,
+                device_type: Platform.OS,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existingDevice.id);
+
+            if (updateErr) {
+              console.warn('[Push] Direct device update note:', updateErr.message);
+            } else {
+              console.log('[Push] Token registration: SUCCESS (updated existing device)');
+              saved = true;
+            }
+          } else {
+            const { error: insertErr } = await supabase
+              .from('user_devices')
+              .insert({
+                user_id: userId,
+                push_token: token,
+                device_type: Platform.OS,
+                is_active: true,
+                updated_at: new Date().toISOString(),
+              });
+
+            if (insertErr) {
+              console.warn('[Push] Direct device insert note:', insertErr.message);
+            } else {
+              console.log('[Push] Token registration: SUCCESS (new device inserted)');
+              saved = true;
+            }
+          }
+        } catch (directErr) {
+          console.warn('[Push] Direct device registration note:', directErr);
+        }
+      }
+
       return token;
     } catch (err: any) {
       console.warn('[Push] Error registering push token:', err?.message || err);

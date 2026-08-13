@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { notificationService } from '@/services/notificationService';
 import { Skeleton } from '@/components/Skeleton';
 
 export default function NotificationsSettingsCenter() {
@@ -209,6 +210,38 @@ export default function NotificationsSettingsCenter() {
             />
           </View>
         </View>
+
+        {/* ── SECTION 4: TEST PUSH NOTIFICATION ─────────────────────────── */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>Device push test</Text>
+          <Text style={[styles.menuRowSub, { marginBottom: 12 }]}>
+            Verify that your device token is registered in Supabase and native alerts are working.
+          </Text>
+          <Pressable
+            testID="send-test-push-btn"
+            onPress={async () => {
+              if (!user) return;
+              try {
+                await notificationService.registerPushToken(user.id);
+                const res = await notificationService.triggerTestPush(user.id);
+                if (res.success) {
+                  alert(res.error || 'Test notification sent! Check your notification center and device banner.');
+                } else {
+                  alert(res.error || 'Failed to send test push.');
+                }
+              } catch (err: any) {
+                alert('Test push error: ' + (err?.message || err));
+              }
+            }}
+            style={({ pressed }) => [
+              styles.testPushBtn,
+              pressed && { opacity: 0.8 },
+            ]}
+          >
+            <Feather name="bell" size={16} color="#FFFFFF" />
+            <Text style={styles.testPushBtnText}>Send Test Push Notification</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </View>
   );
@@ -283,5 +316,20 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F1F5F9',
     marginVertical: 2,
+  },
+  testPushBtn: {
+    backgroundColor: '#F26522',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 4,
+  },
+  testPushBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
