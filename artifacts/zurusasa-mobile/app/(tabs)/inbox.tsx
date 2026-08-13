@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useConversations } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
@@ -38,6 +39,7 @@ export default function InboxScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, loading } = useAuth();
   const { data: conversations, isLoading, refetch } = useConversations(user?.id);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,8 +48,9 @@ export default function InboxScreen() {
     useCallback(() => {
       if (user?.id) {
         refetch();
+        queryClient.invalidateQueries({ queryKey: ['unread-messages-count'] });
       }
-    }, [user?.id, refetch]),
+    }, [user?.id, refetch, queryClient]),
   );
 
   const handleRefresh = async () => {
@@ -128,9 +131,6 @@ export default function InboxScreen() {
       <View style={styles.rowInfo}>
         <Text style={styles.rowName} numberOfLines={1}>
           {item.other.full_name}
-        </Text>
-        <Text style={styles.rowUsername} numberOfLines={1}>
-          @{item.other.username}
         </Text>
       </View>
       <View style={styles.rowRight}>

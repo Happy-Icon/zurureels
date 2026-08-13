@@ -128,48 +128,114 @@ export const notificationService = {
   },
 
   /**
-   * Create a new notification entry (DB + Push trigger if push_token exists)
+   * Create a new notification entry (DB + Push trigger to recipient devices)
    */
   async createNotification(params: CreateNotificationParams): Promise<NotificationRow | null> {
     try {
+      // Build insert payload without image_url column (fixes PGRST204)
+      const insertPayload: Record<string, any> = {
+        user_id: params.userId,
+        type: params.type,
+        title: params.title,
+        message: params.message,
+        metadata: {
+          ...(params.metadata ?? {}),
+          ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
+          ...(params.actionType ? { action_type: params.actionType } : {}),
+          ...(params.actionId ? { action_id: params.actionId } : {}),
+        },
+        is_read: false,
+      };
+
       const { data, error } = await supabase
         .from('notifications')
-        .insert({
-          user_id: params.userId,
-          type: params.type,
-          title: params.title,
-          message: params.message,
-          image_url: params.imageUrl ?? null,
-          metadata: {
-            ...(params.metadata ?? {}),
-            ...(params.actionType ? { action_type: params.actionType } : {}),
-            ...(params.actionId ? { action_id: params.actionId } : {}),
-          },
-          is_read: false,
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
-      if (error) throw error;
-
-      // Attempt sending Expo push notification if token exists
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('push_token, notifications_enabled')
-        .eq('id', params.userId)
-        .single();
-
-      if (profile?.push_token && profile.notifications_enabled !== false) {
-        this.sendPushNotification(profile.push_token, params.title, params.message, {
-          actionType: params.actionType,
-          actionId: params.actionId,
-        });
+      if (error) {
+        console.warn('Notification DB insert warning:', error?.message || error);
       }
 
-      return data as NotificationRow;
+      // Trigger push notification to recipient's registered devices (non-blocking)
+      this.sendPushNotificationForUser(
+        params.userId,
+        params.title,
+        params.message,
+        {
+          type: params.type,
+          actionType: params.actionType,
+          actionId: params.actionId,
+          conversationId: params.actionId,
+        },
+      ).catch((pushErr) => {
+        console.warn('Push delivery warning:', pushErr);
+      });
+
+      return (data as NotificationRow) ?? null;
     } catch (err) {
       console.warn('Error creating notification:', err);
       return null;
+    }
+  },
+
+  /**
+   * Send push notification to all registered devices for a user
+   */
+  async sendPushNotificationForUser(
+    recipientId: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>,
+  ) {
+    try {
+      // 1. Check user notification settings
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('push_token, notifications_enabled')
+        .eq('id', recipientId)
+        .maybeSingle();
+
+      if (profile?.notifications_enabled === false) {
+        console.log(`Push notification skipped: User ${recipientId} has notifications disabled.`);
+        return;
+      }
+
+      // Collect distinct tokens for multi-device support
+      const tokens = new Set<string>();
+      if (profile?.push_token && typeof profile.push_token === 'string') {
+        tokens.add(profile.push_token);
+      }
+
+      // 2. Query user_devices table for registered devices
+      try {
+        const { data: devices } = await supabase
+          .from('user_devices')
+          .select('push_token')
+          .eq('user_id', recipientId);
+
+        if (devices) {
+          for (const d of devices) {
+            if (d.push_token && typeof d.push_token === 'string') {
+              tokens.add(d.push_token);
+            }
+          }
+        }
+      } catch (devErr) {
+        // user_devices table optional check; ignore schema missing errors
+      }
+
+      if (tokens.size === 0) {
+        return;
+      }
+
+      // 3. Send to all unique registered push tokens for this user
+      for (const token of tokens) {
+        if (!token || typeof token !== 'string') continue;
+        await this.sendPushNotification(token, title, body, data);
+      }
+    } catch (err) {
+      console.warn('Error sending push notification for user:', err);
     }
   },
 
@@ -196,12 +262,12 @@ export const notificationService = {
       const tokenData = await Notifications.getExpoPushTokenAsync();
       const token = tokenData.data;
 
-      // Save token & device info to Supabase profile
+      // Save token to profile
       const { data: profile } = await supabase
         .from('profiles')
         .select('metadata')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       const currentMeta = (profile?.metadata ?? {}) as Record<string, unknown>;
 
@@ -218,6 +284,21 @@ export const notificationService = {
           },
         })
         .eq('id', userId);
+
+      // Upsert into user_devices table if present
+      try {
+        await supabase.from('user_devices').upsert(
+          {
+            user_id: userId,
+            push_token: token,
+            device_type: Platform.OS,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,push_token' },
+        );
+      } catch (e) {
+        // Ignore if user_devices table missing
+      }
 
       return token;
     } catch (err) {
@@ -249,6 +330,7 @@ export const notificationService = {
           title,
           body,
           data: data ?? {},
+          badge: 1,
         }),
       });
     } catch (err) {

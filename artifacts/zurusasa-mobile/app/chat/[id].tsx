@@ -161,15 +161,25 @@ export default function NativeChatScreen() {
       if (conv) {
         const recipientId =
           conv.participant_one === user.id ? conv.participant_two : conv.participant_one;
-        if (recipientId) {
-          notificationService.createNotification({
-            userId: recipientId,
-            type: 'message',
-            title: `New message from ${user.user_metadata?.full_name || 'Host/Guest'}`,
-            message: content,
-            actionType: 'chat',
-            actionId: id,
-          });
+        if (recipientId && recipientId !== user.id) {
+          const senderName = user.user_metadata?.full_name || 'Someone';
+          notificationService
+            .createNotification({
+              userId: recipientId,
+              type: 'message',
+              title: `New message from ${senderName}`,
+              message: content,
+              actionType: 'chat',
+              actionId: id,
+              metadata: {
+                conversation_id: id,
+                sender_id: user.id,
+                sender_name: senderName,
+              },
+            })
+            .catch((notifErr) => {
+              console.warn('Message notification warning:', notifErr);
+            });
         }
       }
     }

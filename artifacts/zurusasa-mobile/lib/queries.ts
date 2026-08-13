@@ -507,6 +507,34 @@ export function useConversations(userId: string | undefined) {
   });
 }
 
+export function useUnreadMessageCount(userId: string | undefined) {
+  return useQuery<number>({
+    queryKey: ['unread-messages-count', userId],
+    enabled: !!userId,
+    staleTime: 5000,
+    refetchInterval: 10000,
+    queryFn: async () => {
+      const { data: convs, error: convErr } = await supabase
+        .from('conversations')
+        .select('id')
+        .or(`participant_one.eq.${userId},participant_two.eq.${userId}`);
+
+      if (convErr || !convs || convs.length === 0) return 0;
+      const convIds = convs.map((c) => c.id);
+
+      const { count, error } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .in('conversation_id', convIds)
+        .neq('sender_id', userId!)
+        .eq('is_read', false);
+
+      if (error) return 0;
+      return count ?? 0;
+    },
+  });
+}
+
 // ---- Host Calendar Queries & Mutations ----
 
 export function useHostListings(userId: string | undefined) {

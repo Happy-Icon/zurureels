@@ -14,7 +14,7 @@ import {
 } from '@expo-google-fonts/dm-sans';
 import { InstrumentSerif_400Regular } from '@expo-google-fonts/instrument-serif';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { initSentry, Sentry } from '@/lib/sentry';
 
@@ -27,6 +27,37 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const router = useRouter();
+
+  useEffect(() => {
+    let sub: any = null;
+    try {
+      const Constants = require('expo-constants').default;
+      const isExpoGo =
+        Constants?.executionEnvironment === 'storeClient' ||
+        Constants?.appOwnership === 'expo';
+
+      if (!isExpoGo) {
+        const Notifs = require('expo-notifications');
+        if (Notifs?.addNotificationResponseReceivedListener) {
+          sub = Notifs.addNotificationResponseReceivedListener((response: any) => {
+            const data = response?.notification?.request?.content?.data;
+            const conversationId = data?.actionId || data?.conversationId;
+            if (conversationId) {
+              router.push(`/chat/${conversationId}`);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Push tap listener setup note:', e);
+    }
+
+    return () => {
+      if (sub?.remove) sub.remove();
+    };
+  }, [router]);
+
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFFFFF' } }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
