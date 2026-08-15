@@ -174,17 +174,26 @@ export const passkeyService = {
    */
   async signIn(): Promise<PasskeyAuthResult> {
     try {
+      console.log('[Passkey][Auth 1/4] Starting passkey authentication with Supabase...');
       // 1. Get authentication challenge options from Supabase
       let authOptions: any = null;
       try {
         if ((supabase.auth as any).passkey?.startAuthentication) {
           const res = await (supabase.auth as any).passkey.startAuthentication();
-          if (res?.data) authOptions = res.data;
-          else if (res?.error) throw res.error;
+          if (res?.data) {
+            authOptions = res.data;
+          } else if (res?.error) {
+            throw res.error;
+          }
         }
       } catch (optErr) {
-        console.warn('[Passkey] startAuthentication error:', optErr);
+        console.warn('[Passkey][Auth 1/4] startAuthentication error:', optErr);
       }
+
+      console.log('[Passkey][Auth 1/4] Received authentication challenge options:', {
+        challenge_id: authOptions?.challenge_id || authOptions?.challengeId,
+        hasOptions: !!(authOptions?.options || authOptions),
+      });
 
       if (!authOptions && Platform.OS === 'web') {
         const { data, error } = await (supabase.auth as any).signInWithPasskey();
@@ -216,6 +225,11 @@ export const passkeyService = {
         userVerification: 'required',
       };
 
+      console.log('[Passkey][Auth 2/4] Calling Credential Manager getCredential...', {
+        rpId,
+        userVerification: nativeOptions.userVerification,
+      });
+
       if (Platform.OS === 'web') {
         const { data, error } = await (supabase.auth as any).signInWithPasskey();
         if (error) throw error;
@@ -228,6 +242,7 @@ export const passkeyService = {
             credentialResponse = await NativePasskey.get(nativeOptions);
           }
         } catch (nativeErr: any) {
+          console.warn('[Passkey][Auth 2/4] Native get error:', nativeErr);
           const parsed = parsePasskeyError(nativeErr);
           if (parsed.isCancelled) return { success: false, cancelled: true };
           return { success: false, error: parsed.message, code: parsed.code };
@@ -244,21 +259,36 @@ export const passkeyService = {
       }
 
       if (!credentialResponse) {
+        console.error('[Passkey][Auth 3/4] No credential returned from device.');
         return { success: false, error: 'No credential returned from device.' };
       }
 
+      const parsedCredential =
+        typeof credentialResponse === 'string'
+          ? JSON.parse(credentialResponse)
+          : credentialResponse;
+
+      console.log('[Passkey][Auth 3/4] Received native credential assertion:', {
+        id: parsedCredential?.id,
+        type: parsedCredential?.type,
+      });
+
       // 3. Verify signed credential with Supabase server
+      const challengeId = authOptions.challenge_id || authOptions.challengeId || authOptions.id;
+      console.log('[Passkey][Auth 4/4] Verifying authentication with Supabase...', { challengeId });
       const { data: verifyData, error: verifyError } = await (supabase.auth as any).passkey.verifyAuthentication({
-        challengeId: authOptions.challenge_id,
-        credential: credentialResponse,
+        challengeId,
+        credential: parsedCredential,
       });
 
       if (verifyError || !verifyData?.session) {
+        console.error('[Passkey][Auth 4/4] Supabase verifyAuthentication failed:', verifyError);
         return { success: false, error: verifyError?.message || 'Passkey verification failed on server.' };
       }
 
       // 4. Establish Supabase session
       await supabase.auth.setSession(verifyData.session);
+      console.log('[Passkey][Auth 4/4] Session established for user:', verifyData.user?.id);
 
       return {
         success: true,
@@ -266,6 +296,7 @@ export const passkeyService = {
         session: verifyData.session,
       };
     } catch (err: any) {
+      console.error('[Passkey][Auth Error]:', err);
       const parsed = parsePasskeyError(err);
       if (parsed.isCancelled) {
         return { success: false, cancelled: true };
@@ -288,17 +319,26 @@ export const passkeyService = {
         return { success: false, error: 'You must be logged in to register a passkey.' };
       }
 
+      console.log('[Passkey][1/5] Requesting registration challenge from Supabase for user:', userData.user.id);
       // 1. Get creation challenge options from Supabase
       let regOptions: any = null;
       try {
         if ((supabase.auth as any).passkey?.startRegistration) {
           const res = await (supabase.auth as any).passkey.startRegistration();
-          if (res?.data) regOptions = res.data;
-          else if (res?.error) throw res.error;
+          if (res?.data) {
+            regOptions = res.data;
+          } else if (res?.error) {
+            throw res.error;
+          }
         }
       } catch (optErr) {
-        console.warn('[Passkey] startRegistration error:', optErr);
+        console.warn('[Passkey][1/5] startRegistration error:', optErr);
       }
+
+      console.log('[Passkey][1/5] Supabase challenge response:', {
+        challenge_id: regOptions?.challenge_id || regOptions?.challengeId,
+        hasOptions: !!(regOptions?.options || regOptions),
+      });
 
       if (!regOptions && Platform.OS === 'web') {
         const { data, error } = await (supabase.auth as any).registerPasskey();
@@ -324,17 +364,18 @@ export const passkeyService = {
         rpId = rpId.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
       }
 
+      const baseUser = baseOptions.user || {};
       const platformDeviceOptions = {
         ...baseOptions,
         rp: {
           name: baseOptions.rp?.name || 'ZuruSasa',
-          ...(rpId ? { id: rpId } : {}),
+          ...(baseOptions.rp?.id ? { id: baseOptions.rp.id } : rpId ? { id: rpId } : {}),
         },
         user: {
-          id: baseOptions.user?.id || userData.user.id,
-          name: baseOptions.user?.name || userData.user.email || 'user',
+          id: baseUser.id || userData.user.id,
+          name: baseUser.name || userData.user.email || 'user',
           displayName:
-            baseOptions.user?.displayName ||
+            baseUser.displayName ||
             userData.user.user_metadata?.full_name ||
             userData.user.email ||
             'User',
@@ -358,6 +399,12 @@ export const passkeyService = {
         excludeCredentials: baseOptions.excludeCredentials || [],
       };
 
+      console.log('[Passkey][2/5] Triggering Android Credential Manager createCredential...', {
+        rp: platformDeviceOptions.rp,
+        user: { name: platformDeviceOptions.user.name, hasId: !!platformDeviceOptions.user.id },
+        authenticatorSelection: platformDeviceOptions.authenticatorSelection,
+      });
+
       if (Platform.OS === 'web') {
         const { data, error } = await (supabase.auth as any).registerPasskey();
         if (error) throw error;
@@ -370,6 +417,7 @@ export const passkeyService = {
             credentialResponse = await NativePasskey.create(platformDeviceOptions);
           }
         } catch (nativeErr: any) {
+          console.warn('[Passkey][2/5] Native create error:', nativeErr);
           const parsed = parsePasskeyError(nativeErr);
           if (parsed.isCancelled) return { success: false, cancelled: true };
           return { success: false, error: parsed.message };
@@ -384,21 +432,45 @@ export const passkeyService = {
       }
 
       if (!credentialResponse) {
+        console.error('[Passkey][3/5] Passkey creation returned empty response from device.');
         return { success: false, error: 'Passkey creation was not completed on device.' };
       }
 
+      const parsedCredential =
+        typeof credentialResponse === 'string'
+          ? JSON.parse(credentialResponse)
+          : credentialResponse;
+
+      console.log('[Passkey][3/5] Received native credential response from Android:', {
+        id: parsedCredential?.id,
+        type: parsedCredential?.type,
+        hasResponse: !!parsedCredential?.response,
+        hasAttestation: !!parsedCredential?.response?.attestationObject,
+        hasClientData: !!parsedCredential?.response?.clientDataJSON,
+      });
+
       // 3. Verify and persist new credential on Supabase server
+      const challengeId = regOptions.challenge_id || regOptions.challengeId || regOptions.id;
+      if (!challengeId) {
+        console.error('[Passkey][4/5] Missing challengeId in regOptions:', regOptions);
+        return { success: false, error: 'Missing challenge ID from registration server.' };
+      }
+
+      console.log('[Passkey][4/5] Verifying passkey registration with Supabase...', { challengeId });
       const { data: verifyData, error: verifyError } = await (supabase.auth as any).passkey.verifyRegistration({
-        challengeId: regOptions.challenge_id,
-        credential: credentialResponse,
+        challengeId,
+        credential: parsedCredential,
       });
 
       if (verifyError) {
-        return { success: false, error: verifyError.message };
+        console.error('[Passkey][4/5] Supabase verifyRegistration error:', verifyError);
+        return { success: false, error: verifyError.message || 'Passkey verification failed on server.' };
       }
 
+      console.log('[Passkey][5/5] Passkey successfully registered and stored on Supabase:', verifyData);
       return { success: true, credential: verifyData };
     } catch (err: any) {
+      console.error('[Passkey][Registration Error]:', err);
       const parsed = parsePasskeyError(err);
       if (parsed.isCancelled) {
         return { success: false, cancelled: true };
