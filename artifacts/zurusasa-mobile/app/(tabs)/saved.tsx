@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
-  FlatList,
+  Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,536 +13,363 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
+
 import { useAuth } from '@/context/AuthContext';
-import { useSavedEvents, useSavedReels, useToggleSave } from '@/lib/queries';
-import { Skeleton } from '@/components/Skeleton';
-import type { EventRow, ReelRow } from '@/lib/supabase';
-
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
-function formatEventDate(iso: string | null) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const year =
-    d.getFullYear() === new Date().getFullYear() ? '' : ` ${d.getFullYear()}`;
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}${year}`;
-}
-
-type FilterTab = 'all' | 'reels' | 'events';
+import { useSavedEvents, useSavedReels } from '@/lib/queries';
 
 export default function WishlistsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const { user, loading } = useAuth();
-  const [filterTab, setFilterTab] = useState<FilterTab>('all');
+  const { user } = useAuth();
 
-  const { data: reels, isLoading: reelsLoading } = useSavedReels(user?.id);
-  const { data: events, isLoading: eventsLoading } = useSavedEvents(user?.id);
-  const toggleSave = useToggleSave();
+  const { data: reels, isLoading: reelsLoading, refetch: refetchReels } = useSavedReels(user?.id);
+  const { data: events, isLoading: eventsLoading, refetch: refetchEvents } = useSavedEvents(user?.id);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
-  const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 90;
+  // Recently viewed modal state
+  const [recentlyViewedModal, setRecentlyViewedModal] = useState(false);
 
-  const handleUnsave = (reelId: string) => {
-    if (!user) return;
-    queryClient.setQueryData<ReelRow[]>(['saved-reels', user.id], (old) =>
-      (old ?? []).filter((r) => r.id !== reelId),
-    );
-    toggleSave.mutate({ reelId, userId: user.id, saved: true });
+  const topPad = Platform.OS === 'web' ? 24 : insets.top + 16;
+  const bottomPad = Platform.OS === 'web' ? 120 : insets.bottom + 90;
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([refetchReels(), refetchEvents()]);
+    setRefreshing(false);
   };
 
   const totalSavedCount = (reels?.length ?? 0) + (events?.length ?? 0);
-  const isLoading = reelsLoading || eventsLoading;
-
-  // Unauthenticated signed-out state
-  if (!loading && !user) {
-    return (
-      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad }]}>
-        <View style={styles.topNavBar}>
-          <Pressable
-            testID="saved-back-btn"
-            onPress={() => {
-              router.push('/profile');
-            }}
-            style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
-            hitSlop={10}
-          >
-            <Feather name="arrow-left" size={22} color="#222222" />
-          </Pressable>
-        </View>
-
-        <View style={styles.emptyContainer}>
-          <View style={styles.emptyIconCircle}>
-            <Ionicons name="heart-outline" size={32} color="#222222" />
-          </View>
-
-          <Text style={styles.emptyHeadline}>Log in to view wishlists</Text>
-          <Text style={styles.emptyBody}>
-            You can create, view, or edit wishlists once you're logged in.
-          </Text>
-
-          <Pressable
-            testID="saved-signin"
-            onPress={() => {
-              router.push('/auth');
-            }}
-            style={({ pressed }) => [
-              styles.primaryCtaBtn,
-              { opacity: pressed ? 0.85 : 1 },
-            ]}
-          >
-            <Text style={styles.primaryCtaBtnText}>Log in</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
-
-  // Header component with title & segmented filter chips
-  const renderHeader = () => (
-    <View style={styles.headerWrap}>
-      <View style={styles.topNavBar}>
-        <Pressable
-          testID="saved-back-btn"
-          onPress={() => {
-            router.push('/profile');
-          }}
-          style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
-          hitSlop={10}
-        >
-          <Feather name="arrow-left" size={22} color="#222222" />
-        </Pressable>
-      </View>
-
-      <View style={styles.titleRow}>
-        <Text style={styles.pageTitle}>Wishlists</Text>
-        {totalSavedCount > 0 ? (
-          <Text style={styles.itemCountSub}>{totalSavedCount} saved items</Text>
-        ) : null}
-      </View>
-
-      {/* Segmented Filter Chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterChipRow}
-      >
-        {(
-          [
-            { id: 'all', label: 'All Saved' },
-            { id: 'reels', label: 'Reels & Stays' },
-            { id: 'events', label: 'Events' },
-          ] as const
-        ).map((chip) => {
-          const isActive = filterTab === chip.id;
-          return (
-            <Pressable
-              key={chip.id}
-              testID={`saved-chip-${chip.id}`}
-              onPress={() => {
-                setFilterTab(chip.id);
-              }}
-              style={[
-                styles.chipBtn,
-                isActive ? styles.chipActive : styles.chipInactive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  { color: isActive ? '#FFFFFF' : '#222222' },
-                ]}
-              >
-                {chip.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-
-  // Render reel item in 2-column grid
-  const renderReelCard = ({ item }: { item: ReelRow }) => {
-    const price = Number(item.experience?.current_price ?? 0);
-    const priceUnit = item.experience?.price_unit ?? 'night';
-
-    return (
-      <Pressable
-        testID={`saved-reel-${item.id}`}
-        onPress={() => router.push('/')}
-        style={styles.gridCard}
-      >
-        <View style={styles.cardImageWrap}>
-          {item.thumbnail_url ? (
-            <Image
-              source={{ uri: item.thumbnail_url }}
-              style={styles.cardImage}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={styles.cardImageFallback}>
-              <Feather name="film" size={24} color="#717171" />
-            </View>
-          )}
-
-          {/* Floating Heart Icon Overlay */}
-          <Pressable
-            testID={`unsave-${item.id}`}
-            hitSlop={8}
-            onPress={() => handleUnsave(item.id)}
-            style={styles.floatingHeartBtn}
-          >
-            <Ionicons name="heart" size={18} color="#EE7D30" />
-          </Pressable>
-        </View>
-
-        {/* Stacked Text Below Image */}
-        <View style={styles.cardContent}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.experience?.title ?? 'Coastal Experience'}
-          </Text>
-          <Text style={styles.cardSub} numberOfLines={1}>
-            {item.experience?.location ?? 'Kenya Coast'}
-          </Text>
-          <Text style={styles.cardPrice}>
-            KES {price.toLocaleString()} <Text style={styles.cardPriceUnit}>/ {priceUnit}</Text>
-          </Text>
-        </View>
-      </Pressable>
-    );
-  };
-
-  // Render event item
-  const renderEventCard = ({ item }: { item: EventRow }) => (
-    <Pressable
-      onPress={() => router.push('/discover')}
-      style={styles.eventRowCard}
-    >
-      <View style={styles.eventRowContent}>
-        <View style={styles.eventHeaderRow}>
-          <Text style={styles.eventCategoryTag}>{item.category ?? 'Event'}</Text>
-          <Text style={styles.eventDateText}>{formatEventDate(item.event_date)}</Text>
-        </View>
-        <Text style={styles.eventTitleText} numberOfLines={1}>
-          {item.title ?? 'Coastal Event'}
-        </Text>
-        <Text style={styles.eventPriceText}>
-          {item.price ? `KES ${Number(item.price).toLocaleString()}` : 'Free Entry'}
-        </Text>
-      </View>
-      <View style={styles.eventChevronCircle}>
-        <Feather name="chevron-right" size={18} color="#717171" />
-      </View>
-    </Pressable>
-  );
-
-  // Combined dataset based on active filter chip
-  const filteredReels = filterTab === 'events' ? [] : (reels ?? []);
-  const filteredEvents = filterTab === 'reels' ? [] : (events ?? []);
-  const isCombineEmpty = filteredReels.length === 0 && filteredEvents.length === 0;
+  const firstThumbnail = reels?.[0]?.thumbnail_url || null;
 
   return (
-    <View testID="saved-screen" style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
-      {isCombineEmpty && !isLoading ? (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: bottomPad }}
-        >
-          {renderHeader()}
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconCircle}>
-              <Ionicons name="heart-outline" size={30} color="#222222" />
+    <View style={styles.fill}>
+      <ScrollView
+        style={styles.fill}
+        contentContainerStyle={{
+          paddingTop: topPad,
+          paddingBottom: bottomPad,
+          paddingHorizontal: 24,
+        }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F26522" />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── HEADER TITLE (MATCHING SCREENSHOT) ─────────────────────────────── */}
+        <View style={styles.headerWrap}>
+          <Text style={styles.pageTitle}>Wishlists</Text>
+        </View>
+
+        {/* ── WISHLISTS 2-COLUMN GRID ────────────────────────────────────────── */}
+        <View style={styles.gridRow}>
+          {/* Card 1: Recently viewed (EXACT MATCH TO SCREENSHOT) */}
+          <Pressable
+            testID="recently-viewed-card"
+            onPress={() => setRecentlyViewedModal(true)}
+            style={({ pressed }) => [styles.gridCard, pressed && { opacity: 0.88 }]}
+          >
+            <View style={styles.historyGreyTile}>
+              <MaterialCommunityIcons name="history" size={56} color="#FFFFFF" />
             </View>
+            <Text style={styles.cardTitle}>Recently viewed</Text>
+          </Pressable>
 
-            <Text style={styles.emptyHeadline}>Create your first wishlist</Text>
-            <Text style={styles.emptyBody}>
-              As you search, tap the heart icon on any stay, experience, or event to save it here.
-            </Text>
-
+          {/* Card 2: Saved Favorites (if any) */}
+          {totalSavedCount > 0 && (
             <Pressable
-              onPress={() => {
-                router.push('/discover');
-              }}
-              style={({ pressed }) => [
-                styles.primaryCtaBtn,
-                { opacity: pressed ? 0.85 : 1 },
-              ]}
+              onPress={() => router.push('/reservations')}
+              style={({ pressed }) => [styles.gridCard, pressed && { opacity: 0.88 }]}
             >
-              <Text style={styles.primaryCtaBtnText}>Start exploring</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      ) : (
-        <FlatList
-          data={filteredReels}
-          keyExtractor={(r) => r.id}
-          renderItem={renderReelCard}
-          numColumns={2}
-          columnWrapperStyle={styles.gridColumnWrapper}
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingBottom: bottomPad,
-          }}
-          ListHeaderComponent={
-            <View>
-              {renderHeader()}
-              {filteredEvents.length > 0 ? (
-                <View style={styles.eventsSectionWrap}>
-                  <Text style={styles.sectionHeading}>Subscribed Events</Text>
-                  {filteredEvents.map((ev) => (
-                    <React.Fragment key={ev.id}>{renderEventCard({ item: ev })}</React.Fragment>
-                  ))}
+              <View style={styles.collectionTile}>
+                {firstThumbnail ? (
+                  <Image
+                    source={{ uri: firstThumbnail }}
+                    style={styles.collectionImg}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <View style={styles.collectionFallback}>
+                    <Ionicons name="heart" size={44} color="#F26522" />
+                  </View>
+                )}
+                <View style={styles.countBadge}>
+                  <Text style={styles.countBadgeText}>{totalSavedCount}</Text>
                 </View>
-              ) : null}
-            </View>
-          }
-          ListEmptyComponent={
-            isLoading ? (
-              <View style={styles.skeletonGrid}>
-                <Skeleton style={styles.skeletonCard} />
-                <Skeleton style={styles.skeletonCard} />
               </View>
-            ) : null
-          }
-        />
-      )}
+              <Text style={styles.cardTitle}>Saved favorites</Text>
+              <Text style={styles.cardSub}>{totalSavedCount} saved</Text>
+            </Pressable>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* ── RECENTLY VIEWED MODAL SHEET ──────────────────────────────────────── */}
+      <Modal
+        visible={recentlyViewedModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setRecentlyViewedModal(false)}
+      >
+        <View style={[styles.modalSheet, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setRecentlyViewedModal(false)} style={styles.circleCloseBtn}>
+              <Feather name="x" size={22} color="#111111" />
+            </Pressable>
+            <Text style={styles.modalHeaderTitle}>Recently viewed</Text>
+            <View style={{ width: 36 }} />
+          </View>
+
+          <ScrollView
+            contentContainerStyle={[styles.modalScrollContent, { paddingBottom: insets.bottom + 32 }]}
+            showsVerticalScrollIndicator={false}
+          >
+            {reels && reels.length > 0 ? (
+              reels.map((reel) => (
+                <Pressable
+                  key={reel.id}
+                  onPress={() => {
+                    setRecentlyViewedModal(false);
+                    router.push('/discover');
+                  }}
+                  style={styles.recentItemRow}
+                >
+                  <View style={styles.recentThumbBox}>
+                    {reel.thumbnail_url ? (
+                      <Image source={{ uri: reel.thumbnail_url }} style={styles.recentThumb} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.recentThumb, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Feather name="film" size={20} color="#717171" />
+                      </View>
+                    )}
+                  </View>
+                  <View style={{ flex: 1, paddingLeft: 12 }}>
+                    <Text style={styles.recentTitle} numberOfLines={1}>
+                      {reel.experience?.title ?? 'Coastal Stay'}
+                    </Text>
+                    <Text style={styles.recentLocation} numberOfLines={1}>
+                      {reel.experience?.location ?? 'Kenya Coast'}
+                    </Text>
+                    <Text style={styles.recentPrice}>
+                      KES {Number(reel.experience?.current_price ?? 0).toLocaleString()} / night
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color="#9E9E9E" />
+                </Pressable>
+              ))
+            ) : (
+              <View style={styles.emptyRecentWrap}>
+                <View style={styles.emptyRecentIconCircle}>
+                  <MaterialCommunityIcons name="history" size={32} color="#717171" />
+                </View>
+                <Text style={styles.emptyRecentTitle}>No recently viewed items</Text>
+                <Text style={styles.emptyRecentSub}>
+                  Stays and experiences you browse on Discover and Pulse will appear here automatically.
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setRecentlyViewedModal(false);
+                    router.push('/discover');
+                  }}
+                  style={styles.exploreCtaBtn}
+                >
+                  <Text style={styles.exploreCtaBtnText}>Explore coastal stays</Text>
+                </Pressable>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  topNavBar: {
-    paddingTop: 12,
-    paddingBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backIconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
+  fill: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   headerWrap: {
-    marginBottom: 20,
-  },
-  titleRow: {
-    marginTop: 8,
-    marginBottom: 16,
-    gap: 4,
+    marginBottom: 28,
   },
   pageTitle: {
-    fontSize: 28,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-    letterSpacing: -0.4,
+    fontSize: 34,
+    fontWeight: '700',
+    color: '#111111',
+    letterSpacing: -0.8,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
   },
-  itemCountSub: {
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-    color: '#717171',
-  },
-  filterChipRow: {
-    gap: 8,
-    paddingRight: 20,
-  },
-  chipBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 20,
-  },
-  chipActive: {
-    backgroundColor: '#222222',
-  },
-  chipInactive: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EBEBEB',
-  },
-  chipText: {
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  gridColumnWrapper: {
-    justifyContent: 'space-between',
-    marginBottom: 16,
+  gridRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
   },
   gridCard: {
-    width: '48%',
-    gap: 8,
+    width: '47%',
   },
-  cardImageWrap: {
+  historyGreyTile: {
     width: '100%',
     aspectRatio: 1,
-    borderRadius: 14,
+    borderRadius: 24,
+    backgroundColor: '#8E8E93',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collectionTile: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 24,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  cardImage: {
+  collectionImg: {
     width: '100%',
     height: '100%',
   },
-  cardImageFallback: {
+  collectionFallback: {
     width: '100%',
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  floatingHeartBtn: {
+  countBadge: {
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    backgroundColor: '#111111',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  cardContent: {
-    gap: 2,
+  countBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   cardTitle: {
-    fontSize: 14,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111111',
+    marginTop: 10,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
   },
   cardSub: {
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
-    color: '#717171',
-  },
-  cardPrice: {
     fontSize: 13,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
+    color: '#717171',
     marginTop: 2,
   },
-  cardPriceUnit: {
-    fontSize: 11,
-    fontFamily: 'DMSans_400Regular',
-    color: '#717171',
+
+  /* Recently viewed modal */
+  modalSheet: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
-  eventsSectionWrap: {
-    marginBottom: 20,
-    gap: 10,
-  },
-  sectionHeading: {
-    fontSize: 18,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-    marginBottom: 4,
-  },
-  eventRowCard: {
+  modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F7F7F7',
-    borderRadius: 12,
-    padding: 14,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  eventRowContent: {
-    flex: 1,
-    gap: 3,
-  },
-  eventHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  eventCategoryTag: {
-    fontSize: 11,
-    fontFamily: 'DMSans_700Bold',
-    color: '#EE7D30',
-    textTransform: 'uppercase',
-  },
-  eventDateText: {
-    fontSize: 11,
-    fontFamily: 'DMSans_400Regular',
-    color: '#717171',
-  },
-  eventTitleText: {
-    fontSize: 14,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-  },
-  eventPriceText: {
-    fontSize: 12,
-    fontFamily: 'DMSans_500Medium',
-    color: '#717171',
-  },
-  eventChevronCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  circleCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F5F5F5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 56,
-    paddingHorizontal: 24,
-    gap: 12,
+  modalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111111',
   },
-  emptyIconCircle: {
+  modalScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  recentItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  recentThumbBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  recentThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  recentTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111111',
+  },
+  recentLocation: {
+    fontSize: 13,
+    color: '#717171',
+    marginTop: 2,
+  },
+  recentPrice: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#F26522',
+    marginTop: 2,
+  },
+  emptyRecentWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+  },
+  emptyRecentIconCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 16,
   },
-  emptyHeadline: {
-    fontSize: 20,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-    textAlign: 'center',
+  emptyRecentTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111111',
+    marginBottom: 8,
   },
-  emptyBody: {
+  emptyRecentSub: {
     fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     textAlign: 'center',
     lineHeight: 20,
-    maxWidth: 300,
-    marginBottom: 8,
+    marginBottom: 24,
   },
-  primaryCtaBtn: {
-    height: 48,
-    paddingHorizontal: 28,
+  exploreCtaBtn: {
+    backgroundColor: '#111111',
     borderRadius: 12,
-    backgroundColor: '#222222',
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
   },
-  primaryCtaBtnText: {
+  exploreCtaBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
-  },
-  skeletonGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  skeletonCard: {
-    width: '48%',
-    aspectRatio: 1,
-    borderRadius: 14,
+    fontWeight: '700',
   },
 });

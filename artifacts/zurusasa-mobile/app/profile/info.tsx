@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -12,58 +13,65 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Skeleton } from '@/components/Skeleton';
-import { KeyboardScreen } from '@/components/keyboard';
 
-const COMMON_LANGUAGES = [
-  'English',
-  'Swahili',
-  'French',
-  'German',
-  'Spanish',
-  'Chinese',
-  'Arabic',
-];
+type EditFieldType =
+  | 'legal_name'
+  | 'preferred_name'
+  | 'host_display_name'
+  | 'phone'
+  | 'email'
+  | 'residential_address'
+  | 'postal_address'
+  | 'emergency_contact'
+  | 'identity_verification'
+  | null;
 
-interface EmergencyContact {
-  name: string;
-  phone: string;
-  relationship: string;
+function maskEmail(emailStr?: string): string {
+  if (!emailStr) return 'Not provided';
+  const parts = emailStr.split('@');
+  if (parts.length !== 2) return emailStr;
+  const name = parts[0];
+  const domain = parts[1];
+  if (name.length <= 2) return `${name[0]}***@${domain}`;
+  return `${name[0]}***${name[name.length - 1]}@${domain}`;
 }
 
-export default function PersonalInformationScreen() {
+export default function PersonalInfoScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, refreshProfile } = useAuth();
 
-  const [pageLoading, setPageLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [activeEdit, setActiveEdit] = useState<EditFieldType>(null);
 
-  const [fullName, setFullName] = useState('');
+  // Profile Form State
+  const [legalName, setLegalName] = useState('');
+  const [preferredName, setPreferredName] = useState('');
+  const [hostDisplayName, setHostDisplayName] = useState('Show my first name only');
   const [phone, setPhone] = useState('');
-  const [bio, setBio] = useState('');
-  const [languages, setLanguages] = useState<string[]>([]);
-  const [emergencyContact, setEmergencyContact] = useState<EmergencyContact>({
-    name: '',
-    phone: '',
-    relationship: '',
-  });
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [residentialAddress, setResidentialAddress] = useState('');
+  const [postalAddress, setPostalAddress] = useState('');
+  const [emergencyName, setEmergencyName] = useState('');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
+  const [emergencyRel, setEmergencyRel] = useState('');
+  const [identityStatus, setIdentityStatus] = useState('Not started');
 
-  const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
+  const topPad = Platform.OS === 'web' ? 24 : insets.top + 16;
+  const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 32;
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const loadProfile = async () => {
       if (!user) return;
       try {
-        setFullName((user.user_metadata?.full_name as string) || '');
-        setPhone((user.user_metadata?.phone as string) || '');
+        const userMeta = user.user_metadata || {};
+        setEmail(user.email || '');
+        setLegalName(userMeta.full_name || userMeta.legal_name || 'Okelo Ulak Angelo');
+        if (userMeta.phone) setPhone(userMeta.phone);
 
         const { data } = await supabase
           .from('profiles')
@@ -73,440 +81,690 @@ export default function PersonalInformationScreen() {
 
         if (data) {
           const row = data as Record<string, any>;
-          if (row.full_name) setFullName(row.full_name);
+          if (row.full_name) setLegalName(row.full_name);
+          if (row.preferred_name) setPreferredName(row.preferred_name);
+          if (row.host_display_name) setHostDisplayName(row.host_display_name);
           if (row.phone) setPhone(row.phone);
-          if (row.languages) setLanguages(row.languages);
-          if (row.emergency_contact) setEmergencyContact(row.emergency_contact);
-          if (row.metadata?.avatar_url) setAvatarUrl(row.metadata.avatar_url);
-          if (row.metadata?.bio) setBio(row.metadata.bio);
-          if (row.bio) setBio(row.bio);
+          if (row.residential_address) setResidentialAddress(row.residential_address);
+          if (row.postal_address) setPostalAddress(row.postal_address);
+          if (row.emergency_contact) {
+            setEmergencyName(row.emergency_contact.name || '');
+            setEmergencyPhone(row.emergency_contact.phone || '');
+            setEmergencyRel(row.emergency_contact.relationship || '');
+          }
+          if (row.is_verified) setIdentityStatus('Verified');
+          else if (row.identity_verification_status) setIdentityStatus(row.identity_verification_status);
         }
       } catch (e) {
-        console.error('Error loading profile', e);
+        console.warn('Note loading personal info:', e);
       } finally {
-        setPageLoading(false);
+        setLoading(false);
       }
     };
-    fetchProfile();
+    loadProfile();
   }, [user]);
 
-const uriToBlob = (uri: string): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.onload = () => resolve(xhr.response);
-    xhr.onerror = () => reject(new TypeError('Network request failed'));
-    xhr.responseType = 'blob';
-    xhr.open('GET', uri, true);
-    xhr.send(null);
-  });
-};
-
-  const handleAvatarUpload = async () => {
-    if (!user) return;
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-      if (result.canceled || !result.assets?.length) return;
-      const asset = result.assets[0];
-
-      setAvatarUploading(true);
-      const ext = (asset.fileName?.split('.').pop() ?? asset.uri.split('.').pop() ?? 'jpg').toLowerCase();
-      const path = `${user.id}/${Date.now()}.${ext}`;
-
-      const blob = await uriToBlob(asset.uri);
-
-      const { error: uploadErr } = await supabase.storage
-        .from('avatars')
-        .upload(path, blob, { contentType: `image/${ext === 'png' ? 'png' : 'jpeg'}`, upsert: true });
-
-      if (uploadErr) throw uploadErr;
-
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-      const publicUrl = urlData.publicUrl;
-
-      setAvatarUrl(publicUrl);
-
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('metadata')
-        .eq('id', user.id)
-        .single();
-      const curMeta = (existing?.metadata as Record<string, any>) ?? {};
-
-      await supabase
-        .from('profiles')
-        .update({ metadata: { ...curMeta, avatar_url: publicUrl } })
-        .eq('id', user.id);
-
-      await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
-      await refreshProfile();
-      Alert.alert('Success', 'Profile photo updated!');
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to upload photo.');
-    } finally {
-      setAvatarUploading(false);
-    }
-  };
-
-  const handleSave = async () => {
+  const handleSaveField = async () => {
     if (!user) return;
     setSaving(true);
     try {
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('metadata')
-        .eq('id', user.id)
-        .single();
+      const updates: Record<string, any> = {
+        full_name: legalName.trim(),
+        preferred_name: preferredName.trim() || null,
+        host_display_name: hostDisplayName,
+        phone: phone.trim() || null,
+        residential_address: residentialAddress.trim() || null,
+        postal_address: postalAddress.trim() || null,
+        emergency_contact: emergencyName.trim()
+          ? {
+              name: emergencyName.trim(),
+              phone: emergencyPhone.trim(),
+              relationship: emergencyRel.trim(),
+            }
+          : null,
+      };
 
-      const curMeta = (existing?.metadata as Record<string, any>) ?? {};
+      await supabase.from('profiles').update(updates).eq('id', user.id);
+      await supabase.auth.updateUser({
+        data: {
+          full_name: legalName.trim(),
+          phone: phone.trim(),
+        },
+      });
 
-      await supabase
-        .from('profiles')
-        .update({
-          full_name: fullName,
-          phone,
-          bio,
-          languages,
-          emergency_contact: emergencyContact,
-          metadata: { ...curMeta, bio },
-        })
-        .eq('id', user.id);
-
-      await supabase.auth.updateUser({ data: { full_name: fullName, phone } });
-      await refreshProfile();
-      Alert.alert('Success', 'Personal information saved.');
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to save changes.');
+      if (refreshProfile) await refreshProfile();
+      Alert.alert('Saved', 'Your personal information has been updated.');
+      setActiveEdit(null);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not update profile information.');
     } finally {
       setSaving(false);
     }
   };
 
-  if (pageLoading) {
-    return (
-      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad, paddingHorizontal: 24, gap: 16 }]}>
-        <Skeleton style={{ height: 40, width: 40, borderRadius: 20 }} />
-        <Skeleton style={{ height: 32, width: 220, borderRadius: 8 }} />
-        <Skeleton style={{ height: 90, width: 90, borderRadius: 45 }} />
-        <Skeleton style={{ height: 48, borderRadius: 12 }} />
-        <Skeleton style={{ height: 48, borderRadius: 12 }} />
-      </View>
-    );
-  }
-
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad }]}>
+    <View style={styles.container}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
-          testID="back-btn"
+          testID="personal-info-back-btn"
           onPress={() => {
             if (router.canGoBack()) router.back();
-            else router.push('/profile');
+            else router.push('/profile/settings');
           }}
           style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={20} color="#000000" />
+          <Feather name="arrow-left" size={22} color="#111111" />
         </Pressable>
       </View>
 
-      <KeyboardScreen
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-        stickyFooter={
-          <View style={[styles.pinnedBottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <Pressable
-              testID="save-identity-btn"
-              onPress={handleSave}
-              disabled={saving}
-              style={({ pressed }) => [styles.primaryCtaBtn, pressed && { opacity: 0.9 }]}
-            >
-              {saving ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.primaryCtaBtnText}>Save changes</Text>
-              )}
-            </Pressable>
-          </View>
-        }
+      {/* ── CONTENT ──────────────────────────────────────────────────────────── */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
-        <View style={styles.titleSection}>
-          <Text style={styles.pageTitle}>Personal information</Text>
-        </View>
+        {/* Title */}
+        <Text style={styles.pageTitle}>Personal info</Text>
 
-        {/* Profile Photo */}
-        <View style={styles.avatarRow}>
-          <Pressable
-            testID="avatar-upload"
-            onPress={handleAvatarUpload}
-            disabled={avatarUploading}
-            style={({ pressed }) => [styles.avatarWrap, pressed && { opacity: 0.85 }]}
-          >
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Feather name="user" size={40} color="#717171" />
+        {loading ? (
+          <ActivityIndicator size="small" color="#111111" style={{ marginTop: 40 }} />
+        ) : (
+          <View style={styles.fieldsContainer}>
+            {/* 1. Legal name */}
+            <View style={styles.rowWrapper}>
+              <View style={styles.rowTop}>
+                <Text style={styles.fieldLabel}>Legal name</Text>
+                <Pressable
+                  testID="edit-legal-name-btn"
+                  onPress={() => setActiveEdit('legal_name')}
+                  hitSlop={8}
+                >
+                  <Text style={styles.actionBtnText}>{legalName ? 'Edit' : 'Add'}</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.fieldValue}>{legalName || 'Not provided'}</Text>
+            </View>
+
+            {/* 2. Preferred first name */}
+            <View style={styles.rowWrapper}>
+              <View style={styles.rowTop}>
+                <Text style={styles.fieldLabel}>Preferred first name</Text>
+                <Pressable
+                  testID="edit-preferred-name-btn"
+                  onPress={() => setActiveEdit('preferred_name')}
+                  hitSlop={8}
+                >
+                  <Text style={styles.actionBtnText}>{preferredName ? 'Edit' : 'Add'}</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.fieldValue}>{preferredName || 'Not provided'}</Text>
+            </View>
+
+            {/* 3. Host display name for experiences and services */}
+            <View style={styles.rowWrapper}>
+              <View style={styles.rowTop}>
+                <Text style={[styles.fieldLabel, { maxWidth: '80%' }]}>
+                  Host display name for experiences and services
+                </Text>
+                <Pressable
+                  testID="edit-host-display-btn"
+                  onPress={() => setActiveEdit('host_display_name')}
+                  hitSlop={8}
+                >
+                  <Text style={styles.actionBtnText}>Edit</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.fieldValue}>{hostDisplayName || 'Show my first name only'}</Text>
+            </View>
+
+            {/* 4. Phone number */}
+            <View style={styles.rowWrapper}>
+              <View style={styles.rowTop}>
+                <Text style={styles.fieldLabel}>Phone number</Text>
+                <Pressable
+                  testID="edit-phone-btn"
+                  onPress={() => setActiveEdit('phone')}
+                  hitSlop={8}
+                >
+                  <Text style={styles.actionBtnText}>{phone ? 'Edit' : 'Add'}</Text>
+                </Pressable>
+              </View>
+              <Text style={[styles.fieldValue, !phone && styles.explanatoryText]}>
+                {phone ||
+                  'Add a number so confirmed guests and ZuruSasa can get in touch. You can add other numbers and choose how they’re used.'}
+              </Text>
+            </View>
+
+            {/* 5. Email */}
+            <View style={styles.rowWrapper}>
+              <View style={styles.rowTop}>
+                <Text style={styles.fieldLabel}>Email</Text>
+                <Pressable
+                  testID="edit-email-btn"
+                  onPress={() => setActiveEdit('email')}
+                  hitSlop={8}
+                >
+                  <Text style={styles.actionBtnText}>Edit</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.fieldValue}>{maskEmail(email)}</Text>
+            </View>
+
+            {/* 6. Residential address */}
+            <View style={styles.rowWrapper}>
+              <View style={styles.rowTop}>
+                <Text style={styles.fieldLabel}>Residential address</Text>
+                <Pressable
+                  testID="edit-residential-addr-btn"
+                  onPress={() => setActiveEdit('residential_address')}
+                  hitSlop={8}
+                >
+                  <Text style={styles.actionBtnText}>{residentialAddress ? 'Edit' : 'Add'}</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.fieldValue}>{residentialAddress || 'Not provided'}</Text>
+            </View>
+
+            {/* 7. Postal address */}
+            <View style={styles.rowWrapper}>
+              <View style={styles.rowTop}>
+                <Text style={styles.fieldLabel}>Postal address</Text>
+                <Pressable
+                  testID="edit-postal-addr-btn"
+                  onPress={() => setActiveEdit('postal_address')}
+                  hitSlop={8}
+                >
+                  <Text style={styles.actionBtnText}>{postalAddress ? 'Edit' : 'Add'}</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.fieldValue}>{postalAddress || 'Not provided'}</Text>
+            </View>
+
+            {/* 8. Emergency contact */}
+            <View style={styles.rowWrapper}>
+              <View style={styles.rowTop}>
+                <Text style={styles.fieldLabel}>Emergency contact</Text>
+                <Pressable
+                  testID="edit-emergency-contact-btn"
+                  onPress={() => setActiveEdit('emergency_contact')}
+                  hitSlop={8}
+                >
+                  <Text style={styles.actionBtnText}>{emergencyName ? 'Edit' : 'Add'}</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.fieldValue}>
+                {emergencyName ? `${emergencyName} (${emergencyPhone || 'No phone'})` : 'Not provided'}
+              </Text>
+            </View>
+
+            {/* 9. Identity verification */}
+            <View style={styles.rowWrapper}>
+              <View style={styles.rowTop}>
+                <Text style={styles.fieldLabel}>Identity verification</Text>
+                <Pressable
+                  testID="edit-identity-btn"
+                  onPress={() => setActiveEdit('identity_verification')}
+                  hitSlop={8}
+                >
+                  <Text style={styles.actionBtnText}>
+                    {identityStatus === 'Verified' ? 'View' : 'Start'}
+                  </Text>
+                </Pressable>
+              </View>
+              <Text style={styles.fieldValue}>{identityStatus}</Text>
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* ── EDIT BOTTOM SHEET / MODAL ────────────────────────────────────────── */}
+      <Modal
+        visible={!!activeEdit}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActiveEdit(null)}
+      >
+        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setActiveEdit(null)} style={styles.modalCloseBtn} hitSlop={10}>
+              <Feather name="x" size={22} color="#111111" />
+            </Pressable>
+            <Text style={styles.modalHeaderTitle}>
+              {activeEdit === 'legal_name' && 'Legal name'}
+              {activeEdit === 'preferred_name' && 'Preferred first name'}
+              {activeEdit === 'host_display_name' && 'Host display name'}
+              {activeEdit === 'phone' && 'Phone number'}
+              {activeEdit === 'email' && 'Email address'}
+              {activeEdit === 'residential_address' && 'Residential address'}
+              {activeEdit === 'postal_address' && 'Postal address'}
+              {activeEdit === 'emergency_contact' && 'Emergency contact'}
+              {activeEdit === 'identity_verification' && 'Identity verification'}
+            </Text>
+            <View style={{ width: 36 }} />
+          </View>
+
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
+            {/* Legal Name */}
+            {activeEdit === 'legal_name' && (
+              <View>
+                <Text style={styles.modalFieldTitle}>Legal name</Text>
+                <Text style={styles.modalFieldSub}>
+                  This is the name on your government travel document, such as your National ID, Passport, or Driver’s License.
+                </Text>
+                <TextInput
+                  value={legalName}
+                  onChangeText={setLegalName}
+                  placeholder="First and last legal name"
+                  placeholderTextColor="#9E9E9E"
+                  style={styles.modalInput}
+                />
               </View>
             )}
-            <View style={styles.cameraBadge}>
-              {avatarUploading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+
+            {/* Preferred Name */}
+            {activeEdit === 'preferred_name' && (
+              <View>
+                <Text style={styles.modalFieldTitle}>Preferred first name</Text>
+                <Text style={styles.modalFieldSub}>
+                  This is what hosts and guests will call you across ZuruSasa experiences.
+                </Text>
+                <TextInput
+                  value={preferredName}
+                  onChangeText={setPreferredName}
+                  placeholder="e.g. Angelo"
+                  placeholderTextColor="#9E9E9E"
+                  style={styles.modalInput}
+                />
+              </View>
+            )}
+
+            {/* Host Display Name */}
+            {activeEdit === 'host_display_name' && (
+              <View>
+                <Text style={styles.modalFieldTitle}>Host display name</Text>
+                <Text style={styles.modalFieldSub}>
+                  Choose how your name appears on your verified coastal listings and reel profiles.
+                </Text>
+                {['Show my first name only', 'Show my full legal name', 'Show my business / agency name'].map((opt) => (
+                  <Pressable
+                    key={opt}
+                    onPress={() => setHostDisplayName(opt)}
+                    style={[styles.modalOptionCard, hostDisplayName === opt && styles.modalOptionActive]}
+                  >
+                    <Text style={[styles.modalOptionText, hostDisplayName === opt && styles.modalOptionTextActive]}>
+                      {opt}
+                    </Text>
+                    {hostDisplayName === opt && <Feather name="check" size={18} color="#111111" />}
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {/* Phone */}
+            {activeEdit === 'phone' && (
+              <View>
+                <Text style={styles.modalFieldTitle}>Phone number</Text>
+                <Text style={styles.modalFieldSub}>
+                  Used for booking notifications, M-Pesa STK payment confirmations, and host check-in calls.
+                </Text>
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="+254 712 345678"
+                  placeholderTextColor="#9E9E9E"
+                  keyboardType="phone-pad"
+                  style={styles.modalInput}
+                />
+              </View>
+            )}
+
+            {/* Email */}
+            {activeEdit === 'email' && (
+              <View>
+                <Text style={styles.modalFieldTitle}>Email address</Text>
+                <Text style={styles.modalFieldSub}>
+                  Use an address you always have access to for receipts, security alerts, and passkey recovery.
+                </Text>
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="name@example.com"
+                  placeholderTextColor="#9E9E9E"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={styles.modalInput}
+                />
+              </View>
+            )}
+
+            {/* Residential address */}
+            {activeEdit === 'residential_address' && (
+              <View>
+                <Text style={styles.modalFieldTitle}>Residential address</Text>
+                <Text style={styles.modalFieldSub}>
+                  Your primary residence for tax documentation and verification compliance.
+                </Text>
+                <TextInput
+                  value={residentialAddress}
+                  onChangeText={setResidentialAddress}
+                  placeholder="Street address, city, country"
+                  placeholderTextColor="#9E9E9E"
+                  style={styles.modalInput}
+                />
+              </View>
+            )}
+
+            {/* Postal address */}
+            {activeEdit === 'postal_address' && (
+              <View>
+                <Text style={styles.modalFieldTitle}>Postal address</Text>
+                <Text style={styles.modalFieldSub}>
+                  Postal box or mailing address for formal notices and invoices.
+                </Text>
+                <TextInput
+                  value={postalAddress}
+                  onChangeText={setPostalAddress}
+                  placeholder="P.O. Box 80400 Mombasa, Kenya"
+                  placeholderTextColor="#9E9E9E"
+                  style={styles.modalInput}
+                />
+              </View>
+            )}
+
+            {/* Emergency contact */}
+            {activeEdit === 'emergency_contact' && (
+              <View>
+                <Text style={styles.modalFieldTitle}>Emergency contact</Text>
+                <Text style={styles.modalFieldSub}>
+                  Someone we can reach if an urgent situation arises during a coastal booking.
+                </Text>
+                <TextInput
+                  value={emergencyName}
+                  onChangeText={setEmergencyName}
+                  placeholder="Contact full name"
+                  placeholderTextColor="#9E9E9E"
+                  style={styles.modalInput}
+                />
+                <TextInput
+                  value={emergencyPhone}
+                  onChangeText={setEmergencyPhone}
+                  placeholder="Phone number (+254...)"
+                  placeholderTextColor="#9E9E9E"
+                  keyboardType="phone-pad"
+                  style={styles.modalInput}
+                />
+                <TextInput
+                  value={emergencyRel}
+                  onChangeText={setEmergencyRel}
+                  placeholder="Relationship (e.g. Spouse, Parent, Friend)"
+                  placeholderTextColor="#9E9E9E"
+                  style={styles.modalInput}
+                />
+              </View>
+            )}
+
+            {/* Identity verification */}
+            {activeEdit === 'identity_verification' && (
+              <View>
+                <Text style={styles.modalFieldTitle}>Government ID Verification</Text>
+                <Text style={styles.modalFieldSub}>
+                  Upload a photo of your Kenyan National ID or Passport to receive the Verified badge on ZuruSasa.
+                </Text>
+                <View style={styles.idCardBox}>
+                  <Feather name="shield" size={32} color="#111111" style={{ marginBottom: 12 }} />
+                  <Text style={styles.idCardTitle}>Status: {identityStatus}</Text>
+                  <Text style={styles.idCardSub}>
+                    {identityStatus === 'Verified'
+                      ? 'Your identity is fully verified with ZuruSasa.'
+                      : 'Fast AI & manual verification completed within 2 hours.'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Save Button */}
+            <Pressable
+              onPress={handleSaveField}
+              disabled={saving}
+              style={({ pressed }) => [
+                styles.modalSaveBtn,
+                pressed && { opacity: 0.85 },
+                saving && { opacity: 0.6 },
+              ]}
+            >
+              {saving ? (
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Feather name="camera" size={13} color="#FFFFFF" />
+                <Text style={styles.modalSaveBtnText}>Save</Text>
               )}
-            </View>
-          </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.avatarTitle}>Profile photo</Text>
-            <Text style={styles.avatarSub}>A clear photo helps hosts and guests recognize you</Text>
-          </View>
+            </Pressable>
+          </ScrollView>
         </View>
-
-        <View style={styles.divider} />
-
-        {/* Input Form Fields */}
-        <View style={styles.formBlock}>
-          <View style={styles.inputField}>
-            <Text style={styles.inputLabel}>Legal name</Text>
-            <TextInput
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Full name"
-              placeholderTextColor="#9CA3AF"
-              style={styles.inputText}
-            />
-          </View>
-
-          <View style={styles.fieldDivider} />
-
-          <View style={styles.inputField}>
-            <Text style={styles.inputLabel}>Phone number</Text>
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="+254 712 345 678"
-              keyboardType="phone-pad"
-              placeholderTextColor="#9CA3AF"
-              style={styles.inputText}
-            />
-          </View>
-
-          <View style={styles.fieldDivider} />
-
-          <View style={styles.inputField}>
-            <Text style={styles.inputLabel}>Email address</Text>
-            <TextInput
-              value={user?.email ?? ''}
-              editable={false}
-              style={[styles.inputText, { color: '#717171' }]}
-            />
-          </View>
-
-          <View style={styles.fieldDivider} />
-
-          <View style={styles.inputField}>
-            <Text style={styles.inputLabel}>About you (Bio)</Text>
-            <TextInput
-              value={bio}
-              onChangeText={setBio}
-              placeholder="Tell hosts or guests a little about yourself"
-              placeholderTextColor="#9CA3AF"
-              multiline
-              style={[styles.inputText, { height: 72, textAlignVertical: 'top', paddingTop: 4 }]}
-            />
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* Emergency Contact */}
-        <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>Emergency contact</Text>
-          <Text style={styles.sectionSub}>A trusted contact we can reach in case of an emergency.</Text>
-
-          <View style={styles.formBlock}>
-            <View style={styles.inputField}>
-              <Text style={styles.inputLabel}>Contact name</Text>
-              <TextInput
-                value={emergencyContact.name}
-                onChangeText={(v) => setEmergencyContact((p) => ({ ...p, name: v }))}
-                placeholder="Full name"
-                placeholderTextColor="#9CA3AF"
-                style={styles.inputText}
-              />
-            </View>
-
-            <View style={styles.fieldDivider} />
-
-            <View style={styles.inputField}>
-              <Text style={styles.inputLabel}>Relationship</Text>
-              <TextInput
-                value={emergencyContact.relationship}
-                onChangeText={(v) => setEmergencyContact((p) => ({ ...p, relationship: v }))}
-                placeholder="e.g. Spouse, Parent, Friend"
-                placeholderTextColor="#9CA3AF"
-                style={styles.inputText}
-              />
-            </View>
-
-            <View style={styles.fieldDivider} />
-
-            <View style={styles.inputField}>
-              <Text style={styles.inputLabel}>Phone number</Text>
-              <TextInput
-                value={emergencyContact.phone}
-                onChangeText={(v) => setEmergencyContact((p) => ({ ...p, phone: v }))}
-                placeholder="Phone number"
-                keyboardType="phone-pad"
-                placeholderTextColor="#9CA3AF"
-                style={styles.inputText}
-              />
-            </View>
-          </View>
-        </View>
-      </KeyboardScreen>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: {
+  container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
   header: {
-    height: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
+    paddingBottom: 8,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: -8,
   },
   backBtnActive: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#F5F5F5',
   },
-  titleSection: {
-    marginBottom: 24,
+  content: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '800',
-    color: '#000000',
-    letterSpacing: -0.8,
-  },
-  avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
+    fontWeight: '700',
+    color: '#111111',
+    letterSpacing: -0.5,
     marginBottom: 24,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
   },
-  avatarWrap: {
-    position: 'relative',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F3F4F6',
-    overflow: 'hidden',
-  },
-  avatarImage: {
+  fieldsContainer: {
     width: '100%',
-    height: '100%',
   },
-  avatarFallback: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+  rowWrapper: {
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  cameraBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 6,
   },
-  avatarTitle: {
+  fieldLabel: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#000000',
+    fontWeight: '400',
+    color: '#1E1E1E',
+    letterSpacing: -0.2,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_500Medium',
+      default: 'sans-serif',
+    }),
   },
-  avatarSub: {
-    fontSize: 13,
-    color: '#717171',
-    marginTop: 2,
-    lineHeight: 18,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 20,
-  },
-  formBlock: {
-    gap: 12,
-  },
-  inputField: {
-    gap: 4,
-  },
-  inputLabel: {
-    fontSize: 13,
+  actionBtnText: {
+    fontSize: 15,
     fontWeight: '600',
+    color: '#111111',
+    textDecorationLine: 'underline',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+  fieldValue: {
+    fontSize: 14,
     color: '#717171',
+    lineHeight: 20,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_400Regular',
+      default: 'sans-serif',
+    }),
   },
-  inputText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000000',
-    paddingVertical: 6,
-  },
-  fieldDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-  },
-  sectionBlock: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 4,
-  },
-  sectionSub: {
-    fontSize: 13,
+  explanatoryText: {
+    fontSize: 14,
     color: '#717171',
-    marginBottom: 16,
+    lineHeight: 20,
+    marginTop: 2,
   },
-  pinnedBottomBar: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+
+  /* Modal Styles */
+  modalContainer: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  primaryCtaBtn: {
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#000000',
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F5F5F5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryCtaBtnText: {
+  modalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111111',
+    maxWidth: '70%',
+    textAlign: 'center',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalContent: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
+  modalFieldTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111111',
+    marginBottom: 6,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+  modalFieldSub: {
+    fontSize: 14,
+    color: '#717171',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  modalInput: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#111111',
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+    marginBottom: 12,
+  },
+  modalOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    marginBottom: 10,
+  },
+  modalOptionActive: {
+    borderColor: '#111111',
+    backgroundColor: '#FFFFFF',
+  },
+  modalOptionText: {
+    fontSize: 15,
+    color: '#4B5563',
+  },
+  modalOptionTextActive: {
+    color: '#111111',
+    fontWeight: '600',
+  },
+  idCardBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+  },
+  idCardTitle: {
     fontSize: 16,
     fontWeight: '700',
+    color: '#111111',
+    marginBottom: 4,
+  },
+  idCardSub: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  modalSaveBtn: {
+    backgroundColor: '#111111',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  modalSaveBtnText: {
     color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
   },
 });

@@ -205,19 +205,6 @@ export default function AirbnbDiscoverScreen() {
               activeFilterCount={activeFilterCount}
             />
           </View>
-
-          {/* Bell Notifications Icon */}
-          <Pressable
-            testID="notifications-bell-btn"
-            onPress={() => router.push('/notifications' as any)}
-            style={({ pressed }) => [
-              styles.bellBtn,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <Feather name="bell" size={18} color="#222222" />
-            <NotificationBadge count={unreadCount} />
-          </Pressable>
         </View>
 
         {/* Active Filter Chips Row */}

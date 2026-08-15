@@ -11,10 +11,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
+
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationCard } from '@/components/NotificationCard';
-import { EmptyNotifications } from '@/components/EmptyNotifications';
 import { Skeleton } from '@/components/Skeleton';
 import type { NotificationRow } from '@/lib/supabase';
 
@@ -75,7 +75,7 @@ export default function NotificationCenterScreen() {
     return notifications.filter((n) => !n.is_read).length;
   }, [notifications]);
 
-  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
   const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 24;
 
   const onRefresh = async () => {
@@ -102,16 +102,16 @@ export default function NotificationCenterScreen() {
           }
           break;
         case 'payout':
-          router.push('/host/payouts');
+          router.push('/profile/payments');
           break;
         case 'listing':
-          router.push('/listings');
+          router.push('/become-host');
           break;
         case 'discover':
           router.push('/discover');
           break;
         case 'profile':
-          router.push('/profile');
+          router.push('/(tabs)/profile');
           break;
         case 'support':
           router.push('/profile/support');
@@ -155,40 +155,36 @@ export default function NotificationCenterScreen() {
     <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Header Bar */}
+      {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
-          hitSlop={10}
+          testID="notifications-back-btn"
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.push('/(tabs)/profile');
+          }}
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+          hitSlop={12}
         >
-          <Feather name="arrow-left" size={22} color="#222222" />
+          <Feather name="arrow-left" size={24} color="#111111" />
         </Pressable>
 
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Notifications</Text>
-          {unreadCount > 0 ? (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
-            </View>
-          ) : null}
-        </View>
-
-        {unreadCount > 0 ? (
+        {unreadCount > 0 && (
           <Pressable
             onPress={markAllAsRead}
-            style={({ pressed }) => [
-              styles.markAllBtn,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
+            style={({ pressed }) => [styles.markAllBtn, pressed && { opacity: 0.7 }]}
           >
             <Text style={styles.markAllText}>Mark all read</Text>
           </Pressable>
-        ) : (
-          <View style={{ width: 60 }} />
         )}
       </View>
 
+      {/* ── PAGE TITLE (MATCHING SCREENSHOT) ─────────────────────────────────── */}
+      <View style={styles.titleContainer}>
+        <Text style={styles.pageTitle}>Notifications</Text>
+      </View>
+
+      {/* ── NOTIFICATIONS LIST OR EMPTY STATE (MATCHING SCREENSHOT) ─────────── */}
       <SectionList
         sections={groupedSections}
         keyExtractor={(item) => item.id}
@@ -206,10 +202,11 @@ export default function NotificationCenterScreen() {
             />
           </View>
         )}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingBottom: bottomPad,
-        }}
+        contentContainerStyle={[
+          styles.listContent,
+          notifications.length === 0 && styles.emptyListContent,
+          { paddingBottom: bottomPad },
+        ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F26522" />
         }
@@ -217,13 +214,19 @@ export default function NotificationCenterScreen() {
         stickySectionHeadersEnabled={false}
         ListEmptyComponent={
           isLoading ? (
-            <View style={{ gap: 14, paddingTop: 16 }}>
-              <Skeleton style={{ height: 90, borderRadius: 16 }} />
-              <Skeleton style={{ height: 90, borderRadius: 16 }} />
-              <Skeleton style={{ height: 90, borderRadius: 16 }} />
+            <View style={{ gap: 14, paddingTop: 24, paddingHorizontal: 24 }}>
+              <Skeleton style={{ height: 80, borderRadius: 16 }} />
+              <Skeleton style={{ height: 80, borderRadius: 16 }} />
+              <Skeleton style={{ height: 80, borderRadius: 16 }} />
             </View>
           ) : (
-            <EmptyNotifications />
+            <View style={styles.emptyContainer}>
+              <Feather name="bell" size={40} color="#111111" />
+              <Text style={styles.emptyTitle}>No notifications yet</Text>
+              <Text style={styles.emptySub}>
+                You've got a blank slate (for now). We'll let you know when updates arrive.
+              </Text>
+            </View>
           )
         }
       />
@@ -232,53 +235,87 @@ export default function NotificationCenterScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
+  fill: {
+    flex: 1,
+  },
   header: {
-    paddingTop: 12,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EBEBEB',
-    marginBottom: 8,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'flex-start',
     justifyContent: 'center',
-  },
-  headerTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-  },
-  unreadBadge: {
-    backgroundColor: '#F26522',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  unreadBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontFamily: 'DMSans_700Bold',
   },
   markAllBtn: {
     paddingVertical: 6,
+    paddingHorizontal: 12,
   },
   markAllText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'DMSans_600SemiBold',
     color: '#F26522',
+  },
+  titleContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  pageTitle: {
+    fontSize: 34,
+    fontWeight: '700',
+    color: '#111111',
+    letterSpacing: -0.8,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+  listContent: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+  },
+  emptyListContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 100,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#111111',
+    marginTop: 20,
+    marginBottom: 8,
+    textAlign: 'center',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+  emptySub: {
+    fontSize: 15,
+    color: '#717171',
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 320,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_400Regular',
+      default: 'sans-serif',
+    }),
   },
   sectionHeaderWrap: {
     paddingTop: 16,

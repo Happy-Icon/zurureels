@@ -1,5 +1,9 @@
-import React from 'react';
+
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -8,22 +12,25 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter, type Href } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useSavedEvents, useSavedReels } from '@/lib/queries';
+import { useNotifications } from '@/hooks/useNotifications';
+import { NotificationBadge } from '@/components/NotificationBadge';
 import { Skeleton } from '@/components/Skeleton';
 
-interface AirbnbMenuItem {
+interface ProfileMenuItem {
   id: string;
   title: string;
-  icon: keyof typeof Feather.glyphMap;
+  iconFamily: 'feather' | 'ionicons' | 'material';
+  iconName: string;
   route?: Href;
   action?: () => void;
-  isDividerAfter?: boolean;
+  showChevron?: boolean;
 }
 
 export default function ProfileScreen() {
@@ -35,9 +42,40 @@ export default function ProfileScreen() {
   const { data: reels } = useSavedReels(user?.id);
   const { data: events } = useSavedEvents(user?.id);
   const savedCount = (reels?.length ?? 0) + (events?.length ?? 0);
+  const { unreadCount } = useNotifications();
+
+  // Mode switching state & animation
+  const [switchingOverlayVisible, setSwitchingOverlayVisible] = useState(false);
+  const [targetMode, setTargetMode] = useState<'guest' | 'host'>('host');
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
-  const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 90;
+  const bottomPad = Platform.OS === 'web' ? 140 : insets.bottom + 140;
+
+  useEffect(() => {
+    if (switchingOverlayVisible) {
+      const pulseLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.12,
+            duration: 650,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0.94,
+            duration: 650,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseLoop.start();
+      return () => pulseLoop.stop();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [switchingOverlayVisible, pulseAnim]);
 
   if (loading) {
     return (
@@ -86,8 +124,7 @@ export default function ProfileScreen() {
     'Traveler';
   const avatarUrl = (profile?.metadata as { avatar_url?: string } | null)?.avatar_url;
   const initial = displayName.charAt(0).toUpperCase();
-  const isHostUser = role === 'host';
-  const isHostMode = isHostUser && viewMode === 'host';
+  const isHostMode = viewMode === 'host';
 
   const handleSignOut = () => {
     showAlert({
@@ -105,89 +142,80 @@ export default function ProfileScreen() {
     });
   };
 
-  const menuItems: AirbnbMenuItem[] = [
+  const handleSwitchMode = () => {
+    const nextMode = isHostMode ? 'guest' : 'host';
+    setTargetMode(nextMode);
+    setSwitchingOverlayVisible(true);
+
+    setTimeout(() => {
+      switchViewMode(nextMode);
+    }, 1100);
+
+    setTimeout(() => {
+      setSwitchingOverlayVisible(false);
+    }, 1500);
+  };
+
+  /* Exact menu items matching user screenshot */
+  const block1Items: ProfileMenuItem[] = [
     {
       id: 'settings',
       title: 'Account settings',
-      icon: 'settings',
+      iconFamily: 'material',
+      iconName: 'cog-outline',
       route: '/profile/settings',
-    },
-    {
-      id: 'view_profile',
-      title: 'View profile',
-      icon: 'user',
-      route: '/profile/info',
-    },
-    {
-      id: 'privacy',
-      title: 'Privacy',
-      icon: 'shield',
-      route: '/profile/security',
+      showChevron: true,
     },
     {
       id: 'get_help',
       title: 'Get help',
-      icon: 'help-circle',
+      iconFamily: 'feather',
+      iconName: 'help-circle',
       route: '/profile/support',
-      isDividerAfter: true,
+      showChevron: true,
     },
     {
-      id: 'notifications',
-      title: 'Notifications',
-      icon: 'bell',
-      route: '/profile/notifications',
+      id: 'view_profile',
+      title: 'View profile',
+      iconFamily: 'feather',
+      iconName: 'user',
+      route: '/profile/view',
+      showChevron: true,
     },
     {
-      id: 'payments',
-      title: viewMode === 'host' ? 'Payout methods' : 'Payments & payouts',
-      icon: 'credit-card',
-      route: '/profile/payments',
+      id: 'privacy',
+      title: 'Privacy',
+      iconFamily: 'ionicons',
+      iconName: 'hand-right-outline',
+      route: '/profile/privacy',
+      showChevron: true,
     },
-    ...(isHostMode
-      ? [
-          {
-            id: 'calendar',
-            title: 'Host calendar',
-            icon: 'calendar' as const,
-            route: '/host/calendar' as Href,
-          },
-        ]
-      : []),
-    ...(isHostUser
-      ? [
-          {
-            id: 'switch_mode',
-            title: viewMode === 'host' ? 'Switch to Guest mode' : 'Switch to Host mode',
-            icon: 'refresh-cw' as const,
-            action: () => switchViewMode(viewMode === 'host' ? 'guest' : 'host'),
-          },
-        ]
-      : [
-          {
-            id: 'become_host_menu',
-            title: 'Become a host',
-            icon: 'home' as const,
-            route: '/become-host' as Href,
-          },
-        ]),
+  ];
+
+  const block2Items: ProfileMenuItem[] = [
     {
       id: 'refer_host',
       title: 'Refer a host',
-      icon: 'share-2',
-      route: '/become-host',
+      iconFamily: 'material',
+      iconName: 'account-multiple-outline',
+      route: '/profile/refer',
+      showChevron: true,
     },
     {
       id: 'legal',
       title: 'Legal',
-      icon: 'file-text',
-      route: '/profile/support',
-      isDividerAfter: true,
+      iconFamily: 'material',
+      iconName: 'book-open-outline',
+      route: '/profile/legal',
+      showChevron: true,
     },
     {
       id: 'logout',
       title: 'Log out',
-      icon: 'log-out',
+      iconFamily: 'material',
+      iconName: 'door-open',
       action: handleSignOut,
+      showChevron: false,
     },
   ];
 
@@ -207,16 +235,20 @@ export default function ProfileScreen() {
           <Text style={styles.pageTitle}>Profile</Text>
           <Pressable
             testID="notification-bell-btn"
-            onPress={() => router.push('/profile/notifications')}
+            onPress={() => router.push('/notifications')}
             style={({ pressed }) => [styles.bellBtn, pressed && { opacity: 0.7 }]}
             hitSlop={8}
           >
             <Feather name="bell" size={20} color="#000000" />
+            <NotificationBadge count={unreadCount} />
           </Pressable>
         </View>
 
-        {/* ── PROFILE CARD ────────────────────────────────────────────────────── */}
-        <View style={styles.profileCard}>
+        {/* ── PROFILE CARD (Upper part preserved) ──────────────────────────────── */}
+        <Pressable
+          onPress={() => router.push('/profile/view')}
+          style={({ pressed }) => [styles.profileCard, pressed && { opacity: 0.95 }]}
+        >
           <View style={styles.avatarContainer}>
             {avatarUrl ? (
               <Image
@@ -233,39 +265,35 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.userName}>{displayName}</Text>
           <Text style={styles.userRole}>{isHostMode ? 'Host' : 'Guest'}</Text>
-        </View>
+        </Pressable>
 
-        {/* ── QUICK CARDS (2 per row) ─────────────────────────────────────────── */}
+        {/* ── QUICK CARDS (Bookings & History) ─────────────────────────────────── */}
         <View style={styles.quickCardsRow}>
           <Pressable
+            testID="profile-quick-bookings"
             onPress={() => router.push('/reservations')}
             style={({ pressed }) => [styles.quickCard, pressed && styles.quickCardPressed]}
           >
-            <View style={styles.newBadgePill}>
-              <Text style={styles.newBadgeText}>NEW</Text>
-            </View>
             <View style={styles.quickCardIconWrap}>
               <Feather name="briefcase" size={36} color="#F26522" />
             </View>
-            <Text style={styles.quickCardText}>Past trips</Text>
+            <Text style={styles.quickCardText}>Bookings</Text>
           </Pressable>
 
           <Pressable
-            onPress={() => router.push('/saved')}
+            testID="profile-quick-history"
+            onPress={() => router.push('/profile/history')}
             style={({ pressed }) => [styles.quickCard, pressed && styles.quickCardPressed]}
           >
-            <View style={styles.newBadgePill}>
-              <Text style={styles.newBadgeText}>NEW</Text>
-            </View>
             <View style={styles.quickCardIconWrap}>
-              <Feather name="users" size={36} color="#F26522" />
+              <MaterialCommunityIcons name="history" size={38} color="#F26522" />
             </View>
-            <Text style={styles.quickCardText}>{savedCount > 0 ? `Saved (${savedCount})` : 'Connections'}</Text>
+            <Text style={styles.quickCardText}>History</Text>
           </Pressable>
         </View>
 
         {/* ── BECOME A HOST CARD ──────────────────────────────────────────────── */}
-        {!isHostUser && (
+        {!isHostMode && role !== 'host' && (
           <Pressable
             onPress={() => router.push('/become-host')}
             style={({ pressed }) => [styles.becomeHostCard, pressed && { opacity: 0.95 }]}
@@ -282,30 +310,121 @@ export default function ProfileScreen() {
           </Pressable>
         )}
 
-        {/* ── MAIN MENU (Airbnb Clean List Rows) ─────────────────────────────── */}
+        {/* ── EXACT MENU LIST (MATCHING SCREENSHOT) ────────────────────────────── */}
         <View style={styles.menuListBlock}>
-          {menuItems.map((item) => (
-            <React.Fragment key={item.id}>
-              <Pressable
-                onPress={() => {
-                  if (item.action) {
-                    item.action();
-                  } else if (item.route) {
-                    router.push(item.route);
-                  }
-                }}
-                style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
-              >
-                <Feather name={item.icon} size={22} color="#000000" style={styles.menuIcon} />
-                <Text style={styles.menuTitle}>{item.title}</Text>
-                <Feather name="chevron-right" size={18} color="#94A3B8" />
-              </Pressable>
+          {/* Block 1 */}
+          {block1Items.map((item) => (
+            <Pressable
+              key={item.id}
+              testID={`profile-menu-${item.id}`}
+              onPress={() => {
+                if (item.action) item.action();
+                else if (item.route) router.push(item.route);
+              }}
+              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+            >
+              <View style={styles.menuIconWrap}>
+                {item.iconFamily === 'feather' && (
+                  <Feather name={item.iconName as any} size={22} color="#1E1E1E" />
+                )}
+                {item.iconFamily === 'ionicons' && (
+                  <Ionicons name={item.iconName as any} size={22} color="#1E1E1E" />
+                )}
+                {item.iconFamily === 'material' && (
+                  <MaterialCommunityIcons name={item.iconName as any} size={24} color="#1E1E1E" />
+                )}
+              </View>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              {item.showChevron && <Feather name="chevron-right" size={20} color="#717171" />}
+            </Pressable>
+          ))}
 
-              {item.isDividerAfter && <View style={styles.sectionDivider} />}
-            </React.Fragment>
+          {/* Subtle Divider Line */}
+          <View style={styles.menuDivider} />
+
+          {/* Block 2 */}
+          {block2Items.map((item) => (
+            <Pressable
+              key={item.id}
+              testID={`profile-menu-${item.id}`}
+              onPress={() => {
+                if (item.action) item.action();
+                else if (item.route) router.push(item.route);
+              }}
+              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+            >
+              <View style={styles.menuIconWrap}>
+                {item.iconFamily === 'feather' && (
+                  <Feather name={item.iconName as any} size={22} color="#1E1E1E" />
+                )}
+                {item.iconFamily === 'ionicons' && (
+                  <Ionicons name={item.iconName as any} size={22} color="#1E1E1E" />
+                )}
+                {item.iconFamily === 'material' && (
+                  <MaterialCommunityIcons name={item.iconName as any} size={24} color="#1E1E1E" />
+                )}
+              </View>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              {item.showChevron && <Feather name="chevron-right" size={20} color="#717171" />}
+            </Pressable>
           ))}
         </View>
       </ScrollView>
+
+      {/* ── FLOATING SWITCH BUTTON (ORANGE PILL - PROMINENTLY FLOATING ABOVE TAB BAR) ── */}
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.floatingButtonContainer,
+          { bottom: Platform.OS === 'web' ? 30 : insets.bottom + 84 },
+        ]}
+      >
+        <Pressable
+          testID="floating-switch-mode-btn"
+          onPress={handleSwitchMode}
+          style={({ pressed }) => [
+            styles.floatingSwitchBtn,
+            pressed && styles.floatingSwitchBtnPressed,
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="swap-horizontal-bold"
+            size={20}
+            color="#FFFFFF"
+            style={styles.switchIcon}
+          />
+          <Text style={styles.floatingSwitchText}>
+            {isHostMode ? 'Switch to travelling' : 'Switch to hosting'}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* ── FULL-SCREEN MODE SWITCHING TRANSITION (USING ASSETS/IMAGES/SWITCHLOGO.PNG) ── */}
+      <Modal
+        visible={switchingOverlayVisible}
+        transparent={false}
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={styles.switchingContainer}>
+          <Animated.View
+            style={[
+              styles.switchingLogoWrap,
+              { transform: [{ scale: pulseAnim }] },
+            ]}
+          >
+            <Image
+              source={require('@/assets/images/switchlogo.png')}
+              style={styles.switchLogoImg}
+              contentFit="contain"
+            />
+          </Animated.View>
+
+          <Text style={styles.switchingText}>
+            {targetMode === 'host' ? 'Switching to hosting' : 'Switching to travelling'}
+          </Text>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -509,8 +628,11 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 2,
   },
+
+  /* ── MENU LIST ──────────────────────────────────────────────────────────── */
   menuListBlock: {
-    marginBottom: 20,
+    marginTop: 8,
+    marginBottom: 24,
   },
   menuRow: {
     flexDirection: 'row',
@@ -520,18 +642,96 @@ const styles = StyleSheet.create({
   menuRowPressed: {
     opacity: 0.6,
   },
-  menuIcon: {
+  menuIconWrap: {
+    width: 32,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
     marginRight: 16,
   },
   menuTitle: {
     flex: 1,
     fontSize: 16,
-    fontWeight: '500',
-    color: '#000000',
+    color: '#1E1E1E',
+    fontWeight: '400',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_500Medium',
+      default: 'sans-serif',
+    }),
   },
-  sectionDivider: {
+  menuDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 4,
+    backgroundColor: '#EEEEEE',
+    marginVertical: 8,
+  },
+
+  /* ── FLOATING SWITCH BUTTON (ORANGE PILL) ────────────────────────────────── */
+  floatingButtonContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 99999,
+    elevation: 20,
+  },
+  floatingSwitchBtn: {
+    backgroundColor: '#F26522',
+    borderRadius: 30,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 16,
+  },
+  floatingSwitchBtnPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
+  },
+  switchIcon: {
+    marginRight: 8,
+  },
+  floatingSwitchText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+
+  /* ── SWITCHING TRANSITION SCREEN (SCREENSHOT 2) ─────────────────────────── */
+  switchingContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switchingLogoWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  switchLogoImg: {
+    width: 92,
+    height: 92,
+  },
+  switchingText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111111',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+    letterSpacing: -0.3,
   },
 });

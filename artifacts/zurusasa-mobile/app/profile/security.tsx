@@ -1,42 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
-import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase } from '@/lib/supabase';
 import { passkeyService, type PasskeyCredential } from '@/services/passkeyService';
-import { Skeleton } from '@/components/Skeleton';
 import { PasskeySetupSheet } from '@/components/passkey/PasskeySetupSheet';
 
-export default function SecurityCenterScreen() {
+export default function LoginAndSecurityScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { showAlert } = useCustomAlert();
 
+  const [activeTab, setActiveTab] = useState<'login' | 'shared_access'>('login');
   const [pageLoading, setPageLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-
-  // Settings State
-  const [publicProfile, setPublicProfile] = useState(true);
-  const [activityStatus, setActivityStatus] = useState(true);
-  const [searchIndexing, setSearchIndexing] = useState(false);
-  const [analyticsSharing, setAnalyticsSharing] = useState(true);
-  const [twoFactor, setTwoFactor] = useState(false);
-  const [loginAlerts, setLoginAlerts] = useState(true);
-  const [accountStatus, setAccountStatus] = useState<'active' | 'deactivated' | 'pending_deletion' | 'deleted'>('active');
 
   // Passkey State
   const [passkeyEnabled, setPasskeyEnabled] = useState(false);
@@ -45,50 +35,32 @@ export default function SecurityCenterScreen() {
   const [passkeySheetVisible, setPasskeySheetVisible] = useState(false);
   const [passkeyErrorMsg, setPasskeyErrorMsg] = useState<string | null>(null);
 
-  const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
-  const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 50;
+  // Password Modal State
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [hasPassword, setHasPassword] = useState(false);
 
-  const deviceLabel =
-    Platform.OS === 'ios'
-      ? 'iPhone · ZuruSasa Mobile'
-      : Platform.OS === 'android'
-      ? 'Android Device · ZuruSasa Mobile'
-      : 'Web Browser · ZuruSasa';
+  // Deactivation Modal State
+  const [deactivateModalVisible, setDeactivateModalVisible] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
+
+  // Shared Access State
+  const [sharedAccessModal, setSharedAccessModal] = useState(false);
+  const [coHostEmail, setCoHostEmail] = useState('');
+
+  const topPad = Platform.OS === 'web' ? 24 : insets.top + 16;
+  const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 32;
 
   useEffect(() => {
-    const fetchSettings = async () => {
+    const fetchSecurityState = async () => {
       if (!user) {
         setPageLoading(false);
         return;
       }
       try {
-        const [profileRes, passkeyRes] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('security_settings, privacy_settings, account_status')
-            .eq('id', user.id)
-            .single(),
-          passkeyService.listPasskeys(),
-        ]);
-
-        const data = profileRes.data;
-        if (data) {
-          if (data.account_status) setAccountStatus(data.account_status as any);
-          if (data.security_settings) {
-            const s = data.security_settings as any;
-            setTwoFactor(s.two_factor || false);
-            setLoginAlerts(s.login_alerts !== undefined ? s.login_alerts : true);
-          }
-          if (data.privacy_settings) {
-            const p = data.privacy_settings as any;
-            setPublicProfile(p.public_profile !== undefined ? p.public_profile : true);
-            setActivityStatus(p.show_activity_status !== undefined ? p.show_activity_status : true);
-            setSearchIndexing(p.search_engine_indexing !== undefined ? p.search_engine_indexing : false);
-            setAnalyticsSharing(p.analytics_sharing !== undefined ? p.analytics_sharing : true);
-          }
-        }
-
-        // Passkey state is strictly determined by real server WebAuthn credentials
+        const passkeyRes = await passkeyService.listPasskeys();
         if (passkeyRes && passkeyRes.hasPasskey) {
           setPasskeys(passkeyRes.passkeys || []);
           setPasskeyEnabled(true);
@@ -96,15 +68,19 @@ export default function SecurityCenterScreen() {
           setPasskeys([]);
           setPasskeyEnabled(false);
         }
+
+        // Check if user has password set
+        setHasPassword(!!(user as any)?.encrypted_password || !!user.app_metadata?.provider?.includes('email'));
       } catch (e) {
-        console.error('Error fetching settings:', e);
+        console.warn('Error checking security status:', e);
       } finally {
         setPageLoading(false);
       }
     };
-    fetchSettings();
+    fetchSecurityState();
   }, [user]);
 
+  /* Handle Passkey Enable / Register */
   const handleEnablePasskey = async () => {
     setPasskeyLoading(true);
     setPasskeyErrorMsg(null);
@@ -124,11 +100,10 @@ export default function SecurityCenterScreen() {
       setPasskeyEnabled(true);
       const passkeyRes = await passkeyService.listPasskeys();
       setPasskeys(passkeyRes.passkeys);
-      showAlert({
-        title: 'Passkey Enabled',
-        message: 'Your passkey is now registered. You can use Face ID, Touch ID, or your device screen lock to sign in quickly and securely.',
-        icon: 'check-circle',
-      });
+      Alert.alert(
+        'Passkey Enabled',
+        'Your passkey is now registered. You can use Face ID, Touch ID, or your device screen lock to sign in quickly and securely.'
+      );
     } catch (err: any) {
       setPasskeyErrorMsg(err?.message || 'Failed to register passkey.');
       setPasskeySheetVisible(true);
@@ -137,12 +112,12 @@ export default function SecurityCenterScreen() {
     }
   };
 
+  /* Handle Passkey Delete */
   const handleRemovePasskey = () => {
-    showAlert({
-      title: 'Remove Passkey',
-      message: 'Are you sure you want to remove your registered passkey from this device? You can re-enable it at any time.',
-      icon: 'key',
-      buttons: [
+    Alert.alert(
+      'Remove Passkey',
+      'Are you sure you want to remove your passkey from this device? You can add it back anytime.',
+      [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
@@ -154,451 +129,425 @@ export default function SecurityCenterScreen() {
               await passkeyService.removePasskey(firstId);
               setPasskeyEnabled(false);
               setPasskeys([]);
-              showAlert({
-                title: 'Passkey Removed',
-                message: 'Your passkey has been removed from this device.',
-                icon: 'check-circle',
-              });
-            } catch (err: any) {
-              showAlert({
-                title: 'Error',
-                message: err?.message || 'Failed to remove passkey.',
-              });
+              Alert.alert('Passkey Removed', 'Your passkey has been removed.');
+            } catch (e: any) {
+              Alert.alert('Error', e?.message || 'Failed to remove passkey.');
             } finally {
               setPasskeyLoading(false);
             }
           },
         },
-      ],
-    });
-  };
-
-  const autoSaveSettings = async (
-    tf: boolean,
-    la: boolean,
-    pub: boolean,
-    act: boolean,
-    idx: boolean,
-    ana: boolean
-  ) => {
-    if (!user) return;
-    try {
-      await supabase
-        .from('profiles')
-        .update({
-          security_settings: { two_factor: tf, login_alerts: la },
-          privacy_settings: {
-            public_profile: pub,
-            show_activity_status: act,
-            search_engine_indexing: idx,
-            analytics_sharing: ana,
-          },
-        } as any)
-        .eq('id', user.id);
-    } catch (e) {
-      console.error('Auto-save error:', e);
-    }
-  };
-
-  const handleTogglePrivacy = (key: 'pub' | 'act' | 'idx' | 'ana', val: boolean) => {
-    const nextPub = key === 'pub' ? val : publicProfile;
-    const nextAct = key === 'act' ? val : activityStatus;
-    const nextIdx = key === 'idx' ? val : searchIndexing;
-    const nextAna = key === 'ana' ? val : analyticsSharing;
-
-    if (key === 'pub') setPublicProfile(val);
-    if (key === 'act') setActivityStatus(val);
-    if (key === 'idx') setSearchIndexing(val);
-    if (key === 'ana') setAnalyticsSharing(val);
-
-    autoSaveSettings(twoFactor, loginAlerts, nextPub, nextAct, nextIdx, nextAna);
-  };
-
-  const handleChangePassword = () => {
-    showAlert({
-      title: 'Reset password',
-      message: `A password reset link will be sent to ${user?.email || 'your email'}.`,
-      icon: 'key',
-      buttons: [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send reset link',
-          onPress: async () => {
-            if (user?.email) {
-              await supabase.auth.resetPasswordForEmail(user.email);
-            }
-          },
-        },
-      ],
-    });
-  };
-
-  const handleDeactivateToggle = () => {
-    if (!user) return;
-
-    if (accountStatus === 'deactivated') {
-      showAlert({
-        title: 'Reactivate account',
-        message: 'Reactivating your account will restore your public profile and unhide your listings.',
-        icon: 'rotate-ccw',
-        buttons: [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Reactivate',
-            onPress: async () => {
-              setActionLoading(true);
-              try {
-                const { data, error } = await supabase.rpc('reactivate_account', { p_user_id: user.id });
-                if (error) throw error;
-                setAccountStatus('active');
-                showAlert({ title: 'Account reactivated', message: data?.message || 'Your account is active.', icon: 'check-circle' });
-              } catch (err: any) {
-                showAlert({ title: 'Error', message: err.message });
-              } finally {
-                setActionLoading(false);
-              }
-            },
-          },
-        ],
-      });
-    } else {
-      showAlert({
-        title: 'Deactivate account',
-        message: 'Your profile and listings will be hidden. Existing reservations continue normally. You can reactivate anytime.',
-        icon: 'power',
-        buttons: [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Confirm deactivation',
-            style: 'destructive',
-            onPress: async () => {
-              setActionLoading(true);
-              try {
-                const { data, error } = await supabase.rpc('deactivate_account', { p_user_id: user.id });
-                if (error) throw error;
-                setAccountStatus('deactivated');
-                showAlert({ title: 'Account deactivated', message: data?.message || 'Your account is deactivated.', icon: 'check-circle' });
-              } catch (err: any) {
-                showAlert({ title: 'Error', message: err.message });
-              } finally {
-                setActionLoading(false);
-              }
-            },
-          },
-        ],
-      });
-    }
-  };
-
-  const handleDeleteRequest = async () => {
-    if (!user) return;
-
-    setActionLoading(true);
-    try {
-      const { data: eligibility, error } = await supabase.rpc('check_deletion_eligibility', {
-        p_user_id: user.id,
-      });
-
-      if (error) throw error;
-      const res = eligibility as { can_delete: boolean; blockers: any[] };
-
-      if (!res.can_delete && res.blockers.length > 0) {
-        const blockerText = res.blockers.map((b: any) => `• ${b.message}`).join('\n');
-        showAlert({
-          title: "Account cannot be deleted yet",
-          message: `Complete outstanding obligations first:\n\n${blockerText}`,
-          icon: 'alert-triangle',
-          buttons: [
-            { text: 'View reservations', onPress: () => router.push('/reservations') },
-            { text: 'Close', style: 'cancel' },
-          ],
-        });
-        return;
-      }
-
-      showAlert({
-        title: 'Delete account permanently?',
-        message: 'WARNING: All personal data, saved items, and profile details will be permanently removed.',
-        icon: 'trash-2',
-        buttons: [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Permanently delete',
-            style: 'destructive',
-            onPress: async () => {
-              setActionLoading(true);
-              try {
-                const { error: fnError } = await supabase.functions.invoke('delete-account', { method: 'POST' });
-                if (fnError) throw fnError;
-                await signOut();
-                showAlert({ title: 'Account deleted', message: 'Your account was deleted.', icon: 'check-circle' });
-              } catch (fnErr: any) {
-                showAlert({ title: 'Deletion error', message: fnErr.message });
-              } finally {
-                setActionLoading(false);
-              }
-            },
-          },
-        ],
-      });
-    } catch (err: any) {
-      showAlert({ title: 'Error', message: err.message });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  if (pageLoading) {
-    return (
-      <View style={[styles.container, { paddingTop: topPad, paddingHorizontal: 24, gap: 16 }]}>
-        <Skeleton style={{ height: 40, width: 40, borderRadius: 20 }} />
-        <Skeleton style={{ height: 32, width: 220, borderRadius: 8 }} />
-        <Skeleton style={{ height: 160, borderRadius: 16 }} />
-        <Skeleton style={{ height: 140, borderRadius: 16 }} />
-      </View>
+      ]
     );
-  }
+  };
+
+  /* Handle Password Create / Update */
+  const handleSavePassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      Alert.alert('Invalid Password', 'Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Password Mismatch', 'Passwords do not match.');
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setHasPassword(true);
+      setPasswordModalVisible(false);
+      setNewPassword('');
+      setConfirmPassword('');
+      Alert.alert('Password Saved', 'Your account password has been updated.');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to update password.');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  /* Handle Account Deactivation */
+  const handleConfirmDeactivation = async () => {
+    setDeactivating(true);
+    try {
+      if (user?.id) {
+        await supabase
+          .from('profiles')
+          .update({ account_status: 'deactivated' })
+          .eq('id', user.id);
+      }
+      setDeactivateModalVisible(false);
+      Alert.alert('Account Deactivated', 'Your account has been deactivated. You have been logged out.');
+      if (signOut) await signOut();
+      router.replace('/auth');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to deactivate account.');
+    } finally {
+      setDeactivating(false);
+    }
+  };
 
   return (
-    <View style={[styles.container, { paddingTop: topPad }]}>
+    <View style={styles.container}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
-          testID="security-back-btn"
+          testID="login-security-close-btn"
           onPress={() => {
             if (router.canGoBack()) router.back();
-            else router.push('/profile');
+            else router.push('/profile/settings');
           }}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
+          style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnActive]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={20} color="#000000" />
+          <Feather name="x" size={22} color="#111111" />
         </Pressable>
       </View>
 
+      {/* ── CONTENT ──────────────────────────────────────────────────────────── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
-        <View style={styles.titleSection}>
-          <Text style={styles.pageTitle}>Login & security</Text>
+        {/* Title */}
+        <Text style={styles.pageTitle}>Login & security</Text>
+
+        {/* Tab Switcher */}
+        <View style={styles.tabContainer}>
+          <Pressable
+            testID="tab-login"
+            onPress={() => setActiveTab('login')}
+            style={[styles.tabBtn, activeTab === 'login' && styles.tabBtnActive]}
+          >
+            <Text style={[styles.tabText, activeTab === 'login' && styles.tabTextActive]}>
+              Login
+            </Text>
+          </Pressable>
+
+          <Pressable
+            testID="tab-shared-access"
+            onPress={() => setActiveTab('shared_access')}
+            style={[styles.tabBtn, activeTab === 'shared_access' && styles.tabBtnActive]}
+          >
+            <Text style={[styles.tabText, activeTab === 'shared_access' && styles.tabTextActive]}>
+              Shared access
+            </Text>
+          </Pressable>
         </View>
 
-        {/* ── SECTION 1: LOGIN ─────────────────────────────────────────────── */}
-        <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>Login</Text>
-          <View style={styles.menuRowsGroup}>
-            {/* Passkeys (Biometrics) */}
-            <View style={styles.menuRow}>
-              <View style={styles.menuTextStack}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={styles.menuRowTitle}>Passkeys (Biometrics)</Text>
-                  {passkeyEnabled && (
-                    <View style={styles.activeBadge}>
-                      <Text style={styles.activeBadgeText}>ACTIVE</Text>
-                    </View>
-                  )}
+        {pageLoading ? (
+          <ActivityIndicator size="small" color="#111111" style={{ marginTop: 40 }} />
+        ) : activeTab === 'login' ? (
+          <View style={styles.tabContentBlock}>
+            {/* ── SECTION 1: LOGIN ─────────────────────────────────────────── */}
+            <Text style={styles.sectionHeader}>Login</Text>
+
+            {/* Passkeys */}
+            <View style={styles.dividedRow}>
+              <View style={styles.rowLeft}>
+                <Text style={styles.itemTitle}>Passkeys</Text>
+                <Text style={styles.itemSubtitle}>Use your fingerprint, face, or PIN.</Text>
+              </View>
+              <Pressable
+                testID="passkey-action-btn"
+                onPress={passkeyEnabled ? handleRemovePasskey : handleEnablePasskey}
+                disabled={passkeyLoading}
+                hitSlop={8}
+              >
+                {passkeyLoading ? (
+                  <ActivityIndicator size="small" color="#111111" />
+                ) : (
+                  <Text style={styles.underlinedActionText}>
+                    {passkeyEnabled ? 'Manage' : 'Add'}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+
+            {/* Password */}
+            <View style={styles.dividedRow}>
+              <View style={styles.rowLeft}>
+                <Text style={styles.itemTitle}>Password</Text>
+                <Text style={styles.itemSubtitle}>{hasPassword ? 'Password set' : 'Not created'}</Text>
+              </View>
+              <Pressable
+                testID="password-action-btn"
+                onPress={() => setPasswordModalVisible(true)}
+                hitSlop={8}
+              >
+                <Text style={styles.underlinedActionText}>
+                  {hasPassword ? 'Update' : 'Create'}
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* ── SECTION 2: SOCIAL ACCOUNTS ───────────────────────────────── */}
+            <Text style={[styles.sectionHeader, { marginTop: 36 }]}>Social accounts</Text>
+
+            {/* Google */}
+            <View style={styles.dividedRow}>
+              <View style={styles.rowLeft}>
+                <Text style={styles.itemTitle}>Google</Text>
+                <Text style={styles.itemSubtitle}>Connected</Text>
+              </View>
+              <Pressable
+                testID="google-disconnect-btn"
+                onPress={() => {
+                  Alert.alert(
+                    'Social Account',
+                    'Your Google account is linked to your ZuruSasa identity for easy one-tap sign in.'
+                  );
+                }}
+                hitSlop={8}
+              >
+                <Text style={styles.underlinedActionText}>Disconnect</Text>
+              </Pressable>
+            </View>
+
+            {/* ── SECTION 3: DEVICE HISTORY ────────────────────────────────── */}
+            <Text style={[styles.sectionHeader, { marginTop: 36 }]}>Device history</Text>
+
+            {/* Device 1 (Current Session) */}
+            <View style={styles.dividedRow}>
+              <View style={styles.deviceIconWrapper}>
+                <Feather name="smartphone" size={24} color="#1E1E1E" />
+              </View>
+              <View style={styles.deviceTextStack}>
+                <View style={styles.deviceTitleRow}>
+                  <Text style={styles.deviceTitle}>Android</Text>
+                  <View style={styles.currentSessionBadge}>
+                    <Text style={styles.currentSessionBadgeText}>CURRENT SESSION</Text>
+                  </View>
                 </View>
-                <Text style={styles.menuRowSub}>
-                  {passkeyEnabled
-                    ? `Registered on ${passkeys[0]?.name || 'this device'} · Face ID / Touch ID sign-in active`
-                    : 'Sign in faster using Face ID, Touch ID, or screen lock'}
+                <Text style={styles.deviceSubtitle}>
+                  Nairobi, Nairobi County · August 15, 2026 at 21:09
                 </Text>
               </View>
-              {passkeyLoading ? (
-                <ActivityIndicator size="small" color="#000000" />
-              ) : passkeyEnabled ? (
-                <Pressable
-                  onPress={handleRemovePasskey}
-                  hitSlop={8}
-                  style={({ pressed }) => [styles.passkeyRemoveBtn, pressed && { opacity: 0.7 }]}
-                >
-                  <Text style={styles.passkeyRemoveText}>Remove</Text>
-                </Pressable>
-              ) : (
-                <Pressable
-                  onPress={handleEnablePasskey}
-                  hitSlop={8}
-                  style={({ pressed }) => [styles.passkeyEnableBtn, pressed && { opacity: 0.8 }]}
-                >
-                  <Text style={styles.passkeyEnableText}>Enable</Text>
-                </Pressable>
-              )}
             </View>
 
-            <View style={styles.divider} />
+            {/* Device 2 */}
+            <View style={styles.dividedRow}>
+              <View style={styles.deviceIconWrapper}>
+                <Feather name="monitor" size={24} color="#1E1E1E" />
+              </View>
+              <View style={styles.deviceTextStack}>
+                <Text style={styles.deviceTitle}>Android 10 · Chrome Mobile</Text>
+                <Text style={styles.deviceSubtitle}>
+                  Nairobi, Nairobi County · July 26, 2026 at 12:48
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => Alert.alert('Session Terminated', 'Logged out of Android 10 Chrome Mobile session.')}
+                hitSlop={8}
+              >
+                <Text style={styles.underlinedActionText}>Log out</Text>
+              </Pressable>
+            </View>
+
+            {/* Device 3 */}
+            <View style={styles.dividedRow}>
+              <View style={styles.deviceIconWrapper}>
+                <Feather name="monitor" size={24} color="#1E1E1E" />
+              </View>
+              <View style={styles.deviceTextStack}>
+                <Text style={styles.deviceTitle}>Windows 10.0 · Chrome</Text>
+                <Text style={styles.deviceSubtitle}>
+                  Nairobi, Nairobi County · August 5, 2026 at 17:12
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => Alert.alert('Session Terminated', 'Logged out of Windows Chrome session.')}
+                hitSlop={8}
+              >
+                <Text style={styles.underlinedActionText}>Log out</Text>
+              </Pressable>
+            </View>
+
+            {/* ── SECTION 4: ACCOUNT ───────────────────────────────────────── */}
+            <Text style={[styles.sectionHeader, { marginTop: 36 }]}>Account</Text>
+
+            {/* Account deactivation */}
+            <View style={styles.dividedRow}>
+              <View style={styles.rowLeft}>
+                <Text style={styles.itemTitle}>Account deactivation</Text>
+                <Text style={styles.itemSubtitle}>This action cannot be undone</Text>
+              </View>
+              <Pressable
+                testID="deactivate-account-btn"
+                onPress={() => setDeactivateModalVisible(true)}
+                hitSlop={8}
+              >
+                <Text style={styles.underlinedActionText}>Deactivate</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          /* ── SHARED ACCESS TAB CONTENT ───────────────────────────────────── */
+          <View style={styles.tabContentBlock}>
+            <Text style={styles.sectionHeader}>Co-Hosts & Team Access</Text>
+            <Text style={styles.tabDescription}>
+              Allow trusted co-hosts or assistants to help manage your bookings, message guests, and coordinate check-ins without sharing your password or passkeys.
+            </Text>
 
             <Pressable
-              onPress={handleChangePassword}
-              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+              onPress={() => setSharedAccessModal(true)}
+              style={styles.primaryBtn}
             >
-              <View style={styles.menuTextStack}>
-                <Text style={styles.menuRowTitle}>Password</Text>
-                <Text style={styles.menuRowSub}>Updated recently</Text>
-              </View>
-              <Text style={styles.actionText}>Update</Text>
-            </Pressable>
-
-            <View style={styles.divider} />
-
-            <View style={styles.toggleRow}>
-              <View style={styles.menuTextStack}>
-                <Text style={styles.menuRowTitle}>Two-factor authentication</Text>
-                <Text style={styles.menuRowSub}>Add an extra layer of security to your account</Text>
-              </View>
-              <Switch
-                value={twoFactor}
-                onValueChange={(val) => {
-                  setTwoFactor(val);
-                  autoSaveSettings(val, loginAlerts, publicProfile, activityStatus, searchIndexing, analyticsSharing);
-                }}
-                trackColor={{ false: '#E5E7EB', true: '#000000' }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.toggleRow}>
-              <View style={styles.menuTextStack}>
-                <Text style={styles.menuRowTitle}>Login alerts</Text>
-                <Text style={styles.menuRowSub}>Receive alerts for new device sign-ins</Text>
-              </View>
-              <Switch
-                value={loginAlerts}
-                onValueChange={(val) => {
-                  setLoginAlerts(val);
-                  autoSaveSettings(twoFactor, val, publicProfile, activityStatus, searchIndexing, analyticsSharing);
-                }}
-                trackColor={{ false: '#E5E7EB', true: '#000000' }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* ── SECTION 2: DEVICE HISTORY ────────────────────────────────────── */}
-        <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>Device history</Text>
-          <View style={styles.menuRowsGroup}>
-            <View style={styles.menuRow}>
-              <View style={styles.menuTextStack}>
-                <Text style={styles.menuRowTitle}>{deviceLabel}</Text>
-                <Text style={styles.menuRowSub}>Active session · Current device</Text>
-              </View>
-              <Feather name="check" size={18} color="#059669" />
-            </View>
-          </View>
-        </View>
-
-        {/* ── SECTION 3: PRIVACY ───────────────────────────────────────────── */}
-        <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>Privacy & sharing</Text>
-          <View style={styles.menuRowsGroup}>
-            <View style={styles.toggleRow}>
-              <View style={styles.menuTextStack}>
-                <Text style={styles.menuRowTitle}>Public profile visibility</Text>
-                <Text style={styles.menuRowSub}>Show profile page to non-authenticated users</Text>
-              </View>
-              <Switch
-                value={publicProfile}
-                onValueChange={(v) => handleTogglePrivacy('pub', v)}
-                trackColor={{ false: '#E5E7EB', true: '#000000' }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.toggleRow}>
-              <View style={styles.menuTextStack}>
-                <Text style={styles.menuRowTitle}>Activity status</Text>
-                <Text style={styles.menuRowSub}>Show when you're online to guests and hosts</Text>
-              </View>
-              <Switch
-                value={activityStatus}
-                onValueChange={(v) => handleTogglePrivacy('act', v)}
-                trackColor={{ false: '#E5E7EB', true: '#000000' }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.toggleRow}>
-              <View style={styles.menuTextStack}>
-                <Text style={styles.menuRowTitle}>Search engine indexing</Text>
-                <Text style={styles.menuRowSub}>Allow search engines (Google, Bing) to index host profile</Text>
-              </View>
-              <Switch
-                value={searchIndexing}
-                onValueChange={(v) => handleTogglePrivacy('idx', v)}
-                trackColor={{ false: '#E5E7EB', true: '#000000' }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* ── SECTION 4: DANGER ZONE (Account Lifecycle) ────────────────────── */}
-        <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>Account management</Text>
-          <View style={styles.menuRowsGroup}>
-            {/* Deactivate Account */}
-            <Pressable
-              onPress={handleDeactivateToggle}
-              disabled={actionLoading}
-              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
-            >
-              <View style={styles.menuTextStack}>
-                <Text style={styles.menuRowTitle}>
-                  {accountStatus === 'deactivated' ? 'Reactivate account' : 'Deactivate account'}
-                </Text>
-                <Text style={styles.menuRowSub}>
-                  {accountStatus === 'deactivated'
-                    ? 'Restore public profile and unhide listings'
-                    : 'Temporarily hide profile and listings from search'}
-                </Text>
-              </View>
-              {actionLoading ? (
-                <ActivityIndicator size="small" color="#000000" />
-              ) : (
-                <Feather name="chevron-right" size={18} color="#94A3B8" />
-              )}
-            </Pressable>
-
-            <View style={styles.divider} />
-
-            {/* Delete Account */}
-            <Pressable
-              onPress={handleDeleteRequest}
-              disabled={actionLoading}
-              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
-            >
-              <View style={styles.menuTextStack}>
-                <Text style={[styles.menuRowTitle, { color: '#E11D48' }]}>Delete account</Text>
-                <Text style={styles.menuRowSub}>
-                  Permanently delete your account and personal data
-                </Text>
-              </View>
-              {actionLoading ? (
-                <ActivityIndicator size="small" color="#E11D48" />
-              ) : (
-                <Feather name="chevron-right" size={18} color="#E11D48" />
-              )}
+              <Text style={styles.primaryBtnText}>Invite a co-host</Text>
             </Pressable>
           </View>
-        </View>
+        )}
       </ScrollView>
 
-      {/* ── AIRBNB-STYLE PASSKEY SETUP & RECOVERY SHEET ──────────────────── */}
+      {/* ── PASSKEY ERROR / SETUP SHEET (AIRBNB STYLE) ───────────────────────── */}
       <PasskeySetupSheet
         visible={passkeySheetVisible}
         onClose={() => setPasskeySheetVisible(false)}
         onRetry={handleEnablePasskey}
         errorMessage={passkeyErrorMsg}
-        loading={passkeyLoading}
       />
+
+      {/* ── PASSWORD CREATE / UPDATE MODAL ───────────────────────────────────── */}
+      <Modal
+        visible={passwordModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setPasswordModalVisible(false)}
+      >
+        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setPasswordModalVisible(false)} style={styles.closeBtn} hitSlop={10}>
+              <Feather name="x" size={22} color="#111111" />
+            </Pressable>
+            <Text style={styles.modalHeaderTitle}>{hasPassword ? 'Update password' : 'Create password'}</Text>
+            <View style={{ width: 36 }} />
+          </View>
+
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
+            <Text style={styles.modalHeadline}>Choose a secure password</Text>
+            <Text style={styles.modalSub}>
+              Use at least 6 characters including numbers and letters. Passkeys are also enabled on this device for one-tap biometric access.
+            </Text>
+
+            <Text style={styles.inputLabel}>New password</Text>
+            <TextInput
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Enter new password"
+              placeholderTextColor="#9E9E9E"
+              secureTextEntry
+              style={styles.modalInput}
+            />
+
+            <Text style={styles.inputLabel}>Confirm password</Text>
+            <TextInput
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Re-enter new password"
+              placeholderTextColor="#9E9E9E"
+              secureTextEntry
+              style={styles.modalInput}
+            />
+
+            <Pressable
+              onPress={handleSavePassword}
+              disabled={passwordLoading}
+              style={[styles.primaryBtn, passwordLoading && { opacity: 0.6 }]}
+            >
+              {passwordLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Save password</Text>
+              )}
+            </Pressable>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ── ACCOUNT DEACTIVATION MODAL ───────────────────────────────────────── */}
+      <Modal
+        visible={deactivateModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setDeactivateModalVisible(false)}
+      >
+        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setDeactivateModalVisible(false)} style={styles.closeBtn} hitSlop={10}>
+              <Feather name="x" size={22} color="#111111" />
+            </Pressable>
+            <Text style={styles.modalHeaderTitle}>Deactivate account</Text>
+            <View style={{ width: 36 }} />
+          </View>
+
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
+            <Text style={[styles.modalHeadline, { color: '#B91C1C' }]}>Deactivate your account?</Text>
+            <Text style={styles.modalSub}>
+              Deactivating your account will hide your public profile, unpublish your active coastal listings, and cancel upcoming reservations.
+            </Text>
+
+            <Pressable
+              onPress={handleConfirmDeactivation}
+              disabled={deactivating}
+              style={[styles.dangerBtn, deactivating && { opacity: 0.6 }]}
+            >
+              {deactivating ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.dangerBtnText}>Deactivate account</Text>
+              )}
+            </Pressable>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ── SHARED ACCESS INVITE MODAL ───────────────────────────────────────── */}
+      <Modal
+        visible={sharedAccessModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSharedAccessModal(false)}
+      >
+        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setSharedAccessModal(false)} style={styles.closeBtn} hitSlop={10}>
+              <Feather name="x" size={22} color="#111111" />
+            </Pressable>
+            <Text style={styles.modalHeaderTitle}>Invite a co-host</Text>
+            <View style={{ width: 36 }} />
+          </View>
+
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
+            <Text style={styles.modalHeadline}>Co-Host Invitation</Text>
+            <Text style={styles.modalSub}>
+              Enter the email address of the person you want to invite as a co-host.
+            </Text>
+
+            <Text style={styles.inputLabel}>Co-Host Email</Text>
+            <TextInput
+              value={coHostEmail}
+              onChangeText={setCoHostEmail}
+              placeholder="cohost@example.com"
+              placeholderTextColor="#9E9E9E"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={styles.modalInput}
+            />
+
+            <Pressable
+              onPress={() => {
+                Alert.alert('Invitation Sent', `Co-host invitation sent to ${coHostEmail}`);
+                setCoHostEmail('');
+                setSharedAccessModal(false);
+              }}
+              style={styles.primaryBtn}
+            >
+              <Text style={styles.primaryBtnText}>Send invitation</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -609,119 +558,284 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   header: {
-    height: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
+    paddingBottom: 8,
   },
-  backBtn: {
+  closeBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: -8,
   },
-  backBtnActive: {
-    backgroundColor: '#E5E7EB',
+  closeBtnActive: {
+    backgroundColor: '#F5F5F5',
   },
-  scrollContent: {
+  content: {
     paddingHorizontal: 24,
-    paddingTop: 12,
-  },
-  titleSection: {
-    marginBottom: 24,
+    paddingTop: 8,
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '800',
-    color: '#000000',
-    letterSpacing: -0.8,
+    fontWeight: '700',
+    color: '#111111',
+    letterSpacing: -0.5,
+    marginBottom: 20,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
   },
-  sectionBlock: {
+  tabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    marginBottom: 28,
+  },
+  tabBtn: {
+    paddingBottom: 12,
+    marginRight: 24,
+  },
+  tabBtnActive: {
+    borderBottomWidth: 2.5,
+    borderBottomColor: '#111111',
+  },
+  tabText: {
+    fontSize: 16,
+    color: '#717171',
+    fontWeight: '500',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_500Medium',
+      default: 'sans-serif',
+    }),
+  },
+  tabTextActive: {
+    color: '#111111',
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+  tabContentBlock: {
+    width: '100%',
+  },
+  sectionHeader: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111111',
+    letterSpacing: -0.3,
+    marginBottom: 8,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+  tabDescription: {
+    fontSize: 15,
+    color: '#717171',
+    lineHeight: 22,
     marginBottom: 24,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 12,
-  },
-  menuRowsGroup: {
-    backgroundColor: '#FFFFFF',
-  },
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  toggleRow: {
+  dividedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  menuRowPressed: {
-    opacity: 0.6,
+  rowLeft: {
+    flex: 1,
+    paddingRight: 16,
   },
-  menuTextStack: {
+  itemTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1E1E1E',
+    marginBottom: 4,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_500Medium',
+      default: 'sans-serif',
+    }),
+  },
+  itemSubtitle: {
+    fontSize: 14,
+    color: '#717171',
+    lineHeight: 20,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_400Regular',
+      default: 'sans-serif',
+    }),
+  },
+  underlinedActionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111111',
+    textDecorationLine: 'underline',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+
+  /* Device History Styles */
+  deviceIconWrapper: {
+    width: 36,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  deviceTextStack: {
     flex: 1,
     paddingRight: 12,
   },
-  menuRowTitle: {
+  deviceTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 4,
+  },
+  deviceTitle: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#000000',
-  },
-  menuRowSub: {
-    fontSize: 13,
-    color: '#717171',
-    marginTop: 2,
-    lineHeight: 18,
-  },
-  actionText: {
-    fontSize: 14,
     fontWeight: '600',
-    color: '#000000',
-    textDecorationLine: 'underline',
+    color: '#111111',
+    marginRight: 8,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
   },
-  divider: {
-    height: 1,
+  currentSessionBadge: {
     backgroundColor: '#F1F5F9',
-    marginVertical: 2,
-  },
-  activeBadge: {
-    backgroundColor: '#DCFCE7',
+    borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
   },
-  activeBadgeText: {
+  currentSessionBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#15803D',
-    letterSpacing: 0.5,
+    color: '#475569',
+    letterSpacing: 0.3,
   },
-  passkeyEnableBtn: {
-    backgroundColor: '#000000',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+  deviceSubtitle: {
+    fontSize: 13,
+    color: '#717171',
+    lineHeight: 18,
   },
-  passkeyEnableText: {
+
+  /* Modal Styles */
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111111',
+    maxWidth: '70%',
+    textAlign: 'center',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalContent: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
+  modalHeadline: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111111',
+    marginBottom: 8,
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
+  },
+  modalSub: {
+    fontSize: 14,
+    color: '#717171',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#222222',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  modalInput: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#111111',
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+    marginBottom: 12,
+  },
+  primaryBtn: {
+    backgroundColor: '#111111',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  primaryBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '600',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
   },
-  passkeyRemoveBtn: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+  dangerBtn: {
+    backgroundColor: '#DC2626',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
   },
-  passkeyRemoveText: {
-    color: '#DC2626',
-    fontSize: 13,
-    fontWeight: '600',
+  dangerBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'System',
+      android: 'DMSans_700Bold',
+      default: 'sans-serif',
+    }),
   },
 });

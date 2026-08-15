@@ -40,10 +40,10 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
 
   // Explicit allowed routes list
   const allowedRoutes = !user
-    ? ['index', 'discover', 'profile']
+    ? ['discover', 'saved', 'profile']
     : isHostMode
     ? ['index', 'listings', 'reservations', 'inbox', 'profile']
-    : ['index', 'discover', 'inbox', 'profile'];
+    : ['discover', 'saved', 'index', 'inbox', 'profile'];
 
   return (
     <View
@@ -64,7 +64,6 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
 
           const isProfileActive =
             focusedRoute.name === 'profile' ||
-            focusedRoute.name === 'saved' ||
             (!isHostMode && focusedRoute.name === 'reservations');
 
           const isFocused =
@@ -192,8 +191,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="saved"
         options={{
-          title: 'Saved',
-          href: null,
+          title: 'Wishlists',
+          href: isHostMode ? null : undefined,
           tabBarIcon: ({ color }) => (
             <Ionicons name="heart-outline" size={22} color={color} />
           ),
