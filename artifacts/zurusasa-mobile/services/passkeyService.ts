@@ -34,21 +34,34 @@ export interface PasskeyRegisterResult {
   credential?: any;
 }
 
-function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'not_found' | 'unsupported' | 'invalid' | 'unknown'; isCancelled: boolean } {
-  const rawMsg = (err?.message || err?.error_description || String(err || '')).toLowerCase();
-  const name = (err?.name || '').toLowerCase();
+function parsePasskeyError(err: any): {
+  message: string;
+  code: 'cancelled' | 'not_found' | 'unsupported' | 'invalid' | 'unknown';
+  isCancelled: boolean;
+} {
+  const rawMsg = (
+    err?.message ||
+    err?.error_description ||
+    err?.error ||
+    err?.errorMessage ||
+    String(err || '')
+  ).toLowerCase();
+  const name = (err?.name || err?.error || err?.code || '').toLowerCase();
 
   // 1. User Cancellation
   if (
     name.includes('notallowederror') ||
     name.includes('aborterror') ||
+    name.includes('usercancelled') ||
+    name.includes('user_cancelled') ||
     rawMsg.includes('cancelled') ||
     rawMsg.includes('canceled') ||
     rawMsg.includes('abort') ||
     rawMsg.includes('user denied') ||
     rawMsg.includes('user closed') ||
     rawMsg.includes('user_cancelled') ||
-    rawMsg.includes('timed out or was not allowed')
+    rawMsg.includes('timed out or was not allowed') ||
+    rawMsg.includes('the user cancelled the request')
   ) {
     return {
       message: 'Passkey setup was cancelled.',
@@ -57,27 +70,48 @@ function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'no
     };
   }
 
-  // 2. Unsupported Device
+  // 2. Passkey Already Exists
   if (
+    name.includes('credentialalreadyexists') ||
+    name.includes('invalidstateerror') ||
+    rawMsg.includes('already exists') ||
+    rawMsg.includes('credential already exists')
+  ) {
+    return {
+      message: 'A passkey for this account is already registered on this device.',
+      code: 'invalid',
+      isCancelled: false,
+    };
+  }
+
+  // 3. No Create Option / Unsupported Device / No Provider
+  if (
+    name.includes('nocreateoption') ||
+    name.includes('notsupported') ||
+    name.includes('notsupportederror') ||
+    name.includes('notconfigured') ||
     rawMsg.includes('does not support webauthn') ||
-    rawMsg.includes('notsupportederror') ||
-    rawMsg.includes('unsupported') ||
+    rawMsg.includes('no credential provider') ||
+    rawMsg.includes('no create option') ||
+    rawMsg.includes('not supported') ||
     rawMsg.includes('not available')
   ) {
     return {
-      message: 'Passkey authentication is not supported on this device. Please sign in with Google or Email.',
+      message:
+        'Passkey setup requires a screen lock (PIN, fingerprint, or Face unlock) and Google Password Manager enabled on your device.',
       code: 'unsupported',
       isCancelled: false,
     };
   }
 
-  // 3. Passkey Not Found
+  // 4. Passkey Not Found
   if (
     rawMsg.includes('no passkeys found') ||
     rawMsg.includes('passkey not found') ||
     rawMsg.includes('not found') ||
     rawMsg.includes('not registered') ||
     rawMsg.includes('no credentials') ||
+    name.includes('nocredentials') ||
     name.includes('notfounderror')
   ) {
     return {
@@ -87,21 +121,24 @@ function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'no
     };
   }
 
-  // 4. Invalid Credential
+  // 5. Invalid Credential / Configuration / Server Error
   if (
+    name.includes('badconfiguration') ||
+    name.includes('requestfailed') ||
+    name.includes('securityerror') ||
     rawMsg.includes('invalid') ||
     rawMsg.includes('expired') ||
     rawMsg.includes('verification failed') ||
     rawMsg.includes('challenge')
   ) {
     return {
-      message: 'Your passkey could not be verified. Please try again or use another login method.',
+      message: 'Could not complete passkey verification. Please ensure your device screen lock is set up and try again.',
       code: 'invalid',
       isCancelled: false,
     };
   }
 
-  // 5. Generic Error
+  // 6. Generic Error
   return {
     message: err?.message || 'Failed to complete passkey setup. Please try again.',
     code: 'unknown',
@@ -153,7 +190,9 @@ export const passkeyService = {
         const { data, error } = await (supabase.auth as any).signInWithPasskey();
         if (error) {
           const parsed = parsePasskeyError(error);
-          return parsed.isCancelled ? { success: false, cancelled: true } : { success: false, error: parsed.message, code: parsed.code };
+          return parsed.isCancelled
+            ? { success: false, cancelled: true }
+            : { success: false, error: parsed.message, code: parsed.code };
         }
         return { success: true, user: data?.user, session: data?.session };
       }
@@ -166,8 +205,14 @@ export const passkeyService = {
 
       // 2. Enforce on-device verification
       const rawOptions = authOptions.options || authOptions;
+      let rpId = rawOptions.rpId || rawOptions.rp?.id;
+      if (rpId && typeof rpId === 'string') {
+        rpId = rpId.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+      }
+
       const nativeOptions = {
         ...rawOptions,
+        ...(rpId ? { rpId } : {}),
         userVerification: 'required',
       };
 
@@ -175,9 +220,13 @@ export const passkeyService = {
         const { data, error } = await (supabase.auth as any).signInWithPasskey();
         if (error) throw error;
         return { success: true, user: data?.user, session: data?.session };
-      } else if (NativePasskey?.get) {
+      } else if (NativePasskey?.getPlatformKey || NativePasskey?.get) {
         try {
-          credentialResponse = await NativePasskey.get(nativeOptions);
+          if (typeof NativePasskey.getPlatformKey === 'function') {
+            credentialResponse = await NativePasskey.getPlatformKey(nativeOptions);
+          } else {
+            credentialResponse = await NativePasskey.get(nativeOptions);
+          }
         } catch (nativeErr: any) {
           const parsed = parsePasskeyError(nativeErr);
           if (parsed.isCancelled) return { success: false, cancelled: true };
@@ -187,7 +236,9 @@ export const passkeyService = {
         const { data, error } = await (supabase.auth as any).signInWithPasskey();
         if (error) {
           const parsed = parsePasskeyError(error);
-          return parsed.isCancelled ? { success: false, cancelled: true } : { success: false, error: parsed.message, code: parsed.code };
+          return parsed.isCancelled
+            ? { success: false, cancelled: true }
+            : { success: false, error: parsed.message, code: parsed.code };
         }
         return { success: true, user: data?.user, session: data?.session };
       }
@@ -266,24 +317,58 @@ export const passkeyService = {
 
       // 2. ENFORCE PLATFORM/DEVICE AUTHENTICATOR (THIS PHONE)
       const baseOptions = regOptions.options || regOptions;
+
+      // Clean RP ID (strip any protocol/port if present)
+      let rpId = baseOptions.rp?.id || baseOptions.rpId;
+      if (rpId && typeof rpId === 'string') {
+        rpId = rpId.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+      }
+
       const platformDeviceOptions = {
         ...baseOptions,
+        rp: {
+          name: baseOptions.rp?.name || 'ZuruSasa',
+          ...(rpId ? { id: rpId } : {}),
+        },
+        user: {
+          id: baseOptions.user?.id || userData.user.id,
+          name: baseOptions.user?.name || userData.user.email || 'user',
+          displayName:
+            baseOptions.user?.displayName ||
+            userData.user.user_metadata?.full_name ||
+            userData.user.email ||
+            'User',
+        },
+        pubKeyCredParams:
+          Array.isArray(baseOptions.pubKeyCredParams) && baseOptions.pubKeyCredParams.length > 0
+            ? baseOptions.pubKeyCredParams
+            : [
+                { type: 'public-key', alg: -7 }, // ES256 (ECDSA with SHA-256)
+                { type: 'public-key', alg: -257 }, // RS256 (RSA with SHA-256)
+              ],
         authenticatorSelection: {
           ...(baseOptions.authenticatorSelection || {}),
           authenticatorAttachment: 'platform', // Forces Google Password Manager / Biometrics ON THIS DEVICE
-          residentKey: 'required',             // Stored discoverable credential on device
+          residentKey: 'required', // Stored discoverable credential on device
           requireResidentKey: true,
-          userVerification: 'required',        // Triggers Fingerprint / Face unlock / Device PIN
+          userVerification: 'required', // Triggers Fingerprint / Face unlock / Device PIN
         },
+        attestation: baseOptions.attestation || 'none',
+        timeout: baseOptions.timeout || 60000,
+        excludeCredentials: baseOptions.excludeCredentials || [],
       };
 
       if (Platform.OS === 'web') {
         const { data, error } = await (supabase.auth as any).registerPasskey();
         if (error) throw error;
         return { success: true, credential: data };
-      } else if (NativePasskey?.create) {
+      } else if (NativePasskey?.createPlatformKey || NativePasskey?.create) {
         try {
-          credentialResponse = await NativePasskey.create(platformDeviceOptions);
+          if (typeof NativePasskey.createPlatformKey === 'function') {
+            credentialResponse = await NativePasskey.createPlatformKey(platformDeviceOptions);
+          } else {
+            credentialResponse = await NativePasskey.create(platformDeviceOptions);
+          }
         } catch (nativeErr: any) {
           const parsed = parsePasskeyError(nativeErr);
           if (parsed.isCancelled) return { success: false, cancelled: true };

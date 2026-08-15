@@ -18,6 +18,7 @@ import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase } from '@/lib/supabase';
 import { passkeyService, type PasskeyCredential } from '@/services/passkeyService';
 import { Skeleton } from '@/components/Skeleton';
+import { PasskeySetupSheet } from '@/components/passkey/PasskeySetupSheet';
 
 export default function SecurityCenterScreen() {
   const insets = useSafeAreaInsets();
@@ -41,6 +42,8 @@ export default function SecurityCenterScreen() {
   const [passkeyEnabled, setPasskeyEnabled] = useState(false);
   const [passkeys, setPasskeys] = useState<PasskeyCredential[]>([]);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeySheetVisible, setPasskeySheetVisible] = useState(false);
+  const [passkeyErrorMsg, setPasskeyErrorMsg] = useState<string | null>(null);
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
   const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 50;
@@ -104,6 +107,7 @@ export default function SecurityCenterScreen() {
 
   const handleEnablePasskey = async () => {
     setPasskeyLoading(true);
+    setPasskeyErrorMsg(null);
     try {
       const res = await passkeyService.register();
       if (res.cancelled) {
@@ -111,14 +115,12 @@ export default function SecurityCenterScreen() {
         return;
       }
       if (!res.success) {
-        showAlert({
-          title: 'Passkey Setup',
-          message: res.error || 'Could not register passkey on this device.',
-          icon: 'alert-triangle',
-        });
+        setPasskeyErrorMsg(res.error || 'Could not complete passkey setup on this device.');
+        setPasskeySheetVisible(true);
         setPasskeyLoading(false);
         return;
       }
+      setPasskeySheetVisible(false);
       setPasskeyEnabled(true);
       const passkeyRes = await passkeyService.listPasskeys();
       setPasskeys(passkeyRes.passkeys);
@@ -128,11 +130,8 @@ export default function SecurityCenterScreen() {
         icon: 'check-circle',
       });
     } catch (err: any) {
-      showAlert({
-        title: 'Passkey Setup Error',
-        message: err?.message || 'Failed to register passkey.',
-        icon: 'alert-triangle',
-      });
+      setPasskeyErrorMsg(err?.message || 'Failed to register passkey.');
+      setPasskeySheetVisible(true);
     } finally {
       setPasskeyLoading(false);
     }
@@ -591,6 +590,15 @@ export default function SecurityCenterScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* ── AIRBNB-STYLE PASSKEY SETUP & RECOVERY SHEET ──────────────────── */}
+      <PasskeySetupSheet
+        visible={passkeySheetVisible}
+        onClose={() => setPasskeySheetVisible(false)}
+        onRetry={handleEnablePasskey}
+        errorMessage={passkeyErrorMsg}
+        loading={passkeyLoading}
+      />
     </View>
   );
 }
