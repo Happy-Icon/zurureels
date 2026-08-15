@@ -71,8 +71,7 @@
           "locationWhenInUsePermission": "Show your location on the map to find nearby stays, restaurants, and tours across the Kenyan coast."
         }
       ],
-      "react-native-maps",
-      "react-native-passkey"
+      "react-native-maps"
     ],
     "experiments": {
       "typedRoutes": true,
