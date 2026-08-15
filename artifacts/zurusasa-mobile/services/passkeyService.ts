@@ -51,7 +51,7 @@ function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'no
     rawMsg.includes('timed out or was not allowed')
   ) {
     return {
-      message: 'Passkey sign-in was cancelled.',
+      message: 'Passkey setup was cancelled.',
       code: 'cancelled',
       isCancelled: true,
     };
@@ -103,7 +103,7 @@ function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'no
 
   // 5. Generic Error
   return {
-    message: err?.message || 'Failed to authenticate with passkey. Please try again.',
+    message: err?.message || 'Failed to complete passkey setup. Please try again.',
     code: 'unknown',
     isCancelled: false,
   };
@@ -133,11 +133,11 @@ export const passkeyService = {
   },
 
   /**
-   * Native Sign-In using Android Credential Manager + Supabase Auth
+   * Native Sign-In using Android Credential Manager on THIS DEVICE
    */
   async signIn(): Promise<PasskeyAuthResult> {
     try {
-      // 1. Get authentication challenge options from Supabase GoTrue API
+      // 1. Get authentication challenge options from Supabase
       let authOptions: any = null;
       try {
         if ((supabase.auth as any).passkey?.startAuthentication) {
@@ -164,15 +164,20 @@ export const passkeyService = {
 
       let credentialResponse: any = null;
 
-      // 2. Invoke Platform Authenticator (Android Credential Manager on Native)
+      // 2. Enforce on-device verification
+      const rawOptions = authOptions.options || authOptions;
+      const nativeOptions = {
+        ...rawOptions,
+        userVerification: 'required',
+      };
+
       if (Platform.OS === 'web') {
         const { data, error } = await (supabase.auth as any).signInWithPasskey();
         if (error) throw error;
         return { success: true, user: data?.user, session: data?.session };
       } else if (NativePasskey?.get) {
         try {
-          const optionsPayload = authOptions.options || authOptions;
-          credentialResponse = await NativePasskey.get(optionsPayload);
+          credentialResponse = await NativePasskey.get(nativeOptions);
         } catch (nativeErr: any) {
           const parsed = parsePasskeyError(nativeErr);
           if (parsed.isCancelled) return { success: false, cancelled: true };
@@ -223,7 +228,7 @@ export const passkeyService = {
   },
 
   /**
-   * Native Passkey Registration from Settings
+   * Native Passkey Registration — Enforcing THIS PHONE (Platform Authenticator)
    */
   async register(friendlyName?: string): Promise<PasskeyRegisterResult> {
     try {
@@ -232,7 +237,7 @@ export const passkeyService = {
         return { success: false, error: 'You must be logged in to register a passkey.' };
       }
 
-      // 1. Get creation challenge options from Supabase GoTrue API
+      // 1. Get creation challenge options from Supabase
       let regOptions: any = null;
       try {
         if ((supabase.auth as any).passkey?.startRegistration) {
@@ -259,15 +264,26 @@ export const passkeyService = {
 
       let credentialResponse: any = null;
 
-      // 2. Invoke Platform Authenticator (Android Credential Manager) to create credential
+      // 2. ENFORCE PLATFORM/DEVICE AUTHENTICATOR (THIS PHONE)
+      const baseOptions = regOptions.options || regOptions;
+      const platformDeviceOptions = {
+        ...baseOptions,
+        authenticatorSelection: {
+          ...(baseOptions.authenticatorSelection || {}),
+          authenticatorAttachment: 'platform', // Forces Google Password Manager / Biometrics ON THIS DEVICE
+          residentKey: 'required',             // Stored discoverable credential on device
+          requireResidentKey: true,
+          userVerification: 'required',        // Triggers Fingerprint / Face unlock / Device PIN
+        },
+      };
+
       if (Platform.OS === 'web') {
         const { data, error } = await (supabase.auth as any).registerPasskey();
         if (error) throw error;
         return { success: true, credential: data };
       } else if (NativePasskey?.create) {
         try {
-          const optionsPayload = regOptions.options || regOptions;
-          credentialResponse = await NativePasskey.create(optionsPayload);
+          credentialResponse = await NativePasskey.create(platformDeviceOptions);
         } catch (nativeErr: any) {
           const parsed = parsePasskeyError(nativeErr);
           if (parsed.isCancelled) return { success: false, cancelled: true };
@@ -302,12 +318,12 @@ export const passkeyService = {
       if (parsed.isCancelled) {
         return { success: false, cancelled: true };
       }
-      return { success: false, error: err?.message || 'Passkey registration error.' };
+      return { success: false, error: parsed.message };
     }
   },
 
   /**
-   * Queries registered passkeys on Supabase server (Canonical Source of Truth)
+   * Queries registered passkeys on Supabase server
    */
   async listPasskeys(): Promise<{ passkeys: PasskeyCredential[]; hasPasskey: boolean }> {
     try {
