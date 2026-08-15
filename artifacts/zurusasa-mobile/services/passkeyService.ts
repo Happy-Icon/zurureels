@@ -1,15 +1,6 @@
 import { Platform } from 'react-native';
+import { Passkey } from 'react-native-passkey';
 import { supabase } from '@/lib/supabase';
-
-let NativePasskey: any = null;
-if (Platform.OS !== 'web') {
-  try {
-    const mod = require('react-native-passkey');
-    NativePasskey = mod.Passkey || mod.default || mod;
-  } catch (e) {
-    console.warn('[Passkey] react-native-passkey load note:', e);
-  }
-}
 
 export interface PasskeyCredential {
   id: string;
@@ -84,7 +75,7 @@ function parsePasskeyError(err: any): {
     };
   }
 
-  // 3. No Create Option / Unsupported Device / No Provider
+  // 3. No Create Option / Unsupported Device / No Provider / Missing native module
   if (
     name.includes('nocreateoption') ||
     name.includes('notsupported') ||
@@ -94,7 +85,8 @@ function parsePasskeyError(err: any): {
     rawMsg.includes('no credential provider') ||
     rawMsg.includes('no create option') ||
     rawMsg.includes('not supported') ||
-    rawMsg.includes('not available')
+    rawMsg.includes('not available') ||
+    rawMsg.includes("doesn't seem to be linked")
   ) {
     return {
       message:
@@ -160,8 +152,8 @@ export const passkeyService = {
       );
     }
     try {
-      if (NativePasskey?.isSupported) {
-        return await NativePasskey.isSupported();
+      if (typeof Passkey?.isSupported === 'function') {
+        return Passkey.isSupported();
       }
       return true;
     } catch {
@@ -174,28 +166,8 @@ export const passkeyService = {
    */
   async signIn(): Promise<PasskeyAuthResult> {
     try {
-      console.log('[Passkey][Auth 1/4] Starting passkey authentication with Supabase...');
-      // 1. Get authentication challenge options from Supabase
-      let authOptions: any = null;
-      try {
-        if ((supabase.auth as any).passkey?.startAuthentication) {
-          const res = await (supabase.auth as any).passkey.startAuthentication();
-          if (res?.data) {
-            authOptions = res.data;
-          } else if (res?.error) {
-            throw res.error;
-          }
-        }
-      } catch (optErr) {
-        console.warn('[Passkey][Auth 1/4] startAuthentication error:', optErr);
-      }
-
-      console.log('[Passkey][Auth 1/4] Received authentication challenge options:', {
-        challenge_id: authOptions?.challenge_id || authOptions?.challengeId,
-        hasOptions: !!(authOptions?.options || authOptions),
-      });
-
-      if (!authOptions && Platform.OS === 'web') {
+      // 1. Web Flow
+      if (Platform.OS === 'web') {
         const { data, error } = await (supabase.auth as any).signInWithPasskey();
         if (error) {
           const parsed = parsePasskeyError(error);
@@ -206,13 +178,18 @@ export const passkeyService = {
         return { success: true, user: data?.user, session: data?.session };
       }
 
-      if (!authOptions) {
-        return { success: false, error: 'Could not connect to passkey authentication server.' };
+      // 2. Native Mobile Flow (Android & iOS)
+      console.log('[Passkey][Auth 1/4] Starting passkey authentication with Supabase...');
+      const res = await (supabase.auth as any).passkey.startAuthentication();
+      if (res?.error || !res?.data) {
+        console.error('[Passkey][Auth 1/4] Failed to get authentication options:', res?.error);
+        return {
+          success: false,
+          error: res?.error?.message || 'Could not connect to passkey authentication server.',
+        };
       }
 
-      let credentialResponse: any = null;
-
-      // 2. Enforce on-device verification
+      const authOptions = res.data;
       const rawOptions = authOptions.options || authOptions;
       let rpId = rawOptions.rpId || rawOptions.rp?.id;
       if (rpId && typeof rpId === 'string') {
@@ -230,32 +207,20 @@ export const passkeyService = {
         userVerification: nativeOptions.userVerification,
       });
 
-      if (Platform.OS === 'web') {
-        const { data, error } = await (supabase.auth as any).signInWithPasskey();
-        if (error) throw error;
-        return { success: true, user: data?.user, session: data?.session };
-      } else if (NativePasskey?.getPlatformKey || NativePasskey?.get) {
-        try {
-          if (typeof NativePasskey.getPlatformKey === 'function') {
-            credentialResponse = await NativePasskey.getPlatformKey(nativeOptions);
-          } else {
-            credentialResponse = await NativePasskey.get(nativeOptions);
-          }
-        } catch (nativeErr: any) {
-          console.warn('[Passkey][Auth 2/4] Native get error:', nativeErr);
-          const parsed = parsePasskeyError(nativeErr);
-          if (parsed.isCancelled) return { success: false, cancelled: true };
-          return { success: false, error: parsed.message, code: parsed.code };
+      let credentialResponse: any = null;
+      try {
+        if (typeof Passkey.getPlatformKey === 'function') {
+          credentialResponse = await Passkey.getPlatformKey(nativeOptions);
+        } else if (typeof Passkey.get === 'function') {
+          credentialResponse = await Passkey.get(nativeOptions);
+        } else {
+          throw new Error('Native passkey module is not available on this build.');
         }
-      } else {
-        const { data, error } = await (supabase.auth as any).signInWithPasskey();
-        if (error) {
-          const parsed = parsePasskeyError(error);
-          return parsed.isCancelled
-            ? { success: false, cancelled: true }
-            : { success: false, error: parsed.message, code: parsed.code };
-        }
-        return { success: true, user: data?.user, session: data?.session };
+      } catch (nativeErr: any) {
+        console.warn('[Passkey][Auth 2/4] Native get error:', nativeErr);
+        const parsed = parsePasskeyError(nativeErr);
+        if (parsed.isCancelled) return { success: false, cancelled: true };
+        return { success: false, error: parsed.message, code: parsed.code };
       }
 
       if (!credentialResponse) {
@@ -319,28 +284,8 @@ export const passkeyService = {
         return { success: false, error: 'You must be logged in to register a passkey.' };
       }
 
-      console.log('[Passkey][1/5] Requesting registration challenge from Supabase for user:', userData.user.id);
-      // 1. Get creation challenge options from Supabase
-      let regOptions: any = null;
-      try {
-        if ((supabase.auth as any).passkey?.startRegistration) {
-          const res = await (supabase.auth as any).passkey.startRegistration();
-          if (res?.data) {
-            regOptions = res.data;
-          } else if (res?.error) {
-            throw res.error;
-          }
-        }
-      } catch (optErr) {
-        console.warn('[Passkey][1/5] startRegistration error:', optErr);
-      }
-
-      console.log('[Passkey][1/5] Supabase challenge response:', {
-        challenge_id: regOptions?.challenge_id || regOptions?.challengeId,
-        hasOptions: !!(regOptions?.options || regOptions),
-      });
-
-      if (!regOptions && Platform.OS === 'web') {
+      // 1. Web Flow
+      if (Platform.OS === 'web') {
         const { data, error } = await (supabase.auth as any).registerPasskey();
         if (error) {
           const parsed = parsePasskeyError(error);
@@ -349,16 +294,34 @@ export const passkeyService = {
         return { success: true, credential: data };
       }
 
-      if (!regOptions) {
-        return { success: false, error: 'Could not connect to passkey registration server.' };
+      // 2. Native Mobile Flow (Android & iOS)
+      console.log('[Passkey][1/5] Requesting registration challenge from Supabase for user:', userData.user.id);
+      const res = await (supabase.auth as any).passkey.startRegistration();
+      if (res?.error || !res?.data) {
+        console.error('[Passkey][1/5] startRegistration error from Supabase:', res?.error);
+        return {
+          success: false,
+          error: res?.error?.message || 'Could not connect to passkey registration server.',
+        };
       }
+
+      const regOptions = res.data;
+      const baseOptions = regOptions.options || regOptions;
+      const challengeId = regOptions.challenge_id || regOptions.challengeId || regOptions.id;
+
+      if (!challengeId) {
+        console.error('[Passkey][1/5] Missing challengeId in Supabase response:', regOptions);
+        return { success: false, error: 'Missing challenge ID from registration server.' };
+      }
+
+      console.log('[Passkey][1/5] Supabase challenge response received:', {
+        challengeId,
+        hasOptions: !!(regOptions?.options || regOptions),
+      });
 
       let credentialResponse: any = null;
 
-      // 2. ENFORCE PLATFORM/DEVICE AUTHENTICATOR (THIS PHONE)
-      const baseOptions = regOptions.options || regOptions;
-
-      // Clean RP ID (strip any protocol/port if present)
+      // 3. ENFORCE PLATFORM/DEVICE AUTHENTICATOR (THIS PHONE)
       let rpId = baseOptions.rp?.id || baseOptions.rpId;
       if (rpId && typeof rpId === 'string') {
         rpId = rpId.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
@@ -405,30 +368,19 @@ export const passkeyService = {
         authenticatorSelection: platformDeviceOptions.authenticatorSelection,
       });
 
-      if (Platform.OS === 'web') {
-        const { data, error } = await (supabase.auth as any).registerPasskey();
-        if (error) throw error;
-        return { success: true, credential: data };
-      } else if (NativePasskey?.createPlatformKey || NativePasskey?.create) {
-        try {
-          if (typeof NativePasskey.createPlatformKey === 'function') {
-            credentialResponse = await NativePasskey.createPlatformKey(platformDeviceOptions);
-          } else {
-            credentialResponse = await NativePasskey.create(platformDeviceOptions);
-          }
-        } catch (nativeErr: any) {
-          console.warn('[Passkey][2/5] Native create error:', nativeErr);
-          const parsed = parsePasskeyError(nativeErr);
-          if (parsed.isCancelled) return { success: false, cancelled: true };
-          return { success: false, error: parsed.message };
+      try {
+        if (typeof Passkey.createPlatformKey === 'function') {
+          credentialResponse = await Passkey.createPlatformKey(platformDeviceOptions);
+        } else if (typeof Passkey.create === 'function') {
+          credentialResponse = await Passkey.create(platformDeviceOptions);
+        } else {
+          throw new Error('Native passkey module is not available on this build.');
         }
-      } else {
-        const { data, error } = await (supabase.auth as any).registerPasskey();
-        if (error) {
-          const parsed = parsePasskeyError(error);
-          return parsed.isCancelled ? { success: false, cancelled: true } : { success: false, error: parsed.message };
-        }
-        return { success: true, credential: data };
+      } catch (nativeErr: any) {
+        console.warn('[Passkey][2/5] Native create error:', nativeErr);
+        const parsed = parsePasskeyError(nativeErr);
+        if (parsed.isCancelled) return { success: false, cancelled: true };
+        return { success: false, error: parsed.message };
       }
 
       if (!credentialResponse) {
@@ -449,13 +401,7 @@ export const passkeyService = {
         hasClientData: !!parsedCredential?.response?.clientDataJSON,
       });
 
-      // 3. Verify and persist new credential on Supabase server
-      const challengeId = regOptions.challenge_id || regOptions.challengeId || regOptions.id;
-      if (!challengeId) {
-        console.error('[Passkey][4/5] Missing challengeId in regOptions:', regOptions);
-        return { success: false, error: 'Missing challenge ID from registration server.' };
-      }
-
+      // 4. Verify and persist new credential on Supabase server
       console.log('[Passkey][4/5] Verifying passkey registration with Supabase...', { challengeId });
       const { data: verifyData, error: verifyError } = await (supabase.auth as any).passkey.verifyRegistration({
         challengeId,
