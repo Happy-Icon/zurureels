@@ -1,0 +1,15 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls",
+            "delegate_permission/common.get_login_creds"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.zurureels.app",
+            "sha256_cert_fingerprints": [
+                "5A:A3:3D:B9:18:9F:0D:1D:64:7F:E5:DF:44:96:B3:D8:97:EC:1E:DF:F2:CD:07:3D:86:21:6B:54:BB:50:2D:CD"
+            ]
+        }
+    }
+]
