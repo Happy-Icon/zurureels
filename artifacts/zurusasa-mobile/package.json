@@ -73,6 +73,7 @@
     "expo-video": "^3.0.16",
     "react-native-map-clustering": "^4.0.0",
     "react-native-maps": "^1.29.0",
+    "react-native-passkey": "^3.6.1",
     "react-native-persona": "^2.49.0",
     "react-native-url-polyfill": "^4.0.0"
   }

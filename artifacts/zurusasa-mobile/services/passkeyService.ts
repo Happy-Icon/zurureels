@@ -1,6 +1,16 @@
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 
+let NativePasskey: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    const mod = require('react-native-passkey');
+    NativePasskey = mod.Passkey || mod.default || mod;
+  } catch (e) {
+    console.warn('[Passkey] react-native-passkey load note:', e);
+  }
+}
+
 export interface PasskeyCredential {
   id: string;
   name?: string;
@@ -24,9 +34,6 @@ export interface PasskeyRegisterResult {
   credential?: any;
 }
 
-/**
- * Normalizes and categorizes passkey/WebAuthn error messages into user-friendly strings
- */
 function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'not_found' | 'unsupported' | 'invalid' | 'unknown'; isCancelled: boolean } {
   const rawMsg = (err?.message || err?.error_description || String(err || '')).toLowerCase();
   const name = (err?.name || '').toLowerCase();
@@ -40,6 +47,7 @@ function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'no
     rawMsg.includes('abort') ||
     rawMsg.includes('user denied') ||
     rawMsg.includes('user closed') ||
+    rawMsg.includes('user_cancelled') ||
     rawMsg.includes('timed out or was not allowed')
   ) {
     return {
@@ -49,7 +57,7 @@ function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'no
     };
   }
 
-  // 2. Unsupported Device / Browser
+  // 2. Unsupported Device
   if (
     rawMsg.includes('does not support webauthn') ||
     rawMsg.includes('notsupportederror') ||
@@ -57,13 +65,13 @@ function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'no
     rawMsg.includes('not available')
   ) {
     return {
-      message: 'Passkey authentication is not supported on this device or browser. Please sign in with Email or Google.',
+      message: 'Passkey authentication is not supported on this device. Please sign in with Google or Email.',
       code: 'unsupported',
       isCancelled: false,
     };
   }
 
-  // 3. Passkey Not Found / Not Registered
+  // 3. Passkey Not Found
   if (
     rawMsg.includes('no passkeys found') ||
     rawMsg.includes('passkey not found') ||
@@ -79,7 +87,7 @@ function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'no
     };
   }
 
-  // 4. Invalid / Expired Credential
+  // 4. Invalid Credential
   if (
     rawMsg.includes('invalid') ||
     rawMsg.includes('expired') ||
@@ -103,9 +111,9 @@ function parsePasskeyError(err: any): { message: string; code: 'cancelled' | 'no
 
 export const passkeyService = {
   /**
-   * Checks whether passkeys/WebAuthn are supported in the current environment
+   * Checks whether passkeys are supported on the platform
    */
-  isSupported(): boolean {
+  async isSupported(): Promise<boolean> {
     if (Platform.OS === 'web') {
       return (
         typeof window !== 'undefined' &&
@@ -114,57 +122,97 @@ export const passkeyService = {
         typeof window.navigator.credentials.get === 'function'
       );
     }
-    // On native platforms (Android / iOS), return true if browser or platform authenticator is supported
-    return true;
+    try {
+      if (NativePasskey?.isSupported) {
+        return await NativePasskey.isSupported();
+      }
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   /**
-   * Signs in a user using their registered passkey via Supabase Auth
+   * Native Sign-In using Android Credential Manager + Supabase Auth
    */
   async signIn(): Promise<PasskeyAuthResult> {
     try {
-      // 1. Invoke Supabase experimental Passkey signIn
-      const { data, error } = await (supabase.auth as any).signInWithPasskey();
-
-      if (error) {
-        const parsed = parsePasskeyError(error);
-        if (parsed.isCancelled) {
-          return { success: false, cancelled: true, code: 'cancelled' };
+      // 1. Get authentication challenge options from Supabase GoTrue API
+      let authOptions: any = null;
+      try {
+        if ((supabase.auth as any).passkey?.startAuthentication) {
+          const res = await (supabase.auth as any).passkey.startAuthentication();
+          if (res?.data) authOptions = res.data;
+          else if (res?.error) throw res.error;
         }
-        return {
-          success: false,
-          error: parsed.message,
-          code: parsed.code,
-        };
+      } catch (optErr) {
+        console.warn('[Passkey] startAuthentication error:', optErr);
       }
 
-      if (data?.session && data?.user) {
-        return {
-          success: true,
-          user: data.user,
-          session: data.session,
-        };
+      if (!authOptions && Platform.OS === 'web') {
+        const { data, error } = await (supabase.auth as any).signInWithPasskey();
+        if (error) {
+          const parsed = parsePasskeyError(error);
+          return parsed.isCancelled ? { success: false, cancelled: true } : { success: false, error: parsed.message, code: parsed.code };
+        }
+        return { success: true, user: data?.user, session: data?.session };
       }
 
-      // If no session directly returned, verify current Supabase session
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session?.user) {
-        return {
-          success: true,
-          user: sessionData.session.user,
-          session: sessionData.session,
-        };
+      if (!authOptions) {
+        return { success: false, error: 'Could not connect to passkey authentication server.' };
       }
+
+      let credentialResponse: any = null;
+
+      // 2. Invoke Platform Authenticator (Android Credential Manager on Native)
+      if (Platform.OS === 'web') {
+        const { data, error } = await (supabase.auth as any).signInWithPasskey();
+        if (error) throw error;
+        return { success: true, user: data?.user, session: data?.session };
+      } else if (NativePasskey?.get) {
+        try {
+          const optionsPayload = authOptions.options || authOptions;
+          credentialResponse = await NativePasskey.get(optionsPayload);
+        } catch (nativeErr: any) {
+          const parsed = parsePasskeyError(nativeErr);
+          if (parsed.isCancelled) return { success: false, cancelled: true };
+          return { success: false, error: parsed.message, code: parsed.code };
+        }
+      } else {
+        const { data, error } = await (supabase.auth as any).signInWithPasskey();
+        if (error) {
+          const parsed = parsePasskeyError(error);
+          return parsed.isCancelled ? { success: false, cancelled: true } : { success: false, error: parsed.message, code: parsed.code };
+        }
+        return { success: true, user: data?.user, session: data?.session };
+      }
+
+      if (!credentialResponse) {
+        return { success: false, error: 'No credential returned from device.' };
+      }
+
+      // 3. Verify signed credential with Supabase server
+      const { data: verifyData, error: verifyError } = await (supabase.auth as any).passkey.verifyAuthentication({
+        challengeId: authOptions.challenge_id,
+        credential: credentialResponse,
+      });
+
+      if (verifyError || !verifyData?.session) {
+        return { success: false, error: verifyError?.message || 'Passkey verification failed on server.' };
+      }
+
+      // 4. Establish Supabase session
+      await supabase.auth.setSession(verifyData.session);
 
       return {
-        success: false,
-        error: 'Passkey verification was completed, but no active session was established.',
-        code: 'unknown',
+        success: true,
+        user: verifyData.user,
+        session: verifyData.session,
       };
     } catch (err: any) {
       const parsed = parsePasskeyError(err);
       if (parsed.isCancelled) {
-        return { success: false, cancelled: true, code: 'cancelled' };
+        return { success: false, cancelled: true };
       }
       return {
         success: false,
@@ -175,151 +223,145 @@ export const passkeyService = {
   },
 
   /**
-   * Registers a new passkey for the currently authenticated user
+   * Native Passkey Registration from Settings
    */
   async register(friendlyName?: string): Promise<PasskeyRegisterResult> {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) {
-        return {
-          success: false,
-          error: 'You must be logged in to register a passkey.',
-        };
+        return { success: false, error: 'You must be logged in to register a passkey.' };
       }
 
-      // 1. Trigger Supabase WebAuthn passkey registration ceremony
-      const { data, error } = await (supabase.auth as any).registerPasskey();
-
-      if (error) {
-        const parsed = parsePasskeyError(error);
-        if (parsed.isCancelled) {
-          return { success: false, cancelled: true };
-        }
-        return { success: false, error: parsed.message };
-      }
-
-      // 2. Persist passkey_enabled flag in profile security settings
+      // 1. Get creation challenge options from Supabase GoTrue API
+      let regOptions: any = null;
       try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('security_settings')
-          .eq('id', userData.user.id)
-          .maybeSingle();
-
-        const currentSec = (profile?.security_settings ?? {}) as Record<string, unknown>;
-        await supabase
-          .from('profiles')
-          .update({
-            security_settings: {
-              ...currentSec,
-              passkey_enabled: true,
-              passkey_registered_at: new Date().toISOString(),
-              passkey_name: friendlyName || `${Platform.OS === 'ios' ? 'Apple' : Platform.OS === 'android' ? 'Android' : 'Web'} Passkey`,
-            },
-          } as any)
-          .eq('id', userData.user.id);
-      } catch (saveErr) {
-        console.warn('[Passkey] Note updating profile security settings:', saveErr);
+        if ((supabase.auth as any).passkey?.startRegistration) {
+          const res = await (supabase.auth as any).passkey.startRegistration();
+          if (res?.data) regOptions = res.data;
+          else if (res?.error) throw res.error;
+        }
+      } catch (optErr) {
+        console.warn('[Passkey] startRegistration error:', optErr);
       }
 
-      return { success: true, credential: data };
+      if (!regOptions && Platform.OS === 'web') {
+        const { data, error } = await (supabase.auth as any).registerPasskey();
+        if (error) {
+          const parsed = parsePasskeyError(error);
+          return parsed.isCancelled ? { success: false, cancelled: true } : { success: false, error: parsed.message };
+        }
+        return { success: true, credential: data };
+      }
+
+      if (!regOptions) {
+        return { success: false, error: 'Could not connect to passkey registration server.' };
+      }
+
+      let credentialResponse: any = null;
+
+      // 2. Invoke Platform Authenticator (Android Credential Manager) to create credential
+      if (Platform.OS === 'web') {
+        const { data, error } = await (supabase.auth as any).registerPasskey();
+        if (error) throw error;
+        return { success: true, credential: data };
+      } else if (NativePasskey?.create) {
+        try {
+          const optionsPayload = regOptions.options || regOptions;
+          credentialResponse = await NativePasskey.create(optionsPayload);
+        } catch (nativeErr: any) {
+          const parsed = parsePasskeyError(nativeErr);
+          if (parsed.isCancelled) return { success: false, cancelled: true };
+          return { success: false, error: parsed.message };
+        }
+      } else {
+        const { data, error } = await (supabase.auth as any).registerPasskey();
+        if (error) {
+          const parsed = parsePasskeyError(error);
+          return parsed.isCancelled ? { success: false, cancelled: true } : { success: false, error: parsed.message };
+        }
+        return { success: true, credential: data };
+      }
+
+      if (!credentialResponse) {
+        return { success: false, error: 'Passkey creation was not completed on device.' };
+      }
+
+      // 3. Verify and persist new credential on Supabase server
+      const { data: verifyData, error: verifyError } = await (supabase.auth as any).passkey.verifyRegistration({
+        challengeId: regOptions.challenge_id,
+        credential: credentialResponse,
+      });
+
+      if (verifyError) {
+        return { success: false, error: verifyError.message };
+      }
+
+      return { success: true, credential: verifyData };
     } catch (err: any) {
       const parsed = parsePasskeyError(err);
       if (parsed.isCancelled) {
         return { success: false, cancelled: true };
       }
-      return { success: false, error: parsed.message };
+      return { success: false, error: err?.message || 'Passkey registration error.' };
     }
   },
 
   /**
-   * Lists registered passkey credentials for the current user from Supabase Auth server
+   * Queries registered passkeys on Supabase server (Canonical Source of Truth)
    */
   async listPasskeys(): Promise<{ passkeys: PasskeyCredential[]; hasPasskey: boolean }> {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return { passkeys: [], hasPasskey: false };
 
-      // Query real WebAuthn passkey credentials from Supabase Auth server (Canonical Source of Truth)
-      try {
-        if ((supabase.auth as any).passkey?.list) {
-          const { data, error } = await (supabase.auth as any).passkey.list();
-          if (!error && Array.isArray(data)) {
-            if (data.length > 0) {
-              return {
-                passkeys: data.map((d: any) => ({
-                  id: d.id,
-                  name: d.friendly_name || d.name || 'Device Passkey',
-                  created_at: d.created_at,
-                  last_used_at: d.last_used_at,
-                })),
-                hasPasskey: true,
-              };
-            } else {
-              // Server confirms 0 registered credentials
-              return { passkeys: [], hasPasskey: false };
-            }
+      if ((supabase.auth as any).passkey?.list) {
+        const { data, error } = await (supabase.auth as any).passkey.list();
+        if (!error && Array.isArray(data)) {
+          if (data.length > 0) {
+            return {
+              passkeys: data.map((d: any) => ({
+                id: d.id,
+                name: d.friendly_name || d.name || 'Device Passkey',
+                created_at: d.created_at,
+                last_used_at: d.last_used_at,
+              })),
+              hasPasskey: true,
+            };
+          } else {
+            return { passkeys: [], hasPasskey: false };
           }
         }
-      } catch (listErr) {
-        console.warn('[Passkey] passkey.list API note:', listErr);
       }
 
       return { passkeys: [], hasPasskey: false };
-    } catch (err) {
-      console.warn('[Passkey] Error checking passkeys:', err);
+    } catch {
       return { passkeys: [], hasPasskey: false };
     }
   },
 
   /**
-   * Deletes / removes a registered passkey credential
+   * Removes a passkey credential from Supabase server
    */
   async removePasskey(passkeyId?: string): Promise<{ success: boolean; error?: string }> {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return { success: false, error: 'Not authenticated' };
 
-      // 1. Fetch and delete real passkey credentials from Supabase Auth server
-      try {
-        if ((supabase.auth as any).passkey?.list && (supabase.auth as any).passkey?.delete) {
-          const { data: serverPasskeys } = await (supabase.auth as any).passkey.list();
-          if (Array.isArray(serverPasskeys) && serverPasskeys.length > 0) {
-            for (const p of serverPasskeys) {
-              const targetId = p.id || p.credential_id;
-              if (targetId && (targetId === passkeyId || !passkeyId || passkeyId === 'primary-passkey')) {
-                await (supabase.auth as any).passkey.delete({ passkeyId: targetId });
-              }
+      if ((supabase.auth as any).passkey?.delete) {
+        const { data: serverPasskeys } = await (supabase.auth as any).passkey.list();
+        if (Array.isArray(serverPasskeys) && serverPasskeys.length > 0) {
+          for (const p of serverPasskeys) {
+            const targetId = p.id || p.credential_id;
+            if (targetId && (targetId === passkeyId || !passkeyId)) {
+              await (supabase.auth as any).passkey.delete({ passkeyId: targetId });
             }
           }
         }
-      } catch (delErr) {
-        console.warn('[Passkey] passkey.delete note:', delErr);
       }
-
-      // 2. Clear security settings flag in profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('security_settings')
-        .eq('id', userData.user.id)
-        .maybeSingle();
-
-      const currentSec = (profile?.security_settings ?? {}) as Record<string, unknown>;
-      await supabase
-        .from('profiles')
-        .update({
-          security_settings: {
-            ...currentSec,
-            passkey_enabled: false,
-            passkey_registered_at: null,
-            passkey_name: null,
-          },
-        } as any)
-        .eq('id', userData.user.id);
 
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err?.message || 'Failed to remove passkey' };
+      return { success: false, error: err?.message || 'Failed to remove passkey.' };
     }
   },
 };

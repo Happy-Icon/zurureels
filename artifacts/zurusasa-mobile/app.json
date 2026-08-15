@@ -25,6 +25,7 @@
         "NSCameraUsageDescription": "ZuruSasa requires camera access to scan your Government ID and perform 3D facial liveness verification.",
         "NSLocationWhenInUseUsageDescription": "ZuruSasa uses your location to display nearby experiences, stays, and calculate live journey routes.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "ZuruSasa uses your location to accompany your trip with real-time arrival notifications and route progress.",
+        "NSFaceIDUsageDescription": "ZuruSasa uses Face ID to allow you to sign in quickly and securely with Passkeys.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -43,7 +44,11 @@
         "ACCESS_FINE_LOCATION",
         "FOREGROUND_SERVICE",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "USE_BIOMETRIC",
+        "android.permission.USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "web": {
@@ -66,7 +71,8 @@
           "locationWhenInUsePermission": "Show your location on the map to find nearby stays, restaurants, and tours across the Kenyan coast."
         }
       ],
-      "react-native-maps"
+      "react-native-maps",
+      "react-native-passkey"
     ],
     "experiments": {
       "typedRoutes": true,
