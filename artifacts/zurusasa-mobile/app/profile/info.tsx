@@ -70,7 +70,7 @@ export default function PersonalInfoScreen() {
       try {
         const userMeta = user.user_metadata || {};
         setEmail(user.email || '');
-        setLegalName(userMeta.full_name || userMeta.legal_name || 'Okelo Ulak Angelo');
+        setLegalName(userMeta.full_name || userMeta.legal_name || user.email?.split('@')[0] || 'Traveler');
         if (userMeta.phone) setPhone(userMeta.phone);
 
         const { data } = await supabase

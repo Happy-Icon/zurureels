@@ -1,3 +1,4 @@
+/// <reference path="../deno.d.ts" />
 /**
  * Shared Upstash Redis REST Rate Limiter for Supabase Edge Functions
  * Enforces server-side rate limits based on User ID or IP address.

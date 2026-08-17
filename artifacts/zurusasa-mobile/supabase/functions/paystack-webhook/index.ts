@@ -1,3 +1,4 @@
+/// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -168,6 +169,51 @@ Deno.serve(async (request) => {
         throw new Error(`Settlement RPC failed: ${settleError.message}`);
       }
 
+      // Step 4: Dispatch in-app notifications to Guest & Host
+      try {
+        const { data: bData } = await admin
+          .from('bookings')
+          .select('id, user_id, experience_id, trip_title, amount, experience:experiences(user_id, title)')
+          .eq('id', bookingId)
+          .single();
+
+        if (bData) {
+          const exp = Array.isArray(bData.experience) ? bData.experience[0] : bData.experience;
+          const guestId = bData.user_id;
+          const hostId = (exp as any)?.user_id;
+          const tripTitle = bData.trip_title || (exp as any)?.title || 'Stay';
+          const amountStr = `KES ${Number(bData.amount || 0).toLocaleString()}`;
+
+          // Notify Guest
+          if (guestId) {
+            await admin.from('notifications').insert({
+              user_id: guestId,
+              type: 'payment_success',
+              title: 'Payment Confirmed! 💳',
+              message: `Your payment of ${amountStr} for "${tripTitle}" was received. The host will confirm your reservation shortly.`,
+              action_type: 'booking',
+              action_id: bookingId,
+              is_read: false,
+            });
+          }
+
+          // Notify Host
+          if (hostId && hostId !== guestId) {
+            await admin.from('notifications').insert({
+              user_id: hostId,
+              type: 'booking_request',
+              title: 'Payment Received — Review Booking',
+              message: `A guest paid ${amountStr} for "${tripTitle}". Review and confirm the reservation in your Host Dashboard.`,
+              action_type: 'booking',
+              action_id: bookingId,
+              is_read: false,
+            });
+          }
+        }
+      } catch (notifErr) {
+        console.warn('Post-settlement notification error:', notifErr);
+      }
+
       await admin
         .from('payment_events')
         .update({ processed_at: new Date().toISOString() })
@@ -190,6 +236,69 @@ Deno.serve(async (request) => {
         .eq('id', eventRecordId);
 
       return json({ status: 'failed_recorded' }, 200);
+    } else if (eventType === 'refund.processed') {
+      const refundId = data.id ? String(data.id) : null;
+      const transactionRef = data.transaction_reference ? String(data.transaction_reference) : null;
+
+      if (transactionRef) {
+        const { data: pa } = await admin
+          .from('payment_attempts')
+          .select('id, quote_id')
+          .eq('provider_reference', transactionRef)
+          .maybeSingle();
+
+        if (pa) {
+          const { data: bRow } = await admin
+            .from('bookings')
+            .select('id, user_id, trip_title')
+            .eq('payment_attempt_id', pa.id)
+            .maybeSingle();
+
+          if (bRow) {
+            await admin
+              .from('bookings')
+              .update({ status: 'refunded', updated_at: new Date().toISOString() })
+              .eq('id', bRow.id);
+
+            await admin
+              .from('refund_requests')
+              .update({
+                status: 'success',
+                provider_refund_id: refundId,
+                processed_at: new Date().toISOString(),
+              })
+              .eq('booking_id', bRow.id);
+
+            await admin
+              .from('booking_lifecycle_events')
+              .insert({
+                booking_id: bRow.id,
+                from_status: 'refund_pending',
+                to_status: 'refunded',
+                actor_type: 'payment_provider',
+                reason: 'Paystack refund confirmed',
+              });
+
+            // Notify Guest
+            await admin.from('notifications').insert({
+              user_id: bRow.user_id,
+              type: 'refund_processed',
+              title: 'Refund Completed! 💳',
+              message: `Your refund for "${bRow.trip_title || 'your reservation'}" has been processed successfully.`,
+              action_type: 'booking',
+              action_id: bRow.id,
+              is_read: false,
+            });
+          }
+        }
+      }
+
+      await admin
+        .from('payment_events')
+        .update({ processed_at: new Date().toISOString() })
+        .eq('id', eventRecordId);
+
+      return json({ status: 'refund_settled' }, 200);
     } else {
       // Unhandled event types (e.g. transfer updates, subscription events)
       await admin

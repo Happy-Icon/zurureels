@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchServerCachedQuery } from '@/lib/redis';
 import { notificationService } from '@/services/notificationService';
@@ -8,6 +9,8 @@ import {
   type EventRow,
   type ExperienceRow,
   type HostBlockedDateRow,
+  type MessageRow,
+  type ProfileRow,
   type ReelRow,
 } from '@/lib/supabase';
 
@@ -60,9 +63,11 @@ export function useExperiences(category?: string | null) {
 }
 
 export function useMyBookings(userId: string | undefined) {
-  return useQuery<BookingRow[]>({
+  const queryClient = useQueryClient();
+  const query = useQuery<BookingRow[]>({
     queryKey: ['bookings', userId],
     enabled: !!userId,
+    staleTime: 5_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('bookings')
@@ -77,73 +82,50 @@ export function useMyBookings(userId: string | undefined) {
       return (data as unknown as BookingRow[]) ?? [];
     },
   });
+
+  useEffect(() => {
+    if (!userId) return;
+    const channelName = `guest_bookings_${userId}_${Math.random().toString(36).substring(2, 7)}`;
+    const channel = supabase.channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        (payload) => {
+          const newUserId = (payload.new as any)?.user_id;
+          const oldUserId = (payload.old as any)?.user_id;
+          if (!newUserId && !oldUserId) {
+            // General update without full replica identity - invalidate to ensure sync
+            queryClient.invalidateQueries({ queryKey: ['bookings', userId] });
+          } else if (newUserId === userId || oldUserId === userId) {
+            queryClient.invalidateQueries({ queryKey: ['bookings', userId] });
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          const notif = payload.new as any;
+          if (
+            notif?.action_type === 'booking' ||
+            notif?.type === 'booking_confirmed' ||
+            notif?.type === 'booking_cancelled' ||
+            notif?.type === 'payment_success' ||
+            notif?.type === 'refund_processed'
+          ) {
+            queryClient.invalidateQueries({ queryKey: ['bookings', userId] });
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, userId]);
+
+  return query;
 }
-
-interface CreateBookingInput {
-  userId: string;
-  experienceId: string;
-  reelId?: string | null;
-  tripTitle: string;
-  amount: number | null;
-  guests: number;
-  checkIn?: string;
-  checkOut?: string;
-}
-
-export function useCreateBooking() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: CreateBookingInput) => {
-      const { data, error } = await supabase
-        .from('bookings')
-        .insert({
-          user_id: input.userId,
-          experience_id: input.experienceId,
-          reel_id: input.reelId ?? null,
-          trip_title: input.tripTitle,
-          amount: input.amount ?? 0,
-          guests: input.guests,
-          check_in: input.checkIn ?? new Date().toISOString(),
-          check_out:
-            input.checkOut ?? new Date(Date.now() + 86_400_000).toISOString(),
-          status: 'pending',
-        })
-        .select('id, experience_id, trip_title')
-        .single();
-
-      if (error) throw new Error(error.message);
-
-      // Notify Host of new booking request
-      if (data?.experience_id) {
-        const { data: exp } = await supabase
-          .from('experiences')
-          .select('user_id')
-          .eq('id', data.experience_id)
-          .maybeSingle();
-
-        if (exp?.user_id && exp.user_id !== input.userId) {
-          notificationService
-            .createNotification({
-              userId: exp.user_id,
-              type: 'booking_request',
-              title: 'New Booking Request 📅',
-              message: `You have a new booking request for "${input.tripTitle || 'your experience'}"`,
-              actionType: 'booking',
-              actionId: data.id,
-            })
-            .catch((e) => console.warn('Booking request notification warning:', e));
-        }
-      }
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-    },
-  });
-}
-
-// ---- Reel interactions (mirrors web useReelInteractions: reel_likes / reel_saves / user_follows) ----
-
 export interface ReelInteractions {
   likeCount: number;
   liked: boolean;
@@ -563,6 +545,126 @@ export function useUnreadMessageCount(userId: string | undefined) {
   });
 }
 
+// ---- Direct Chat Room Queries & Mutations ----
+
+export function useMessages(conversationId: string | undefined) {
+  return useQuery<MessageRow[]>({
+    queryKey: ['messages', conversationId],
+    enabled: !!conversationId,
+    staleTime: 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId!)
+        .order('created_at', { ascending: true });
+
+      if (error) throw new Error(error.message);
+      return (data as unknown as MessageRow[]) ?? [];
+    },
+  });
+}
+
+export interface SendMessageInput {
+  conversationId: string;
+  senderId: string;
+  content: string;
+  imageUrl?: string | null;
+  recipientId?: string;
+  senderName?: string;
+}
+
+export function useSendMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: SendMessageInput) => {
+      const now = new Date().toISOString();
+
+      // 1. Insert message
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: input.conversationId,
+          sender_id: input.senderId,
+          content: input.content,
+          image_url: input.imageUrl ?? null,
+        })
+        .select('*')
+        .single();
+
+      if (error) throw new Error(error.message);
+
+      // 2. Update conversation last_message_at
+      await supabase
+        .from('conversations')
+        .update({ last_message_at: now })
+        .eq('id', input.conversationId);
+
+      // 3. Resolve recipient if not provided
+      let recipientId = input.recipientId;
+      if (!recipientId) {
+        const { data: conv } = await supabase
+          .from('conversations')
+          .select('participant_one, participant_two')
+          .eq('id', input.conversationId)
+          .maybeSingle();
+
+        if (conv) {
+          recipientId = conv.participant_one === input.senderId ? conv.participant_two : conv.participant_one;
+        }
+      }
+
+      // 4. Trigger In-App + Push notification (non-blocking)
+      if (recipientId && recipientId !== input.senderId) {
+        const senderName = input.senderName || 'Someone';
+        notificationService
+          .createNotification({
+            userId: recipientId,
+            type: 'message',
+            title: `New message from ${senderName}`,
+            message: input.content || (input.imageUrl ? 'Sent a photo' : 'New message'),
+            actionType: 'chat',
+            actionId: input.conversationId,
+            metadata: {
+              conversation_id: input.conversationId,
+              sender_id: input.senderId,
+              sender_name: senderName,
+            },
+          })
+          .catch((e) => console.warn('Message notification warning:', e));
+      }
+
+      return data as unknown as MessageRow;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', data.conversation_id] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['unread-messages-count'] });
+    },
+  });
+}
+
+export function useMarkMessagesRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ conversationId, userId }: { conversationId: string; userId: string }) => {
+      const { error } = await supabase
+        .from('messages')
+        .update({ is_read: true })
+        .eq('conversation_id', conversationId)
+        .neq('sender_id', userId)
+        .eq('is_read', false);
+
+      if (error) throw new Error(error.message);
+      return true;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', vars.conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['unread-messages-count'] });
+    },
+  });
+}
+
 // ---- Host Calendar Queries & Mutations ----
 
 export function useHostListings(userId: string | undefined) {
@@ -655,6 +757,41 @@ export function useHostBlockedDates(
   });
 }
 
+export function useExperienceBlockedDates(experienceId: string | undefined) {
+  return useQuery<HostBlockedDateRow[]>({
+    queryKey: ['experience-blocked-dates', experienceId],
+    enabled: !!experienceId,
+    queryFn: async () => {
+      // 1. Query unified server-authoritative unavailable dates RPC
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_experience_unavailable_dates', {
+        p_experience_id: experienceId!,
+      });
+
+      if (!rpcError && rpcData) {
+        return (rpcData as any[]).map((row, idx) => ({
+          id: `unavail_${idx}`,
+          experience_id: experienceId!,
+          host_id: '',
+          start_date: row.start_date,
+          end_date: row.end_date,
+          reason: row.reason || 'Unavailable',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+      }
+
+      // 2. Fallback to host_blocked_dates table if RPC is not yet loaded
+      const { data, error } = await supabase
+        .from('host_blocked_dates')
+        .select('id, experience_id, host_id, start_date, end_date, reason, created_at, updated_at')
+        .eq('experience_id', experienceId!)
+        .order('start_date', { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data as HostBlockedDateRow[]) ?? [];
+    },
+  });
+}
+
 export function useBlockHostDates() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -676,24 +813,8 @@ export function useBlockHostDates() {
         p_reason: reason,
       });
 
-      if (error) {
-        if (error.code === 'P0001') {
-          throw new Error(error.message || 'Dates contain active or pending reservations and cannot be blocked.');
-        }
-        const { data: userRes } = await supabase.auth.getUser();
-        const hostId = userRes.user?.id;
-        if (!hostId) throw new Error('Authentication required');
 
-        const { error: insertErr } = await supabase.from('host_blocked_dates').insert({
-          experience_id: experienceId,
-          host_id: hostId,
-          start_date: startDate,
-          end_date: endDate,
-          reason,
-        });
-        if (insertErr) throw new Error(insertErr.message);
-        return data;
-      }
+      if (error) throw new Error(error.message);
       return data;
     },
     onSuccess: () => {
@@ -710,10 +831,7 @@ export function useUnblockHostDates() {
         p_block_id: blockId,
       });
 
-      if (error) {
-        const { error: delErr } = await supabase.from('host_blocked_dates').delete().eq('id', blockId);
-        if (delErr) throw new Error(delErr.message);
-      }
+      if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['host-blocked-dates'] });
@@ -730,22 +848,11 @@ export function useHostConfirmBooking() {
       });
       if (error) throw new Error(error.message);
 
-      // Trigger push notification to guest safely (non-blocking)
-      const bookingData = data as BookingRow;
-      if (bookingData?.user_id) {
-        notificationService
-          .sendPushNotificationForUser(
-            bookingData.user_id,
-            'Reservation Confirmed! 🎉',
-            `Your reservation for "${bookingData.trip_title || 'your trip'}" was confirmed by the host.`,
-            { actionType: 'booking', bookingId },
-          )
-          .catch((e) => console.warn('Push delivery warning:', e));
-      }
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
     },
@@ -762,22 +869,11 @@ export function useHostDeclineBooking() {
       });
       if (error) throw new Error(error.message);
 
-      // Trigger push notification to guest safely (non-blocking)
-      const bookingData = data as BookingRow;
-      if (bookingData?.user_id) {
-        notificationService
-          .sendPushNotificationForUser(
-            bookingData.user_id,
-            'Reservation Declined',
-            `Your reservation for "${bookingData.trip_title || 'your trip'}" was declined by the host.`,
-            { actionType: 'booking', bookingId },
-          )
-          .catch((e) => console.warn('Push delivery warning:', e));
-      }
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
     },
@@ -794,37 +890,166 @@ export function useGuestCancelBooking() {
       });
       if (error) throw new Error(error.message);
 
-      // Trigger push notification to host safely (non-blocking)
-      const bookingData = data as BookingRow;
-      if (bookingData?.experience_id) {
-        (async () => {
-          try {
-            const { data: exp } = await supabase
-              .from('experiences')
-              .select('user_id')
-              .eq('id', bookingData.experience_id)
-              .maybeSingle();
-
-            if (exp?.user_id) {
-              await notificationService.sendPushNotificationForUser(
-                exp.user_id,
-                'Reservation Cancelled',
-                `Reservation for "${bookingData.trip_title || 'your trip'}" was cancelled by the guest.`,
-                { actionType: 'booking', bookingId },
-              );
-            }
-          } catch (e) {
-            console.warn('Host notification dispatch warning:', e);
-          }
-        })();
-      }
-
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
     },
   });
+}
+
+export function useHostBookings(hostId: string | undefined) {
+  const queryClient = useQueryClient();
+  const query = useQuery<BookingRow[]>({
+    queryKey: ['host-bookings', hostId],
+    enabled: !!hostId,
+    staleTime: 5_000,
+    queryFn: async () => {
+      // 1. Fetch host's experience IDs (both user_id and metadata->host_id)
+      const { data: expData, error: expError } = await supabase
+        .from('experiences')
+        .select('id')
+        .or(`user_id.eq.${hostId},metadata->>host_id.eq.${hostId}`);
+
+      if (expError) throw new Error(expError.message);
+      const expIds = (expData ?? []).map((e) => e.id as string);
+
+      // 2. Fetch any booking quotes directly assigned to this host
+      const { data: quotesData } = await supabase
+        .from('booking_quotes')
+        .select('id, experience_id')
+        .eq('host_id', hostId);
+
+      const quoteIds = (quotesData ?? []).map((q) => q.id as string);
+      const quoteExpIds = (quotesData ?? []).map((q) => q.experience_id as string).filter(Boolean);
+      const allExpIds = Array.from(new Set([...expIds, ...quoteExpIds]));
+
+      if (allExpIds.length === 0 && quoteIds.length === 0) return [];
+
+      // 3. Fetch bookings matching experience IDs or quote IDs
+      let bQuery = supabase
+        .from('bookings')
+        .select(
+          `*,
+          experience:experiences(id, title, location, current_price, price_unit, image_url, entity_name, metadata)`
+        )
+        .order('created_at', { ascending: false });
+
+      if (allExpIds.length > 0 && quoteIds.length > 0) {
+        bQuery = bQuery.or(`experience_id.in.(${allExpIds.join(',')}),quote_id.in.(${quoteIds.join(',')})`);
+      } else if (allExpIds.length > 0) {
+        bQuery = bQuery.in('experience_id', allExpIds);
+      } else if (quoteIds.length > 0) {
+        bQuery = bQuery.in('quote_id', quoteIds);
+      }
+
+      const { data: bData, error: bError } = await bQuery;
+      if (bError) throw new Error(bError.message);
+
+      const rawBookings = (bData as unknown as BookingRow[]) ?? [];
+      if (rawBookings.length === 0) return [];
+
+      // 4. Fetch Real Guest Profiles and Experience Reels
+      const guestIds = Array.from(new Set(rawBookings.map((b) => b.user_id).filter(Boolean))) as string[];
+      const bookingExpIds = Array.from(new Set(rawBookings.map((b) => b.experience_id).filter(Boolean))) as string[];
+      const bookingReelIds = Array.from(new Set(rawBookings.map((b) => b.reel_id).filter(Boolean))) as string[];
+
+      const profilesMap = new Map<string, ProfileRow>();
+      const reelsMap = new Map<string, ReelRow>();
+
+      const guestPromise = (async () => {
+        if (guestIds.length === 0) return;
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, phone, role, verification_status, metadata')
+          .in('id', guestIds);
+        (data ?? []).forEach((p) => profilesMap.set(p.id, p as ProfileRow));
+      })();
+
+      const reelsPromise = (async () => {
+        if (bookingExpIds.length === 0 && bookingReelIds.length === 0) return;
+        let reelQuery = supabase
+          .from('reels')
+          .select('id, experience_id, thumbnail_url, video_url, category');
+
+        if (bookingExpIds.length > 0 && bookingReelIds.length > 0) {
+          reelQuery = reelQuery.or(
+            `experience_id.in.(${bookingExpIds.join(',')}),id.in.(${bookingReelIds.join(',')})`
+          );
+        } else if (bookingExpIds.length > 0) {
+          reelQuery = reelQuery.in('experience_id', bookingExpIds);
+        } else {
+          reelQuery = reelQuery.in('id', bookingReelIds);
+        }
+
+        const { data } = await reelQuery;
+        (data ?? []).forEach((r) => {
+          if (r.experience_id) reelsMap.set(r.experience_id, r as ReelRow);
+          if (r.id) reelsMap.set(r.id, r as ReelRow);
+        });
+      })();
+
+      await Promise.all([guestPromise, reelsPromise]);
+
+      return rawBookings.map((b) => {
+        const matchingReel = (b.experience_id ? reelsMap.get(b.experience_id) : null) || (b.reel_id ? reelsMap.get(b.reel_id) : null);
+        const resolvedImageUrl =
+          b.experience?.image_url ||
+          matchingReel?.thumbnail_url ||
+          (b.experience?.metadata as any)?.image_url ||
+          (b.experience?.metadata as any)?.cover_image ||
+          (b.experience?.metadata as any)?.photos?.[0] ||
+          null;
+
+        return {
+          ...b,
+          guest: b.user_id ? profilesMap.get(b.user_id) || null : null,
+          experience: b.experience
+            ? {
+                ...b.experience,
+                image_url: resolvedImageUrl,
+              }
+            : null,
+        };
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!hostId) return;
+    const channelName = `host_bookings_${hostId}_${Math.random().toString(36).substring(2, 7)}`;
+    const channel = supabase.channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['host-bookings', hostId] });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${hostId}` },
+        (payload) => {
+          const notif = payload.new as any;
+          if (
+            notif?.action_type === 'booking' ||
+            notif?.type === 'booking_request' ||
+            notif?.type === 'booking_confirmed' ||
+            notif?.type === 'booking_cancelled'
+          ) {
+            queryClient.invalidateQueries({ queryKey: ['host-bookings', hostId] });
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, hostId]);
+
+  return query;
 }

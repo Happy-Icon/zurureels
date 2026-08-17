@@ -15,6 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useHostProfile } from '@/hooks/useHostProfile';
+import { useEnquire } from '@/lib/queries';
 import { HostHeader } from '@/components/host/profile/HostHeader';
 import { HostStatsCard } from '@/components/host/profile/HostStatsCard';
 import { HostTrustBadges } from '@/components/host/profile/HostTrustBadges';
@@ -26,13 +27,13 @@ import { HostAchievements } from '@/components/host/profile/HostAchievements';
 import { HostSafetyCard } from '@/components/host/profile/HostSafetyCard';
 import { HostActionBar } from '@/components/host/profile/HostActionBar';
 import { HostProfileSkeleton } from '@/components/host/profile/HostProfileSkeleton';
-import { supabase } from '@/lib/supabase';
 
 export default function PublicHostProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { hostId } = useLocalSearchParams<{ hostId: string }>();
   const { user } = useAuth();
+  const enquire = useEnquire();
 
   const {
     host,
@@ -44,6 +45,10 @@ export default function PublicHostProfileScreen() {
     toggleFollow,
     toggleSaveHost,
   } = useHostProfile(hostId || '');
+
+  const [contactModalVisible, setContactModalVisible] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState(false);
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -72,32 +77,17 @@ export default function PublicHostProfileScreen() {
     }
 
     try {
-      // Find or create conversation with this host
-      const { data: existing } = await supabase
-        .from('conversations')
-        .select('id')
-        .or(
-          `and(participant_one.eq.${user.id},participant_two.eq.${hostId}),and(participant_one.eq.${hostId},participant_two.eq.${user.id})`,
-        )
-        .maybeSingle();
-
-      if (existing?.id) {
-        router.push(`/chat/${existing.id}`);
-      } else {
-        const { data: created, error } = await supabase
-          .from('conversations')
-          .insert({
-            participant_one: user.id,
-            participant_two: hostId,
-            last_message_at: new Date().toISOString(),
-          })
-          .select('id')
-          .single();
-
-        if (error) throw error;
-        if (created?.id) {
-          router.push(`/chat/${created.id}`);
-        }
+      const convId = await enquire.mutateAsync({ userId: user.id, hostId });
+      if (convId) {
+        router.push({
+          pathname: '/chat/[id]',
+          params: {
+            id: convId,
+            name: host?.full_name || 'Host',
+            avatar: (host?.metadata as any)?.avatar_url || '',
+            otherId: host?.id,
+          },
+        });
       }
     } catch (err) {
       console.warn('Message host error:', err);

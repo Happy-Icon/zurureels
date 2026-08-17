@@ -19,9 +19,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import { useEnquire } from '@/lib/queries';
-import { supabase } from '@/lib/supabase';
-import { notificationService } from '@/services/notificationService';
+import { useEnquire, useSendMessage } from '@/lib/queries';
 import { GrowingInput } from '@/components/keyboard';
 
 const ORANGE = '#F26522';
@@ -65,6 +63,7 @@ export function EnquireModal({
   const router = useRouter();
   const { user } = useAuth();
   const enquire = useEnquire();
+  const sendMessage = useSendMessage();
   const queryClient = useQueryClient();
 
   const [text, setText] = useState('');
@@ -113,38 +112,17 @@ export function EnquireModal({
       // 1. Find or create conversation
       const convId = await enquire.mutateAsync({ userId: user.id, hostId });
       setConversationId(convId);
-      const now = new Date().toISOString();
 
-      // 2. Send the first message
-      const { error: msgError } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: convId,
-          sender_id: user.id,
-          content: text.trim(),
-        });
-
-      if (msgError) throw new Error(msgError.message);
-
-      // 3. Update conversation last_message_at & invalidate cache
-      await supabase
-        .from('conversations')
-        .update({ last_message_at: now })
-        .eq('id', convId);
-
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-
-      // 4. Notify the host
-      notificationService.createNotification({
-        userId: hostId,
-        type: 'message',
-        title: `New message from ${user.user_metadata?.full_name || 'a guest'}`,
-        message: text.trim(),
-        actionType: 'chat',
-        actionId: convId,
+      // 2. Send message through centralized mutation
+      await sendMessage.mutateAsync({
+        conversationId: convId,
+        senderId: user.id,
+        content: text.trim(),
+        recipientId: hostId,
+        senderName: user.user_metadata?.full_name || 'a guest',
       });
 
-      // 4. Show success state
+      // 3. Show success state
       setSent(true);
       setSending(false);
       Animated.spring(successScale, {

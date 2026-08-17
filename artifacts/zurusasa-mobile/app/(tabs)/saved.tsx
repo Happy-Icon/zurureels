@@ -26,8 +26,9 @@ export default function WishlistsScreen() {
   const { data: events, isLoading: eventsLoading, refetch: refetchEvents } = useSavedEvents(user?.id);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Recently viewed modal state
+  // Recently viewed & Saved Favorites modal state
   const [recentlyViewedModal, setRecentlyViewedModal] = useState(false);
+  const [savedFavoritesModal, setSavedFavoritesModal] = useState(false);
 
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 16;
   const bottomPad = Platform.OS === 'web' ? 120 : insets.bottom + 90;
@@ -74,34 +75,145 @@ export default function WishlistsScreen() {
             <Text style={styles.cardTitle}>Recently viewed</Text>
           </Pressable>
 
-          {/* Card 2: Saved Favorites (if any) */}
-          {totalSavedCount > 0 && (
-            <Pressable
-              onPress={() => router.push('/reservations')}
-              style={({ pressed }) => [styles.gridCard, pressed && { opacity: 0.88 }]}
-            >
-              <View style={styles.collectionTile}>
-                {firstThumbnail ? (
-                  <Image
-                    source={{ uri: firstThumbnail }}
-                    style={styles.collectionImg}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <View style={styles.collectionFallback}>
-                    <Ionicons name="heart" size={44} color="#F26522" />
-                  </View>
-                )}
-                <View style={styles.countBadge}>
-                  <Text style={styles.countBadgeText}>{totalSavedCount}</Text>
+          {/* Card 2: Saved Favorites */}
+          <Pressable
+            testID="saved-favorites-card"
+            onPress={() => setSavedFavoritesModal(true)}
+            style={({ pressed }) => [styles.gridCard, pressed && { opacity: 0.88 }]}
+          >
+            <View style={styles.collectionTile}>
+              {firstThumbnail ? (
+                <Image
+                  source={{ uri: firstThumbnail }}
+                  style={styles.collectionImg}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={styles.collectionFallback}>
+                  <Ionicons name="heart" size={44} color="#F26522" />
                 </View>
+              )}
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{totalSavedCount}</Text>
               </View>
-              <Text style={styles.cardTitle}>Saved favorites</Text>
-              <Text style={styles.cardSub}>{totalSavedCount} saved</Text>
-            </Pressable>
-          )}
+            </View>
+            <Text style={styles.cardTitle}>Saved favorites</Text>
+            <Text style={styles.cardSub}>{totalSavedCount} saved</Text>
+          </Pressable>
         </View>
       </ScrollView>
+
+      {/* ── SAVED FAVORITES MODAL SHEET ───────────────────────────────────────── */}
+      <Modal
+        visible={savedFavoritesModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSavedFavoritesModal(false)}
+      >
+        <View style={[styles.modalSheet, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setSavedFavoritesModal(false)} style={styles.circleCloseBtn}>
+              <Feather name="x" size={22} color="#111111" />
+            </Pressable>
+            <Text style={styles.modalHeaderTitle}>Saved favorites</Text>
+            <View style={{ width: 36 }} />
+          </View>
+
+          <ScrollView
+            contentContainerStyle={[styles.modalScrollContent, { paddingBottom: insets.bottom + 32 }]}
+            showsVerticalScrollIndicator={false}
+          >
+            {totalSavedCount > 0 ? (
+              <View style={{ gap: 14 }}>
+                {reels?.map((reel) => (
+                  <Pressable
+                    key={`saved-reel-${reel.id}`}
+                    onPress={() => {
+                      setSavedFavoritesModal(false);
+                      router.push('/discover');
+                    }}
+                    style={styles.recentItemRow}
+                  >
+                    <View style={styles.recentThumbBox}>
+                      {reel.thumbnail_url ? (
+                        <Image source={{ uri: reel.thumbnail_url }} style={styles.recentThumb} contentFit="cover" />
+                      ) : (
+                        <View style={[styles.recentThumb, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
+                          <Feather name="film" size={20} color="#717171" />
+                        </View>
+                      )}
+                    </View>
+                    <View style={{ flex: 1, paddingLeft: 12 }}>
+                      <Text style={styles.recentTitle} numberOfLines={1}>
+                        {reel.experience?.title ?? 'Coastal Stay'}
+                      </Text>
+                      <Text style={styles.recentLocation} numberOfLines={1}>
+                        {reel.experience?.location ?? 'Kenya Coast'}
+                      </Text>
+                      <Text style={styles.recentPrice}>
+                        KES {Number(reel.experience?.current_price ?? 0).toLocaleString()} / night
+                      </Text>
+                    </View>
+                    <Ionicons name="heart" size={20} color="#F26522" style={{ marginRight: 8 }} />
+                  </Pressable>
+                ))}
+
+                {events?.map((ev) => (
+                  <Pressable
+                    key={`saved-event-${ev.id}`}
+                    onPress={() => {
+                      setSavedFavoritesModal(false);
+                      router.push('/discover');
+                    }}
+                    style={styles.recentItemRow}
+                  >
+                    <View style={styles.recentThumbBox}>
+                      {ev.image_url ? (
+                        <Image source={{ uri: ev.image_url }} style={styles.recentThumb} contentFit="cover" />
+                      ) : (
+                        <View style={[styles.recentThumb, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
+                          <Feather name="calendar" size={20} color="#717171" />
+                        </View>
+                      )}
+                    </View>
+                    <View style={{ flex: 1, paddingLeft: 12 }}>
+                      <Text style={styles.recentTitle} numberOfLines={1}>
+                        {ev.title ?? 'Coastal Event'}
+                      </Text>
+                      <Text style={styles.recentLocation} numberOfLines={1}>
+                        {ev.location ?? 'Kenya Coast'}
+                      </Text>
+                      <Text style={styles.recentPrice}>
+                        {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : 'Upcoming Event'}
+                      </Text>
+                    </View>
+                    <Ionicons name="heart" size={20} color="#F26522" style={{ marginRight: 8 }} />
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyRecentWrap}>
+                <View style={styles.emptyRecentIconCircle}>
+                  <Ionicons name="heart-outline" size={32} color="#717171" />
+                </View>
+                <Text style={styles.emptyRecentTitle}>No saved favorites yet</Text>
+                <Text style={styles.emptyRecentSub}>
+                  Tap the heart icon on any stay, experience, or event to save it to your favorites list.
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setSavedFavoritesModal(false);
+                    router.push('/discover');
+                  }}
+                  style={styles.exploreCtaBtn}
+                >
+                  <Text style={styles.exploreCtaBtnText}>Explore coastal stays</Text>
+                </Pressable>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
 
       {/* ── RECENTLY VIEWED MODAL SHEET ──────────────────────────────────────── */}
       <Modal

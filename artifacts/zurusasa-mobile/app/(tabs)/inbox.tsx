@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -17,7 +17,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useConversations } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
 import { useColors } from '@/hooks/useColors';
-import type { ConversationRow } from '@/lib/supabase';
+import { supabase, type ConversationRow } from '@/lib/supabase';
 
 function timeAgo(iso: string | null) {
   if (!iso) return '';
@@ -43,6 +43,31 @@ export default function InboxScreen() {
   const { user, loading } = useAuth();
   const { data: conversations, isLoading, refetch } = useConversations(user?.id);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Realtime subscription for instant inbox updates when conversations receive messages
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`inbox_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'conversations',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['conversations', user.id] });
+          queryClient.invalidateQueries({ queryKey: ['unread-messages-count', user.id] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
 
   useFocusEffect(
     useCallback(() => {

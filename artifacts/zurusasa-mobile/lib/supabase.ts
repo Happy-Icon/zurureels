@@ -46,6 +46,7 @@ export interface ProfileRow {
   role: string | null;
   verification_status: string | null;
   metadata: Record<string, unknown> | null;
+  avatar_url?: string | null;
 }
 
 export interface HostReviewRow {
@@ -152,8 +153,10 @@ export interface BookingRow {
   created_at?: string | null;
   experience?: Pick<
     ExperienceRow,
-    'id' | 'title' | 'location' | 'current_price' | 'price_unit' | 'image_url' | 'entity_name'
+    'id' | 'title' | 'location' | 'current_price' | 'price_unit' | 'image_url' | 'entity_name' | 'metadata'
   > | null;
+  guest?: ProfileRow | null;
+  host?: ProfileRow | null;
 }
 
 export interface HostBlockedDateRow {
@@ -175,6 +178,8 @@ export interface EventRow {
   event_date: string | null;
   price: number | null;
   location?: string | null;
+  image_url?: string | null;
+  start_time?: string | null;
 }
 
 export interface ConversationRow {
@@ -196,6 +201,8 @@ export interface MessageRow {
   conversation_id: string;
   sender_id: string;
   content: string;
+  image_url?: string | null;
+  metadata?: Record<string, unknown> | null;
   is_read: boolean | null;
   created_at: string;
 }
@@ -204,6 +211,7 @@ export type NotificationType =
   | 'booking_created'
   | 'booking_confirmed'
   | 'booking_cancelled'
+  | 'booking_declined'
   | 'payment_success'
   | 'refund_processed'
   | 'message'

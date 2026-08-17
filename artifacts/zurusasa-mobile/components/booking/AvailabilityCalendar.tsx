@@ -76,7 +76,7 @@ export function AvailabilityCalendar({
   const isBlocked = (day: Date): boolean => {
     const t = day.getTime();
     return blockedRanges.some(
-      (r) => t >= startOfDay(r.from).getTime() && t <= startOfDay(r.to).getTime(),
+      (r) => t >= startOfDay(r.from).getTime() && t < startOfDay(r.to).getTime(),
     );
   };
 

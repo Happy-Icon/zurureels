@@ -236,7 +236,8 @@ export const notificationService = {
   },
 
   /**
-   * Send push notification to all registered active devices for a recipient
+   * Internal helper: Send push notification to all registered active devices for a recipient.
+   * Consumer screens and mutation hooks must use createNotification() instead.
    */
   async sendPushNotificationForUser(
     recipientId: string,
@@ -245,16 +246,38 @@ export const notificationService = {
     data?: Record<string, unknown>,
   ) {
     try {
-      // 1. Check user notification settings in metadata
+      // 1. Check user notification settings (supports both notification_settings map and legacy metadata)
       const { data: profile } = await supabase
         .from('profiles')
-        .select('metadata')
+        .select('metadata, notification_settings')
         .eq('id', recipientId)
         .maybeSingle();
 
       const notifMeta = (profile?.metadata ?? {}) as Record<string, unknown>;
       if (notifMeta?.notifications_enabled === false) {
-        console.log(`[Push] Device token disabled: Recipient ${recipientId} has notifications disabled.`);
+        console.log(`[Push] Push disabled: Recipient ${recipientId} has master notifications disabled.`);
+        return;
+      }
+
+      // Check category preferences from Settings screen (profiles.notification_settings)
+      const settings = (profile?.notification_settings ?? {}) as Record<string, { push?: boolean; email?: boolean; sms?: boolean }>;
+      const notifType = data?.type as string | undefined;
+
+      let categoryKey: string | null = null;
+      if (notifType === 'message') {
+        categoryKey = 'messages';
+      } else if (notifType?.startsWith('booking_') || notifType?.startsWith('payment_') || notifType?.startsWith('payout_') || notifType?.startsWith('refund_')) {
+        categoryKey = 'account_activity';
+      } else if (notifType?.startsWith('listing_') || notifType === 'verification') {
+        categoryKey = 'listing_activity';
+      } else if (notifType === 'review_reminder') {
+        categoryKey = 'reminders';
+      } else if (notifType === 'promotion' || notifType === 'wishlist_available') {
+        categoryKey = 'all_offers';
+      }
+
+      if (categoryKey && settings[categoryKey] && settings[categoryKey].push === false) {
+        console.log(`[Push] Push disabled for category "${categoryKey}" by user ${recipientId}`);
         return;
       }
 
@@ -437,6 +460,29 @@ export const notificationService = {
     } catch (err: any) {
       console.warn('[Push] Error registering push token:', err?.message || err);
       return null;
+    }
+  },
+
+  /**
+   * Deactivate device push token on logout to prevent cross-account push bleeding
+   */
+  async deactivatePushToken(userId: string): Promise<boolean> {
+    try {
+      if (!userId) return false;
+      const { error } = await supabase
+        .from('user_devices')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('user_id', userId);
+
+      if (error) {
+        console.warn('[Push] Deactivate token note:', error.message);
+        return false;
+      }
+      console.log(`[Push] Push token deactivated for user ${userId.slice(0, 8)}...`);
+      return true;
+    } catch (err) {
+      console.warn('[Push] Error deactivating push token:', err);
+      return false;
     }
   },
 

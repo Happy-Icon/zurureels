@@ -22,8 +22,7 @@ import { useColors } from '@/hooks/useColors';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase, type BookingRow } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
-import { notificationService } from '@/services/notificationService';
-import { smsService } from '@/services/smsService';
+import { useHostConfirmBooking, useHostDeclineBooking } from '@/lib/queries';
 
 interface HostKPIs {
   views: number;
@@ -55,6 +54,9 @@ export function HostDashboard() {
   const { height: winHeight } = useWindowDimensions();
   const { user, profile, refreshProfile } = useAuth();
   const { showAlert } = useCustomAlert();
+
+  const confirmBookingMutation = useHostConfirmBooking();
+  const declineBookingMutation = useHostDeclineBooking();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -119,24 +121,39 @@ export function HostDashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('following_id', user.id);
 
+      // 1. Fetch host experience IDs (both user_id and metadata->host_id)
       const expRes = await supabase
         .from('experiences')
         .select('id')
-        .eq('metadata->>host_id', user.id);
+        .or(`user_id.eq.${user.id},metadata->>host_id.eq.${user.id}`);
 
       const expIds = (expRes.data ?? []).map((e) => e.id as string);
+
+      // 2. Fetch quotes assigned to this host
+      const quotesRes = await supabase
+        .from('booking_quotes')
+        .select('id, experience_id')
+        .eq('host_id', user.id);
+
+      const quoteIds = (quotesRes.data ?? []).map((q) => q.id as string);
+      const quoteExpIds = (quotesRes.data ?? []).map((q) => q.experience_id as string).filter(Boolean);
+      const allExpIds = Array.from(new Set([...expIds, ...quoteExpIds]));
 
       let hostBookings: BookingRow[] = [];
       let totalEarnings = 0;
 
-      if (expIds.length > 0 || reelIds.length > 0) {
+      if (allExpIds.length > 0 || quoteIds.length > 0) {
         let query = supabase
           .from('bookings')
           .select('*, experience:experiences(id, title, location, current_price, price_unit, image_url)')
           .order('created_at', { ascending: false });
 
-        if (expIds.length > 0) {
-          query = query.in('experience_id', expIds);
+        if (allExpIds.length > 0 && quoteIds.length > 0) {
+          query = query.or(`experience_id.in.(${allExpIds.join(',')}),quote_id.in.(${quoteIds.join(',')})`);
+        } else if (allExpIds.length > 0) {
+          query = query.in('experience_id', allExpIds);
+        } else if (quoteIds.length > 0) {
+          query = query.in('quote_id', quoteIds);
         }
 
         const { data: bData } = await query;
@@ -182,63 +199,22 @@ export function HostDashboard() {
     setProcessingAction(true);
 
     try {
-      // 1. Update DB Status to 'confirmed' via server RPC
-      const { error } = await supabase.rpc('host_confirm_booking', {
-        p_booking_id: b.id,
-      });
+      // 1. Confirm booking via standardized hook (handles RPC + notification dispatch)
+      await confirmBookingMutation.mutateAsync(b.id);
 
-      if (error) throw error;
-
-      // 2. Fetch Guest Details for Multi-Channel Notification
-      let guestPhone = '+254712345678';
-      let guestName = 'Guest Traveler';
-
-      if (b.user_id) {
-        const { data: gProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', b.user_id)
-          .single();
-        if (gProfile?.phone) guestPhone = gProfile.phone;
-        if (gProfile?.full_name) guestName = gProfile.full_name;
-      }
-
-      const titleStr = b.experience?.title || 'Coastal Villa Stay';
+      const titleStr = b.experience?.title || b.trip_title || 'Stay';
       const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-      // 3. Dispatch Multi-Channel Notifications (Push, SMS, In-App Inbox)
-      if (b.user_id) {
-        await notificationService.createNotification({
-          userId: b.user_id,
-          type: 'booking_confirmed',
-          title: 'Your booking has been confirmed! 🌟',
-          message: `Hi ${guestName}, your reservation at ${titleStr} has been accepted by your host.`,
-          actionType: 'booking',
-          actionId: b.id,
-        });
-      }
-
-      // Live SMS Delivery via smsService
-      await smsService.sendSMS({
-        userId: b.user_id || 'guest_user',
-        phone: guestPhone,
-        message: `Hi ${guestName}, Your reservation at ${titleStr} has been accepted. Check-in: ${
-          b.check_in ? new Date(b.check_in).toLocaleDateString() : 'Upcoming'
-        }. Open ZuruSasa to view your itinerary.`,
-        notificationType: 'booking_confirmed',
-      });
-
-      // 4. Update Live Activity Timeline
+      // 2. Update Live Activity Timeline
       const newItems: ActivityItem[] = [
-        { id: Date.now() + '-1', time: nowStr, text: `Accepted reservation for ${guestName}`, type: 'accept' },
-        { id: Date.now() + '-2', time: nowStr, text: `SMS & Email voucher sent to ${guestPhone}`, type: 'sms' },
+        { id: Date.now() + '-1', time: nowStr, text: `Accepted reservation for ${titleStr}`, type: 'accept' },
       ];
       setActivities((prev) => [...newItems, ...prev].slice(0, 8));
 
       setAcceptModalBooking(null);
       showAlert({
         title: 'Reservation Confirmed! 🎉',
-        message: `Booking for ${guestName} has been moved to Upcoming. Multi-channel confirmation sent.`,
+        message: 'Booking has been moved to Upcoming. Multi-channel confirmation sent.',
         icon: 'check-circle',
       });
       loadData();
@@ -246,7 +222,7 @@ export function HostDashboard() {
       console.error('Accept reservation error:', err);
       showAlert({
         title: 'Action Failed',
-        message: err.message || 'Failed to accept reservation.',
+        message: err?.message || 'Failed to accept reservation.',
         icon: 'alert-circle',
       });
     } finally {
@@ -261,47 +237,14 @@ export function HostDashboard() {
     setProcessingAction(true);
 
     try {
-      const { error } = await supabase.rpc('host_cancel_booking', {
-        p_booking_id: b.id,
-        p_reason: 'Host declined reservation request',
+      // 1. Decline booking via standardized hook (handles RPC + notification dispatch)
+      await declineBookingMutation.mutateAsync({
+        bookingId: b.id,
+        reason: selectedDeclineReason,
       });
 
-      if (error) throw error;
-
-      let guestPhone = '+254712345678';
-      let guestName = 'Guest Traveler';
-
-      if (b.user_id) {
-        const { data: gProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', b.user_id)
-          .single();
-        if (gProfile?.phone) guestPhone = gProfile.phone;
-        if (gProfile?.full_name) guestName = gProfile.full_name;
-      }
-
-      const titleStr = b.experience?.title || 'Coastal Villa Stay';
+      const titleStr = b.experience?.title || b.trip_title || 'Stay';
       const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      // Dispatch Cancelled Notifications
-      if (b.user_id) {
-        await notificationService.createNotification({
-          userId: b.user_id,
-          type: 'booking_cancelled',
-          title: 'Booking Request Update',
-          message: `Unfortunately your booking for ${titleStr} could not be accepted. Reason: ${selectedDeclineReason}.`,
-          actionType: 'booking',
-          actionId: b.id,
-        });
-      }
-
-      await smsService.sendSMS({
-        userId: b.user_id || 'guest_user',
-        phone: guestPhone,
-        message: `Hi ${guestName}, Unfortunately your booking for ${titleStr} could not be accepted. Reason: ${selectedDeclineReason}. Open ZuruSasa to view similar stays.`,
-        notificationType: 'booking_cancelled',
-      });
 
       const declineItems: ActivityItem[] = [
         { id: Date.now() + '-1', time: nowStr, text: `Declined booking for ${titleStr} (${selectedDeclineReason})`, type: 'decline' },
@@ -311,7 +254,7 @@ export function HostDashboard() {
       setDeclineModalBooking(null);
       showAlert({
         title: 'Reservation Declined',
-        message: `Booking has been moved to Cancelled History. Guest notified.`,
+        message: 'Booking has been moved to Cancelled History. Guest notified.',
         icon: 'info',
       });
       loadData();
@@ -319,7 +262,7 @@ export function HostDashboard() {
       console.error('Decline reservation error:', err);
       showAlert({
         title: 'Action Failed',
-        message: err.message || 'Failed to decline reservation.',
+        message: err?.message || 'Failed to decline reservation.',
         icon: 'alert-circle',
       });
     } finally {
@@ -334,7 +277,7 @@ export function HostDashboard() {
   const filteredBookings = bookings.filter((b) => {
     if (activeTab === 'requests') return b.status === 'paid' || b.status === 'pending';
     if (activeTab === 'upcoming') return b.status === 'confirmed';
-    return b.status === 'completed' || b.status === 'cancelled';
+    return b.status === 'completed' || b.status === 'cancelled' || b.status === 'refund_pending' || b.status === 'refunded';
   });
 
   const getStatusStyle = (status?: string | null) => {
@@ -343,13 +286,15 @@ export function HostDashboard() {
       case 'confirmed':
         return { bg: '#F0FDF4', border: '#DCFCE7', text: '#16A34A', label: 'Confirmed' };
       case 'paid':
-        return { bg: '#ECFDF5', border: '#A7F3D0', text: '#059669', label: 'Paid Escrow' };
+        return { bg: '#EFF6FF', border: '#BFDBFE', text: '#2563EB', label: 'Paid — Awaiting Confirmation' };
       case 'completed':
         return { bg: '#F0F9FF', border: '#BAE6FD', text: '#0284C7', label: 'Completed' };
-      case 'cancelled':
-        return { bg: '#FEF2F2', border: '#FEE2E2', text: '#EF4444', label: 'Cancelled' };
+      case 'refund_pending':
+        return { bg: '#FFFBEB', border: '#FDE68A', text: '#D97706', label: 'Refund Pending' };
       case 'refunded':
         return { bg: '#F5F3FF', border: '#DDD6FE', text: '#7C3AED', label: 'Refunded' };
+      case 'cancelled':
+        return { bg: '#FEF2F2', border: '#FEE2E2', text: '#EF4444', label: 'Cancelled' };
       case 'pending':
       default:
         return { bg: '#FFF7ED', border: '#FFEDD5', text: '#EA580C', label: 'Pending Request' };
@@ -489,415 +434,105 @@ export function HostDashboard() {
           </View>
         </Pressable>
 
-        {/* 5. Reservation Requests Operational Section */}
+        {/* 5. Reservation Requests Summary Widget */}
         <View style={styles.sectionHeaderWrap}>
-          <Text style={styles.sectionTitle}>Reservation Requests</Text>
+          <Text style={styles.sectionTitle}>Reservations & Requests</Text>
         </View>
 
-        {/* Segmented Control Track */}
-        <View style={styles.segmentedControlTrack}>
-          {(['requests', 'upcoming', 'history'] as const).map((t) => {
-            const isActive = activeTab === t;
-            const count = bookings.filter((b) =>
-              t === 'requests'
-                ? b.status === 'paid' || b.status === 'pending'
-                : t === 'upcoming'
-                ? b.status === 'confirmed'
-                : b.status === 'completed' || b.status === 'cancelled',
-            ).length;
-
-            return (
-              <Pressable
-                key={t}
-                onPress={() => setActiveTab(t)}
-                style={[styles.segmentedTile, isActive ? styles.segmentedTileActive : null]}
-              >
-                <Text style={[styles.segmentedTileText, isActive ? styles.segmentedTileTextActive : null]}>
-                  {t.charAt(0).toUpperCase() + t.slice(1)} ({count})
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Rich Reservation Cards or Improved Empty State */}
-        {filteredBookings.length === 0 ? (
-          <View style={styles.compactEmptyCard}>
-            <View style={styles.emptyIconCircle}>
+        <Pressable
+          testID="dashboard-requests-card"
+          onPress={() => router.push('/(tabs)/reservations')}
+          style={({ pressed }) => [
+            styles.requestsSummaryCard,
+            bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 0
+              ? styles.requestsSummaryCardAlert
+              : styles.requestsSummaryCardClean,
+            { opacity: pressed ? 0.95 : 1 },
+          ]}
+        >
+          <View style={styles.requestsSummaryTopRow}>
+            <View
+              style={[
+                styles.requestsIconCircle,
+                {
+                  backgroundColor:
+                    bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 0
+                      ? '#FFF7ED'
+                      : '#F0FDF4',
+                },
+              ]}
+            >
               <Feather
-                name={activeTab === 'requests' ? 'inbox' : activeTab === 'upcoming' ? 'calendar' : 'archive'}
-                size={24}
-                color="#F26522"
+                name={
+                  bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 0
+                    ? 'bell'
+                    : 'check-circle'
+                }
+                size={22}
+                color={
+                  bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 0
+                    ? '#F26522'
+                    : '#16A34A'
+                }
               />
             </View>
-            <Text style={styles.emptyTitle}>
-              {activeTab === 'requests'
-                ? 'No pending reservation requests.'
-                : activeTab === 'upcoming'
-                ? 'No upcoming reservations.'
-                : 'No completed reservations yet.'}
-            </Text>
-            <Text style={styles.emptySub}>
-              {activeTab === 'requests'
-                ? "You're all caught up! New guest inquiries and instant reservations will appear here."
-                : activeTab === 'upcoming'
-                ? 'Confirmed guest bookings will be listed here prior to check-in.'
-                : 'Past and completed trips will be safely archived here for your records.'}
-            </Text>
-            <Pressable
-              onPress={() => router.push('/host/create-reel')}
-              style={({ pressed }) => [styles.emptyBtn, { opacity: pressed ? 0.88 : 1 }]}
-            >
-              <Feather name="plus" size={14} color="#FFFFFF" />
-              <Text style={styles.emptyBtnText}>Create Listing Reel</Text>
-            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.requestsSummaryTitle}>
+                {bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 0
+                  ? `You have ${
+                      bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length
+                    } pending reservation request${
+                      bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 1
+                        ? 's'
+                        : ''
+                    }`
+                  : 'All reservations up to date'}
+              </Text>
+              <Text style={styles.requestsSummarySub}>
+                {bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 0
+                  ? 'Awaiting your acceptance to lock dates and confirm.'
+                  : 'No pending guest requests. All bookings confirmed.'}
+              </Text>
+            </View>
+            <View style={styles.viewRequestsPill}>
+              <Text style={styles.viewRequestsPillText}>View</Text>
+              <Feather name="arrow-right" size={14} color="#F26522" />
+            </View>
           </View>
-        ) : (
-          <View style={styles.bookingsList}>
-            {filteredBookings.map((b) => {
-              const st = getStatusStyle(b.status);
-              const isExpanded = expandedBookingId === b.id;
-              const guestName = b.user_id ? 'Guest Traveler' : 'Guest Traveler';
-              const locationStr = b.experience?.location || 'Kenyan Coast';
-              const titleStr = b.experience?.title || 'Coastal Villa Stay';
-              const totalVal = (b.amount ?? 0);
 
-              return (
-                <View key={b.id} style={styles.bookingCard}>
-                  {/* Tapping Header Toggles Card Expansion */}
-                  <Pressable
-                    onPress={() => setExpandedBookingId(isExpanded ? null : b.id)}
-                    style={styles.cardMainTouch}
-                  >
-                    {/* Header Row */}
-                    <View style={styles.bookingCardHeader}>
-                      <View style={styles.guestInfo}>
-                        <View style={styles.guestAvatar}>
-                          <Feather name="user" size={16} color="#F26522" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.guestName}>{guestName}</Text>
-                            <View style={styles.verifiedTag}>
-                              <Feather name="check" size={10} color="#059669" />
-                              <Text style={styles.verifiedTagText}>Verified</Text>
-                            </View>
-                          </View>
-                          <Text style={styles.bookingDate}>
-                            Requested {b.created_at ? new Date(b.created_at).toLocaleDateString() : 'recently'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Strict HSL Status Badge */}
-                      <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
-                        <Text style={[styles.statusText, { color: st.text }]}>{st.label}</Text>
-                      </View>
-                    </View>
-
-                    {/* Rich Details Grid */}
-                    <View style={styles.bookingDetailsBox}>
-                      <View style={styles.detailRow}>
-                        <Feather name="home" size={13} color="#F26522" />
-                        <Text style={styles.detailTitle} numberOfLines={1}>
-                          {titleStr}
-                        </Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Feather name="map-pin" size={13} color="#717171" />
-                        <Text style={styles.detailSub}>{locationStr}</Text>
-                      </View>
-                      <View style={styles.detailMetaRow}>
-                        <View style={styles.detailMetaItem}>
-                          <Feather name="calendar" size={12} color="#717171" />
-                          <Text style={styles.detailMetaText}>
-                            {b.check_in ? new Date(b.check_in).toLocaleDateString() : 'TBD'} –{' '}
-                            {b.check_out ? new Date(b.check_out).toLocaleDateString() : 'TBD'}
-                          </Text>
-                        </View>
-                        <View style={styles.detailMetaItem}>
-                          <Feather name="users" size={12} color="#717171" />
-                          <Text style={styles.detailMetaText}>{b.guests ?? 1} Guests</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.priceContainer}>
-                        <Text style={styles.priceLabel}>Total Booking Value</Text>
-                        <Text style={styles.priceValue}>KES {totalVal.toLocaleString()}</Text>
-                      </View>
-                    </View>
-                  </Pressable>
-
-                  {/* Expanded Information Drawer */}
-                  {isExpanded && (
-                    <View style={styles.expandedDrawer}>
-                      <View style={styles.drawerDivider} />
-                      <Text style={styles.drawerHeader}>Guest & Reservation Dossier</Text>
-                      <View style={styles.drawerGrid}>
-                        <View style={styles.drawerItem}>
-                          <Text style={styles.drawerLabel}>Phone Contact</Text>
-                          <Text style={styles.drawerVal}>+254 712 345 678</Text>
-                        </View>
-                        <View style={styles.drawerItem}>
-                          <Text style={styles.drawerLabel}>Email Address</Text>
-                          <Text style={styles.drawerVal}>guest@zurusasa.com</Text>
-                        </View>
-                        <View style={styles.drawerItem}>
-                          <Text style={styles.drawerLabel}>Estimated Arrival</Text>
-                          <Text style={styles.drawerVal}>02:00 PM – 04:00 PM</Text>
-                        </View>
-                        <View style={styles.drawerItem}>
-                          <Text style={styles.drawerLabel}>Payment Escrow</Text>
-                          <Text style={styles.drawerVal}>Secured (M-Pesa / Card)</Text>
-                        </View>
-                        <View style={[styles.drawerItem, { width: '100%' }]}>
-                          <Text style={styles.drawerLabel}>Special Requests</Text>
-                          <Text style={styles.drawerVal}>
-                            "High floor requested, quiet room, late check-out option."
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Expanded Drawer Action Buttons */}
-                      <View style={styles.drawerActionsRow}>
-                        <Pressable
-                          onPress={() => Linking.openURL('tel:+254712345678')}
-                          style={styles.drawerBtn}
-                        >
-                          <Feather name="phone" size={13} color="#222222" />
-                          <Text style={styles.drawerBtnText}>Call Guest</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => router.push(`/chat/${b.user_id || 'guest'}` as any)}
-                          style={styles.drawerBtn}
-                        >
-                          <Feather name="message-square" size={13} color="#222222" />
-                          <Text style={styles.drawerBtnText}>Message</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() =>
-                            Share.share({
-                              message: `Booking Reservation for ${titleStr} (${b.guests} guests). Total: KES ${totalVal.toLocaleString()}`,
-                            })
-                          }
-                          style={styles.drawerBtn}
-                        >
-                          <Feather name="share-2" size={13} color="#222222" />
-                          <Text style={styles.drawerBtnText}>Share</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Primary Action Buttons: Message Guest | Decline | Accept Reservation */}
-                  {activeTab === 'requests' ? (
-                    <View style={styles.actionRow}>
-                      <Pressable
-                        onPress={() => router.push(`/chat/${b.user_id || 'guest'}` as any)}
-                        style={({ pressed }) => [styles.msgBtn, { opacity: pressed ? 0.75 : 1 }]}
-                      >
-                        <Feather name="message-square" size={14} color="#222222" />
-                        <Text style={styles.msgBtnText}>Message</Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => {
-                          setSelectedDeclineReason(DECLINE_REASONS[0]);
-                          setDeclineModalBooking(b);
-                        }}
-                        style={({ pressed }) => [styles.declineBtn, { opacity: pressed ? 0.75 : 1 }]}
-                      >
-                        <Feather name="x" size={14} color="#EF4444" />
-                        <Text style={styles.declineText}>Decline</Text>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => setAcceptModalBooking(b)}
-                        style={({ pressed }) => [styles.acceptBtn, { opacity: pressed ? 0.88 : 1 }]}
-                      >
-                        <Feather name="check" size={14} color="#FFFFFF" />
-                        <Text style={styles.acceptText}>Accept</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })}
+          {/* Quick Metrics Breakdown Row */}
+          <View style={styles.requestsMetricsRow}>
+            <View style={styles.requestsMetricItem}>
+              <Text style={styles.requestsMetricVal}>
+                {bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length}
+              </Text>
+              <Text style={styles.requestsMetricLbl}>Pending</Text>
+            </View>
+            <View style={styles.requestsMetricDivider} />
+            <View style={styles.requestsMetricItem}>
+              <Text style={styles.requestsMetricVal}>
+                {bookings.filter((b) => b.status === 'confirmed').length}
+              </Text>
+              <Text style={styles.requestsMetricLbl}>Upcoming</Text>
+            </View>
+            <View style={styles.requestsMetricDivider} />
+            <View style={styles.requestsMetricItem}>
+              <Text style={styles.requestsMetricVal}>
+                {
+                  bookings.filter(
+                    (b) =>
+                      b.status === 'completed' ||
+                      b.status === 'cancelled' ||
+                      b.status === 'refunded' ||
+                      b.status === 'refund_pending'
+                  ).length
+                }
+              </Text>
+              <Text style={styles.requestsMetricLbl}>History</Text>
+            </View>
           </View>
-        )}
+        </Pressable>
       </ScrollView>
-
-      {/* ── ACCEPT CONFIRMATION BOTTOM SHEET MODAL ────────────────────────────── */}
-      <Modal
-        visible={Boolean(acceptModalBooking)}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setAcceptModalBooking(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <Pressable style={styles.backdropTouch} onPress={() => setAcceptModalBooking(null)} />
-          <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
-            <View style={styles.sheetHeader}>
-              <View style={styles.sheetHeaderBadge}>
-                <Feather name="check-circle" size={20} color="#16A34A" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sheetTitle}>Accept Reservation?</Text>
-                <Text style={styles.sheetSub}>Review booking breakdown before confirming</Text>
-              </View>
-              <Pressable onPress={() => setAcceptModalBooking(null)} hitSlop={10}>
-                <Feather name="x" size={20} color="#717171" />
-              </Pressable>
-            </View>
-
-            {acceptModalBooking && (
-              <View style={styles.sheetBreakdownCard}>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Guest</Text>
-                  <Text style={styles.breakdownVal}>Guest Traveler (Verified)</Text>
-                </View>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Listing</Text>
-                  <Text style={styles.breakdownVal} numberOfLines={1}>
-                    {acceptModalBooking.experience?.title || 'Coastal Villa'}
-                  </Text>
-                </View>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Dates</Text>
-                  <Text style={styles.breakdownVal}>
-                    {acceptModalBooking.check_in
-                      ? new Date(acceptModalBooking.check_in).toLocaleDateString()
-                      : 'TBD'}{' '}
-                    –{' '}
-                    {acceptModalBooking.check_out
-                      ? new Date(acceptModalBooking.check_out).toLocaleDateString()
-                      : 'TBD'}
-                  </Text>
-                </View>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Guests</Text>
-                  <Text style={styles.breakdownVal}>{acceptModalBooking.guests ?? 1} Guests</Text>
-                </View>
-                <View style={styles.sheetDivider} />
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Booking Total</Text>
-                  <Text style={styles.breakdownValBold}>
-                    KES {(acceptModalBooking.amount ?? 0).toLocaleString()}
-                  </Text>
-                </View>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Host Service Fee (15%)</Text>
-                  <Text style={{ fontSize: 13, color: '#EF4444' }}>
-                    - KES {Math.round((acceptModalBooking.amount ?? 0) * 0.15).toLocaleString()}
-                  </Text>
-                </View>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.payoutHighlightLabel}>Estimated Host Payout</Text>
-                  <Text style={styles.payoutHighlightVal}>
-                    KES {Math.round((acceptModalBooking.amount ?? 0) * 0.85).toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            <View style={styles.sheetActionRow}>
-              <Pressable
-                disabled={processingAction}
-                onPress={() => setAcceptModalBooking(null)}
-                style={styles.sheetCancelBtn}
-              >
-                <Text style={styles.sheetCancelBtnText}>Cancel</Text>
-              </Pressable>
-
-              <Pressable
-                disabled={processingAction}
-                onPress={executeAccept}
-                style={({ pressed }) => [styles.sheetConfirmAcceptBtn, { opacity: pressed ? 0.88 : 1 }]}
-              >
-                {processingAction ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                    <Text style={styles.sheetConfirmAcceptBtnText}>Processing...</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.sheetConfirmAcceptBtnText}>Confirm & Accept</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── DECLINE REASON BOTTOM SHEET MODAL ─────────────────────────────────── */}
-      <Modal
-        visible={Boolean(declineModalBooking)}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setDeclineModalBooking(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <Pressable style={styles.backdropTouch} onPress={() => setDeclineModalBooking(null)} />
-          <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
-            <View style={styles.sheetHeader}>
-              <View style={[styles.sheetHeaderBadge, { backgroundColor: '#FEF2F2' }]}>
-                <Feather name="alert-circle" size={20} color="#EF4444" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sheetTitle}>Decline Reservation?</Text>
-                <Text style={styles.sheetSub}>Select reason to notify the guest</Text>
-              </View>
-              <Pressable onPress={() => setDeclineModalBooking(null)} hitSlop={10}>
-                <Feather name="x" size={20} color="#717171" />
-              </Pressable>
-            </View>
-
-            <View style={styles.reasonsList}>
-              {DECLINE_REASONS.map((r) => {
-                const sel = selectedDeclineReason === r;
-                return (
-                  <Pressable
-                    key={r}
-                    onPress={() => setSelectedDeclineReason(r)}
-                    style={[styles.reasonTile, sel ? styles.reasonTileSelected : null]}
-                  >
-                    <View style={[styles.radioCircle, sel ? styles.radioCircleSelected : null]}>
-                      {sel && <View style={styles.radioDot} />}
-                    </View>
-                    <Text style={[styles.reasonTileText, sel ? styles.reasonTileTextSelected : null]}>
-                      {r}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View style={styles.sheetActionRow}>
-              <Pressable
-                disabled={processingAction}
-                onPress={() => setDeclineModalBooking(null)}
-                style={styles.sheetCancelBtn}
-              >
-                <Text style={styles.sheetCancelBtnText}>Cancel</Text>
-              </Pressable>
-
-              <Pressable
-                disabled={processingAction}
-                onPress={executeDecline}
-                style={({ pressed }) => [styles.sheetConfirmDeclineBtn, { opacity: pressed ? 0.88 : 1 }]}
-              >
-                {processingAction ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                    <Text style={styles.sheetConfirmAcceptBtnText}>Declining...</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.sheetConfirmAcceptBtnText}>Decline Reservation</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -1349,4 +984,95 @@ const styles = StyleSheet.create({
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444' },
   reasonTileText: { fontSize: 14, fontFamily: 'DMSans_500Medium', color: '#334155' },
   reasonTileTextSelected: { fontFamily: 'DMSans_700Bold', color: '#991B1B' },
+
+  /* Reservation Requests Summary Widget */
+  requestsSummaryCard: {
+    marginHorizontal: 20,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    gap: 16,
+    marginBottom: 20,
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  requestsSummaryCardAlert: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FED7AA',
+  },
+  requestsSummaryCardClean: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+  },
+  requestsSummaryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  requestsIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestsSummaryTitle: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    color: '#0F172A',
+  },
+  requestsSummarySub: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  viewRequestsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+  },
+  viewRequestsPillText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: '#F26522',
+  },
+  requestsMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  requestsMetricItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  requestsMetricVal: {
+    fontSize: 16,
+    fontFamily: 'DMSans_700Bold',
+    color: '#0F172A',
+  },
+  requestsMetricLbl: {
+    fontSize: 11,
+    fontFamily: 'DMSans_500Medium',
+    color: '#64748B',
+    marginTop: 1,
+  },
+  requestsMetricDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+  },
 });

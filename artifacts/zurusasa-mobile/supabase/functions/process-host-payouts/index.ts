@@ -1,3 +1,4 @@
+/// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -23,10 +24,18 @@ Deno.serve(async (request) => {
 
   const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 
+  // Complete eligible stays before considering payouts. This keeps completed
+  // as the release gate rather than letting a merely-paid booking transfer.
+  const { error: completionError } = await admin.rpc('complete_due_bookings');
+  if (completionError) {
+    console.error('Failed to complete due bookings:', completionError);
+    return json({ error: 'Could not finalize completed bookings safely' }, 500);
+  }
+
   // Fetch due payouts scheduled for <= now()
   const { data: duePayouts, error: fetchError } = await admin
     .from('host_payouts')
-    .select('id, host_id, booking_id, recipient_code, amount, currency')
+    .select('id, host_id, booking_id, recipient_code, amount, currency, retry_count, max_retries')
     .eq('status', 'scheduled')
     .lte('scheduled_for', new Date().toISOString())
     .limit(20);
@@ -44,6 +53,23 @@ Deno.serve(async (request) => {
 
   for (const payout of duePayouts) {
     try {
+      const { data: booking, error: bookingError } = await admin
+        .from('bookings')
+        .select('status')
+        .eq('id', payout.booking_id)
+        .maybeSingle();
+      if (bookingError || booking?.status !== 'completed') {
+        await admin
+          .from('host_payouts')
+          .update({
+            status: 'cancelled',
+            failure_reason: 'Payout requires a completed confirmed booking',
+          })
+          .eq('id', payout.id)
+          .eq('status', 'scheduled');
+        results.push({ payoutId: payout.id, status: 'cancelled', error: 'Booking is not completed' });
+        continue;
+      }
       const reference = `payout_${payout.id.replace(/-/g, '')}`;
 
       const transferResponse = await fetch('https://api.paystack.co/transfer', {
@@ -65,18 +91,38 @@ Deno.serve(async (request) => {
       const providerResult = await transferResponse.json().catch(() => ({}));
       if (!transferResponse.ok || providerResult.status !== true) {
         const failureReason = String(providerResult.message || transferResponse.statusText);
+        const currentRetries = Number(payout.retry_count || 0);
+        const maxRetries = Number(payout.max_retries || 3);
 
-        await admin
-          .from('host_payouts')
-          .update({
-            status: 'failed',
-            failure_reason: failureReason,
-            provider_response: providerResult,
-            processed_at: new Date().toISOString(),
-          })
-          .eq('id', payout.id);
+        if (currentRetries < maxRetries) {
+          // Exponential backoff retry: 1h, 2h, 4h
+          const backoffHours = Math.pow(2, currentRetries);
+          const nextAttempt = new Date(Date.now() + backoffHours * 3600 * 1000).toISOString();
 
-        results.push({ payoutId: payout.id, status: 'failed', error: failureReason });
+          await admin
+            .from('host_payouts')
+            .update({
+              retry_count: currentRetries + 1,
+              scheduled_for: nextAttempt,
+              failure_reason: `Attempt ${currentRetries + 1} failed: ${failureReason}`,
+              provider_response: providerResult,
+            })
+            .eq('id', payout.id);
+
+          results.push({ payoutId: payout.id, status: 'retry_scheduled', error: failureReason });
+        } else {
+          await admin
+            .from('host_payouts')
+            .update({
+              status: 'failed',
+              failure_reason: `All ${maxRetries} attempts failed: ${failureReason}`,
+              provider_response: providerResult,
+              processed_at: new Date().toISOString(),
+            })
+            .eq('id', payout.id);
+
+          results.push({ payoutId: payout.id, status: 'failed', error: failureReason });
+        }
         continue;
       }
 
@@ -104,6 +150,23 @@ Deno.serve(async (request) => {
         currency: payout.currency,
         metadata: { payout_id: payout.id, transfer_code: transferCode, host_id: payout.host_id },
       });
+
+      // Notify Host of successful payout release
+      try {
+        const payoutAmountKES = (Number(payout.amount) / 100).toLocaleString();
+        const refId = payout.booking_id ? payout.booking_id.slice(0, 8).toUpperCase() : payout.id.slice(0, 8).toUpperCase();
+        await admin.from('notifications').insert({
+          user_id: payout.host_id,
+          type: 'payout_completed',
+          title: 'Payout Sent! 💰',
+          message: `KES ${payoutAmountKES} has been transferred to your payout account for booking #${refId}.`,
+          action_type: 'payout',
+          action_id: payout.id,
+          is_read: false,
+        });
+      } catch (notifEx) {
+        console.warn('Payout notification dispatch warning:', notifEx);
+      }
 
       results.push({ payoutId: payout.id, status: 'success', transferCode });
     } catch (err) {

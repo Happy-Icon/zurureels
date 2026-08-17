@@ -22,10 +22,18 @@ import { CenteredState, Skeleton } from '@/components/Skeleton';
 import { useReels, useBatchReelInteractions } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
 
-export default function ZuruFlowScreen() {
+export default function HomeScreen() {
+  const { viewMode } = useAuth();
+  if (viewMode === 'host') {
+    return <HostDashboard />;
+  }
+  return <ZuruFlowFeed />;
+}
+
+function ZuruFlowFeed() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, viewMode } = useAuth();
+  const { user } = useAuth();
   const { height } = useWindowDimensions();
   const isFocused = useIsFocused();
   const { data: reels, isLoading, isError, refetch } = useReels();
@@ -35,7 +43,7 @@ export default function ZuruFlowScreen() {
   const { data: interactionsMap } = useBatchReelInteractions(
     reelIds,
     user?.id,
-    isFocused && viewMode === 'guest'
+    isFocused
   );
 
   const pageHeight = height;
@@ -54,17 +62,13 @@ export default function ZuruFlowScreen() {
     ({ item, index }: { item: ReelRow; index: number }) => (
       <ReelCard
         reel={item}
-        isActive={isFocused && viewMode === 'guest' && index === activeIndex}
+        isActive={isFocused && index === activeIndex}
         height={pageHeight}
         prefetchInteractions={interactionsMap?.[item.id]}
       />
     ),
-    [activeIndex, pageHeight, isFocused, viewMode, interactionsMap],
+    [activeIndex, pageHeight, isFocused, interactionsMap],
   );
-
-  if (viewMode === 'host') {
-    return <HostDashboard />;
-  }
 
   // 1. Top Navigation Bar with Gradient Scrim Protection
   const topOverlay = (

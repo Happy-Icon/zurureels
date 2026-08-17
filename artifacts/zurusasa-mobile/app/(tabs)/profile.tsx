@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   Modal,
@@ -14,10 +15,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter, type Href } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
+import { supabase } from '@/lib/supabase';
 import { useSavedEvents, useSavedReels } from '@/lib/queries';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationBadge } from '@/components/NotificationBadge';
@@ -36,7 +40,7 @@ interface ProfileMenuItem {
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, profile, signOut, loading, viewMode, switchViewMode, role } = useAuth();
+  const { user, profile, signOut, loading, viewMode, switchViewMode, role, refreshProfile } = useAuth();
   const { showAlert } = useCustomAlert();
 
   const { data: reels } = useSavedReels(user?.id);
@@ -47,6 +51,8 @@ export default function ProfileScreen() {
   // Mode switching state & animation
   const [switchingOverlayVisible, setSwitchingOverlayVisible] = useState(false);
   const [targetMode, setTargetMode] = useState<'guest' | 'host'>('host');
+  const [imageError, setImageError] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
@@ -118,13 +124,109 @@ export default function ProfileScreen() {
   }
 
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const profMeta = (profile?.metadata ?? {}) as Record<string, any>;
   const displayName =
-    (typeof meta.full_name === 'string' && meta.full_name) ||
+    (typeof profile?.full_name === 'string' && profile.full_name.trim()) ||
+    (typeof meta.full_name === 'string' && (meta.full_name as string).trim()) ||
+    (typeof meta.legal_name === 'string' && (meta.legal_name as string).trim()) ||
     user.email?.split('@')[0] ||
+    user.phone ||
     'Traveler';
-  const avatarUrl = (profile?.metadata as { avatar_url?: string } | null)?.avatar_url;
+
+  const rawAvatarUrl =
+    (profile as any)?.avatar_url ||
+    profMeta?.avatar_url ||
+    (meta.avatar_url as string) ||
+    (meta.picture as string) ||
+    (meta.avatar as string) ||
+    null;
+
+  const avatarUrl = typeof rawAvatarUrl === 'string' && rawAvatarUrl.trim().length > 0
+    ? rawAvatarUrl
+    : null;
+
   const initial = displayName.charAt(0).toUpperCase();
   const isHostMode = viewMode === 'host';
+  const userContact = user.phone || (profile as any)?.phone || user.email || (profile as any)?.email || '';
+  const userLocation = profMeta?.location || (meta.location as string) || '';
+  const userWork = profMeta?.work || (meta.work as string) || '';
+
+  const handlePickAndUploadAvatar = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert({
+          title: 'Permission Required',
+          message: 'Please allow photo library access to change your profile picture.',
+          icon: 'alert-circle',
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const pickedUri = result.assets[0].uri;
+      setUploadingAvatar(true);
+
+      let finalAvatarUrl = pickedUri;
+      try {
+        const uploadRes = await uploadToCloudinaryMobile(pickedUri, {
+          resourceType: 'image',
+          folder: 'avatars',
+        });
+        if (uploadRes?.secure_url) {
+          finalAvatarUrl = uploadRes.secure_url;
+        }
+      } catch (e) {
+        console.warn('Cloudinary upload error, using direct uri:', e);
+      }
+
+      if (user?.id) {
+        const existingMeta = (profile?.metadata ?? {}) as Record<string, any>;
+        await supabase
+          .from('profiles')
+          .update({
+            metadata: {
+              ...existingMeta,
+              avatar_url: finalAvatarUrl,
+            },
+          })
+          .eq('id', user.id);
+
+        await supabase.auth.updateUser({
+          data: {
+            avatar_url: finalAvatarUrl,
+            picture: finalAvatarUrl,
+          },
+        });
+
+        setImageError(false);
+        if (refreshProfile) await refreshProfile();
+      }
+
+      showAlert({
+        title: 'Profile Photo Updated',
+        message: 'Your new profile picture has been saved.',
+        icon: 'check-circle',
+      });
+    } catch (err: any) {
+      console.warn('Avatar update note:', err);
+      showAlert({
+        title: 'Upload Failed',
+        message: err?.message || 'Could not upload profile picture.',
+        icon: 'alert-circle',
+      });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleSignOut = () => {
     showAlert({
@@ -244,27 +346,71 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        {/* ── PROFILE CARD (Upper part preserved) ──────────────────────────────── */}
+        {/* ── PROFILE HERO CARD ────────────────────────────────────────────────── */}
         <Pressable
+          testID="profile-hero-card"
           onPress={() => router.push('/profile/view')}
           style={({ pressed }) => [styles.profileCard, pressed && { opacity: 0.95 }]}
         >
           <View style={styles.avatarContainer}>
-            {avatarUrl ? (
+            {avatarUrl && !imageError ? (
               <Image
                 source={{ uri: avatarUrl }}
                 style={styles.avatarImg}
                 contentFit="cover"
                 transition={150}
+                onError={() => setImageError(true)}
               />
             ) : (
               <View style={styles.avatarInitialBox}>
                 <Text style={styles.avatarInitialText}>{initial}</Text>
               </View>
             )}
+            <Pressable
+              testID="avatar-camera-btn"
+              onPress={handlePickAndUploadAvatar}
+              style={({ pressed }) => [styles.avatarCameraBadge, pressed && { opacity: 0.8 }]}
+              hitSlop={6}
+            >
+              {uploadingAvatar ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Feather name="camera" size={12} color="#FFFFFF" />
+              )}
+            </Pressable>
           </View>
+
           <Text style={styles.userName}>{displayName}</Text>
-          <Text style={styles.userRole}>{isHostMode ? 'Host' : 'Guest'}</Text>
+
+          {userContact ? (
+            <Text style={styles.userContactText}>{userContact}</Text>
+          ) : null}
+
+          <View style={styles.roleTagPill}>
+            <Text style={styles.roleTagText}>{isHostMode ? 'Verified Host' : 'Guest Traveler'}</Text>
+          </View>
+
+          {userLocation || userWork ? (
+            <View style={styles.metaPreviewRow}>
+              {userLocation ? (
+                <View style={styles.metaChip}>
+                  <Feather name="map-pin" size={11} color="#6B7280" />
+                  <Text style={styles.metaChipText}>{userLocation}</Text>
+                </View>
+              ) : null}
+              {userWork ? (
+                <View style={styles.metaChip}>
+                  <Feather name="briefcase" size={11} color="#6B7280" />
+                  <Text style={styles.metaChipText}>{userWork}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={styles.showProfilePill}>
+            <Text style={styles.showProfilePillText}>Show profile</Text>
+            <Feather name="chevron-right" size={14} color="#F26522" />
+          </View>
         </Pressable>
 
         {/* ── QUICK CARDS (Bookings & History) ─────────────────────────────────── */}
@@ -509,39 +655,138 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    paddingVertical: 28,
+    paddingVertical: 24,
     paddingHorizontal: 20,
     alignItems: 'center',
     marginBottom: 16,
+    shadowColor: '#000000',
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   avatarContainer: {
     width: 96,
     height: 96,
     borderRadius: 48,
     marginBottom: 12,
-    overflow: 'hidden',
+    position: 'relative',
   },
   avatarImg: {
     width: '100%',
     height: '100%',
+    borderRadius: 48,
   },
   avatarInitialBox: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#FCE7F3',
+    borderRadius: 48,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 2,
+    borderColor: '#FED7AA',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitialText: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#9D174D',
+    fontSize: 34,
+    fontFamily: 'DMSans_700Bold',
+    color: '#F26522',
+  },
+  avatarVerifiedBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F26522',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   userName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#000000',
+    fontSize: 22,
+    fontFamily: 'DMSans_700Bold',
+    color: '#111827',
     textAlign: 'center',
+  },
+  userContactText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#6B7280',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  roleTagPill: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  roleTagText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#374151',
+  },
+  metaPreviewRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  metaChipText: {
+    fontSize: 11,
+    fontFamily: 'DMSans_500Medium',
+    color: '#4B5563',
+  },
+  showProfilePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 14,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+  },
+  showProfilePillText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: '#F26522',
   },
   userRole: {
     fontSize: 14,

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,11 +16,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { useEnquire, useMyBookings } from '@/lib/queries';
+import { useCustomAlert } from '@/context/CustomAlertContext';
+import { useEnquire, useGuestCancelBooking, useMyBookings } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
 import { JourneyCompanionSheet } from '@/components/journey/JourneyCompanionSheet';
+import { HostReservationsView } from '@/components/host/HostReservationsView';
 import type { BookingRow } from '@/lib/supabase';
 
 const MONTHS = [
@@ -86,7 +89,12 @@ function StatusPill({ status }: { status: string | null }) {
   let iconName: keyof typeof Feather.glyphMap = 'clock';
   let label = 'Pending';
 
-  if (s === 'paid' || s === 'confirmed') {
+  if (s === 'paid') {
+    bg = '#EFF6FF';
+    color = '#2563EB';
+    iconName = 'clock';
+    label = 'Awaiting Host';
+  } else if (s === 'confirmed') {
     bg = '#ECFDF5';
     color = '#059669';
     iconName = 'check-circle';
@@ -96,6 +104,11 @@ function StatusPill({ status }: { status: string | null }) {
     color = '#2563EB';
     iconName = 'check-square';
     label = 'Completed';
+  } else if (s === 'refund_pending') {
+    bg = '#FFFBEB';
+    color = '#D97706';
+    iconName = 'refresh-cw';
+    label = 'Refund Pending';
   } else if (s === 'cancelled' || s === 'refunded') {
     bg = '#FEF2F2';
     color = '#DC2626';
@@ -172,9 +185,19 @@ function TripProgressTimeline({ status, checkIn }: { status: string | null; chec
   );
 }
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
+// ── Root Screen Component ───────────────────────────────────────────────────
 
-export default function TripsScreen() {
+export default function ReservationsScreen() {
+  const { viewMode } = useAuth();
+  if (viewMode === 'host') {
+    return <HostReservationsView />;
+  }
+  return <GuestTripsView />;
+}
+
+// ── Guest Trips Screen ───────────────────────────────────────────────────────
+
+function GuestTripsView() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -184,7 +207,16 @@ export default function TripsScreen() {
   const [selectedBooking, setSelectedBooking] = useState<BookingRow | null>(null);
   const [journeyBooking, setJourneyBooking] = useState<BookingRow | null>(null);
 
-  const { data: bookings, isLoading } = useMyBookings(user?.id);
+  const { data: bookings, isLoading, isRefetching, refetch } = useMyBookings(user?.id);
+
+  // Automatically refresh trips whenever this screen/tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        refetch();
+      }
+    }, [user?.id, refetch])
+  );
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 10;
   const bottomPad = Platform.OS === 'web' ? 110 : insets.bottom + 90;
@@ -285,6 +317,44 @@ export default function TripsScreen() {
     if (url) Linking.openURL(url);
   };
 
+  const cancelBookingMutation = useGuestCancelBooking();
+  const { showAlert } = useCustomAlert();
+
+  const handleCancelBooking = (b: BookingRow) => {
+    showAlert({
+      title: 'Cancel Reservation?',
+      message: 'Are you sure you want to cancel this reservation? The host will be notified and your cancellation will be processed.',
+      icon: 'alert-triangle',
+      buttons: [
+        { text: 'Keep Reservation', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelBookingMutation.mutateAsync({
+                bookingId: b.id,
+                reason: 'Cancelled by guest from Trips screen',
+              });
+              setSelectedBooking(null);
+              showAlert({
+                title: 'Reservation Cancelled',
+                message: 'Your booking has been cancelled.',
+                icon: 'check-circle',
+              });
+            } catch (err: any) {
+              showAlert({
+                title: 'Cancellation Failed',
+                message: err?.message || 'Could not cancel reservation.',
+                icon: 'alert-circle',
+              });
+            }
+          },
+        },
+      ],
+    });
+  };
+
   const handleBack = () => {
     router.push('/profile');
   };
@@ -334,6 +404,14 @@ export default function TripsScreen() {
     <View testID="reservations-screen" style={[styles.fill, { backgroundColor: '#FAFAFA' }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor="#F26522"
+            colors={['#F26522']}
+          />
+        }
         contentContainerStyle={{
           paddingTop: topPad,
           paddingBottom: bottomPad,
@@ -530,6 +608,8 @@ export default function TripsScreen() {
             setSelectedBooking(null);
             setJourneyBooking(current);
           }}
+          onCancelBooking={() => handleCancelBooking(selectedBooking)}
+          isCancelling={cancelBookingMutation.isPending}
         />
       ) : null}
 
@@ -834,6 +914,8 @@ interface BookingDetailModalProps {
   onClose: () => void;
   onMessageHost: () => void;
   onDirections: () => void;
+  onCancelBooking?: () => void;
+  isCancelling?: boolean;
 }
 
 function BookingDetailModal({
@@ -841,9 +923,13 @@ function BookingDetailModal({
   onClose,
   onMessageHost,
   onDirections,
+  onCancelBooking,
+  isCancelling,
 }: BookingDetailModalProps) {
   const exp = booking.experience;
   const range = dateRange(booking);
+  const status = (booking.status ?? '').toLowerCase();
+  const canCancel = status === 'pending' || status === 'confirmed' || status === 'paid';
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -911,6 +997,21 @@ function BookingDetailModal({
                 <Feather name="navigation" size={16} color="#374151" />
                 <Text style={styles.modalSecondaryBtnText}>Get Directions</Text>
               </Pressable>
+              {canCancel && onCancelBooking ? (
+                <Pressable
+                  onPress={onCancelBooking}
+                  disabled={isCancelling}
+                  style={({ pressed }) => [
+                    styles.modalCancelBtn,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <Feather name="x-circle" size={16} color="#DC2626" />
+                  <Text style={styles.modalCancelBtnText}>
+                    {isCancelling ? 'Cancelling...' : 'Cancel Reservation'}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </ScrollView>
         </View>
@@ -1632,5 +1733,22 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontFamily: 'DMSans_600SemiBold',
     color: '#374151',
+  },
+  modalCancelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+    marginTop: 4,
+  },
+  modalCancelBtnText: {
+    fontSize: 14.5,
+    fontFamily: 'DMSans_700Bold',
+    color: '#DC2626',
   },
 });

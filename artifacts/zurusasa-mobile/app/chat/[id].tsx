@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -7,7 +8,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,11 +15,11 @@ import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, type MessageRow } from '@/lib/supabase';
+import { useMessages, useSendMessage, useMarkMessagesRead } from '@/lib/queries';
+import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
 import { Skeleton } from '@/components/Skeleton';
-import { notificationService } from '@/services/notificationService';
 import { GrowingInput } from '@/components/keyboard';
 
 function formatTime(iso: string) {
@@ -36,7 +36,6 @@ export default function NativeChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const { id, name, avatar, otherId } = useLocalSearchParams<{
     id: string;
     name?: string;
@@ -44,60 +43,79 @@ export default function NativeChatScreen() {
     otherId?: string;
   }>();
 
+  const { data: serverMessages, isLoading: loading } = useMessages(id);
+  const sendMessageMutation = useSendMessage();
+  const markReadMutation = useMarkMessagesRead();
+
   const [messages, setMessages] = useState<MessageRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<FlatList<MessageRow>>(null);
 
   const topPad = Platform.OS === 'web' ? 12 : insets.top + 4;
   const bottomPad = Platform.OS === 'web' ? 14 : Math.max(insets.bottom, 12);
 
-  // Load history + subscribe to new messages
+  // Sync server messages into local state
+  useEffect(() => {
+    if (serverMessages) {
+      setMessages((prev) => {
+        const optimistic = prev.filter((m) => m.id.startsWith('temp-'));
+        const merged = [...serverMessages];
+        for (const opt of optimistic) {
+          if (!merged.some((m) => m.content === opt.content && m.sender_id === opt.sender_id)) {
+            merged.push(opt);
+          }
+        }
+        return merged;
+      });
+    }
+  }, [serverMessages]);
+
+  // Mark incoming messages as read when opening conversation
   useEffect(() => {
     if (!id || !user) return;
-    let active = true;
+    markReadMutation.mutate({ conversationId: id, userId: user.id });
+  }, [id, user?.id]);
 
-    (async () => {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', id)
-        .order('created_at', { ascending: true });
-      if (active && !error && data) {
-        setMessages(data as unknown as MessageRow[]);
-      }
-      if (active) setLoading(false);
-
-      await supabase
-        .from('messages')
-        .update({ is_read: true })
-        .eq('conversation_id', id)
-        .neq('sender_id', user.id);
-    })();
+  // Realtime subscription for INSERT and UPDATE (read receipts)
+  useEffect(() => {
+    if (!id || !user) return;
 
     const channel = supabase
       .channel(`conv_${id}`)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'messages',
           filter: `conversation_id=eq.${id}`,
         },
         (payload) => {
-          const msg = payload.new as MessageRow;
-          setMessages((prev) =>
-            prev.some((m) => m.id === msg.id) ? prev : [...prev, msg],
-          );
+          if (payload.eventType === 'INSERT') {
+            const newMsg = payload.new as MessageRow;
+            setMessages((prev) => {
+              const withoutTemp = prev.filter((m) => !m.id.startsWith('temp-'));
+              return withoutTemp.some((m) => m.id === newMsg.id) ? withoutTemp : [...withoutTemp, newMsg];
+            });
+
+            // If incoming message is from the other user, mark as read immediately
+            if (newMsg.sender_id !== user.id) {
+              markReadMutation.mutate({ conversationId: id, userId: user.id });
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedMsg = payload.new as MessageRow;
+            setMessages((prev) =>
+              prev.map((m) => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m)),
+            );
+          }
         },
       )
       .subscribe();
 
     return () => {
-      active = false;
       supabase.removeChannel(channel);
     };
   }, [id, user?.id]);
@@ -114,8 +132,9 @@ export default function NativeChatScreen() {
     setSendError(null);
     setText('');
 
+    const tempId = `temp-${Date.now()}`;
     const temp: MessageRow = {
-      id: `temp-${Date.now()}`,
+      id: tempId,
       conversation_id: id,
       sender_id: user.id,
       content,
@@ -124,75 +143,58 @@ export default function NativeChatScreen() {
     };
     setMessages((prev) => [...prev, temp]);
 
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({ conversation_id: id, sender_id: user.id, content })
-      .select('*')
-      .single();
-
-    if (error) {
-      setMessages((prev) => prev.filter((m) => m.id !== temp.id));
+    try {
+      await sendMessageMutation.mutateAsync({
+        conversationId: id,
+        senderId: user.id,
+        content,
+        recipientId: otherId,
+        senderName: user.user_metadata?.full_name || 'Someone',
+      });
+    } catch (err: any) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setSendError('Message failed to send. Please try again.');
       setText(content);
-    } else if (data) {
-      const real = data as unknown as MessageRow;
-      setMessages((prev) => {
-        const withoutTemp = prev.filter((m) => m.id !== temp.id);
-        return withoutTemp.some((m) => m.id === real.id)
-          ? withoutTemp
-          : [...withoutTemp, real];
-      });
-
-      const now = new Date().toISOString();
-      await supabase
-        .from('conversations')
-        .update({ last_message_at: now })
-        .eq('id', id);
-
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-
-      // Find recipient ID from conversation
-      const { data: conv } = await supabase
-        .from('conversations')
-        .select('participant_one, participant_two')
-        .eq('id', id)
-        .single();
-
-      if (conv) {
-        const recipientId =
-          conv.participant_one === user.id ? conv.participant_two : conv.participant_one;
-        if (recipientId && recipientId !== user.id) {
-          const senderName = user.user_metadata?.full_name || 'Someone';
-          notificationService
-            .createNotification({
-              userId: recipientId,
-              type: 'message',
-              title: `New message from ${senderName}`,
-              message: content,
-              actionType: 'chat',
-              actionId: id,
-              metadata: {
-                conversation_id: id,
-                sender_id: user.id,
-                sender_name: senderName,
-              },
-            })
-            .catch((notifErr) => {
-              console.warn('Message notification warning:', notifErr);
-            });
-        }
-      }
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   };
 
   const handlePickAttachment = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets?.length) {
-      Alert.alert('Attachment Selected', 'Sharing photo in conversation.');
+    if (uploadingPhoto || !user || !id) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: true,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const asset = result.assets[0];
+      setUploadingPhoto(true);
+      setSendError(null);
+
+      // Upload to Cloudinary
+      const cRes = await uploadToCloudinaryMobile(asset.uri, {
+        resourceType: 'image',
+        folder: 'chat_attachments',
+      });
+
+      // Send photo message
+      await sendMessageMutation.mutateAsync({
+        conversationId: id,
+        senderId: user.id,
+        content: '📷 Photo attachment',
+        imageUrl: cRes.secure_url,
+        recipientId: otherId,
+        senderName: user.user_metadata?.full_name || 'Someone',
+      });
+    } catch (err: any) {
+      console.warn('Attachment upload error:', err);
+      Alert.alert('Upload Failed', 'Could not upload the selected photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -210,11 +212,30 @@ export default function NativeChatScreen() {
             mine ? styles.mineBubble : styles.theirBubble,
           ]}
         >
-          <Text style={[styles.bubbleText, mine ? styles.mineText : styles.theirText]}>
-            {item.content}
-          </Text>
+          {item.image_url ? (
+            <Image
+              source={{ uri: item.image_url }}
+              style={styles.attachmentImage}
+              contentFit="cover"
+              transition={200}
+            />
+          ) : null}
+          {item.content && item.content !== '📷 Photo attachment' ? (
+            <Text style={[styles.bubbleText, mine ? styles.mineText : styles.theirText]}>
+              {item.content}
+            </Text>
+          ) : null}
         </View>
-        <Text style={styles.timestampText}>{formatTime(item.created_at)}</Text>
+        <View style={styles.bubbleFooterRow}>
+          <Text style={styles.timestampText}>{formatTime(item.created_at)}</Text>
+          {mine ? (
+            item.is_read ? (
+              <Feather name="check-circle" size={11} color="#10B981" />
+            ) : (
+              <Feather name="check" size={11} color="#9CA3AF" />
+            )
+          ) : null}
+        </View>
       </View>
     );
   };
@@ -267,7 +288,7 @@ export default function NativeChatScreen() {
         {/* Right Info Action */}
         <Pressable
           onPress={() => {
-            Alert.alert(displayName, 'Conversation details and support ticket context.');
+            Alert.alert(displayName, 'Conversation details and direct host messaging.');
           }}
           hitSlop={10}
           style={({ pressed }) => [styles.infoBtn, { opacity: pressed ? 0.6 : 1 }]}
@@ -296,7 +317,7 @@ export default function NativeChatScreen() {
               <View style={styles.contextBadgeCard}>
                 <Feather name="shield" size={13} color="#717171" />
                 <Text style={styles.contextBadgeText}>
-                  Support Inquiry · Verified Conversation
+                  Support & Host Inquiry · Verified Conversation
                 </Text>
               </View>
             ) : null
@@ -309,30 +330,37 @@ export default function NativeChatScreen() {
                 <Skeleton style={{ height: 44, width: '55%', borderRadius: 16, borderTopLeftRadius: 4 }} />
               </View>
             ) : (
-              /* 2. Chat Body Empty State Refinement */
               <View style={styles.emptyContainer}>
                 <View style={styles.emptyIconCircle}>
                   <Feather name="message-square" size={28} color="#717171" />
                 </View>
                 <Text style={styles.emptyHeadline}>Start a conversation</Text>
                 <Text style={styles.emptyBody}>
-                  Our team is here to assist with your bookings, payments, or general questions.
+                  Plan the details of your stay or experience directly with the host.
                 </Text>
               </View>
             )
           }
         />
 
+        {uploadingPhoto ? (
+          <View style={styles.uploadingBar}>
+            <ActivityIndicator size="small" color="#EE7D30" />
+            <Text style={styles.uploadingText}>Uploading photo...</Text>
+          </View>
+        ) : null}
+
         {sendError ? <Text style={styles.sendErrorText}>{sendError}</Text> : null}
 
-        {/* 4. Message Composer Bar (Sticky Bottom Input Dock) */}
+        {/* 4. Message Composer Bar */}
         <View style={[styles.composerBar, { paddingBottom: bottomPad }]}>
           <Pressable
             onPress={handlePickAttachment}
+            disabled={uploadingPhoto || sending}
             style={({ pressed }) => [styles.attachmentBtn, { opacity: pressed ? 0.6 : 1 }]}
             hitSlop={8}
           >
-            <Feather name="paperclip" size={20} color="#717171" />
+            <Feather name="image" size={20} color={uploadingPhoto ? '#EE7D30' : '#717171'} />
           </Pressable>
 
           <View style={styles.inputPillBox}>
@@ -506,11 +534,22 @@ const styles = StyleSheet.create({
   theirText: {
     color: '#222222',
   },
+  attachmentImage: {
+    width: 220,
+    height: 160,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  bubbleFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 4,
+  },
   timestampText: {
     fontSize: 11,
     fontFamily: 'DMSans_400Regular',
     color: '#717171',
-    paddingHorizontal: 4,
   },
   emptyContainer: {
     flex: 1,
@@ -542,6 +581,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     maxWidth: 260,
+  },
+  uploadingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    backgroundColor: '#FFF7ED',
+  },
+  uploadingText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+    color: '#EE7D30',
   },
   sendErrorText: {
     fontSize: 12,

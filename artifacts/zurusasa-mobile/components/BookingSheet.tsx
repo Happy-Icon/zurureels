@@ -19,10 +19,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import { useCreateBooking } from '@/lib/queries';
+import { useExperienceBlockedDates } from '@/lib/queries';
 import { supabase } from '@/lib/supabase';
 import type { ReelRow } from '@/lib/supabase';
-import { notificationService } from '@/services/notificationService';
 import { AvailabilityCalendar } from '@/components/booking/AvailabilityCalendar';
 import { GuestSelector, type GuestCounts } from '@/components/booking/GuestSelector';
 import { PriceBreakdown } from '@/components/booking/PriceBreakdown';
@@ -85,7 +84,6 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
   const router = useRouter();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const createBooking = useCreateBooking();
 
   const exp = reel.experience;
   const meta = (exp?.metadata ?? {}) as Record<string, unknown>;
@@ -112,12 +110,8 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
     infants: 0,
     pets: 0,
   });
-  const [method, setMethod] = useState<'mpesa' | 'reserve'>(
-    price != null ? 'mpesa' : 'reserve',
-  );
   const [mpesaPhone, setMpesaPhone] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
-  const [successKind, setSuccessKind] = useState<'paid' | 'requested'>('paid');
   const [activeSection, setActiveSection] = useState<ActiveSection>('dates');
 
   // ── Calendar nav ──────────────────────────────────────────────────────────
@@ -134,18 +128,29 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
   const nights =
     from && to ? Math.max(1, Math.round((to.getTime() - from.getTime()) / DAY_MS)) : 1;
   const units = isNightBased ? nights : totalGuests;
-  const baseTotal = (price ?? 0) * units;
   const busy = phase === 'sending' || phase === 'pin';
+  const { data: blockedDateRows = [] } = useExperienceBlockedDates(exp?.id);
+  const blockedRanges = useMemo(() => blockedDateRows.map((block) => ({
+    from: new Date(`${block.start_date}T00:00:00`),
+    to: new Date(`${block.end_date}T00:00:00`),
+  })), [blockedDateRows]);
 
-  // ── Polling ref ───────────────────────────────────────────────────────────
+  // ── Polling & Realtime ref ───────────────────────────────────────────────
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const stopPolling = () => {
+  const realtimeChannelRef = useRef<any>(null);
+
+  const cleanupPaymentListeners = () => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
+    }
   };
-  useEffect(() => () => stopPolling(), []);
+
+  useEffect(() => () => cleanupPaymentListeners(), []);
 
   // ── Reset ─────────────────────────────────────────────────────────────────
   const resetState = () => {
@@ -153,14 +158,13 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
     setTo(undefined);
     setViewMonth(new Date(today.getFullYear(), today.getMonth(), 1));
     setGuests({ adults: 1, children: 0, infants: 0, pets: 0 });
-    setMethod(price != null ? 'mpesa' : 'reserve');
     setMpesaPhone('');
     setPhase('idle');
     setActiveSection('dates');
   };
 
   const handleClose = () => {
-    stopPolling();
+    cleanupPaymentListeners();
     onClose();
     setTimeout(resetState, 350);
   };
@@ -262,6 +266,53 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
       if (!attemptId) throw new Error('Payment attempt could not be created');
 
       setPhase('pin');
+
+      // 3. Instant Realtime Subscription for Webhook Confirmation
+      const channel = supabase
+        .channel(`pay_status_${attemptId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'payment_attempts',
+            filter: `id=eq.${attemptId}`,
+          },
+          (payload) => {
+            const paStatus = (payload.new as any)?.status;
+            if (paStatus === 'succeeded') {
+              cleanupPaymentListeners();
+              queryClient.invalidateQueries({ queryKey: ['bookings'] });
+              setPhase('success');
+            } else if (paStatus === 'failed' || paStatus === 'cancelled' || paStatus === 'expired') {
+              cleanupPaymentListeners();
+              setPhase('idle');
+              Alert.alert('Payment failed', 'The M-Pesa payment was cancelled or declined.');
+            }
+          },
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'bookings',
+            filter: `quote_id=eq.${quote.id}`,
+          },
+          (payload) => {
+            const bStatus = (payload.new as any)?.status;
+            if (bStatus === 'paid' || bStatus === 'confirmed') {
+              cleanupPaymentListeners();
+              queryClient.invalidateQueries({ queryKey: ['bookings'] });
+              setPhase('success');
+            }
+          },
+        )
+        .subscribe();
+
+      realtimeChannelRef.current = channel;
+
+      // 4. Polling fallback (every 3s for 20 attempts = 60s)
       let attempts = 0;
       pollRef.current = setInterval(async () => {
         attempts++;
@@ -274,9 +325,8 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
           .maybeSingle();
 
         if (b?.status === 'paid' || b?.status === 'confirmed') {
-          stopPolling();
+          cleanupPaymentListeners();
           queryClient.invalidateQueries({ queryKey: ['bookings'] });
-          setSuccessKind('paid');
           setPhase('success');
           return;
         }
@@ -289,14 +339,14 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
           .maybeSingle();
 
         if (pa?.status === 'failed' || pa?.status === 'cancelled' || pa?.status === 'expired') {
-          stopPolling();
+          cleanupPaymentListeners();
           setPhase('idle');
           Alert.alert('Payment failed', 'The M-Pesa payment was cancelled or declined.');
           return;
         }
 
         if (attempts >= 20) {
-          stopPolling();
+          cleanupPaymentListeners();
           setPhase('idle');
           queryClient.invalidateQueries({ queryKey: ['bookings'] });
           Alert.alert(
@@ -312,28 +362,6 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
     }
   };
 
-  const startReserveFlow = async () => {
-    if (!from || !user || !exp?.id) return;
-    setPhase('sending');
-    try {
-      await createBooking.mutateAsync({
-        userId: user.id,
-        experienceId: exp.id,
-        reelId: reel.id,
-        tripTitle: title,
-        amount: price != null ? baseTotal : null,
-        guests: totalGuests,
-        checkIn: from.toISOString(),
-        checkOut: (to ?? addDays(from, 1)).toISOString(),
-      });
-      setSuccessKind('requested');
-      setPhase('success');
-    } catch (err) {
-      setPhase('idle');
-      Alert.alert('Booking failed', err instanceof Error ? err.message : 'Please try again.');
-    }
-  };
-
   const handleConfirm = () => {
     if (!user) {
       handleClose();
@@ -341,20 +369,15 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
       return;
     }
     if (!from || busy) return;
-    if (method === 'mpesa') startStkFlow();
-    else startReserveFlow();
+    startStkFlow();
   };
 
   const confirmLabel =
     phase === 'pin'
       ? 'Waiting for M-Pesa PIN…'
       : phase === 'sending'
-        ? method === 'mpesa'
-          ? 'Sending STK push…'
-          : 'Sending request…'
-        : method === 'mpesa'
-          ? 'Confirm & Pay'
-          : 'Request to Book';
+        ? 'Sending STK push…'
+        : 'Confirm & Pay';
 
   // ── Guest summary label ───────────────────────────────────────────────────
   const guestSummary = [
@@ -398,12 +421,10 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                   <Feather name="check" size={36} color="#10B981" />
                 </View>
                 <Text style={styles.successTitle}>
-                  {successKind === 'paid' ? 'Booking Confirmed! 🎉' : 'Request Sent!'}
+                  Payment Received! 🎉
                 </Text>
                 <Text style={styles.successBody}>
-                  {successKind === 'paid'
-                    ? `You're all set for ${title}. Check Transactions & Receipts for your booking details.`
-                    : `Your request for ${title} is with the host. Track it in Transactions & Receipts.`}
+                  {`Your payment for ${title} is secure. The host will confirm your reservation shortly.`}
                 </Text>
                 <Pressable
                   testID="booking-done"
@@ -525,6 +546,7 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                         startDate={from}
                         endDate={to}
                         viewMonth={viewMonth}
+                        blockedRanges={blockedRanges}
                         onDayPress={onDayPress}
                         onPrevMonth={() =>
                           setViewMonth(
@@ -630,64 +652,17 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                         />
                       ) : null}
 
-                      {/* Payment method selector */}
                       <View style={styles.methodBlock}>
                         <Text style={styles.sectionTitle}>Payment Method</Text>
-                        <View style={styles.methodRow}>
-                          {price != null ? (
-                            <Pressable
-                              testID="method-mpesa"
-                              onPress={() => setMethod('mpesa')}
-                              style={[
-                                styles.methodCard,
-                                method === 'mpesa' && styles.methodCardActive,
-                              ]}
-                            >
-                              <Feather
-                                name="smartphone"
-                                size={18}
-                                color={method === 'mpesa' ? ORANGE : '#9CA3AF'}
-                              />
-                              <Text
-                                style={[
-                                  styles.methodTitle,
-                                  method === 'mpesa' && { color: ORANGE },
-                                ]}
-                              >
-                                M-Pesa
-                              </Text>
-                              <Text style={styles.methodSub}>STK push</Text>
-                            </Pressable>
-                          ) : null}
-                          <Pressable
-                            testID="method-reserve"
-                            onPress={() => setMethod('reserve')}
-                            style={[
-                              styles.methodCard,
-                              method === 'reserve' && styles.methodCardActive,
-                            ]}
-                          >
-                            <Feather
-                              name="clock"
-                              size={18}
-                              color={method === 'reserve' ? ORANGE : '#9CA3AF'}
-                            />
-                            <Text
-                              style={[
-                                styles.methodTitle,
-                                method === 'reserve' && { color: ORANGE },
-                              ]}
-                            >
-                              Reserve
-                            </Text>
-                            <Text style={styles.methodSub}>Pay later</Text>
-                          </Pressable>
+                        <View style={[styles.methodCard, styles.methodCardActive]}>
+                          <Feather name="smartphone" size={18} color={ORANGE} />
+                          <Text style={[styles.methodTitle, { color: ORANGE }]}>M-Pesa</Text>
+                          <Text style={styles.methodSub}>Secure STK push</Text>
                         </View>
                       </View>
 
                       {/* M-Pesa phone input */}
-                      {method === 'mpesa' ? (
-                        <View style={styles.mpesaCard}>
+                      <View style={styles.mpesaCard}>
                           <Text style={styles.mpesaLabel}>M-PESA PHONE NUMBER</Text>
                           <TextInput
                             testID="mpesa-phone"
@@ -702,8 +677,7 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                           <Text style={styles.mpesaHint}>
                             An STK PIN prompt will be sent directly to your phone.
                           </Text>
-                        </View>
-                      ) : null}
+                      </View>
 
                       {/* Escrow trust notice */}
                       <View style={styles.escrow}>

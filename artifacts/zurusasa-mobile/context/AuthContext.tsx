@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, email, phone, role, host_role, verification_status, metadata')
+      .select('*')
       .eq('id', userId)
       .maybeSingle();
     setProfile((data as ProfileRow | null) ?? null);
@@ -137,8 +137,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (session?.user?.id) {
+      try {
+        await notificationService.deactivatePushToken(session.user.id);
+      } catch (e) {
+        console.warn('Deactivate token on logout note:', e);
+      }
+    }
     await supabase.auth.signOut();
-  }, []);
+  }, [session]);
 
   const refreshProfile = useCallback(async () => {
     if (session?.user) await loadProfile(session.user.id);

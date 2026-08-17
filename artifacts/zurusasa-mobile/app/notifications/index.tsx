@@ -30,6 +30,7 @@ const GUEST_NOTIFICATION_TYPES = new Set([
   'booking_created',
   'booking_confirmed',
   'booking_cancelled',
+  'booking_declined',
   'payment_success',
   'refund_processed',
   'message',
@@ -41,6 +42,7 @@ const GUEST_NOTIFICATION_TYPES = new Set([
 const HOST_NOTIFICATION_TYPES = new Set([
   'booking_request',
   'booking_cancelled',
+  'booking_declined',
   'payout_completed',
   'verification',
   'listing_approved',

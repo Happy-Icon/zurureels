@@ -22,6 +22,7 @@ function getNotificationTypeConfig(type: NotificationType): {
     case 'listing_approved':
       return { icon: 'check-circle', color: '#10B981', bgColor: 'rgba(16, 185, 129, 0.1)' };
     case 'booking_cancelled':
+    case 'booking_declined':
     case 'listing_rejected':
       return { icon: 'x-circle', color: '#EF4444', bgColor: 'rgba(239, 68, 68, 0.1)' };
     case 'payment_success':

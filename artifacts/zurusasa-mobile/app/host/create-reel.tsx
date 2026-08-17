@@ -328,10 +328,11 @@ export default function CreateReelScreen() {
       // Trigger notification
       await notificationService.createNotification({
         userId: user.id,
-        type: 'booking_confirmed',
+        type: 'listing_approved',
         title: '🎬 Your reel is live!',
         message: `"${title.trim()}" is now live on Pulse & Discover!`,
-        metadata: { action_type: 'discover', action_id: newReel?.id },
+        actionType: 'discover',
+        actionId: newReel?.id ?? null,
       });
 
       showAlert({

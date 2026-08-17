@@ -20,6 +20,7 @@ import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
 import { supabase } from '@/lib/supabase';
 
 interface ProfileFieldConfig {
@@ -224,7 +225,21 @@ export default function ViewProfileScreen() {
       setSelectedAvatarUri(pickedUri);
       setUploadingAvatar(true);
 
-      // Persist directly into Supabase profiles and user auth metadata
+      // 1. Upload picked image to Cloudinary/Storage for a permanent public URL
+      let finalAvatarUrl = pickedUri;
+      try {
+        const uploadResult = await uploadToCloudinaryMobile(pickedUri, {
+          resourceType: 'image',
+          folder: 'avatars',
+        });
+        if (uploadResult?.secure_url) {
+          finalAvatarUrl = uploadResult.secure_url;
+        }
+      } catch (uploadErr) {
+        console.warn('Cloudinary upload fallback to direct uri:', uploadErr);
+      }
+
+      // 2. Persist permanent URL directly into Supabase profiles and user auth metadata
       if (user?.id) {
         const existingMeta = (profile?.metadata ?? {}) as Record<string, any>;
         await supabase
@@ -232,17 +247,19 @@ export default function ViewProfileScreen() {
           .update({
             metadata: {
               ...existingMeta,
-              avatar_url: pickedUri,
+              avatar_url: finalAvatarUrl,
             },
           })
           .eq('id', user.id);
 
         await supabase.auth.updateUser({
           data: {
-            avatar_url: pickedUri,
-            picture: pickedUri,
+            avatar_url: finalAvatarUrl,
+            picture: finalAvatarUrl,
           },
         });
+
+        setSelectedAvatarUri(finalAvatarUrl);
 
         if (refreshProfile) {
           await refreshProfile();

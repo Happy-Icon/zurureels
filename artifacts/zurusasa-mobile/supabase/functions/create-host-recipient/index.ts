@@ -1,3 +1,4 @@
+/// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
 
@@ -131,8 +132,22 @@ Deno.serve(async (request) => {
     return json({ error: 'Payout recipient registered with Paystack but could not be saved' }, 500);
   }
 
+  // Backfill and schedule payouts for any existing paid bookings for this host
+  let backfilledCount = 0;
+  try {
+    const { data: backfillRes } = await admin.rpc('schedule_pending_host_payouts', {
+      p_host_id: user.id,
+    });
+    backfilledCount = Number(backfillRes || 0);
+  } catch (backfillErr) {
+    console.warn('Payout backfill non-fatal warning:', backfillErr);
+  }
+
   return json({
     recipient: recipientRow,
-    message: 'Payout M-Pesa account configured successfully.',
+    backfilledPayoutsCount: backfilledCount,
+    message: backfilledCount > 0
+      ? `Payout account configured and ${backfilledCount} pending booking payout(s) scheduled.`
+      : 'Payout M-Pesa account configured successfully.',
   });
 });

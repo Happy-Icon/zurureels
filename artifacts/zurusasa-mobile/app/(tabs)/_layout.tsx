@@ -31,19 +31,22 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
   const { data: unreadCount = 0 } = useUnreadMessageCount(user?.id);
 
   const focusedRoute = state.routes[state.index];
-  const focusedOptions = descriptors[focusedRoute.key]?.options;
 
-  // Hide bottom tab bar on full-screen ZuruFlow video feed in Guest mode / signed out
-  if (!isHostMode && (focusedRoute.name === 'index' || (focusedOptions?.tabBarStyle as any)?.display === 'none')) {
+  // Hide bottom tab bar on full-screen ZuruFlow video feed in Guest / signed-out mode
+  if (!isHostMode && focusedRoute.name === 'index') {
     return null;
   }
 
-  // Explicit allowed routes list
+  // Dynamic allowed routes per authentication and mode
   const allowedRoutes = !user
-    ? ['discover', 'saved', 'profile']
+    ? ['index', 'discover', 'profile']
     : isHostMode
     ? ['index', 'listings', 'reservations', 'inbox', 'profile']
-    : ['discover', 'saved', 'index', 'inbox', 'profile'];
+    : ['index', 'discover', 'saved', 'inbox', 'profile'];
+
+  const inactiveColor = INACTIVE_COLOR;
+  const barBg = '#FFFFFF';
+  const borderTopColor = '#E2E8F0';
 
   return (
     <View
@@ -51,8 +54,8 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
         styles.bottomBarContainer,
         {
           paddingBottom: bottomPad,
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#E2E8F0',
+          backgroundColor: barBg,
+          borderTopColor,
         },
       ]}
     >
@@ -61,13 +64,7 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
           if (!allowedRoutes.includes(route.name)) return null;
 
           const { options } = descriptors[route.key];
-
-          const isProfileActive =
-            focusedRoute.name === 'profile' ||
-            (!isHostMode && focusedRoute.name === 'reservations');
-
-          const isFocused =
-            route.name === 'profile' ? isProfileActive : state.index === index;
+          const isFocused = state.index === index;
 
           const isInboxTab = route.name === 'inbox';
           const showUnreadDot = isInboxTab && unreadCount > 0 && !isFocused;
@@ -103,14 +100,14 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
                 {options.tabBarIcon ? (
                   options.tabBarIcon({
                     focused: isFocused,
-                    color: isFocused ? ACTIVE_COLOR : INACTIVE_COLOR,
+                    color: isFocused ? ACTIVE_COLOR : inactiveColor,
                     size: 22,
                   })
                 ) : (
                   <Ionicons
                     name="grid-outline"
                     size={22}
-                    color={isFocused ? ACTIVE_COLOR : INACTIVE_COLOR}
+                    color={isFocused ? ACTIVE_COLOR : inactiveColor}
                   />
                 )}
                 {/* Unread Messages Orange Status Dot directly on icon top-right */}
@@ -122,7 +119,7 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
                 style={[
                   styles.tabLabel,
                   {
-                    color: isFocused ? ACTIVE_COLOR : INACTIVE_COLOR,
+                    color: isFocused ? ACTIVE_COLOR : inactiveColor,
                     fontFamily: isFocused ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
                   },
                 ]}
@@ -143,11 +140,6 @@ export default function TabLayout() {
   const { user, viewMode } = useAuth();
   const isHostMode = viewMode === 'host';
   const userAvatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
-  const userInitial = (
-    user?.user_metadata?.full_name?.charAt(0) ||
-    user?.email?.charAt(0) ||
-    'U'
-  ).toUpperCase();
 
   return (
     <Tabs
@@ -161,8 +153,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: isHostMode ? 'Dashboard' : 'Pulse',
-          tabBarStyle: isHostMode ? undefined : { display: 'none' },
+          title: isHostMode ? 'Dashboard' : 'Home',
           tabBarIcon: ({ color }) => (
             <Ionicons name={isHostMode ? 'grid-outline' : 'home-outline'} size={22} color={color} />
           ),
@@ -192,7 +183,7 @@ export default function TabLayout() {
         name="saved"
         options={{
           title: 'Wishlists',
-          href: isHostMode ? null : undefined,
+          href: isHostMode || !user ? null : undefined,
           tabBarIcon: ({ color }) => (
             <Ionicons name="heart-outline" size={22} color={color} />
           ),
@@ -245,7 +236,7 @@ export default function TabLayout() {
                     width: 22,
                     height: 22,
                     borderRadius: 11,
-                    backgroundColor: focused ? ACTIVE_COLOR : '#717171',
+                    backgroundColor: focused ? ACTIVE_COLOR : color,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
@@ -258,7 +249,7 @@ export default function TabLayout() {
                       lineHeight: 13,
                     }}
                   >
-                    {userInitial}
+                    {(user?.email?.charAt(0) || 'U').toUpperCase()}
                   </Text>
                 </View>
               );
