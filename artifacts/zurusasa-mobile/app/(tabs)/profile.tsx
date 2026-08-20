@@ -592,7 +592,7 @@ export default function ProfileScreen() {
         animationType="fade"
         statusBarTranslucent
       >
-        <View style={styles.switchingContainer}>
+        <View style={[styles.switchingContainer, { backgroundColor: isDark ? '#0A0A0A' : colors.background }]}>
           <Animated.View
             style={[
               styles.switchingLogoWrap,
@@ -601,12 +601,12 @@ export default function ProfileScreen() {
           >
             <Image
               source={require('@/assets/images/switchlogo.png')}
-              style={styles.switchLogoImg}
-              contentFit="contain"
+              style={[styles.switchLogoImg, { borderRadius: 20 }]}
+              contentFit="cover"
             />
           </Animated.View>
 
-          <Text style={styles.switchingText}>
+          <Text style={[styles.switchingText, { color: colors.text }]}>
             {targetMode === 'host' ? 'Switching to hosting' : 'Switching to travelling'}
           </Text>
         </View>
