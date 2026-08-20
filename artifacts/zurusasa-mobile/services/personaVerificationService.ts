@@ -33,7 +33,12 @@ export const personaVerificationService = {
   isPersonaAvailable(): boolean {
     if (Platform.OS === 'web') return false;
     const hasNativeBridge = Boolean(
-      NativeModules.RNPersona2 || NativeModules.Persona2 || NativeModules.Persona
+      NativeModules.PersonaInquiry2 ||
+      NativeModules.PersonaInquiry ||
+      NativeModules.RNPersona2 ||
+      NativeModules.Persona2 ||
+      NativeModules.Persona ||
+      Boolean(PersonaSDK?.Inquiry)
     );
     return Boolean(PersonaSDK?.Inquiry && hasNativeBridge);
   },
