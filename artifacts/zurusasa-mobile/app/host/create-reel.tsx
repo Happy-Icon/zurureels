@@ -18,6 +18,8 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { notificationService } from '@/services/notificationService';
@@ -78,6 +80,8 @@ function InlineVideoPreview({ uri, onChangeVideo }: { uri: string; onChangeVideo
 }
 
 export default function CreateReelScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -365,7 +369,7 @@ export default function CreateReelScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      <View style={[styles.fill, { backgroundColor: colors.background }]}>
         {/* 1. Header Bar */}
         <View style={[styles.header, { paddingTop: topPad }]}>
           <Pressable
@@ -373,9 +377,9 @@ export default function CreateReelScreen() {
             style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
             hitSlop={10}
           >
-            <Feather name="arrow-left" size={22} color="#222222" />
+            <Feather name="arrow-left" size={22} color={colors.text} />
           </Pressable>
-          <Text style={styles.headerTitle}>Create Listing Reel</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Create Listing Reel</Text>
           <View style={{ width: 38 }} />
         </View>
 
@@ -397,7 +401,7 @@ export default function CreateReelScreen() {
         >
           {/* Step 1: Media Action Cards (Video & Cover) */}
           <View style={styles.sectionBlock}>
-            <Text style={styles.sectionHeading}>1. Media Assets</Text>
+            <Text style={[styles.sectionHeading, { color: colors.text }]}>1. Media Assets</Text>
             <View style={styles.mediaRow}>
               {/* Pick/Record Video Action Card or Inline Player */}
               {videoUri ? (
@@ -410,14 +414,15 @@ export default function CreateReelScreen() {
                   onPress={() => setShowVideoSourceModal(true)}
                   style={({ pressed }) => [
                     styles.mediaActionCard,
+                    { backgroundColor: isDark ? '#27272A' : '#F7F7F7', borderColor: colors.border },
                     { opacity: pressed ? 0.85 : 1 },
                   ]}
                 >
-                  <View style={styles.mediaBadgeCircle}>
-                    <Feather name="video" size={20} color="#717171" />
+                  <View style={[styles.mediaBadgeCircle, { backgroundColor: colors.card }]}>
+                    <Feather name="video" size={20} color={colors.mutedForeground} />
                   </View>
-                  <Text style={styles.mediaCardTitle}>Select Reel Video</Text>
-                  <Text style={styles.mediaCardSub}>Record or choose gallery</Text>
+                  <Text style={[styles.mediaCardTitle, { color: colors.text }]}>Select Reel Video</Text>
+                  <Text style={[styles.mediaCardSub, { color: colors.mutedForeground }]}>Record or choose gallery</Text>
                 </Pressable>
               )}
 
@@ -426,6 +431,7 @@ export default function CreateReelScreen() {
                 onPress={pickThumbnail}
                 style={({ pressed }) => [
                   styles.mediaActionCard,
+                  { backgroundColor: isDark ? '#27272A' : '#F7F7F7', borderColor: colors.border },
                   thumbnailUri ? styles.mediaActionCardSelected : null,
                   { opacity: pressed ? 0.85 : 1 },
                 ]}
@@ -440,22 +446,22 @@ export default function CreateReelScreen() {
                   </View>
                 ) : (
                   <>
-                    <View style={styles.mediaBadgeCircle}>
-                      <Feather name="image" size={20} color="#717171" />
+                    <View style={[styles.mediaBadgeCircle, { backgroundColor: colors.card }]}>
+                      <Feather name="image" size={20} color={colors.mutedForeground} />
                     </View>
-                    <Text style={styles.mediaCardTitle}>Pick Cover</Text>
-                    <Text style={styles.mediaCardSub}>9:16 portrait image</Text>
+                    <Text style={[styles.mediaCardTitle, { color: colors.text }]}>Pick Cover</Text>
+                    <Text style={[styles.mediaCardSub, { color: colors.mutedForeground }]}>9:16 portrait image</Text>
                   </>
                 )}
               </Pressable>
             </View>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
           {/* Step 2: Experience Details */}
           <View style={styles.sectionBlock}>
-            <Text style={styles.sectionHeading}>2. Experience Category</Text>
+            <Text style={[styles.sectionHeading, { color: colors.text }]}>2. Experience Category</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {CATEGORIES.map((c) => {
                 const selected = category === c.value;
@@ -465,12 +471,14 @@ export default function CreateReelScreen() {
                     onPress={() => setCategory(c.value)}
                     style={[
                       styles.categoryChip,
+                      { backgroundColor: isDark ? '#27272A' : '#F7F7F7' },
                       selected ? styles.categoryChipSelected : null,
                     ]}
                   >
                     <Text
                       style={[
                         styles.categoryChipText,
+                        { color: colors.mutedForeground },
                         selected ? styles.categoryChipTextSelected : null,
                       ]}
                     >
@@ -484,13 +492,13 @@ export default function CreateReelScreen() {
 
           {/* Listing Title */}
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Listing Title *</Text>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Listing Title *</Text>
             <TextInput
               placeholder="e.g. Diani Sunset Villa & Private Pool"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.mutedForeground}
               value={title}
               onChangeText={setTitle}
-              style={styles.textInput}
+              style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
               onFocus={() => {
                 scrollViewRef.current?.scrollTo({ y: 220, animated: true });
               }}
@@ -499,7 +507,7 @@ export default function CreateReelScreen() {
 
           {/* Location Selector */}
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Location *</Text>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Location *</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
               {LOCATIONS.map((loc) => {
                 const sel = location === loc;
@@ -509,10 +517,11 @@ export default function CreateReelScreen() {
                     onPress={() => setLocation(loc)}
                     style={[
                       styles.locChip,
+                      { backgroundColor: isDark ? '#27272A' : '#F7F7F7' },
                       sel ? styles.locChipSelected : null,
                     ]}
                   >
-                    <Text style={[styles.locChipText, sel ? styles.locChipTextSelected : null]}>
+                    <Text style={[styles.locChipText, { color: colors.mutedForeground }, sel ? styles.locChipTextSelected : null]}>
                       {loc}
                     </Text>
                   </Pressable>
@@ -524,14 +533,14 @@ export default function CreateReelScreen() {
           {/* Price & Price Unit Row */}
           <View style={styles.rowTwoCol}>
             <View style={[styles.formGroup, { flex: 1 }]}>
-              <Text style={styles.inputLabel}>Price (KES) *</Text>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Price (KES) *</Text>
               <TextInput
                 placeholder="e.g. 15000"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 keyboardType="numeric"
                 value={price}
                 onChangeText={setPrice}
-                style={styles.textInput}
+                style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
                 onFocus={() => {
                   scrollViewRef.current?.scrollTo({ y: 340, animated: true });
                 }}
@@ -539,13 +548,13 @@ export default function CreateReelScreen() {
             </View>
 
             <View style={[styles.formGroup, { width: 130 }]}>
-              <Text style={styles.inputLabel}>Price Unit</Text>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Price Unit</Text>
               <TextInput
                 placeholder="night / trip"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 value={priceUnit}
                 onChangeText={setPriceUnit}
-                style={styles.textInput}
+                style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
                 onFocus={() => {
                   scrollViewRef.current?.scrollTo({ y: 340, animated: true });
                 }}
@@ -555,21 +564,21 @@ export default function CreateReelScreen() {
 
           {/* Description */}
           <View style={styles.formGroup}>
-            <Text style={styles.inputLabel}>Description (Optional)</Text>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Description (Optional)</Text>
             <GrowingInput
               placeholder="Describe what makes this experience special..."
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.mutedForeground}
               value={description}
               onChangeText={setDescription}
               minHeight={80}
               maxHeight={180}
-              style={[styles.textInput, styles.textAreaInput]}
+              style={[styles.textInput, styles.textAreaInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
             />
           </View>
         </ScrollView>
 
         {/* Sticky Bottom Dock */}
-        <View style={[styles.bottomDock, { paddingBottom: bottomPad }]}>
+        <View style={[styles.bottomDock, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: bottomPad }]}>
           <Pressable
             disabled={uploading}
             onPress={handleSubmit}
@@ -598,50 +607,50 @@ export default function CreateReelScreen() {
           animationType="fade"
           onRequestClose={() => setShowVideoSourceModal(false)}
         >
-          <Pressable style={styles.modalBackdrop} onPress={() => setShowVideoSourceModal(false)}>
-            <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
-              <Text style={styles.modalTitle}>Choose Reel Source</Text>
-              <Text style={styles.modalSubtitle}>Record a live video or choose an existing video file</Text>
+          <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShowVideoSourceModal(false)}>
+            <View style={[styles.modalSheet, { backgroundColor: colors.card }]} onStartShouldSetResponder={() => true}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Choose Reel Source</Text>
+              <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Record a live video or choose an existing video file</Text>
 
               <Pressable
-                style={styles.modalOptionBtn}
+                style={[styles.modalOptionBtn, { borderColor: colors.border }]}
                 onPress={() => {
                   setShowVideoSourceModal(false);
                   recordVideoLive();
                 }}
               >
-                <View style={[styles.modalIconWrap, { backgroundColor: '#FFF0ED' }]}>
+                <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(242, 101, 34, 0.12)' }]}>
                   <Feather name="video" size={22} color="#F26522" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalOptionTitle}>Record Reel (Live Camera)</Text>
-                  <Text style={styles.modalOptionSub}>Record up to 60 seconds using camera</Text>
+                  <Text style={[styles.modalOptionTitle, { color: colors.text }]}>Record Reel (Live Camera)</Text>
+                  <Text style={[styles.modalOptionSub, { color: colors.mutedForeground }]}>Record up to 60 seconds using camera</Text>
                 </View>
-                <Feather name="chevron-right" size={20} color="#999" />
+                <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
               </Pressable>
 
               <Pressable
-                style={styles.modalOptionBtn}
+                style={[styles.modalOptionBtn, { borderColor: colors.border }]}
                 onPress={() => {
                   setShowVideoSourceModal(false);
                   pickVideo();
                 }}
               >
-                <View style={[styles.modalIconWrap, { backgroundColor: '#F3F4F6' }]}>
-                  <Feather name="folder" size={22} color="#4B5563" />
+                <View style={[styles.modalIconWrap, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                  <Feather name="folder" size={22} color={colors.text} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalOptionTitle}>Choose from Gallery</Text>
-                  <Text style={styles.modalOptionSub}>Select an existing MP4 video from device</Text>
+                  <Text style={[styles.modalOptionTitle, { color: colors.text }]}>Choose from Gallery</Text>
+                  <Text style={[styles.modalOptionSub, { color: colors.mutedForeground }]}>Select an existing MP4 video from device</Text>
                 </View>
-                <Feather name="chevron-right" size={20} color="#999" />
+                <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
               </Pressable>
 
               <Pressable
                 style={styles.modalCancelBtn}
                 onPress={() => setShowVideoSourceModal(false)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>Cancel</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -731,7 +740,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -840,7 +848,6 @@ const styles = StyleSheet.create({
 
   /* Bottom Dock */
   bottomDock: {
-    backgroundColor: '#FFFFFF',
     paddingTop: 12,
     paddingHorizontal: 20,
     borderTopWidth: 1,
@@ -876,7 +883,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,

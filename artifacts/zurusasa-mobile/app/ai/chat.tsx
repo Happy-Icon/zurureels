@@ -249,7 +249,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: AI_COLORS.border,
     gap: 10,
@@ -326,6 +325,5 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: AI_COLORS.border,
-    backgroundColor: '#FFFFFF',
   },
 });

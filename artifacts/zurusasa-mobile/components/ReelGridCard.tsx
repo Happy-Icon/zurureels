@@ -7,6 +7,9 @@ import { useAuth } from '@/context/AuthContext';
 import { useReelInteractions, useToggleSave } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
 
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
+
 interface ReelGridCardProps {
   reel: ReelRow;
   width: number;
@@ -15,6 +18,8 @@ interface ReelGridCardProps {
 
 export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
   const router = useRouter();
+  const colors = useColors();
+  const { isDark } = useTheme();
   const { user } = useAuth();
   const toggleSave = useToggleSave();
 
@@ -44,7 +49,7 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
       style={[styles.cardContainer, { width }]}
     >
       {/* High-res 4:5 Rounded Image Container */}
-      <View style={[styles.imageWrap, { width, height: imageHeight }]}>
+      <View style={[styles.imageWrap, { width, height: imageHeight, backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}>
         {reel.thumbnail_url ? (
           <Image
             source={{ uri: reel.thumbnail_url }}
@@ -53,7 +58,7 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
           />
         ) : (
           <View style={styles.imageFallback}>
-            <Feather name="film" size={24} color="#717171" />
+            <Feather name="film" size={24} color={colors.mutedForeground} />
           </View>
         )}
 
@@ -67,12 +72,12 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
           testID={`grid-save-${reel.id}`}
           onPress={onSave}
           hitSlop={8}
-          style={styles.heartCircleBtn}
+          style={[styles.heartCircleBtn, { backgroundColor: isDark ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.9)' }]}
         >
           <Ionicons
             name={saved ? 'heart' : 'heart-outline'}
             size={18}
-            color={saved ? '#EE7D30' : '#222222'}
+            color={saved ? '#F26522' : colors.text}
           />
         </Pressable>
       </View>
@@ -80,22 +85,22 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
       {/* Text Information Below Image Container */}
       <View style={styles.textMetaStack}>
         <View style={styles.titleRatingRow}>
-          <Text style={styles.titleText} numberOfLines={1}>
+          <Text style={[styles.titleText, { color: colors.text }]} numberOfLines={1}>
             {exp?.title ?? 'Coastal Stay'}
           </Text>
           <View style={styles.ratingRow}>
-            <Ionicons name="star" size={12} color="#222222" />
-            <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+            <Ionicons name="star" size={12} color="#F59E0B" />
+            <Text style={[styles.ratingText, { color: colors.text }]}>{rating.toFixed(1)}</Text>
           </View>
         </View>
 
-        <Text style={styles.locationText} numberOfLines={1}>
+        <Text style={[styles.locationText, { color: colors.mutedForeground }]} numberOfLines={1}>
           {exp?.location ?? 'Kenyan Coast'}
         </Text>
 
-        <Text style={styles.priceText}>
+        <Text style={[styles.priceText, { color: colors.text }]}>
           KES {Number(exp?.current_price ?? 0).toLocaleString()}
-          <Text style={styles.priceUnitText}> / {exp?.price_unit ?? 'person'}</Text>
+          <Text style={[styles.priceUnitText, { color: colors.mutedForeground }]}> / {exp?.price_unit ?? 'person'}</Text>
         </Text>
       </View>
     </Pressable>

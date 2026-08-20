@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 import { personaVerificationService } from '@/services/personaVerificationService';
+import { useColors, useTheme } from '@/hooks/useColors';
 import * as Haptics from 'expo-haptics';
 
 interface PersonaVerificationModalProps {
@@ -27,89 +29,39 @@ export function PersonaVerificationModal({
   title = 'Identity Verification Required',
   subtitle = 'To publish listings or add payout methods on ZuruSasa, please verify your identity with Persona.',
 }: PersonaVerificationModalProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const { user, refreshProfile } = useAuth();
   const [verifying, setVerifying] = useState(false);
-  const [step, setStep] = useState<'intro' | 'id_scan' | 'liveness' | 'complete'>('intro');
-  const [statusMsg, setStatusMsg] = useState('Connecting Persona Inquiry...');
 
   const handleStartPersona = async () => {
     if (!user) return;
     try {
       setVerifying(true);
-      setStep('id_scan');
-      setStatusMsg('Launching Persona Inquiry...');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      const templateId = process.env.EXPO_PUBLIC_PERSONA_TEMPLATE_ID || 'itm_demo';
-
-      // 1. Attempt Native Persona SDK launch (Works in EAS Development / Production builds)
-      const launchedNative = await personaVerificationService.launchNativeInquiry(
-        templateId,
-        async (inquiryId) => {
-          await personaVerificationService.completeInquiry(user.id, inquiryId);
+      await personaVerificationService.launchVerification({
+        userId: user.id,
+        onSuccess: async () => {
           await refreshProfile();
-          setStep('complete');
           setVerifying(false);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setTimeout(() => {
-            setStep('intro');
-            onSuccess?.();
-            onClose();
-          }, 1400);
-        },
-        () => {
-          setVerifying(false);
-          setStep('intro');
-        },
-        (err) => {
-          console.log('Persona fallback mode active:', err);
-          runFallbackScan();
-        }
-      );
-
-      // 2. If running in Expo Go (where native C++/Swift binaries are unlinked), run interactive web/expo verification sheet
-      if (!launchedNative) {
-        runFallbackScan();
-      }
-    } catch (err) {
-      console.error('Verification failed:', err);
-      setVerifying(false);
-      setStep('intro');
-    }
-  };
-
-  const runFallbackScan = async () => {
-    if (!user) return;
-    const startRes = await personaVerificationService.startInquiry(user.id);
-
-    // Phase 1: ID Document Extraction
-    setStep('id_scan');
-    setStatusMsg('Scanning Government ID & Passport...');
-    
-    setTimeout(() => {
-      // Phase 2: 3D Selfie Liveness Match
-      setStep('liveness');
-      setStatusMsg('Performing 3D Facial Liveness Match...');
-
-      setTimeout(async () => {
-        // Phase 3: Final Sync & Complete
-        await personaVerificationService.completeInquiry(
-          user.id,
-          startRes.inquiryId || `inq_${Date.now()}`
-        );
-
-        await refreshProfile();
-        setStep('complete');
-        setVerifying(false);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-        setTimeout(() => {
-          setStep('intro');
           onSuccess?.();
           onClose();
-        }, 1400);
-      }, 1800);
-    }, 1800);
+        },
+        onCanceled: () => {
+          setVerifying(false);
+        },
+        onError: (errorMessage) => {
+          setVerifying(false);
+          Alert.alert('Identity Verification', errorMessage);
+        },
+      });
+    } catch (err: any) {
+      console.error('Verification launch failed:', err);
+      setVerifying(false);
+      Alert.alert('Verification Error', err?.message || 'Could not start identity verification.');
+    }
   };
 
   return (
@@ -119,93 +71,67 @@ export function PersonaVerificationModal({
       transparent
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.sheetContainer}>
+      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
+        <View style={[styles.sheetContainer, { backgroundColor: colors.card }]}>
           {/* Top handle */}
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           {/* Close button */}
-          <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={10}>
-            <Feather name="x" size={20} color="#717171" />
+          <Pressable
+            onPress={onClose}
+            style={[styles.closeBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}
+            hitSlop={10}
+          >
+            <Feather name="x" size={20} color={colors.text} />
           </Pressable>
 
-          {step === 'intro' && (
-            <>
-              <View style={styles.iconCircle}>
-                <MaterialCommunityIcons name="shield-account" size={36} color="#F26522" />
+          <View style={styles.iconCircle}>
+            <MaterialCommunityIcons name="shield-account" size={36} color="#F26522" />
+          </View>
+
+          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
+
+          {/* Requirement Checklist */}
+          <View style={[styles.checklist, { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border }]}>
+            <View style={styles.checkItem}>
+              <View style={styles.checkIconWrap}>
+                <Feather name="credit-card" size={16} color="#F26522" />
               </View>
-
-              <Text style={styles.title}>{title}</Text>
-              <Text style={styles.subtitle}>{subtitle}</Text>
-
-              {/* Requirement Checklist */}
-              <View style={styles.checklist}>
-                <View style={styles.checkItem}>
-                  <View style={styles.checkIconWrap}>
-                    <Feather name="credit-card" size={16} color="#F26522" />
-                  </View>
-                  <View style={styles.checkTextWrap}>
-                    <Text style={styles.checkTitle}>Government Issued ID</Text>
-                    <Text style={styles.checkSub}>Passport, National ID or Driver's License</Text>
-                  </View>
-                </View>
-
-                <View style={styles.checkItem}>
-                  <View style={styles.checkIconWrap}>
-                    <Feather name="camera" size={16} color="#F26522" />
-                  </View>
-                  <View style={styles.checkTextWrap}>
-                    <Text style={styles.checkTitle}>Quick Selfie Check</Text>
-                    <Text style={styles.checkSub}>3D liveness match for host security</Text>
-                  </View>
-                </View>
+              <View style={styles.checkTextWrap}>
+                <Text style={[styles.checkTitle, { color: colors.text }]}>Government Issued ID</Text>
+                <Text style={[styles.checkSub, { color: colors.mutedForeground }]}>Passport, National ID or Driver's License</Text>
               </View>
+            </View>
 
-              <Pressable
-                onPress={handleStartPersona}
-                disabled={verifying}
-                style={({ pressed }) => [
-                  styles.primaryCta,
-                  { opacity: pressed || verifying ? 0.85 : 1 },
-                ]}
-              >
+            <View style={styles.checkItem}>
+              <View style={styles.checkIconWrap}>
+                <Feather name="camera" size={16} color="#F26522" />
+              </View>
+              <View style={styles.checkTextWrap}>
+                <Text style={[styles.checkTitle, { color: colors.text }]}>Quick Selfie Check</Text>
+                <Text style={[styles.checkSub, { color: colors.mutedForeground }]}>3D liveness match for host security</Text>
+              </View>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={handleStartPersona}
+            disabled={verifying}
+            style={({ pressed }) => [
+              styles.primaryCta,
+              { opacity: pressed || verifying ? 0.85 : 1 },
+            ]}
+          >
+            {verifying ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
                 <Text style={styles.primaryCtaText}>Verify with Persona</Text>
                 <Feather name="arrow-right" size={16} color="#FFFFFF" />
-              </Pressable>
-            </>
-          )}
-
-          {step === 'id_scan' && (
-            <View style={styles.loadingBlock}>
-              <View style={styles.scanBadge}>
-                <Feather name="credit-card" size={28} color="#F26522" />
-              </View>
-              <ActivityIndicator size="large" color="#F26522" />
-              <Text style={styles.loadingTitle}>Step 1: ID Document Scan</Text>
-              <Text style={styles.loadingSub}>{statusMsg}</Text>
-            </View>
-          )}
-
-          {step === 'liveness' && (
-            <View style={styles.loadingBlock}>
-              <View style={styles.scanBadge}>
-                <Feather name="camera" size={28} color="#F26522" />
-              </View>
-              <ActivityIndicator size="large" color="#F26522" />
-              <Text style={styles.loadingTitle}>Step 2: 3D Facial Liveness</Text>
-              <Text style={styles.loadingSub}>{statusMsg}</Text>
-            </View>
-          )}
-
-          {step === 'complete' && (
-            <View style={styles.loadingBlock}>
-              <View style={styles.successCircle}>
-                <Feather name="check" size={32} color="#10B981" />
-              </View>
-              <Text style={styles.loadingTitle}>Identity Verified! 🎉</Text>
-              <Text style={styles.loadingSub}>Your host account is now fully verified with Persona</Text>
-            </View>
-          )}
+              </>
+            )}
+          </Pressable>
         </View>
       </View>
     </Modal>
@@ -319,37 +245,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontFamily: 'DMSans_700Bold',
-  },
-  loadingBlock: {
-    paddingVertical: 32,
-    alignItems: 'center',
-    gap: 12,
-  },
-  scanBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingTitle: {
-    fontSize: 18,
-    fontFamily: 'DMSans_700Bold',
-    color: '#111827',
-  },
-  loadingSub: {
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  successCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#10B98118',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

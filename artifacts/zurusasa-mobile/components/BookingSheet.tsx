@@ -25,6 +25,7 @@ import type { ReelRow } from '@/lib/supabase';
 import { AvailabilityCalendar } from '@/components/booking/AvailabilityCalendar';
 import { GuestSelector, type GuestCounts } from '@/components/booking/GuestSelector';
 import { PriceBreakdown } from '@/components/booking/PriceBreakdown';
+import { useColors, useTheme } from '@/hooks/useColors';
 
 const ORANGE = '#F26522';
 const DAY_MS = 86_400_000;
@@ -80,6 +81,8 @@ type ActiveSection = 'dates' | 'guests' | 'payment';
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheetProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -394,24 +397,24 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <View style={styles.root}>
         {/* Dimmed backdrop */}
-        <Pressable style={styles.backdrop} onPress={handleClose} />
+        <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={handleClose} />
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           pointerEvents="box-none"
         >
-          <View style={styles.sheet} testID="booking-sheet">
+          <View style={[styles.sheet, { backgroundColor: colors.card }]} testID="booking-sheet">
             {/* Drag handle */}
-            <View style={styles.dragHandle} />
+            <View style={[styles.dragHandle, { backgroundColor: colors.border }]} />
 
             {/* Close button */}
             <Pressable
               testID="booking-close"
               onPress={handleClose}
-              style={styles.closeBtn}
+              style={[styles.closeBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}
               hitSlop={8}
             >
-              <Feather name="x" size={18} color="#222222" />
+              <Feather name="x" size={18} color={colors.text} />
             </Pressable>
 
             {/* ── SUCCESS STATE ──────────────────────────────────────── */}
@@ -420,10 +423,10 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                 <View style={styles.successCircle}>
                   <Feather name="check" size={36} color="#10B981" />
                 </View>
-                <Text style={styles.successTitle}>
+                <Text style={[styles.successTitle, { color: colors.text }]}>
                   Payment Received! 🎉
                 </Text>
-                <Text style={styles.successBody}>
+                <Text style={[styles.successBody, { color: colors.mutedForeground }]}>
                   {`Your payment for ${title} is secure. The host will confirm your reservation shortly.`}
                 </Text>
                 <Pressable
@@ -489,11 +492,11 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                   </View>
                 ) : (
                   <View style={styles.plainHeader}>
-                    <Text style={styles.plainTitle}>{title}</Text>
+                    <Text style={[styles.plainTitle, { color: colors.text }]}>{title}</Text>
                     {exp?.location ? (
                       <View style={styles.heroMetaItem}>
-                        <Feather name="map-pin" size={12} color="#9CA3AF" />
-                        <Text style={styles.plainSub}>{exp.location}</Text>
+                        <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+                        <Text style={[styles.plainSub, { color: colors.mutedForeground }]}>{exp.location}</Text>
                       </View>
                     ) : null}
                   </View>
@@ -502,14 +505,23 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                 <View style={styles.body}>
 
                   {/* ── SECTION TABS ──────────────────────────────── */}
-                  <View style={styles.sectionTabs}>
+                  <View style={[styles.sectionTabs, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
                     {(['dates', 'guests', 'payment'] as const).map((s) => (
                       <Pressable
                         key={s}
                         onPress={() => setActiveSection(s)}
-                        style={[styles.tab, activeSection === s && styles.tabActive]}
+                        style={[
+                          styles.tab,
+                          activeSection === s && [styles.tabActive, { backgroundColor: colors.card }],
+                        ]}
                       >
-                        <Text style={[styles.tabText, activeSection === s && styles.tabTextActive]}>
+                        <Text
+                          style={[
+                            styles.tabText,
+                            { color: colors.mutedForeground },
+                            activeSection === s && [styles.tabTextActive, { color: colors.text }],
+                          ]}
+                        >
                           {s.charAt(0).toUpperCase() + s.slice(1)}
                         </Text>
                       </Pressable>
@@ -519,25 +531,32 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                   {/* ── DATES SECTION ─────────────────────────────── */}
                   {activeSection === 'dates' ? (
                     <View style={styles.sectionBlock}>
-                      <Text style={styles.sectionTitle}>Select Dates</Text>
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>Select Dates</Text>
 
                       {/* Selected date pill summary */}
                       {from ? (
                         <View style={styles.dateSummaryRow}>
-                          <View style={styles.datePill}>
+                          <View style={[styles.datePill, { backgroundColor: isDark ? '#2A1810' : '#FFFBF8' }]}>
                             <Feather name="log-in" size={13} color={ORANGE} />
                             <Text style={styles.datePillText}>{fmtShort(from)}</Text>
                           </View>
-                          <Feather name="arrow-right" size={14} color="#9CA3AF" />
-                          <View style={[styles.datePill, to ? null : styles.datePillEmpty]}>
-                            <Feather name="log-out" size={13} color={to ? ORANGE : '#9CA3AF'} />
-                            <Text style={[styles.datePillText, !to && { color: '#9CA3AF' }]}>
+                          <Feather name="arrow-right" size={14} color={colors.mutedForeground} />
+                          <View
+                            style={[
+                              styles.datePill,
+                              to
+                                ? { backgroundColor: isDark ? '#2A1810' : '#FFFBF8' }
+                                : [styles.datePillEmpty, { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border }],
+                            ]}
+                          >
+                            <Feather name="log-out" size={13} color={to ? ORANGE : colors.mutedForeground} />
+                            <Text style={[styles.datePillText, !to && { color: colors.mutedForeground }]}>
                               {to ? fmtShort(to) : 'End date'}
                             </Text>
                           </View>
                         </View>
                       ) : (
-                        <Text style={styles.dateHint}>
+                        <Text style={[styles.dateHint, { color: colors.mutedForeground }]}>
                           Tap a date to set your check-in, then tap another for checkout.
                         </Text>
                       )}
@@ -564,7 +583,12 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
 
                       {/* Night count badge */}
                       {from && to ? (
-                        <View style={styles.nightsBadge}>
+                        <View
+                          style={[
+                            styles.nightsBadge,
+                            { backgroundColor: isDark ? '#2A1810' : '#FFFBF8', borderColor: isDark ? '#5C2D16' : '#FCE3D6' },
+                          ]}
+                        >
                           <Feather name="moon" size={13} color={ORANGE} />
                           <Text style={styles.nightsBadgeText}>
                             {nights} night{nights !== 1 ? 's' : ''}
@@ -573,7 +597,7 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                             onPress={() => { setFrom(undefined); setTo(undefined); }}
                             style={styles.clearDatesBtn}
                           >
-                            <Text style={styles.clearDatesText}>Clear</Text>
+                            <Text style={[styles.clearDatesText, { color: colors.mutedForeground }]}>Clear</Text>
                           </Pressable>
                         </View>
                       ) : null}
@@ -583,7 +607,7 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                           onPress={() => setActiveSection('guests')}
                           style={({ pressed }) => [
                             styles.nextStepBtn,
-                            { opacity: pressed ? 0.88 : 1 },
+                            { backgroundColor: isDark ? '#333338' : '#222222', opacity: pressed ? 0.88 : 1 },
                           ]}
                         >
                           <Text style={styles.nextStepBtnText}>Next: Select Guests</Text>
@@ -596,7 +620,7 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                   {/* ── GUESTS SECTION ────────────────────────────── */}
                   {activeSection === 'guests' ? (
                     <View style={styles.sectionBlock}>
-                      <Text style={styles.sectionTitle}>Who's Coming?</Text>
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>Who's Coming?</Text>
                       <GuestSelector
                         guests={guests}
                         maxGuests={20}
@@ -606,7 +630,7 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                         onPress={() => setActiveSection('payment')}
                         style={({ pressed }) => [
                           styles.nextStepBtn,
-                          { opacity: pressed ? 0.88 : 1 },
+                          { backgroundColor: isDark ? '#333338' : '#222222', opacity: pressed ? 0.88 : 1 },
                         ]}
                       >
                         <Text style={styles.nextStepBtnText}>Next: Review & Pay</Text>
@@ -619,24 +643,24 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                   {activeSection === 'payment' ? (
                     <View style={styles.sectionBlock}>
                       {/* Booking summary card */}
-                      <View style={styles.summaryCard}>
+                      <View style={[styles.summaryCard, { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border }]}>
                         <Text style={styles.summarySectionLabel}>Booking Summary</Text>
                         <View style={styles.summaryRow}>
-                          <Feather name="calendar" size={14} color="#717171" />
-                          <Text style={styles.summaryLabel}>Dates</Text>
-                          <Text style={styles.summaryValue}>
+                          <Feather name="calendar" size={14} color={colors.mutedForeground} />
+                          <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Dates</Text>
+                          <Text style={[styles.summaryValue, { color: colors.text }]}>
                             {from ? `${fmtShort(from)} → ${to ? fmtFull(to) : 'Flexible'}` : 'Not selected'}
                           </Text>
                         </View>
                         <View style={styles.summaryRow}>
-                          <Feather name="users" size={14} color="#717171" />
-                          <Text style={styles.summaryLabel}>Guests</Text>
-                          <Text style={styles.summaryValue}>{guestSummary}</Text>
+                          <Feather name="users" size={14} color={colors.mutedForeground} />
+                          <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Guests</Text>
+                          <Text style={[styles.summaryValue, { color: colors.text }]}>{guestSummary}</Text>
                         </View>
                         <View style={styles.summaryRow}>
-                          <Feather name="map-pin" size={14} color="#717171" />
-                          <Text style={styles.summaryLabel}>Location</Text>
-                          <Text style={styles.summaryValue} numberOfLines={1}>
+                          <Feather name="map-pin" size={14} color={colors.mutedForeground} />
+                          <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Location</Text>
+                          <Text style={[styles.summaryValue, { color: colors.text }]} numberOfLines={1}>
                             {exp?.location ?? 'Kenya Coast'}
                           </Text>
                         </View>
@@ -653,38 +677,52 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                       ) : null}
 
                       <View style={styles.methodBlock}>
-                        <Text style={styles.sectionTitle}>Payment Method</Text>
-                        <View style={[styles.methodCard, styles.methodCardActive]}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment Method</Text>
+                        <View
+                          style={[
+                            styles.methodCard,
+                            styles.methodCardActive,
+                            { backgroundColor: isDark ? '#2A1810' : '#FFFBF8', borderColor: ORANGE },
+                          ]}
+                        >
                           <Feather name="smartphone" size={18} color={ORANGE} />
                           <Text style={[styles.methodTitle, { color: ORANGE }]}>M-Pesa</Text>
-                          <Text style={styles.methodSub}>Secure STK push</Text>
+                          <Text style={[styles.methodSub, { color: colors.mutedForeground }]}>Secure STK push</Text>
                         </View>
                       </View>
 
                       {/* M-Pesa phone input */}
-                      <View style={styles.mpesaCard}>
+                      <View style={[styles.mpesaCard, { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border }]}>
                           <Text style={styles.mpesaLabel}>M-PESA PHONE NUMBER</Text>
                           <TextInput
                             testID="mpesa-phone"
                             value={mpesaPhone}
                             onChangeText={setMpesaPhone}
                             placeholder="e.g. 0712345678"
-                            placeholderTextColor="#9CA3AF"
+                            placeholderTextColor={colors.mutedForeground}
                             keyboardType="phone-pad"
-                            style={styles.mpesaInput}
+                            style={[
+                              styles.mpesaInput,
+                              { backgroundColor: colors.card, borderColor: colors.border, color: colors.text },
+                            ]}
                             editable={!busy}
                           />
-                          <Text style={styles.mpesaHint}>
+                          <Text style={[styles.mpesaHint, { color: colors.mutedForeground }]}>
                             An STK PIN prompt will be sent directly to your phone.
                           </Text>
                       </View>
 
                       {/* Escrow trust notice */}
-                      <View style={styles.escrow}>
+                      <View
+                        style={[
+                          styles.escrow,
+                          { backgroundColor: isDark ? '#064E3B20' : '#10B98110', borderColor: isDark ? '#05966940' : '#10B98130' },
+                        ]}
+                      >
                         <MaterialCommunityIcons name="shield-check" size={18} color="#10B981" />
                         <View style={{ flex: 1, gap: 2 }}>
                           <Text style={styles.escrowTitle}>ZURU SECURE ESCROW</Text>
-                          <Text style={styles.escrowBody}>
+                          <Text style={[styles.escrowBody, { color: isDark ? '#A7F3D0' : '#065F46' }]}>
                             Your payment is held by ZuruSasa and only released to the host after you confirm receipt of the service.
                           </Text>
                         </View>
@@ -692,8 +730,8 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
 
                       {/* Cancellation policy */}
                       <View style={styles.cancellationRow}>
-                        <Feather name="refresh-ccw" size={13} color="#717171" />
-                        <Text style={styles.cancellationText}>
+                        <Feather name="refresh-ccw" size={13} color={colors.mutedForeground} />
+                        <Text style={[styles.cancellationText, { color: colors.mutedForeground }]}>
                           Free cancellation within 24 hours of booking.
                         </Text>
                       </View>
@@ -721,11 +759,11 @@ export function BookingSheet({ reel, visible, onClose, onSuccess }: BookingSheet
                       </Pressable>
 
                       {phase === 'pin' ? (
-                        <Text style={styles.footNote}>
+                        <Text style={[styles.footNote, { color: colors.mutedForeground }]}>
                           Enter your M-Pesa PIN on your phone — keep this screen open while we confirm.
                         </Text>
                       ) : !user ? (
-                        <Text style={styles.footNote}>
+                        <Text style={[styles.footNote, { color: colors.mutedForeground }]}>
                           You'll be asked to sign in before confirming.
                         </Text>
                       ) : null}

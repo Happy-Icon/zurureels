@@ -21,6 +21,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useEnquire, useSendMessage } from '@/lib/queries';
 import { GrowingInput } from '@/components/keyboard';
+import { useColors, useTheme } from '@/hooks/useColors';
 
 const ORANGE = '#F26522';
 
@@ -59,6 +60,8 @@ export function EnquireModal({
   experiencePriceUnit,
   reelThumbnailUrl,
 }: EnquireModalProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -169,7 +172,7 @@ export function EnquireModal({
     >
       <View style={styles.root}>
         {/* Dimmed backdrop */}
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} />
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -179,17 +182,22 @@ export function EnquireModal({
             style={[
               styles.sheet,
               {
+                backgroundColor: colors.card,
                 transform: [{ translateY: slideAnim }],
                 opacity: fadeAnim,
               },
             ]}
           >
             {/* Drag handle */}
-            <View style={styles.handle} />
+            <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
             {/* Close button */}
-            <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={8}>
-              <Feather name="x" size={18} color="#374151" />
+            <Pressable
+              onPress={onClose}
+              style={[styles.closeBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}
+              hitSlop={8}
+            >
+              <Feather name="x" size={18} color={colors.text} />
             </Pressable>
 
             {/* ── SUCCESS STATE ──────────────────────────────────── */}
@@ -200,10 +208,10 @@ export function EnquireModal({
                 >
                   <Feather name="check" size={32} color="#10B981" />
                 </Animated.View>
-                <Text style={styles.successTitle}>Message Sent! 🎉</Text>
-                <Text style={styles.successBody}>
+                <Text style={[styles.successTitle, { color: colors.text }]}>Message Sent! 🎉</Text>
+                <Text style={[styles.successBody, { color: colors.mutedForeground }]}>
                   Your message has been delivered to{' '}
-                  <Text style={{ fontFamily: 'DMSans_700Bold' }}>{hostName}</Text>.
+                  <Text style={{ fontFamily: 'DMSans_700Bold', color: colors.text }}>{hostName}</Text>.
                   {'\n'}They usually reply within a few hours.
                 </Text>
 
@@ -222,10 +230,10 @@ export function EnquireModal({
                     onPress={onClose}
                     style={({ pressed }) => [
                       styles.dismissBtn,
-                      { opacity: pressed ? 0.88 : 1 },
+                      { backgroundColor: isDark ? '#27272A' : '#F3F4F6', opacity: pressed ? 0.88 : 1 },
                     ]}
                   >
-                    <Text style={styles.dismissBtnText}>Done</Text>
+                    <Text style={[styles.dismissBtnText, { color: colors.text }]}>Done</Text>
                   </Pressable>
                 </View>
               </View>
@@ -238,11 +246,11 @@ export function EnquireModal({
               >
                 {/* Header title */}
                 <View style={styles.headerRow}>
-                  <Text style={styles.headerTitle}>Message Host</Text>
+                  <Text style={[styles.headerTitle, { color: colors.text }]}>Message Host</Text>
                 </View>
 
                 {/* Host card */}
-                <View style={styles.hostCard}>
+                <View style={[styles.hostCard, { backgroundColor: isDark ? '#27272A' : '#FAFAFA', borderColor: colors.border }]}>
                   {/* Thumbnail on left */}
                   {reelThumbnailUrl ? (
                     <Image
@@ -270,17 +278,17 @@ export function EnquireModal({
                     </View>
 
                     <View style={styles.hostText}>
-                      <Text style={styles.hostLabel}>Hosted by</Text>
-                      <Text style={styles.hostName}>{hostName}</Text>
+                      <Text style={[styles.hostLabel, { color: colors.mutedForeground }]}>Hosted by</Text>
+                      <Text style={[styles.hostName, { color: colors.text }]}>{hostName}</Text>
                       {experienceTitle ? (
-                        <Text style={styles.expTitle} numberOfLines={1}>
+                        <Text style={[styles.expTitle, { color: colors.text }]} numberOfLines={1}>
                           {experienceTitle}
                         </Text>
                       ) : null}
                       {experienceLocation ? (
                         <View style={styles.locationRow}>
-                          <Feather name="map-pin" size={10} color="#9CA3AF" />
-                          <Text style={styles.locationText}>{experienceLocation}</Text>
+                          <Feather name="map-pin" size={10} color={colors.mutedForeground} />
+                          <Text style={[styles.locationText, { color: colors.mutedForeground }]}>{experienceLocation}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -292,7 +300,7 @@ export function EnquireModal({
                           KES {Number(experiencePrice).toLocaleString()}
                         </Text>
                         {experiencePriceUnit ? (
-                          <Text style={styles.priceUnit}>/{experiencePriceUnit}</Text>
+                          <Text style={[styles.priceUnit, { color: colors.mutedForeground }]}>/{experiencePriceUnit}</Text>
                         ) : null}
                       </View>
                     ) : null}
@@ -300,16 +308,16 @@ export function EnquireModal({
                 </View>
 
                 {/* Trust bar */}
-                <View style={styles.trustBar}>
+                <View style={[styles.trustBar, { backgroundColor: isDark ? '#064E3B20' : '#F0FDF4', borderColor: isDark ? '#05966940' : '#BBF7D0' }]}>
                   <Feather name="shield" size={12} color="#10B981" />
-                  <Text style={styles.trustText}>
+                  <Text style={[styles.trustText, { color: isDark ? '#A7F3D0' : '#065F46' }]}>
                     Messages are end-to-end encrypted and protected by ZuruSasa.
                   </Text>
                 </View>
 
                 {/* Quick message chips */}
                 <View style={styles.quickSection}>
-                  <Text style={styles.quickLabel}>Quick messages</Text>
+                  <Text style={[styles.quickLabel, { color: colors.mutedForeground }]}>Quick messages</Text>
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -321,13 +329,15 @@ export function EnquireModal({
                         onPress={() => handleSelectQuick(msg)}
                         style={({ pressed }) => [
                           styles.quickChip,
-                          text === msg && styles.quickChipActive,
+                          { backgroundColor: isDark ? '#27272A' : '#FFFFFF', borderColor: colors.border },
+                          text === msg && [styles.quickChipActive, { backgroundColor: isDark ? '#2A1810' : '#FFF5EF', borderColor: ORANGE }],
                           pressed && { opacity: 0.8 },
                         ]}
                       >
                         <Text
                           style={[
                             styles.quickChipText,
+                            { color: colors.text },
                             text === msg && styles.quickChipTextActive,
                           ]}
                           numberOfLines={1}
@@ -341,27 +351,27 @@ export function EnquireModal({
 
                 {/* Message input */}
                 <View style={styles.inputSection}>
-                  <Text style={styles.inputLabel}>Your message</Text>
-                  <View style={styles.inputWrap}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Your message</Text>
+                  <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <GrowingInput
                       value={text}
                       onChangeText={setText}
                       placeholder={`Hi ${hostName.split(' ')[0]}, I'm interested in...`}
-                      placeholderTextColor="#9CA3AF"
+                      placeholderTextColor={colors.mutedForeground}
                       minHeight={72}
                       maxHeight={150}
-                      style={styles.input}
+                      style={[styles.input, { color: colors.text }]}
                       editable={!sending}
                       autoFocus
                     />
-                    <Text style={styles.charCount}>{text.length}/500</Text>
+                    <Text style={[styles.charCount, { color: colors.mutedForeground }]}>{text.length}/500</Text>
                   </View>
                 </View>
 
                 {/* Response time note */}
                 <View style={styles.responseNote}>
-                  <Ionicons name="time-outline" size={14} color="#6B7280" />
-                  <Text style={styles.responseNoteText}>
+                  <Ionicons name="time-outline" size={14} color={colors.mutedForeground} />
+                  <Text style={[styles.responseNoteText, { color: colors.mutedForeground }]}>
                     {hostName.split(' ')[0]} typically replies within 2 hours.
                   </Text>
                 </View>
@@ -387,7 +397,7 @@ export function EnquireModal({
                 </Pressable>
 
                 {!user ? (
-                  <Text style={styles.footNote}>
+                  <Text style={[styles.footNote, { color: colors.mutedForeground }]}>
                     You'll be asked to sign in before sending.
                   </Text>
                 ) : null}

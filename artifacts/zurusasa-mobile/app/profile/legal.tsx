@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 
 interface LegalDoc {
   id: 'terms' | 'privacy' | 'licenses';
@@ -66,64 +68,50 @@ const LEGAL_DOCS: Record<'terms' | 'privacy' | 'licenses', LegalDoc> = {
     sections: [
       {
         heading: '1. Information We Collect',
-        body: 'We collect information you provide directly to us when you create an account, complete your profile, make a booking, register a passkey, or communicate with hosts. This includes your name, email address, phone number, government ID for verification, and transaction history.',
+        body: 'We collect information you provide directly to us (such as your name, email, phone number, Kenyan ID / passport verification, and payment details) as well as data collected automatically when you browse reels, search coastal stays, and message hosts.',
       },
       {
-        heading: '2. Location & Device Information',
-        body: 'With your permission, we collect precise or approximate location information from your mobile device to show nearby reels, stays in Diani, Mombasa, Watamu, Kilifi, and Lamu, and calculate check-in directions. We also collect device model, OS version, and app analytics.',
+        heading: '2. How We Use Your Information',
+        body: 'We use your information to operate, improve, and personalize ZuruSasa, process secure M-Pesa and card transactions, verify host identities, send booking confirmations and trip itineraries, and ensure community safety.',
       },
       {
-        heading: '3. Passkey & Biometric Data',
-        body: 'When you enable Passkey authentication, biometric verification (fingerprint, Face unlock, or screen lock) is performed entirely on your local device via Android Credential Manager or Apple Secure Enclave. ZuruSasa never receives, stores, or transmits your biometric data.',
+        heading: '3. Data Sharing & Third Parties',
+        body: 'We share your information with confirmed hosts or guests only to the extent necessary to facilitate your booking (e.g., guest name, contact number, check-in instructions). We do not sell your personal information to third parties.',
       },
       {
-        heading: '4. How We Use Your Information',
-        body: 'We use your data to facilitate bookings, process secure payments, prevent fraudulent activity, improve our recommendation algorithm for coastal reels, provide customer support, and comply with legal obligations.',
+        heading: '4. Biometrics & Passkeys',
+        body: 'When you register a Passkey, your biometric data (fingerprint, Face ID) remains stored strictly on your physical device secure enclave and is never transmitted to or stored on ZuruSasa servers.',
       },
       {
-        heading: '5. Information Sharing',
-        body: 'We only share necessary booking details with Hosts when a reservation is confirmed. We do not sell your personal information to third parties. We may disclose information if required by law or to protect user safety.',
-      },
-      {
-        heading: '6. Data Retention & Deletion',
-        body: 'We retain your personal data for as long as your account is active. You can request account deletion and complete data erasure at any time through Account Settings > Delete Account.',
+        heading: '5. Your Rights & Data Requests',
+        body: 'You have the right to access, correct, download, or delete your personal data at any time via Profile > Privacy > Data privacy.',
       },
     ],
   },
   licenses: {
     id: 'licenses',
-    title: 'Open source licences',
+    title: 'Open Source Licences',
     lastUpdated: 'August 2026',
     sections: [
       {
-        heading: 'React & React Native',
-        body: 'Copyright (c) Meta Platforms, Inc. and affiliates.\nLicensed under the MIT License.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files, to deal in the Software without restriction.',
+        heading: 'React Native & Expo',
+        body: 'MIT License\n\nCopyright (c) Meta Platforms, Inc. and affiliates.\nCopyright (c) 650 Industries, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files, to deal in the Software without restriction.',
       },
       {
-        heading: 'Expo SDK',
-        body: 'Copyright (c) 650 Industries, Inc.\nLicensed under the MIT License.\n\nProviding universal native tooling, camera, location, filesystem, and multimedia APIs.',
+        heading: 'Supabase Client',
+        body: 'MIT License\n\nCopyright (c) 2020 Supabase Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software to deal in the Software without restriction.',
       },
       {
-        heading: 'Supabase JavaScript Client',
-        body: 'Copyright (c) Supabase, Inc.\nLicensed under the MIT License.\n\nUniversal client library for authentication, PostgreSQL database queries, real-time channels, and storage.',
-      },
-      {
-        heading: 'react-native-passkey',
-        body: 'Copyright (c) F-Secure Corporation / Contributors.\nLicensed under the MIT License.\n\nNative WebAuthn and Android Credential Manager integration for biometric passkey authentication.',
-      },
-      {
-        heading: 'Lucide & Feather Vector Icons',
-        body: 'Copyright (c) Cole Bemis & Lucide Project.\nLicensed under the ISC / MIT License.\n\nProviding clean, minimalist interface icons throughout ZuruSasa Mobile.',
-      },
-      {
-        heading: 'React Native Reanimated & Gesture Handler',
-        body: 'Copyright (c) Software Mansion S.A.\nLicensed under the MIT License.\n\nDeclarative micro-animations, gestures, and fluid transitions.',
+        heading: 'Expo Vector Icons & Lucide/Feather',
+        body: 'MIT License\n\nCopyright (c) Cole Bemis\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software without restriction.',
       },
     ],
   },
 };
 
 export default function LegalScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -148,7 +136,7 @@ export default function LegalScreen() {
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
@@ -160,7 +148,7 @@ export default function LegalScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={22} color="#111111" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -170,7 +158,7 @@ export default function LegalScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
         {/* Title */}
-        <Text style={styles.pageTitle}>Legal</Text>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>Legal</Text>
 
         {/* List Rows */}
         <View style={styles.listBlock}>
@@ -179,18 +167,22 @@ export default function LegalScreen() {
               key={item.id}
               testID={`legal-item-${item.id}`}
               onPress={() => setActiveDoc(LEGAL_DOCS[item.id])}
-              style={({ pressed }) => [styles.rowItem, pressed && styles.rowItemPressed]}
+              style={({ pressed }) => [
+                styles.rowItem,
+                { borderBottomColor: colors.border },
+                pressed && styles.rowItemPressed,
+              ]}
             >
               {/* Left Icon (Open Book Outline) */}
               <View style={styles.iconWrapper}>
-                <Feather name="book-open" size={22} color="#1E1E1E" />
+                <Feather name="book-open" size={22} color={colors.text} />
               </View>
 
               {/* Title */}
-              <Text style={styles.rowTitle}>{item.title}</Text>
+              <Text style={[styles.rowTitle, { color: colors.text }]}>{item.title}</Text>
 
               {/* Right Chevron */}
-              <Feather name="chevron-right" size={20} color="#717171" style={styles.chevron} />
+              <Feather name="chevron-right" size={20} color={colors.mutedForeground} style={styles.chevron} />
             </Pressable>
           ))}
         </View>
@@ -203,17 +195,17 @@ export default function LegalScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setActiveDoc(null)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.card, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
           {/* Modal Header */}
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Pressable
               onPress={() => setActiveDoc(null)}
               style={({ pressed }) => [styles.modalCloseBtn, pressed && { opacity: 0.6 }]}
               hitSlop={10}
             >
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle} numberOfLines={1}>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]} numberOfLines={1}>
               {activeDoc?.title}
             </Text>
             <View style={{ width: 36 }} />
@@ -225,13 +217,13 @@ export default function LegalScreen() {
             contentContainerStyle={[styles.modalScrollContent, { paddingBottom: insets.bottom + 40 }]}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.docHeadline}>{activeDoc?.title}</Text>
-            <Text style={styles.docLastUpdated}>Last updated: {activeDoc?.lastUpdated}</Text>
+            <Text style={[styles.docHeadline, { color: colors.text }]}>{activeDoc?.title}</Text>
+            <Text style={[styles.docLastUpdated, { color: colors.mutedForeground }]}>Last updated: {activeDoc?.lastUpdated}</Text>
 
             {activeDoc?.sections.map((section, idx) => (
               <View key={idx} style={styles.docSection}>
-                <Text style={styles.sectionHeading}>{section.heading}</Text>
-                <Text style={styles.sectionBody}>{section.body}</Text>
+                <Text style={[styles.sectionHeading, { color: colors.text }]}>{section.heading}</Text>
+                <Text style={[styles.sectionBody, { color: colors.mutedForeground }]}>{section.body}</Text>
               </View>
             ))}
           </ScrollView>
@@ -244,7 +236,6 @@ export default function LegalScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 24,
@@ -315,7 +306,6 @@ const styles = StyleSheet.create({
   /* Modal Styles */
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',

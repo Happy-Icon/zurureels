@@ -2,6 +2,8 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, Pressable, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { SearchFilters } from '@/services/filterService';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 
 interface FilterChipProps {
   filters: SearchFilters;
@@ -22,6 +24,8 @@ export function FilterChip({
   onRemoveAmenity,
   onResetAll,
 }: FilterChipProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const chips: Array<{ label: string; onRemove: () => void }> = [];
 
   if (filters.category) {
@@ -77,14 +81,27 @@ export function FilterChip({
           onPress={onResetAll}
           style={({ pressed }) => [
             styles.resetChip,
-            { opacity: pressed ? 0.7 : 1 },
+            {
+              backgroundColor: isDark ? '#27272A' : '#F7F7F7',
+              borderColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+            },
           ]}
         >
-          <Text style={styles.resetText}>Clear All</Text>
+          <Text style={[styles.resetText, { color: colors.mutedForeground }]}>Clear All</Text>
         </Pressable>
 
         {chips.map((chip, idx) => (
-          <View key={idx} style={styles.chip}>
+          <View
+            key={idx}
+            style={[
+              styles.chip,
+              {
+                backgroundColor: isDark ? '#2A1F1A' : '#FFFBF8',
+                borderColor: isDark ? '#5A2A1A' : '#FCE3D6',
+              },
+            ]}
+          >
             <Text style={styles.chipText}>{chip.label}</Text>
             <Pressable onPress={chip.onRemove} hitSlop={6} style={styles.removeIconBtn}>
               <Feather name="x" size={12} color="#F26522" />
@@ -110,14 +127,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#F7F7F7',
     borderWidth: 1,
-    borderColor: '#EBEBEB',
   },
   resetText: {
     fontSize: 12,
     fontFamily: 'DMSans_700Bold',
-    color: '#717171',
   },
   chip: {
     flexDirection: 'row',
@@ -126,9 +140,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#FFFBF8',
     borderWidth: 1,
-    borderColor: '#FCE3D6',
   },
   chipText: {
     fontSize: 12,
@@ -139,3 +151,4 @@ const styles = StyleSheet.create({
     padding: 2,
   },
 });
+

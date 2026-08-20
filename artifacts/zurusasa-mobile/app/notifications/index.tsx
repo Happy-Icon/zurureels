@@ -13,6 +13,8 @@ import { Feather } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationCard } from '@/components/NotificationCard';
 import { Skeleton } from '@/components/Skeleton';
@@ -52,6 +54,8 @@ const HOST_NOTIFICATION_TYPES = new Set([
 ]);
 
 export default function NotificationCenterScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { viewMode } = useAuth();
@@ -154,7 +158,7 @@ export default function NotificationCenterScreen() {
   }, [notifications]);
 
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
@@ -168,7 +172,7 @@ export default function NotificationCenterScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={24} color="#111111" />
+          <Feather name="arrow-left" size={24} color={colors.text} />
         </Pressable>
 
         {unreadCount > 0 && (
@@ -176,14 +180,14 @@ export default function NotificationCenterScreen() {
             onPress={markAllAsRead}
             style={({ pressed }) => [styles.markAllBtn, pressed && { opacity: 0.7 }]}
           >
-            <Text style={styles.markAllText}>Mark all read</Text>
+            <Text style={[styles.markAllText, { color: colors.text }]}>Mark all read</Text>
           </Pressable>
         )}
       </View>
 
       {/* ── PAGE TITLE (MATCHING SCREENSHOT) ─────────────────────────────────── */}
       <View style={styles.titleContainer}>
-        <Text style={styles.pageTitle}>Notifications</Text>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>Notifications</Text>
       </View>
 
       {/* ── NOTIFICATIONS LIST OR EMPTY STATE (MATCHING SCREENSHOT) ─────────── */}
@@ -191,8 +195,8 @@ export default function NotificationCenterScreen() {
         sections={groupedSections}
         keyExtractor={(item) => item.id}
         renderSectionHeader={({ section: { title } }) => (
-          <View style={styles.sectionHeaderWrap}>
-            <Text style={styles.sectionHeaderTitle}>{title}</Text>
+          <View style={[styles.sectionHeaderWrap, { backgroundColor: colors.background }]}>
+            <Text style={[styles.sectionHeaderTitle, { color: colors.text }]}>{title}</Text>
           </View>
         )}
         renderItem={({ item }) => (
@@ -223,10 +227,12 @@ export default function NotificationCenterScreen() {
             </View>
           ) : (
             <View style={styles.emptyContainer}>
-              <Feather name="bell" size={40} color="#111111" />
-              <Text style={styles.emptyTitle}>No notifications yet</Text>
-              <Text style={styles.emptySub}>
-                You've got a blank slate (for now). We'll let you know when updates arrive.
+              <View style={[styles.emptyIcon, { backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}>
+                <Feather name="bell-off" size={28} color={colors.mutedForeground} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No notifications yet</Text>
+              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+                We'll notify you here about booking updates, host messages, and payment activity.
               </Text>
             </View>
           )
@@ -294,6 +300,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
   emptyTitle: {
     fontSize: 19,
     fontWeight: '700',
@@ -322,7 +336,6 @@ const styles = StyleSheet.create({
   sectionHeaderWrap: {
     paddingTop: 16,
     paddingBottom: 10,
-    backgroundColor: '#FFFFFF',
   },
   sectionHeaderTitle: {
     fontSize: 16,

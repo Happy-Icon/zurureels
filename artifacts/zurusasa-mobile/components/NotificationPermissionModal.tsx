@@ -9,6 +9,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
 import { notificationService } from '@/services/notificationService';
+import { useColors, useTheme } from '@/hooks/useColors';
 
 interface NotificationPermissionModalProps {
   visible: boolean;
@@ -19,6 +20,8 @@ export function NotificationPermissionModal({
   visible,
   onClose,
 }: NotificationPermissionModalProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const { user } = useAuth();
 
   const handleAllow = async () => {
@@ -35,14 +38,14 @@ export function NotificationPermissionModal({
       transparent
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
+      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
+        <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: isDark ? 1 : 0 }]}>
           <View style={styles.iconCircle}>
             <Feather name="bell" size={32} color="#F26522" />
           </View>
 
-          <Text style={styles.title}>Enable Notifications</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: colors.text }]}>Enable Notifications</Text>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             Receive booking updates, messages, payments, and travel reminders instantly.
           </Text>
 
@@ -63,7 +66,7 @@ export function NotificationPermissionModal({
               { opacity: pressed ? 0.6 : 1 },
             ]}
           >
-            <Text style={styles.skipBtnText}>Skip for Now</Text>
+            <Text style={[styles.skipBtnText, { color: colors.mutedForeground }]}>Skip for Now</Text>
           </Pressable>
         </View>
       </View>

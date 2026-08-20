@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { useColors, useTheme } from '@/hooks/useColors';
 
 const ORANGE = '#F26522';
 const MONTHS = [
@@ -54,6 +55,8 @@ export function AvailabilityCalendar({
   canPrev,
   canNext,
 }: AvailabilityCalendarProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const { width } = useWindowDimensions();
   const today = useMemo(() => startOfDay(new Date()), []);
   const maxDate = useMemo(() => {
@@ -81,39 +84,47 @@ export function AvailabilityCalendar({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
       {/* Month Header */}
       <View style={styles.monthHeader}>
         <Pressable
           onPress={onPrevMonth}
           disabled={!canPrev}
           hitSlop={12}
-          style={[styles.navBtn, !canPrev && { opacity: 0.3 }]}
+          style={[
+            styles.navBtn,
+            { backgroundColor: isDark ? '#27272A' : '#F7F7F7', borderColor: colors.border },
+            !canPrev && { opacity: 0.3 },
+          ]}
         >
-          <Feather name="chevron-left" size={20} color="#222222" />
+          <Feather name="chevron-left" size={20} color={colors.text} />
         </Pressable>
 
         <View style={styles.monthTitleBlock}>
-          <Text style={styles.monthTitle}>
+          <Text style={[styles.monthTitle, { color: colors.text }]}>
             {MONTHS[viewMonth.getMonth()]}
           </Text>
-          <Text style={styles.monthYear}>{viewMonth.getFullYear()}</Text>
+          <Text style={[styles.monthYear, { color: colors.mutedForeground }]}>{viewMonth.getFullYear()}</Text>
         </View>
 
         <Pressable
           onPress={onNextMonth}
           disabled={!canNext}
           hitSlop={12}
-          style={[styles.navBtn, !canNext && { opacity: 0.3 }]}
+          style={[
+            styles.navBtn,
+            { backgroundColor: isDark ? '#27272A' : '#F7F7F7', borderColor: colors.border },
+            !canNext && { opacity: 0.3 },
+          ]}
         >
-          <Feather name="chevron-right" size={20} color="#222222" />
+          <Feather name="chevron-right" size={20} color={colors.text} />
         </Pressable>
       </View>
 
       {/* Weekday Labels */}
       <View style={styles.weekRow}>
         {WEEKDAYS_SHORT.map((w) => (
-          <Text key={w} style={styles.weekday}>{w}</Text>
+          <Text key={w} style={[styles.weekday, { color: colors.mutedForeground }]}>{w}</Text>
         ))}
       </View>
 
@@ -145,11 +156,11 @@ export function AvailabilityCalendar({
             <View key={i} style={styles.cell}>
               {/* Range fill band */}
               {inRange ? (
-                <View style={styles.rangeFill} />
+                <View style={[styles.rangeFill, isDark && { backgroundColor: '#F2652230' }]} />
               ) : isRangeLeft ? (
-                <View style={[styles.rangeFill, { left: '50%' }]} />
+                <View style={[styles.rangeFill, { left: '50%' }, isDark && { backgroundColor: '#F2652230' }]} />
               ) : isRangeRight ? (
-                <View style={[styles.rangeFill, { right: '50%' }]} />
+                <View style={[styles.rangeFill, { right: '50%' }, isDark && { backgroundColor: '#F2652230' }]} />
               ) : null}
 
               <Pressable
@@ -166,7 +177,8 @@ export function AvailabilityCalendar({
                 <Text
                   style={[
                     styles.dayText,
-                    disabled ? styles.dayDisabled : null,
+                    { color: colors.text },
+                    disabled ? [styles.dayDisabled, isDark && { color: '#4B5563' }] : null,
                     isStart || isEnd ? styles.daySelectedText : null,
                     inRange ? styles.dayRangeText : null,
                     isToday && !isStart && !isEnd ? styles.dayTodayText : null,
@@ -181,18 +193,18 @@ export function AvailabilityCalendar({
       </View>
 
       {/* Legend */}
-      <View style={styles.legendRow}>
+      <View style={[styles.legendRow, { borderTopColor: colors.border }]}>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: ORANGE }]} />
-          <Text style={styles.legendText}>Selected</Text>
+          <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Selected</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' }]} />
-          <Text style={styles.legendText}>Available</Text>
+          <View style={[styles.legendDot, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', borderWidth: 1, borderColor: colors.border }]} />
+          <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Available</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={styles.blockedLegendDot} />
-          <Text style={styles.legendText}>Unavailable</Text>
+          <View style={[styles.blockedLegendDot, { backgroundColor: isDark ? '#27272A' : '#E5E7EB', borderColor: isDark ? '#3F3F46' : '#D1D5DB' }]} />
+          <Text style={[styles.legendText, { color: colors.mutedForeground }]}>Unavailable</Text>
         </View>
       </View>
     </View>

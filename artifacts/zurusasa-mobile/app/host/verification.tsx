@@ -17,8 +17,11 @@ import { supabase } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
 import { personaVerificationService } from '@/services/personaVerificationService';
+import { useColors, useTheme } from '@/hooks/useColors';
 
 export default function HostVerificationScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile, refreshProfile } = useAuth();
@@ -46,7 +49,37 @@ export default function HostVerificationScreen() {
       return;
     }
 
-    setShowVerificationModal(true);
+    setLoading(true);
+    try {
+      await personaVerificationService.launchVerification({
+        userId: user.id,
+        onSuccess: async () => {
+          setLoading(false);
+          setStatus('verified');
+          if (refreshProfile) await refreshProfile();
+          showAlert({
+            title: 'Identity Verified',
+            message: 'Your host identity has been successfully verified with Persona.',
+          });
+        },
+        onCanceled: () => {
+          setLoading(false);
+        },
+        onError: (errorMessage) => {
+          setLoading(false);
+          showAlert({
+            title: 'Verification Notice',
+            message: errorMessage,
+          });
+        },
+      });
+    } catch (err: any) {
+      setLoading(false);
+      showAlert({
+        title: 'Verification Error',
+        message: err?.message || 'Could not start identity verification.',
+      });
+    }
   };
 
   const handleResetVerification = async () => {
@@ -59,7 +92,7 @@ export default function HostVerificationScreen() {
   };
 
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       {/* 1. Header Bar */}
       <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
@@ -67,9 +100,9 @@ export default function HostVerificationScreen() {
           style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
           hitSlop={10}
         >
-          <Feather name="arrow-left" size={22} color="#222222" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>Identity Verification</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Identity Verification</Text>
         <View style={{ width: 38 }} />
       </View>
 
@@ -83,18 +116,18 @@ export default function HostVerificationScreen() {
           <View style={styles.heroIconCircle}>
             <MaterialCommunityIcons name="shield-check-outline" size={32} color="#F26522" />
           </View>
-          <Text style={styles.heroTitle}>Verified Host Trust</Text>
-          <Text style={styles.heroSub}>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>Verified Host Trust</Text>
+          <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
             To keep ZuruSasa safe and secure for guests, all hosts verify their official government ID or passport before publishing listings.
           </Text>
         </View>
 
         {/* 3. Status or Benefits Cards */}
         {status === 'verified' ? (
-          <View style={styles.statusCardVerified}>
+          <View style={[styles.statusCardVerified, { backgroundColor: isDark ? '#064E3B20' : '#F0FDF4', borderColor: isDark ? '#05966940' : '#BBF7D0' }]}>
             <Feather name="check-circle" size={36} color="#16A34A" />
-            <Text style={styles.statusTitleVerified}>Identity Verified!</Text>
-            <Text style={styles.statusSubVerified}>
+            <Text style={[styles.statusTitleVerified, { color: isDark ? '#A7F3D0' : '#166534' }]}>Identity Verified!</Text>
+            <Text style={[styles.statusSubVerified, { color: isDark ? '#A7F3D0' : '#166534' }]}>
               Your host profile has earned the Verified badge. Guests can now book your stays and tours with total confidence.
             </Text>
             <Pressable
@@ -113,10 +146,10 @@ export default function HostVerificationScreen() {
             </Pressable>
           </View>
         ) : status === 'pending' ? (
-          <View style={styles.statusCardPending}>
+          <View style={[styles.statusCardPending, { backgroundColor: isDark ? '#2A1810' : '#FFF7ED', borderColor: isDark ? '#5C2D16' : '#FFEDD5' }]}>
             <MaterialCommunityIcons name="clock-outline" size={36} color="#F26522" />
-            <Text style={styles.statusTitlePending}>Verification Pending</Text>
-            <Text style={styles.statusSubPending}>
+            <Text style={[styles.statusTitlePending, { color: isDark ? '#FED7AA' : '#9A3412' }]}>Verification Pending</Text>
+            <Text style={[styles.statusSubPending, { color: isDark ? '#FED7AA' : '#9A3412' }]}>
               Your identity verification is in progress. Tap below to complete your Persona 3D selfie & ID verification.
             </Text>
             <Pressable
@@ -130,14 +163,14 @@ export default function HostVerificationScreen() {
             </Pressable>
           </View>
         ) : (
-          <View style={styles.benefitsCard}>
+          <View style={[styles.benefitsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.benefitRow}>
               <View style={styles.benefitIconWrap}>
                 <Feather name="check-square" size={18} color="#F26522" />
               </View>
               <View style={styles.benefitTextWrap}>
-                <Text style={styles.benefitTitle}>Verified Host Badge</Text>
-                <Text style={styles.benefitSub}>Displays prominently on all your video reels and stay listings.</Text>
+                <Text style={[styles.benefitTitle, { color: colors.text }]}>Verified Host Badge</Text>
+                <Text style={[styles.benefitSub, { color: colors.mutedForeground }]}>Displays prominently on all your video reels and stay listings.</Text>
               </View>
             </View>
 
@@ -146,8 +179,8 @@ export default function HostVerificationScreen() {
                 <Feather name="credit-card" size={18} color="#F26522" />
               </View>
               <View style={styles.benefitTextWrap}>
-                <Text style={styles.benefitTitle}>Automated Escrow Payouts</Text>
-                <Text style={styles.benefitSub}>Unlocks direct earnings withdrawals to M-Pesa or Kenyan bank.</Text>
+                <Text style={[styles.benefitTitle, { color: colors.text }]}>Automated Escrow Payouts</Text>
+                <Text style={[styles.benefitSub, { color: colors.mutedForeground }]}>Unlocks direct earnings withdrawals to M-Pesa or Kenyan bank.</Text>
               </View>
             </View>
 
@@ -156,8 +189,8 @@ export default function HostVerificationScreen() {
                 <Feather name="star" size={18} color="#F26522" />
               </View>
               <View style={styles.benefitTextWrap}>
-                <Text style={styles.benefitTitle}>Enhanced Guest Trust</Text>
-                <Text style={styles.benefitSub}>Verified hosts get up to 3x more booking inquiries and reservations.</Text>
+                <Text style={[styles.benefitTitle, { color: colors.text }]}>Enhanced Guest Trust</Text>
+                <Text style={[styles.benefitSub, { color: colors.mutedForeground }]}>Verified hosts get up to 3x more booking inquiries and reservations.</Text>
               </View>
             </View>
 
@@ -307,7 +340,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#EBEBEB',
-    backgroundColor: '#FFFFFF',
     gap: 18,
     shadowColor: '#000000',
     shadowOpacity: 0.03,

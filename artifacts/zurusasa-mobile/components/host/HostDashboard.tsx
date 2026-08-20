@@ -19,6 +19,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase, type BookingRow } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
@@ -49,6 +50,7 @@ const DECLINE_REASONS = [
 
 export function HostDashboard() {
   const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { height: winHeight } = useWindowDimensions();
@@ -98,7 +100,6 @@ export function HostDashboard() {
         .eq('user_id', user.id);
 
       const reelIds = (reelsRes.data ?? []).map((r) => r.id as string);
-
       let likesCount = 0;
       let savesCount = 0;
 
@@ -303,7 +304,7 @@ export function HostDashboard() {
 
   if (loading) {
     return (
-      <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      <View style={[styles.fill, { backgroundColor: colors.background }]}>
         <ScrollView
           style={styles.fill}
           contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottomPad + 32, paddingHorizontal: 20, gap: 20 }}
@@ -325,7 +326,7 @@ export function HostDashboard() {
   }
 
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <ScrollView
         style={styles.fill}
         contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottomPad + 32 }}
@@ -337,21 +338,21 @@ export function HostDashboard() {
         {/* 1. Header Title */}
         <View style={styles.topHeader}>
           <View style={styles.headerTextStack}>
-            <Text style={styles.headerTitle}>Host Dashboard</Text>
-            <Text style={styles.headerSub}>Hospitality overview & reservation manager.</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Host Dashboard</Text>
+            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Hospitality overview & reservation manager.</Text>
           </View>
         </View>
 
         {/* 3. Payout Setup Banner */}
         {!hasPayout ? (
-          <View style={styles.payoutCardAmber}>
+          <View style={[styles.payoutCardAmber, { backgroundColor: isDark ? '#2A1810' : '#FFF8F5', borderColor: isDark ? '#5C2D16' : '#FFEDD5' }]}>
             <View style={styles.payoutHeaderRow}>
               <View style={styles.payoutBadgeAmber}>
                 <Feather name="credit-card" size={18} color="#F26522" />
               </View>
               <View style={styles.payoutTextWrap}>
-                <Text style={styles.payoutTitleAmber}>Set Up Payout Method</Text>
-                <Text style={styles.payoutSubAmber}>
+                <Text style={[styles.payoutTitleAmber, { color: colors.text }]}>Set Up Payout Method</Text>
+                <Text style={[styles.payoutSubAmber, { color: colors.mutedForeground }]}>
                   Connect your M-Pesa business line or bank account to receive guest earnings.
                 </Text>
               </View>
@@ -436,7 +437,7 @@ export function HostDashboard() {
 
         {/* 5. Reservation Requests Summary Widget */}
         <View style={styles.sectionHeaderWrap}>
-          <Text style={styles.sectionTitle}>Reservations & Requests</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Reservations & Requests</Text>
         </View>
 
         <Pressable
@@ -444,8 +445,9 @@ export function HostDashboard() {
           onPress={() => router.push('/(tabs)/reservations')}
           style={({ pressed }) => [
             styles.requestsSummaryCard,
+            { backgroundColor: colors.card, borderColor: colors.border },
             bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 0
-              ? styles.requestsSummaryCardAlert
+              ? [styles.requestsSummaryCardAlert, isDark && { backgroundColor: '#2A1810', borderColor: '#5C2D16' }]
               : styles.requestsSummaryCardClean,
             { opacity: pressed ? 0.95 : 1 },
           ]}
@@ -457,8 +459,8 @@ export function HostDashboard() {
                 {
                   backgroundColor:
                     bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 0
-                      ? '#FFF7ED'
-                      : '#F0FDF4',
+                      ? isDark ? '#3D2010' : '#FFF7ED'
+                      : isDark ? '#064E3B30' : '#F0FDF4',
                 },
               ]}
             >
@@ -477,7 +479,7 @@ export function HostDashboard() {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.requestsSummaryTitle}>
+              <Text style={[styles.requestsSummaryTitle, { color: colors.text }]}>
                 {bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 0
                   ? `You have ${
                       bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length
@@ -488,36 +490,36 @@ export function HostDashboard() {
                     }`
                   : 'All reservations up to date'}
               </Text>
-              <Text style={styles.requestsSummarySub}>
+              <Text style={[styles.requestsSummarySub, { color: colors.mutedForeground }]}>
                 {bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length > 0
                   ? 'Awaiting your acceptance to lock dates and confirm.'
                   : 'No pending guest requests. All bookings confirmed.'}
               </Text>
             </View>
-            <View style={styles.viewRequestsPill}>
+            <View style={[styles.viewRequestsPill, isDark && { backgroundColor: '#3D2010' }]}>
               <Text style={styles.viewRequestsPillText}>View</Text>
               <Feather name="arrow-right" size={14} color="#F26522" />
             </View>
           </View>
 
           {/* Quick Metrics Breakdown Row */}
-          <View style={styles.requestsMetricsRow}>
+          <View style={[styles.requestsMetricsRow, { borderTopColor: colors.border }]}>
             <View style={styles.requestsMetricItem}>
-              <Text style={styles.requestsMetricVal}>
+              <Text style={[styles.requestsMetricVal, { color: colors.text }]}>
                 {bookings.filter((b) => b.status === 'paid' || b.status === 'pending').length}
               </Text>
-              <Text style={styles.requestsMetricLbl}>Pending</Text>
+              <Text style={[styles.requestsMetricLbl, { color: colors.mutedForeground }]}>Pending</Text>
             </View>
-            <View style={styles.requestsMetricDivider} />
+            <View style={[styles.requestsMetricDivider, { backgroundColor: colors.border }]} />
             <View style={styles.requestsMetricItem}>
-              <Text style={styles.requestsMetricVal}>
+              <Text style={[styles.requestsMetricVal, { color: colors.text }]}>
                 {bookings.filter((b) => b.status === 'confirmed').length}
               </Text>
-              <Text style={styles.requestsMetricLbl}>Upcoming</Text>
+              <Text style={[styles.requestsMetricLbl, { color: colors.mutedForeground }]}>Upcoming</Text>
             </View>
-            <View style={styles.requestsMetricDivider} />
+            <View style={[styles.requestsMetricDivider, { backgroundColor: colors.border }]} />
             <View style={styles.requestsMetricItem}>
-              <Text style={styles.requestsMetricVal}>
+              <Text style={[styles.requestsMetricVal, { color: colors.text }]}>
                 {
                   bookings.filter(
                     (b) =>
@@ -528,7 +530,7 @@ export function HostDashboard() {
                   ).length
                 }
               </Text>
-              <Text style={styles.requestsMetricLbl}>History</Text>
+              <Text style={[styles.requestsMetricLbl, { color: colors.mutedForeground }]}>History</Text>
             </View>
           </View>
         </Pressable>

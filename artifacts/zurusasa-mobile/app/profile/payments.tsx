@@ -16,6 +16,8 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 
 type PaymentScreenView =
@@ -63,15 +65,13 @@ const CURRENCIES_LIST: CurrencyItem[] = [
   { code: 'MYR', name: 'Malaysian ringgit', symbol: 'RM' },
   { code: 'MXN', name: 'Mexican peso', symbol: '$' },
   { code: 'MAD', name: 'Moroccan dirham', symbol: 'د.م.' },
-  { code: 'TWD', name: 'New Taiwan dollar', symbol: '$' },
+  { code: 'TWD', name: 'New Taiwan dollar', symbol: 'NT$' },
   { code: 'NZD', name: 'New Zealand dollar', symbol: '$' },
   { code: 'NOK', name: 'Norwegian krone', symbol: 'kr' },
-  { code: 'PEN', name: 'Peruvian sol', symbol: 'S/.' },
-  { code: 'PHP', name: 'Philippine peso', symbol: '₱' },
   { code: 'PLN', name: 'Polish zloty', symbol: 'zł' },
   { code: 'QAR', name: 'Qatari riyal', symbol: 'ر.ق' },
   { code: 'RON', name: 'Romanian leu', symbol: 'lei' },
-  { code: 'SAR', name: 'Saudi riyal', symbol: 'ر.س' },
+  { code: 'SAR', name: 'Saudi Arabian riyal', symbol: 'ر.س' },
   { code: 'SGD', name: 'Singapore dollar', symbol: '$' },
   { code: 'ZAR', name: 'South African rand', symbol: 'R' },
   { code: 'KRW', name: 'South Korean won', symbol: '₩' },
@@ -85,6 +85,8 @@ const CURRENCIES_LIST: CurrencyItem[] = [
 ];
 
 export default function PaymentsAndPayoutsScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile } = useAuth();
@@ -266,7 +268,7 @@ export default function PaymentsAndPayoutsScreen() {
      ───────────────────────────────────────────────────────────────────────────── */
   if (currentView === 'hub') {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Top Header */}
         <View style={[styles.headerRow, { paddingTop: topPad }]}>
           <Pressable
@@ -278,7 +280,7 @@ export default function PaymentsAndPayoutsScreen() {
             style={styles.circleBtn}
             hitSlop={12}
           >
-            <Feather name="arrow-left" size={22} color="#111111" />
+            <Feather name="arrow-left" size={22} color={colors.text} />
           </Pressable>
 
           <Pressable
@@ -286,7 +288,7 @@ export default function PaymentsAndPayoutsScreen() {
             onPress={() => setCurrencyModal(true)}
             hitSlop={8}
           >
-            <Text style={styles.currencyTopLink}>{`${selectedCurrency.code}-${selectedCurrency.symbol}`}</Text>
+            <Text style={[styles.currencyTopLink, { color: colors.text }]}>{`${selectedCurrency.code}-${selectedCurrency.symbol}`}</Text>
           </Pressable>
         </View>
 
@@ -295,14 +297,14 @@ export default function PaymentsAndPayoutsScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
         >
           {/* Main Title */}
-          <Text style={styles.pageTitle}>Payments & payouts</Text>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Payments & payouts</Text>
 
           {loading ? (
-            <ActivityIndicator size="small" color="#111111" style={{ marginTop: 40 }} />
+            <ActivityIndicator size="small" color={colors.text} style={{ marginTop: 40 }} />
           ) : (
             <View style={styles.menuBlock}>
               {/* ── SECTION 1: TRAVELLING ─────────────────────────────────────── */}
-              <Text style={styles.sectionHeader}>Travelling</Text>
+              <Text style={[styles.sectionHeader, { color: colors.text }]}>Travelling</Text>
 
               {/* Payment methods */}
               <Pressable
@@ -311,10 +313,10 @@ export default function PaymentsAndPayoutsScreen() {
                 style={styles.navRow}
               >
                 <View style={styles.navRowLeft}>
-                  <MaterialCommunityIcons name="credit-card-outline" size={24} color="#1E1E1E" style={styles.rowIcon} />
-                  <Text style={styles.navRowTitle}>Payment methods</Text>
+                  <MaterialCommunityIcons name="credit-card-outline" size={24} color={colors.text} style={styles.rowIcon} />
+                  <Text style={[styles.navRowTitle, { color: colors.text }]}>Payment methods</Text>
                 </View>
-                <Feather name="chevron-right" size={20} color="#717171" />
+                <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
               </Pressable>
 
               {/* Your payments */}
@@ -324,10 +326,10 @@ export default function PaymentsAndPayoutsScreen() {
                 style={styles.navRow}
               >
                 <View style={styles.navRowLeft}>
-                  <Feather name="list" size={22} color="#1E1E1E" style={styles.rowIcon} />
-                  <Text style={styles.navRowTitle}>Your payments</Text>
+                  <Feather name="list" size={22} color={colors.text} style={styles.rowIcon} />
+                  <Text style={[styles.navRowTitle, { color: colors.text }]}>Your payments</Text>
                 </View>
-                <Feather name="chevron-right" size={20} color="#717171" />
+                <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
               </Pressable>
 
               {/* Credits & coupons */}
@@ -337,16 +339,16 @@ export default function PaymentsAndPayoutsScreen() {
                 style={styles.navRow}
               >
                 <View style={styles.navRowLeft}>
-                  <MaterialCommunityIcons name="ticket-percent-outline" size={24} color="#1E1E1E" style={styles.rowIcon} />
-                  <Text style={styles.navRowTitle}>Credits & coupons</Text>
+                  <MaterialCommunityIcons name="ticket-percent-outline" size={24} color={colors.text} style={styles.rowIcon} />
+                  <Text style={[styles.navRowTitle, { color: colors.text }]}>Credits & coupons</Text>
                 </View>
-                <Feather name="chevron-right" size={20} color="#717171" />
+                <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
               </Pressable>
 
-              <View style={styles.dividerLine} />
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
 
               {/* ── SECTION 2: HOSTING ────────────────────────────────────────── */}
-              <Text style={styles.sectionHeader}>Hosting</Text>
+              <Text style={[styles.sectionHeader, { color: colors.text }]}>Hosting</Text>
 
               {/* Payout methods */}
               <Pressable
@@ -355,10 +357,10 @@ export default function PaymentsAndPayoutsScreen() {
                 style={styles.navRow}
               >
                 <View style={styles.navRowLeft}>
-                  <MaterialCommunityIcons name="hand-coin-outline" size={24} color="#1E1E1E" style={styles.rowIcon} />
-                  <Text style={styles.navRowTitle}>Payout methods</Text>
+                  <MaterialCommunityIcons name="hand-coin-outline" size={24} color={colors.text} style={styles.rowIcon} />
+                  <Text style={[styles.navRowTitle, { color: colors.text }]}>Payout methods</Text>
                 </View>
-                <Feather name="chevron-right" size={20} color="#717171" />
+                <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
               </Pressable>
 
               {/* Transaction history */}
@@ -368,10 +370,10 @@ export default function PaymentsAndPayoutsScreen() {
                 style={styles.navRow}
               >
                 <View style={styles.navRowLeft}>
-                  <MaterialCommunityIcons name="receipt-text-outline" size={24} color="#1E1E1E" style={styles.rowIcon} />
-                  <Text style={styles.navRowTitle}>Transaction history</Text>
+                  <MaterialCommunityIcons name="receipt-text-outline" size={24} color={colors.text} style={styles.rowIcon} />
+                  <Text style={[styles.navRowTitle, { color: colors.text }]}>Transaction history</Text>
                 </View>
-                <Feather name="chevron-right" size={20} color="#717171" />
+                <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
               </Pressable>
             </View>
           )}
@@ -384,9 +386,9 @@ export default function PaymentsAndPayoutsScreen() {
           presentationStyle="pageSheet"
           onRequestClose={() => setCurrencyModal(false)}
         >
-          <View style={[styles.currencyModalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.currencyModalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
             {/* Header */}
-            <View style={styles.currencyModalHeader}>
+            <View style={[styles.currencyModalHeader, { borderBottomColor: colors.border }]}>
               <Pressable
                 onPress={() => {
                   setCurrencyModal(false);
@@ -395,26 +397,26 @@ export default function PaymentsAndPayoutsScreen() {
                 style={styles.circleBtn}
                 hitSlop={10}
               >
-                <Feather name="x" size={22} color="#111111" />
+                <Feather name="x" size={22} color={colors.text} />
               </Pressable>
-              <Text style={styles.currencyHeaderTitle}>Choose a currency</Text>
+              <Text style={[styles.currencyHeaderTitle, { color: colors.text }]}>Choose a currency</Text>
               <View style={{ width: 36 }} />
             </View>
 
             {/* Search input */}
             <View style={styles.searchContainer}>
-              <View style={styles.searchBarWrapper}>
-                <Feather name="search" size={18} color="#717171" style={{ marginRight: 8 }} />
+              <View style={[styles.searchBarWrapper, { borderColor: colors.border, backgroundColor: isDark ? '#27272A' : '#F9FAFB' }]}>
+                <Feather name="search" size={18} color={colors.mutedForeground} style={{ marginRight: 8 }} />
                 <TextInput
                   value={currencySearch}
                   onChangeText={setCurrencySearch}
                   placeholder="Search currencies"
-                  placeholderTextColor="#717171"
-                  style={styles.searchInput}
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.searchInput, { color: colors.text }]}
                 />
                 {currencySearch.length > 0 && (
                   <Pressable onPress={() => setCurrencySearch('')} hitSlop={8}>
-                    <Feather name="x-circle" size={16} color="#717171" />
+                    <Feather name="x-circle" size={16} color={colors.mutedForeground} />
                   </Pressable>
                 )}
               </View>
@@ -436,12 +438,12 @@ export default function PaymentsAndPayoutsScreen() {
                       setCurrencyModal(false);
                       setCurrencySearch('');
                     }}
-                    style={styles.currencyItemRow}
+                    style={[styles.currencyItemRow, { borderBottomColor: colors.border }]}
                   >
-                    <Text style={[styles.currencyItemLabel, isSelected && styles.currencyItemLabelActive]}>
+                    <Text style={[styles.currencyItemLabel, { color: colors.text }, isSelected && styles.currencyItemLabelActive]}>
                       {item.name} - {item.symbol}
                     </Text>
-                    {isSelected && <Feather name="check" size={20} color="#111111" />}
+                    {isSelected && <Feather name="check" size={20} color={colors.text} />}
                   </Pressable>
                 );
               })}
@@ -457,10 +459,10 @@ export default function PaymentsAndPayoutsScreen() {
      ───────────────────────────────────────────────────────────────────────────── */
   if (currentView === 'payment_methods') {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.headerRow, { paddingTop: topPad }]}>
           <Pressable onPress={() => setCurrentView('hub')} style={styles.circleBtn} hitSlop={12}>
-            <Feather name="arrow-left" size={22} color="#111111" />
+            <Feather name="arrow-left" size={22} color={colors.text} />
           </Pressable>
         </View>
 
@@ -468,28 +470,28 @@ export default function PaymentsAndPayoutsScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
         >
-          <Text style={styles.pageTitle}>Payment methods</Text>
-          <Text style={styles.pageSubtitle}>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Payment methods</Text>
+          <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>
             Add a payment method using our secure payment system, then start planning your next trip.
           </Text>
 
           {/* List of Linked Methods if any */}
           {paymentMethods.map((method) => (
-            <View key={method.id} style={styles.linkedMethodRow}>
-              <View style={styles.methodIconBadge}>
+            <View key={method.id} style={[styles.linkedMethodRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.methodIconBadge, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
                 {method.type === 'mpesa' ? (
                   <Text style={styles.mpesaBadgeText}>M</Text>
                 ) : (
-                  <Feather name="credit-card" size={18} color="#111111" />
+                  <Feather name="credit-card" size={18} color={colors.text} />
                 )}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.methodRowTitle}>{method.title}</Text>
-                <Text style={styles.methodRowSubtitle}>{method.subtitle}</Text>
+                <Text style={[styles.methodRowTitle, { color: colors.text }]}>{method.title}</Text>
+                <Text style={[styles.methodRowSubtitle, { color: colors.mutedForeground }]}>{method.subtitle}</Text>
               </View>
               {method.isDefault && (
-                <View style={styles.defaultPill}>
-                  <Text style={styles.defaultPillText}>DEFAULT</Text>
+                <View style={[styles.defaultPill, { backgroundColor: isDark ? '#27272A' : '#F1F5F9' }]}>
+                  <Text style={[styles.defaultPillText, { color: isDark ? '#CBD5E1' : '#475569' }]}>DEFAULT</Text>
                 </View>
               )}
             </View>
@@ -505,12 +507,12 @@ export default function PaymentsAndPayoutsScreen() {
           </Pressable>
 
           {/* Make all payments through ZuruSasa Protection Card */}
-          <View style={styles.protectionCard}>
-            <View style={styles.protectionIconWrapper}>
+          <View style={[styles.protectionCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <View style={[styles.protectionIconWrapper, { backgroundColor: isDark ? '#4C0519' : '#FFE4E6' }]}>
               <MaterialCommunityIcons name="credit-card-chip-outline" size={24} color="#E11D48" />
             </View>
-            <Text style={styles.protectionCardTitle}>Make all payments through ZuruSasa</Text>
-            <Text style={styles.protectionCardBody}>
+            <Text style={[styles.protectionCardTitle, { color: colors.text }]}>Make all payments through ZuruSasa</Text>
+            <Text style={[styles.protectionCardBody, { color: colors.mutedForeground }]}>
               Always pay and communicate through ZuruSasa to ensure you're protected under our{' '}
               <Text style={styles.underlineLink}>Terms of Service</Text>,{' '}
               <Text style={styles.underlineLink}>Payments Terms of Service</Text>, cancellation and other safeguards.
@@ -524,7 +526,7 @@ export default function PaymentsAndPayoutsScreen() {
               }
               style={{ marginTop: 12 }}
             >
-              <Text style={styles.learnMoreBold}>Learn more</Text>
+              <Text style={[styles.learnMoreBold, { color: colors.text }]}>Learn more</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -536,22 +538,22 @@ export default function PaymentsAndPayoutsScreen() {
           animationType="fade"
           onRequestClose={() => setPaymentMethodSelectionModal(false)}
         >
-          <View style={styles.bottomSheetOverlay}>
+          <View style={[styles.bottomSheetOverlay, { backgroundColor: colors.overlay }]}>
             <Pressable
               style={{ flex: 1 }}
               onPress={() => setPaymentMethodSelectionModal(false)}
             />
 
-            <View style={[styles.bottomSheetContainer, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={[styles.bottomSheetContainer, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
               {/* Header */}
               <View style={styles.bottomSheetHeader}>
-                <Text style={styles.bottomSheetTitle}>Payment method</Text>
+                <Text style={[styles.bottomSheetTitle, { color: colors.text }]}>Payment method</Text>
                 <Pressable
                   onPress={() => setPaymentMethodSelectionModal(false)}
                   style={styles.sheetCloseBtn}
                   hitSlop={10}
                 >
-                  <Feather name="x" size={20} color="#111111" />
+                  <Feather name="x" size={22} color={colors.text} />
                 </Pressable>
               </View>
 
@@ -560,36 +562,45 @@ export default function PaymentsAndPayoutsScreen() {
                 onPress={() => setChosenMethodType('card')}
                 style={[
                   styles.methodCardOption,
-                  chosenMethodType === 'card' && styles.methodCardOptionSelected,
+                  { borderColor: colors.border, backgroundColor: isDark ? '#27272A' : '#FAFAFA' },
+                  chosenMethodType === 'card' && [styles.methodCardOptionSelected, { borderColor: '#F26522' }],
                 ]}
               >
                 <View style={styles.methodCardLeft}>
-                  <MaterialCommunityIcons name="credit-card-outline" size={22} color="#111111" style={{ marginRight: 12 }} />
+                  <View style={{ marginRight: 14 }}>
+                    <Feather name="credit-card" size={24} color={colors.text} />
+                  </View>
                   <View>
-                    <Text style={styles.methodCardName}>Credit or debit card</Text>
+                    <Text style={[styles.methodCardName, { color: colors.text }]}>Credit or debit card</Text>
                     <View style={styles.cardBadgesRow}>
                       <Text style={styles.visaBadge}>VISA</Text>
                       <View style={styles.mastercardCircleWrapper}>
                         <View style={[styles.mcCircle, { backgroundColor: '#EB001B' }]} />
-                        <View style={[styles.mcCircle, { backgroundColor: '#F79E1B', marginLeft: -6 }]} />
+                        <View style={[styles.mcCircle, { backgroundColor: '#F79E1B', marginLeft: -4 }]} />
                       </View>
                     </View>
                   </View>
                 </View>
 
-                {/* Radio button */}
-                <View style={[styles.radioCircle, chosenMethodType === 'card' && styles.radioCircleActive]}>
-                  {chosenMethodType === 'card' && <View style={styles.radioInnerDot} />}
+                {/* Radio indicator */}
+                <View
+                  style={[
+                    styles.radioCircle,
+                    { borderColor: colors.border },
+                    chosenMethodType === 'card' && [styles.radioCircleActive, { borderColor: '#F26522' }],
+                  ]}
+                >
+                  {chosenMethodType === 'card' && <View style={[styles.radioInnerDot, { backgroundColor: '#F26522' }]} />}
                 </View>
               </Pressable>
 
-              {/* Option 2: M-Pesa */}
+              {/* Option 2: Safaricom M-Pesa */}
               <Pressable
                 onPress={() => setChosenMethodType('mpesa')}
                 style={[
                   styles.methodCardOption,
-                  chosenMethodType === 'mpesa' && styles.methodCardOptionSelected,
-                  { marginTop: 12 },
+                  { borderColor: colors.border, backgroundColor: isDark ? '#27272A' : '#FAFAFA', marginTop: 12 },
+                  chosenMethodType === 'mpesa' && [styles.methodCardOptionSelected, { borderColor: '#F26522' }],
                 ]}
               >
                 <View style={styles.methodCardLeft}>
@@ -597,42 +608,45 @@ export default function PaymentsAndPayoutsScreen() {
                     <Text style={styles.mpesaSmallBadgeText}>M</Text>
                   </View>
                   <View>
-                    <Text style={styles.methodCardName}>M-Pesa</Text>
-                    <Text style={styles.mpesaCardSubtitle}>Safaricom M-Pesa Express</Text>
+                    <Text style={[styles.methodCardName, { color: colors.text }]}>Safaricom M-Pesa</Text>
+                    <Text style={[styles.mpesaCardSubtitle, { color: colors.mutedForeground }]}>Instant STK Push for Kenya</Text>
                   </View>
                 </View>
 
-                {/* Radio button */}
-                <View style={[styles.radioCircle, chosenMethodType === 'mpesa' && styles.radioCircleActive]}>
-                  {chosenMethodType === 'mpesa' && <View style={styles.radioInnerDot} />}
+                {/* Radio indicator */}
+                <View
+                  style={[
+                    styles.radioCircle,
+                    { borderColor: colors.border },
+                    chosenMethodType === 'mpesa' && [styles.radioCircleActive, { borderColor: '#F26522' }],
+                  ]}
+                >
+                  {chosenMethodType === 'mpesa' && <View style={[styles.radioInnerDot, { backgroundColor: '#F26522' }]} />}
                 </View>
               </Pressable>
 
-              {/* Footer Buttons: Cancel on left, Done on right */}
+              {/* Footer: Cancel & Done */}
               <View style={styles.sheetFooterRow}>
                 <Pressable
-                  onPress={() => {
-                    setChosenMethodType(null);
-                    setPaymentMethodSelectionModal(false);
-                  }}
+                  onPress={() => setPaymentMethodSelectionModal(false)}
                   style={styles.sheetCancelBtn}
                   hitSlop={8}
                 >
-                  <Text style={styles.sheetCancelText}>Cancel</Text>
+                  <Text style={[styles.sheetCancelText, { color: colors.text }]}>Cancel</Text>
                 </Pressable>
 
                 <Pressable
-                  disabled={!chosenMethodType}
                   onPress={handleDoneSelectingMethod}
+                  disabled={!chosenMethodType}
                   style={[
                     styles.sheetDoneBtn,
-                    chosenMethodType ? styles.sheetDoneBtnActive : styles.sheetDoneBtnDisabled,
+                    !chosenMethodType ? styles.sheetDoneBtnDisabled : styles.sheetDoneBtnActive,
                   ]}
                 >
                   <Text
                     style={[
                       styles.sheetDoneText,
-                      chosenMethodType ? styles.sheetDoneTextActive : styles.sheetDoneTextDisabled,
+                      !chosenMethodType ? styles.sheetDoneTextDisabled : styles.sheetDoneTextActive,
                     ]}
                   >
                     Done
@@ -642,20 +656,19 @@ export default function PaymentsAndPayoutsScreen() {
             </View>
           </View>
         </Modal>
-
-        {/* ── CARD / MPESA DETAILS INPUT MODAL ──────────────────────────────── */}
+                {/* ── CARD / MPESA DETAILS INPUT MODAL ──────────────────────────────── */}
         <Modal
           visible={detailsModalVisible}
           animationType="slide"
           presentationStyle="pageSheet"
           onRequestClose={() => setDetailsModalVisible(false)}
         >
-          <View style={[styles.currencyModalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-            <View style={styles.currencyModalHeader}>
+          <View style={[styles.currencyModalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+            <View style={[styles.currencyModalHeader, { borderBottomColor: colors.border }]}>
               <Pressable onPress={() => setDetailsModalVisible(false)} style={styles.circleBtn}>
-                <Feather name="x" size={22} color="#111111" />
+                <Feather name="x" size={22} color={colors.text} />
               </Pressable>
-              <Text style={styles.currencyHeaderTitle}>
+              <Text style={[styles.currencyHeaderTitle, { color: colors.text }]}>
                 {chosenMethodType === 'mpesa' ? 'Enter M-Pesa Number' : 'Enter Card Details'}
               </Text>
               <View style={{ width: 36 }} />
@@ -664,52 +677,52 @@ export default function PaymentsAndPayoutsScreen() {
             <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalBody}>
               {chosenMethodType === 'mpesa' ? (
                 <View>
-                  <Text style={styles.inputLabel}>Safaricom Phone Number</Text>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Safaricom Phone Number</Text>
                   <TextInput
                     value={mpesaNumber}
                     onChangeText={setMpesaNumber}
                     placeholder="0712 345 678"
-                    placeholderTextColor="#9E9E9E"
+                    placeholderTextColor={colors.mutedForeground}
                     keyboardType="phone-pad"
-                    style={styles.sheetInput}
+                    style={[styles.sheetInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                   />
-                  <Text style={styles.inputHint}>
+                  <Text style={[styles.inputHint, { color: colors.mutedForeground }]}>
                     An M-Pesa STK PIN prompt will be sent directly to your phone whenever you confirm a reservation.
                   </Text>
                 </View>
               ) : (
                 <View>
-                  <Text style={styles.inputLabel}>Card Number</Text>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Card Number</Text>
                   <TextInput
                     value={cardNumber}
                     onChangeText={setCardNumber}
                     placeholder="4111 2222 3333 4444"
-                    placeholderTextColor="#9E9E9E"
+                    placeholderTextColor={colors.mutedForeground}
                     keyboardType="numeric"
-                    style={styles.sheetInput}
+                    style={[styles.sheetInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                   />
 
                   <View style={{ flexDirection: 'row', gap: 12 }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.inputLabel}>Expiry (MM/YY)</Text>
+                      <Text style={[styles.inputLabel, { color: colors.text }]}>Expiry (MM/YY)</Text>
                       <TextInput
                         value={cardExpiry}
                         onChangeText={setCardExpiry}
                         placeholder="12/28"
-                        placeholderTextColor="#9E9E9E"
-                        style={styles.sheetInput}
+                        placeholderTextColor={colors.mutedForeground}
+                        style={[styles.sheetInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                       />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.inputLabel}>CVV</Text>
+                      <Text style={[styles.inputLabel, { color: colors.text }]}>CVV</Text>
                       <TextInput
                         value={cardCvv}
                         onChangeText={setCardCvv}
                         placeholder="123"
-                        placeholderTextColor="#9E9E9E"
+                        placeholderTextColor={colors.mutedForeground}
                         keyboardType="numeric"
                         secureTextEntry
-                        style={styles.sheetInput}
+                        style={[styles.sheetInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                       />
                     </View>
                   </View>
@@ -731,10 +744,10 @@ export default function PaymentsAndPayoutsScreen() {
      ───────────────────────────────────────────────────────────────────────────── */
   if (currentView === 'your_payments') {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.headerRow, { paddingTop: topPad }]}>
           <Pressable onPress={() => setCurrentView('hub')} style={styles.circleBtn} hitSlop={12}>
-            <Feather name="arrow-left" size={22} color="#111111" />
+            <Feather name="arrow-left" size={22} color={colors.text} />
           </Pressable>
         </View>
 
@@ -743,23 +756,23 @@ export default function PaymentsAndPayoutsScreen() {
           contentContainerStyle={[styles.content, { flexGrow: 1, justifyContent: 'space-between', paddingBottom: bottomPad }]}
         >
           <View>
-            <Text style={styles.pageTitle}>Your payments</Text>
-            <Text style={styles.pageSubtitle}>
+            <Text style={[styles.pageTitle, { color: colors.text }]}>Your payments</Text>
+            <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>
               Once you have a reservation, this is where you can come to track your payments and refunds.
             </Text>
 
             {userBookings.length > 0 && (
               <View style={{ marginTop: 24 }}>
-                <Text style={styles.sectionHeader}>Recent Bookings</Text>
+                <Text style={[styles.sectionHeader, { color: colors.text }]}>Recent Bookings</Text>
                 {userBookings.map((b) => (
-                  <View key={b.id} style={styles.bookingPaymentRow}>
+                  <View key={b.id} style={[styles.bookingPaymentRow, { borderBottomColor: colors.border }]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.bookingRowTitle}>{b.trip_title || 'Coastal Getaway'}</Text>
-                      <Text style={styles.bookingRowSub}>
+                      <Text style={[styles.bookingRowTitle, { color: colors.text }]}>{b.trip_title || 'Coastal Getaway'}</Text>
+                      <Text style={[styles.bookingRowSub, { color: colors.mutedForeground }]}>
                         Ref: {b.payment_reference || b.id.slice(0, 8)} · {b.status?.toUpperCase() || 'PAID'}
                       </Text>
                     </View>
-                    <Text style={styles.bookingRowAmount}>KES {b.amount?.toLocaleString() || '0'}</Text>
+                    <Text style={[styles.bookingRowAmount, { color: colors.text }]}>KES {b.amount?.toLocaleString() || '0'}</Text>
                   </View>
                 ))}
               </View>
@@ -767,10 +780,10 @@ export default function PaymentsAndPayoutsScreen() {
           </View>
 
           {/* Footer */}
-          <View style={styles.helpFooter}>
-            <Text style={styles.helpFooterText}>
+          <View style={[styles.helpFooter, { borderTopColor: colors.border }]}>
+            <Text style={[styles.helpFooterText, { color: colors.mutedForeground }]}>
               To find another payment, try our{' '}
-              <Text onPress={() => router.push('/profile/support')} style={styles.underlineLinkBold}>
+              <Text onPress={() => router.push('/profile/support')} style={[styles.underlineLinkBold, { color: colors.text }]}>
                 Help Centre
               </Text>
               .
@@ -786,10 +799,10 @@ export default function PaymentsAndPayoutsScreen() {
      ───────────────────────────────────────────────────────────────────────────── */
   if (currentView === 'credits_coupons') {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.headerRow, { paddingTop: topPad }]}>
           <Pressable onPress={() => setCurrentView('hub')} style={styles.circleBtn} hitSlop={12}>
-            <Feather name="arrow-left" size={22} color="#111111" />
+            <Feather name="arrow-left" size={22} color={colors.text} />
           </Pressable>
         </View>
 
@@ -797,11 +810,11 @@ export default function PaymentsAndPayoutsScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
         >
-          <Text style={styles.pageTitle}>Credits and coupons</Text>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Credits and coupons</Text>
 
           {/* Section: Gift credit */}
           <View style={{ marginTop: 20 }}>
-            <Text style={styles.sectionHeader}>Gift credit</Text>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>Gift credit</Text>
             <Pressable
               testID="add-gift-card-btn"
               onPress={() => setGiftCardModal(true)}
@@ -811,14 +824,14 @@ export default function PaymentsAndPayoutsScreen() {
             </Pressable>
           </View>
 
-          <View style={[styles.dividerLine, { marginVertical: 32 }]} />
+          <View style={[styles.dividerLine, { marginVertical: 32, backgroundColor: colors.border }]} />
 
           {/* Section: Coupons */}
           <View>
-            <Text style={styles.sectionHeader}>Coupons</Text>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>Coupons</Text>
             <View style={styles.couponCountRow}>
-              <Text style={styles.couponCountLabel}>Your coupons</Text>
-              <Text style={styles.couponCountValue}>{couponsCount}</Text>
+              <Text style={[styles.couponCountLabel, { color: colors.text }]}>Your coupons</Text>
+              <Text style={[styles.couponCountValue, { color: colors.text }]}>{couponsCount}</Text>
             </View>
 
             <Pressable
@@ -838,24 +851,24 @@ export default function PaymentsAndPayoutsScreen() {
           presentationStyle="pageSheet"
           onRequestClose={() => setGiftCardModal(false)}
         >
-          <View style={[styles.currencyModalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-            <View style={styles.currencyModalHeader}>
+          <View style={[styles.currencyModalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+            <View style={[styles.currencyModalHeader, { borderBottomColor: colors.border }]}>
               <Pressable onPress={() => setGiftCardModal(false)} style={styles.circleBtn}>
-                <Feather name="x" size={22} color="#111111" />
+                <Feather name="x" size={22} color={colors.text} />
               </Pressable>
-              <Text style={styles.currencyHeaderTitle}>Add gift card</Text>
+              <Text style={[styles.currencyHeaderTitle, { color: colors.text }]}>Add gift card</Text>
               <View style={{ width: 36 }} />
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Gift Card PIN / Code</Text>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Gift Card PIN / Code</Text>
               <TextInput
                 value={giftCardCode}
                 onChangeText={setGiftCardCode}
                 placeholder="XXXX-XXXX-XXXX"
-                placeholderTextColor="#9E9E9E"
+                placeholderTextColor={colors.mutedForeground}
                 autoCapitalize="characters"
-                style={styles.sheetInput}
+                style={[styles.sheetInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
               />
               <Pressable onPress={handleApplyGiftCard} style={styles.modalPrimaryBtn}>
                 <Text style={styles.modalPrimaryBtnText}>Apply to balance</Text>
@@ -871,24 +884,24 @@ export default function PaymentsAndPayoutsScreen() {
           presentationStyle="pageSheet"
           onRequestClose={() => setCouponModal(false)}
         >
-          <View style={[styles.currencyModalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-            <View style={styles.currencyModalHeader}>
+          <View style={[styles.currencyModalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+            <View style={[styles.currencyModalHeader, { borderBottomColor: colors.border }]}>
               <Pressable onPress={() => setCouponModal(false)} style={styles.circleBtn}>
-                <Feather name="x" size={22} color="#111111" />
+                <Feather name="x" size={22} color={colors.text} />
               </Pressable>
-              <Text style={styles.currencyHeaderTitle}>Add coupon</Text>
+              <Text style={[styles.currencyHeaderTitle, { color: colors.text }]}>Add coupon</Text>
               <View style={{ width: 36 }} />
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Coupon Code</Text>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Coupon Code</Text>
               <TextInput
                 value={couponCode}
                 onChangeText={setCouponCode}
                 placeholder="COASTAL20"
-                placeholderTextColor="#9E9E9E"
+                placeholderTextColor={colors.mutedForeground}
                 autoCapitalize="characters"
-                style={styles.sheetInput}
+                style={[styles.sheetInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
               />
               <Pressable onPress={handleApplyCoupon} style={styles.modalPrimaryBtn}>
                 <Text style={styles.modalPrimaryBtnText}>Add to account</Text>
@@ -904,15 +917,15 @@ export default function PaymentsAndPayoutsScreen() {
      RENDER SCREEN 5 & 6: EARNINGS / HOST PAYOUTS (SCREENSHOTS 5 & 6)
      ───────────────────────────────────────────────────────────────────────────── */
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Top Header */}
       <View style={[styles.headerRow, { paddingTop: topPad }]}>
         <Pressable onPress={() => setCurrentView('hub')} style={styles.circleBtn} hitSlop={12}>
-          <Feather name="arrow-left" size={22} color="#111111" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
 
         <Pressable onPress={() => setPayoutModal(true)} style={styles.circleBtn} hitSlop={12}>
-          <Feather name="settings" size={20} color="#111111" />
+          <Feather name="settings" size={20} color={colors.text} />
         </Pressable>
       </View>
 
@@ -920,65 +933,65 @@ export default function PaymentsAndPayoutsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
-        <Text style={styles.pageTitle}>Earnings</Text>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>Earnings</Text>
 
         {/* Warning Banner: Payouts are paused */}
         {!payoutsConfigured && (
-          <View style={styles.warningBanner}>
+          <View style={[styles.warningBanner, { backgroundColor: isDark ? '#3D1515' : '#F8F8F8' }]}>
             <View style={styles.warningHeaderRow}>
               <Ionicons name="alert-circle" size={22} color="#DC2626" style={{ marginRight: 8 }} />
-              <Text style={styles.warningTitle}>Your payouts are paused</Text>
+              <Text style={[styles.warningTitle, { color: colors.text }]}>Your payouts are paused</Text>
             </View>
-            <Text style={styles.warningSubtitle}>
+            <Text style={[styles.warningSubtitle, { color: colors.mutedForeground }]}>
               Add a payout method so we can send you the money you're owed.
             </Text>
 
             <Pressable
               testID="setup-payouts-btn"
               onPress={() => setPayoutModal(true)}
-              style={styles.setupPayoutsPillBtn}
+              style={[styles.setupPayoutsPillBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
             >
-              <Text style={styles.setupPayoutsBtnText}>Set up payouts</Text>
+              <Text style={[styles.setupPayoutsBtnText, { color: colors.text }]}>Set up payouts</Text>
             </Pressable>
           </View>
         )}
 
         {/* Performance Card */}
-        <View style={styles.performanceCard}>
-          <Text style={styles.performanceHeader}>Performance</Text>
-          <Text style={styles.performanceAmount}>$0.00</Text>
-          <Text style={styles.performanceSub}>Total for August (USD)</Text>
+        <View style={[styles.performanceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.performanceHeader, { color: colors.text }]}>Performance</Text>
+          <Text style={[styles.performanceAmount, { color: colors.text }]}>$0.00</Text>
+          <Text style={[styles.performanceSub, { color: colors.mutedForeground }]}>Total for August (USD)</Text>
 
           {/* Bar placeholder */}
           <View style={styles.barGraphRow}>
-            <View style={[styles.barPillar, { height: 70 }]} />
-            <View style={[styles.barPillar, { height: 50 }]} />
+            <View style={[styles.barPillar, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', height: 70 }]} />
+            <View style={[styles.barPillar, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', height: 50 }]} />
           </View>
 
-          <Text style={styles.performanceFooterText}>
+          <Text style={[styles.performanceFooterText, { color: colors.mutedForeground }]}>
             Your overview will show up here once you get your first booking.
           </Text>
         </View>
 
         {/* Section: Upcoming */}
-        <Text style={[styles.sectionHeader, { marginTop: 32 }]}>Upcoming</Text>
-        <View style={styles.illustrationCard}>
+        <Text style={[styles.sectionHeader, { marginTop: 32, color: colors.text }]}>Upcoming</Text>
+        <View style={[styles.illustrationCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.illustrationBadge}>
             <Text style={{ fontSize: 32 }}>📅</Text>
           </View>
-          <Text style={styles.illustrationTitle}>No scheduled payouts</Text>
-          <Text style={styles.illustrationSub}>
+          <Text style={[styles.illustrationTitle, { color: colors.text }]}>No scheduled payouts</Text>
+          <Text style={[styles.illustrationSub, { color: colors.mutedForeground }]}>
             Upcoming payouts will be shown here after your first booking.
           </Text>
         </View>
 
         {/* Section: Paid */}
-        <Text style={[styles.sectionHeader, { marginTop: 32 }]}>Paid</Text>
-        <View style={styles.illustrationCard}>
+        <Text style={[styles.sectionHeader, { marginTop: 32, color: colors.text }]}>Paid</Text>
+        <View style={[styles.illustrationCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.illustrationBadge}>
             <Text style={{ fontSize: 32 }}>🪙</Text>
           </View>
-          <Text style={styles.illustrationTitle}>No sent payouts</Text>
+          <Text style={[styles.illustrationTitle, { color: colors.text }]}>No sent payouts</Text>
           <Pressable
             onPress={() =>
               Alert.alert(
@@ -987,7 +1000,7 @@ export default function PaymentsAndPayoutsScreen() {
               )
             }
           >
-            <Text style={styles.underlineLinkBold}>Learn how payouts work</Text>
+            <Text style={[styles.underlineLinkBold, { color: colors.text }]}>Learn how payouts work</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -999,30 +1012,36 @@ export default function PaymentsAndPayoutsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setPayoutModal(false)}
       >
-        <View style={[styles.currencyModalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.currencyModalHeader}>
+        <View style={[styles.currencyModalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.currencyModalHeader, { borderBottomColor: colors.border }]}>
             <Pressable onPress={() => setPayoutModal(false)} style={styles.circleBtn}>
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.currencyHeaderTitle}>Set up payout method</Text>
+            <Text style={[styles.currencyHeaderTitle, { color: colors.text }]}>Set up payout method</Text>
             <View style={{ width: 36 }} />
           </View>
 
           <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalBody}>
-            <View style={styles.methodTypeSwitcher}>
+            <View style={[styles.methodTypeSwitcher, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
               <Pressable
                 onPress={() => setPayoutType('mpesa')}
-                style={[styles.typeBtn, payoutType === 'mpesa' && styles.typeBtnActive]}
+                style={[
+                  styles.typeBtn,
+                  payoutType === 'mpesa' && [styles.typeBtnActive, { backgroundColor: colors.card }],
+                ]}
               >
-                <Text style={[styles.typeBtnText, payoutType === 'mpesa' && styles.typeBtnTextActive]}>
+                <Text style={[styles.typeBtnText, { color: colors.mutedForeground }, payoutType === 'mpesa' && [styles.typeBtnTextActive, { color: colors.text }]]}>
                   M-Pesa Payout
                 </Text>
               </Pressable>
               <Pressable
                 onPress={() => setPayoutType('bank')}
-                style={[styles.typeBtn, payoutType === 'bank' && styles.typeBtnActive]}
+                style={[
+                  styles.typeBtn,
+                  payoutType === 'bank' && [styles.typeBtnActive, { backgroundColor: colors.card }],
+                ]}
               >
-                <Text style={[styles.typeBtnText, payoutType === 'bank' && styles.typeBtnTextActive]}>
+                <Text style={[styles.typeBtnText, { color: colors.mutedForeground }, payoutType === 'bank' && [styles.typeBtnTextActive, { color: colors.text }]]}>
                   Bank Account (EFT)
                 </Text>
               </Pressable>
@@ -1030,34 +1049,34 @@ export default function PaymentsAndPayoutsScreen() {
 
             {payoutType === 'mpesa' ? (
               <View>
-                <Text style={styles.inputLabel}>M-Pesa Phone Number</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>M-Pesa Phone Number</Text>
                 <TextInput
                   value={payoutPhone}
                   onChangeText={setPayoutPhone}
                   placeholder="0712 345 678"
-                  placeholderTextColor="#9E9E9E"
+                  placeholderTextColor={colors.mutedForeground}
                   keyboardType="phone-pad"
-                  style={styles.sheetInput}
+                  style={[styles.sheetInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
               </View>
             ) : (
               <View>
-                <Text style={styles.inputLabel}>Bank Name</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Bank Name</Text>
                 <TextInput
                   value={payoutBankName}
                   onChangeText={setPayoutBankName}
                   placeholder="e.g. KCB, Equity Bank, NCBA"
-                  placeholderTextColor="#9E9E9E"
-                  style={styles.sheetInput}
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.sheetInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
-                <Text style={styles.inputLabel}>Account Number</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Account Number</Text>
                 <TextInput
                   value={payoutAccountNumber}
                   onChangeText={setPayoutAccountNumber}
                   placeholder="1234567890"
-                  placeholderTextColor="#9E9E9E"
+                  placeholderTextColor={colors.mutedForeground}
                   keyboardType="numeric"
-                  style={styles.sheetInput}
+                  style={[styles.sheetInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
               </View>
             )}
@@ -1075,7 +1094,6 @@ export default function PaymentsAndPayoutsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   headerRow: {
     flexDirection: 'row',
@@ -1282,7 +1300,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bottomSheetContainer: {
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
@@ -1431,7 +1448,6 @@ const styles = StyleSheet.create({
   /* Choose Currency Modal Styles (Screenshot 2) */
   currencyModalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   currencyModalHeader: {
     flexDirection: 'row',
@@ -1577,7 +1593,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   setupPayoutsPillBtn: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
@@ -1591,7 +1606,6 @@ const styles = StyleSheet.create({
     color: '#111111',
   },
   performanceCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 24,
     borderWidth: 1,
@@ -1642,7 +1656,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   illustrationCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 28,
     borderWidth: 1,

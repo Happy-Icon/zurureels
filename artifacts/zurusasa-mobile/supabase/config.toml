@@ -19,3 +19,12 @@ verify_jwt = false
 [functions.delete-account]
 verify_jwt = true
 
+[functions.create-persona-inquiry]
+verify_jwt = true
+
+[functions.verify-persona-inquiry]
+verify_jwt = true
+
+[functions.persona-webhook]
+verify_jwt = false
+

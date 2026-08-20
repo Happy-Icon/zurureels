@@ -20,6 +20,8 @@ import { useRouter, type Href } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { useTheme } from '@/context/ThemeContext';
+import { useColors } from '@/hooks/useColors';
 import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
 import { supabase } from '@/lib/supabase';
 import { useSavedEvents, useSavedReels } from '@/lib/queries';
@@ -40,6 +42,8 @@ interface ProfileMenuItem {
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const colors = useColors();
+  const { isDark } = useTheme();
   const { user, profile, signOut, loading, viewMode, switchViewMode, role, refreshProfile } = useAuth();
   const { showAlert } = useCustomAlert();
 
@@ -85,7 +89,7 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad, paddingHorizontal: 24, gap: 20 }]}>
+      <View style={[styles.fill, { backgroundColor: colors.background, paddingTop: topPad, paddingHorizontal: 24, gap: 20 }]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Skeleton style={{ height: 36, width: 120, borderRadius: 8 }} />
           <Skeleton style={{ height: 40, width: 40, borderRadius: 20 }} />
@@ -102,19 +106,19 @@ export default function ProfileScreen() {
 
   if (!user) {
     return (
-      <View style={[styles.fill, styles.centered, { backgroundColor: '#FFFFFF', paddingTop: topPad }]}>
-        <View style={styles.loggedOutCard}>
-          <View style={styles.loggedOutIconRing}>
-            <Feather name="user" size={32} color="#000000" />
+      <View style={[styles.fill, styles.centered, { backgroundColor: colors.background, paddingTop: topPad }]}>
+        <View style={[styles.loggedOutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.loggedOutIconRing, { backgroundColor: isDark ? '#27272A' : '#F8FAFC' }]}>
+            <Feather name="user" size={32} color={colors.text} />
           </View>
-          <Text style={styles.loggedOutTitle}>Your Profile</Text>
-          <Text style={styles.loggedOutSub}>
+          <Text style={[styles.loggedOutTitle, { color: colors.text }]}>Your Profile</Text>
+          <Text style={[styles.loggedOutSub, { color: colors.mutedForeground }]}>
             Log in to manage your reservations, wishlist, payment methods and profile settings.
           </Text>
           <Pressable
             testID="signin-button"
             onPress={() => router.push('/auth')}
-            style={({ pressed }) => [styles.signInBtn, pressed && { opacity: 0.9 }]}
+            style={({ pressed }) => [styles.signInBtn, { backgroundColor: '#F26522' }, pressed && { opacity: 0.9 }]}
           >
             <Text style={styles.signInBtnText}>Log in or Sign up</Text>
           </Pressable>
@@ -147,6 +151,11 @@ export default function ProfileScreen() {
 
   const initial = displayName.charAt(0).toUpperCase();
   const isHostMode = viewMode === 'host';
+  const isVerified = Boolean(
+    (profile as any)?.is_verified ||
+    (profile as any)?.verification_status === 'verified' ||
+    meta?.verification_status === 'verified'
+  );
   const userContact = user.phone || (profile as any)?.phone || user.email || (profile as any)?.email || '';
   const userLocation = profMeta?.location || (meta.location as string) || '';
   const userWork = profMeta?.work || (meta.work as string) || '';
@@ -322,9 +331,9 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <View style={styles.fill}>
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <ScrollView
-        style={styles.fill}
+        style={[styles.fill, { backgroundColor: colors.background }]}
         contentContainerStyle={{
           paddingTop: topPad,
           paddingBottom: bottomPad,
@@ -334,14 +343,18 @@ export default function ProfileScreen() {
       >
         {/* ── HEADER ───────────────────────────────────────────────────────────── */}
         <View style={styles.headerRow}>
-          <Text style={styles.pageTitle}>Profile</Text>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Profile</Text>
           <Pressable
             testID="notification-bell-btn"
             onPress={() => router.push('/notifications')}
-            style={({ pressed }) => [styles.bellBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [
+              styles.bellBtn,
+              { backgroundColor: isDark ? '#27272A' : '#F3F4F6' },
+              pressed && { opacity: 0.7 },
+            ]}
             hitSlop={8}
           >
-            <Feather name="bell" size={20} color="#000000" />
+            <Feather name="bell" size={20} color={colors.text} />
             <NotificationBadge count={unreadCount} />
           </Pressable>
         </View>
@@ -350,7 +363,14 @@ export default function ProfileScreen() {
         <Pressable
           testID="profile-hero-card"
           onPress={() => router.push('/profile/view')}
-          style={({ pressed }) => [styles.profileCard, pressed && { opacity: 0.95 }]}
+          style={({ pressed }) => [
+            styles.profileCard,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+            pressed && { opacity: 0.95 },
+          ]}
         >
           <View style={styles.avatarContainer}>
             {avatarUrl && !imageError ? (
@@ -362,7 +382,7 @@ export default function ProfileScreen() {
                 onError={() => setImageError(true)}
               />
             ) : (
-              <View style={styles.avatarInitialBox}>
+              <View style={[styles.avatarInitialBox, { backgroundColor: isDark ? '#27272A' : '#FFF7ED', borderColor: isDark ? '#3F3F46' : '#FED7AA' }]}>
                 <Text style={styles.avatarInitialText}>{initial}</Text>
               </View>
             )}
@@ -380,34 +400,42 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
 
-          <Text style={styles.userName}>{displayName}</Text>
+          <Text style={[styles.userName, { color: colors.text }]}>{displayName}</Text>
 
           {userContact ? (
-            <Text style={styles.userContactText}>{userContact}</Text>
+            <Text style={[styles.userContactText, { color: colors.mutedForeground }]}>{userContact}</Text>
           ) : null}
 
-          <View style={styles.roleTagPill}>
-            <Text style={styles.roleTagText}>{isHostMode ? 'Verified Host' : 'Guest Traveler'}</Text>
+          <View style={[styles.roleTagPill, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+            <Text style={[styles.roleTagText, { color: isDark ? '#E4E4E7' : '#374151' }]}>
+              {isHostMode
+                ? isVerified
+                  ? 'Verified Host'
+                  : 'Host'
+                : isVerified
+                  ? 'Verified Guest'
+                  : 'Guest Traveler'}
+            </Text>
           </View>
 
           {userLocation || userWork ? (
             <View style={styles.metaPreviewRow}>
               {userLocation ? (
-                <View style={styles.metaChip}>
-                  <Feather name="map-pin" size={11} color="#6B7280" />
-                  <Text style={styles.metaChipText}>{userLocation}</Text>
+                <View style={[styles.metaChip, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                  <Feather name="map-pin" size={11} color={colors.mutedForeground} />
+                  <Text style={[styles.metaChipText, { color: colors.mutedForeground }]}>{userLocation}</Text>
                 </View>
               ) : null}
               {userWork ? (
-                <View style={styles.metaChip}>
-                  <Feather name="briefcase" size={11} color="#6B7280" />
-                  <Text style={styles.metaChipText}>{userWork}</Text>
+                <View style={[styles.metaChip, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                  <Feather name="briefcase" size={11} color={colors.mutedForeground} />
+                  <Text style={[styles.metaChipText, { color: colors.mutedForeground }]}>{userWork}</Text>
                 </View>
               ) : null}
             </View>
           ) : null}
 
-          <View style={styles.showProfilePill}>
+          <View style={[styles.showProfilePill, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
             <Text style={styles.showProfilePillText}>Show profile</Text>
             <Feather name="chevron-right" size={14} color="#F26522" />
           </View>
@@ -418,23 +446,31 @@ export default function ProfileScreen() {
           <Pressable
             testID="profile-quick-bookings"
             onPress={() => router.push('/reservations')}
-            style={({ pressed }) => [styles.quickCard, pressed && styles.quickCardPressed]}
+            style={({ pressed }) => [
+              styles.quickCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && styles.quickCardPressed,
+            ]}
           >
-            <View style={styles.quickCardIconWrap}>
+            <View style={[styles.quickCardIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
               <Feather name="briefcase" size={36} color="#F26522" />
             </View>
-            <Text style={styles.quickCardText}>Bookings</Text>
+            <Text style={[styles.quickCardText, { color: colors.text }]}>Bookings</Text>
           </Pressable>
 
           <Pressable
             testID="profile-quick-history"
             onPress={() => router.push('/profile/history')}
-            style={({ pressed }) => [styles.quickCard, pressed && styles.quickCardPressed]}
+            style={({ pressed }) => [
+              styles.quickCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && styles.quickCardPressed,
+            ]}
           >
-            <View style={styles.quickCardIconWrap}>
+            <View style={[styles.quickCardIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
               <MaterialCommunityIcons name="history" size={38} color="#F26522" />
             </View>
-            <Text style={styles.quickCardText}>History</Text>
+            <Text style={[styles.quickCardText, { color: colors.text }]}>History</Text>
           </Pressable>
         </View>
 
@@ -442,14 +478,18 @@ export default function ProfileScreen() {
         {!isHostMode && role !== 'host' && (
           <Pressable
             onPress={() => router.push('/become-host')}
-            style={({ pressed }) => [styles.becomeHostCard, pressed && { opacity: 0.95 }]}
+            style={({ pressed }) => [
+              styles.becomeHostCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && { opacity: 0.95 },
+            ]}
           >
-            <View style={styles.becomeHostIconWrap}>
+            <View style={[styles.becomeHostIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
               <Feather name="home" size={26} color="#F26522" />
             </View>
             <View style={styles.becomeHostTextStack}>
-              <Text style={styles.becomeHostTitle}>Become a host</Text>
-              <Text style={styles.becomeHostSub}>
+              <Text style={[styles.becomeHostTitle, { color: colors.text }]}>Become a host</Text>
+              <Text style={[styles.becomeHostSub, { color: colors.mutedForeground }]}>
                 It's easy to start hosting and earn extra income.
               </Text>
             </View>
@@ -471,22 +511,22 @@ export default function ProfileScreen() {
             >
               <View style={styles.menuIconWrap}>
                 {item.iconFamily === 'feather' && (
-                  <Feather name={item.iconName as any} size={22} color="#1E1E1E" />
+                  <Feather name={item.iconName as any} size={22} color={colors.text} />
                 )}
                 {item.iconFamily === 'ionicons' && (
-                  <Ionicons name={item.iconName as any} size={22} color="#1E1E1E" />
+                  <Ionicons name={item.iconName as any} size={22} color={colors.text} />
                 )}
                 {item.iconFamily === 'material' && (
-                  <MaterialCommunityIcons name={item.iconName as any} size={24} color="#1E1E1E" />
+                  <MaterialCommunityIcons name={item.iconName as any} size={24} color={colors.text} />
                 )}
               </View>
-              <Text style={styles.menuTitle}>{item.title}</Text>
-              {item.showChevron && <Feather name="chevron-right" size={20} color="#717171" />}
+              <Text style={[styles.menuTitle, { color: colors.text }]}>{item.title}</Text>
+              {item.showChevron && <Feather name="chevron-right" size={20} color={colors.mutedForeground} />}
             </Pressable>
           ))}
 
           {/* Subtle Divider Line */}
-          <View style={styles.menuDivider} />
+          <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
           {/* Block 2 */}
           {block2Items.map((item) => (
@@ -501,17 +541,17 @@ export default function ProfileScreen() {
             >
               <View style={styles.menuIconWrap}>
                 {item.iconFamily === 'feather' && (
-                  <Feather name={item.iconName as any} size={22} color="#1E1E1E" />
+                  <Feather name={item.iconName as any} size={22} color={colors.text} />
                 )}
                 {item.iconFamily === 'ionicons' && (
-                  <Ionicons name={item.iconName as any} size={22} color="#1E1E1E" />
+                  <Ionicons name={item.iconName as any} size={22} color={colors.text} />
                 )}
                 {item.iconFamily === 'material' && (
-                  <MaterialCommunityIcons name={item.iconName as any} size={24} color="#1E1E1E" />
+                  <MaterialCommunityIcons name={item.iconName as any} size={24} color={colors.text} />
                 )}
               </View>
-              <Text style={styles.menuTitle}>{item.title}</Text>
-              {item.showChevron && <Feather name="chevron-right" size={20} color="#717171" />}
+              <Text style={[styles.menuTitle, { color: colors.text }]}>{item.title}</Text>
+              {item.showChevron && <Feather name="chevron-right" size={20} color={colors.mutedForeground} />}
             </Pressable>
           ))}
         </View>
@@ -578,7 +618,6 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   centered: {
     alignItems: 'center',
@@ -588,7 +627,6 @@ const styles = StyleSheet.create({
   loggedOutCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -651,7 +689,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   profileCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 28,
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -802,7 +839,6 @@ const styles = StyleSheet.create({
   },
   quickCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -845,7 +881,6 @@ const styles = StyleSheet.create({
   becomeHostCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -955,7 +990,6 @@ const styles = StyleSheet.create({
   /* ── SWITCHING TRANSITION SCREEN (SCREENSHOT 2) ─────────────────────────── */
   switchingContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },

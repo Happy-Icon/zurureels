@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { RatingStars } from '@/components/reviews/RatingStars';
 import { reviewService } from '@/services/reviewService';
 import { useAuth } from '@/context/AuthContext';
@@ -39,6 +41,8 @@ export function LeaveReviewModal({
   onClose,
   onSuccess,
 }: LeaveReviewModalProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const { user } = useAuth();
   const [step, setStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -129,18 +133,18 @@ export function LeaveReviewModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={styles.overlay}>
-        <View style={styles.modalSheet}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {/* Header */}
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Review {listingTitle}</Text>
+          <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.sheetTitle, { color: colors.text }]}>Review {listingTitle}</Text>
             <Pressable onPress={handleClose} hitSlop={10}>
-              <Feather name="x" size={22} color="#222222" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
           </View>
 
           {/* Progress Indicator Bar */}
           {step < 5 ? (
-            <View style={styles.progressTrack}>
+            <View style={[styles.progressTrack, { backgroundColor: isDark ? '#3F3F46' : '#EBEBEB' }]}>
               <View style={[styles.progressFill, { width: `${(step / 4) * 100}%` }]} />
             </View>
           ) : null}
@@ -158,8 +162,8 @@ export function LeaveReviewModal({
             {/* STEP 1: OVERALL RATING */}
             {step === 1 ? (
               <View style={styles.stepBlock}>
-                <Text style={styles.stepHeading}>How was your overall stay?</Text>
-                <Text style={styles.stepSub}>Rate your overall experience with {listingTitle}</Text>
+                <Text style={[styles.stepHeading, { color: colors.text }]}>How was your overall stay?</Text>
+                <Text style={[styles.stepSub, { color: colors.mutedForeground }]}>Rate your overall experience with {listingTitle}</Text>
 
                 <View style={styles.starWrapLarge}>
                   <RatingStars
@@ -168,7 +172,7 @@ export function LeaveReviewModal({
                     interactive
                     onRatingChange={setOverallRating}
                   />
-                  <Text style={styles.ratingNumberLarge}>{overallRating}.0 / 5.0</Text>
+                  <Text style={[styles.ratingNumberLarge, { color: colors.text }]}>{overallRating}.0 / 5.0</Text>
                 </View>
 
                 <Pressable
@@ -184,21 +188,21 @@ export function LeaveReviewModal({
             {/* STEP 2: CATEGORY RATINGS */}
             {step === 2 ? (
               <View style={styles.stepBlock}>
-                <Text style={styles.stepHeading}>Category Ratings</Text>
-                <Text style={styles.stepSub}>Help future guests by rating key details</Text>
+                <Text style={[styles.stepHeading, { color: colors.text }]}>Category Ratings</Text>
+                <Text style={[styles.stepSub, { color: colors.mutedForeground }]}>Help future guests by rating key details</Text>
 
                 <View style={styles.categoryStack}>
-                  <CategoryRatingRow label="Cleanliness" value={cleanliness} onChange={setCleanliness} />
-                  <CategoryRatingRow label="Accuracy" value={accuracy} onChange={setAccuracy} />
-                  <CategoryRatingRow label="Communication" value={communication} onChange={setCommunication} />
-                  <CategoryRatingRow label="Check-in" value={checkIn} onChange={setCheckIn} />
-                  <CategoryRatingRow label="Location" value={location} onChange={setLocation} />
-                  <CategoryRatingRow label="Value" value={value} onChange={setValue} />
+                  <CategoryRatingRow label="Cleanliness" value={cleanliness} onChange={setCleanliness} textColor={colors.text} />
+                  <CategoryRatingRow label="Accuracy" value={accuracy} onChange={setAccuracy} textColor={colors.text} />
+                  <CategoryRatingRow label="Communication" value={communication} onChange={setCommunication} textColor={colors.text} />
+                  <CategoryRatingRow label="Check-in" value={checkIn} onChange={setCheckIn} textColor={colors.text} />
+                  <CategoryRatingRow label="Location" value={location} onChange={setLocation} textColor={colors.text} />
+                  <CategoryRatingRow label="Value" value={value} onChange={setValue} textColor={colors.text} />
                 </View>
 
                 <View style={styles.dualBtnRow}>
-                  <Pressable onPress={() => setStep(1)} style={styles.backStepBtn}>
-                    <Text style={styles.backStepBtnText}>Back</Text>
+                  <Pressable onPress={() => setStep(1)} style={[styles.backStepBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                    <Text style={[styles.backStepBtnText, { color: colors.text }]}>Back</Text>
                   </Pressable>
 
                   <Pressable
@@ -215,33 +219,36 @@ export function LeaveReviewModal({
             {/* STEP 3: WRITTEN REVIEW & PHOTOS */}
             {step === 3 ? (
               <View style={styles.stepBlock}>
-                <Text style={styles.stepHeading}>Write your review</Text>
-                <Text style={styles.stepSub}>Tell future travelers what you enjoyed most</Text>
+                <Text style={[styles.stepHeading, { color: colors.text }]}>Write your review</Text>
+                <Text style={[styles.stepSub, { color: colors.mutedForeground }]}>Tell future travelers what you enjoyed most</Text>
 
                 <GrowingInput
                   value={comment}
                   onChangeText={setComment}
                   placeholder="Describe your stay, the location, amenities, and host communication..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                   minHeight={90}
                   maxHeight={200}
-                  style={styles.commentInput}
+                  style={[styles.commentInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
 
                 <View style={styles.photoUploadBlock}>
-                  <Text style={styles.photoBlockLabel}>Add Photos (Optional)</Text>
-                  <Pressable onPress={handlePickPhotos} style={styles.addPhotoBtn}>
+                  <Text style={[styles.photoBlockLabel, { color: colors.text }]}>Add Photos (Optional)</Text>
+                  <Pressable
+                    onPress={handlePickPhotos}
+                    style={[styles.addPhotoBtn, { backgroundColor: isDark ? '#2A1810' : '#FFFBF8', borderColor: isDark ? '#5C2D16' : '#FCE3D6' }]}
+                  >
                     <Feather name="camera" size={18} color="#F26522" />
                     <Text style={styles.addPhotoText}>Upload Trip Photos</Text>
                   </Pressable>
                   {photos.length > 0 ? (
-                    <Text style={styles.photoCountText}>{photos.length} photos attached</Text>
+                    <Text style={[styles.photoCountText, { color: colors.mutedForeground }]}>{photos.length} photos attached</Text>
                   ) : null}
                 </View>
 
                 <View style={styles.dualBtnRow}>
-                  <Pressable onPress={() => setStep(2)} style={styles.backStepBtn}>
-                    <Text style={styles.backStepBtnText}>Back</Text>
+                  <Pressable onPress={() => setStep(2)} style={[styles.backStepBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                    <Text style={[styles.backStepBtnText, { color: colors.text }]}>Back</Text>
                   </Pressable>
 
                   <Pressable
@@ -268,8 +275,8 @@ export function LeaveReviewModal({
                 <View style={styles.successCircle}>
                   <Feather name="check" size={32} color="#FFFFFF" />
                 </View>
-                <Text style={styles.successTitle}>Thank You!</Text>
-                <Text style={styles.successSub}>
+                <Text style={[styles.successTitle, { color: colors.text }]}>Thank You!</Text>
+                <Text style={[styles.successSub, { color: colors.mutedForeground }]}>
                   Your review has been published. You're helping build a trusted coastal community on ZuruSasa.
                 </Text>
                 <Pressable
@@ -295,14 +302,16 @@ function CategoryRatingRow({
   label,
   value,
   onChange,
+  textColor,
 }: {
   label: string;
   value: number;
   onChange: (val: number) => void;
+  textColor?: string;
 }) {
   return (
     <View style={styles.catRow}>
-      <Text style={styles.catLabelText}>{label}</Text>
+      <Text style={[styles.catLabelText, textColor ? { color: textColor } : null]}>{label}</Text>
       <RatingStars rating={value} size={22} interactive onRatingChange={onChange} />
     </View>
   );

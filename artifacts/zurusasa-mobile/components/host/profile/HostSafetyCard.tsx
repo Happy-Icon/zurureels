@@ -1,8 +1,12 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useColors, useTheme } from '@/hooks/useColors';
 
 export function HostSafetyCard() {
+  const colors = useColors();
+  const { isDark } = useTheme();
+
   const safetyPoints = [
     { title: 'Bookings Protected', sub: '24/7 guest protection & emergency support' },
     { title: 'Identity Verified', sub: 'Government ID & phone check verified' },
@@ -11,12 +15,12 @@ export function HostSafetyCard() {
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.headerRow}>
         <View style={styles.iconCircle}>
           <Feather name="shield" size={18} color="#F26522" />
         </View>
-        <Text style={styles.title}>ZuruSasa Protection & Trust</Text>
+        <Text style={[styles.title, { color: colors.text }]}>ZuruSasa Protection & Trust</Text>
       </View>
 
       <View style={styles.listStack}>
@@ -24,8 +28,8 @@ export function HostSafetyCard() {
           <View key={idx} style={styles.pointRow}>
             <Feather name="check-circle" size={15} color="#10B981" style={{ marginTop: 2 }} />
             <View style={styles.pointTextGroup}>
-              <Text style={styles.pointTitle}>{pt.title}</Text>
-              <Text style={styles.pointSub}>{pt.sub}</Text>
+              <Text style={[styles.pointTitle, { color: colors.text }]}>{pt.title}</Text>
+              <Text style={[styles.pointSub, { color: colors.mutedForeground }]}>{pt.sub}</Text>
             </View>
           </View>
         ))}

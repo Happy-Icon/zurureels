@@ -1,16 +1,31 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import type { HostProfileData } from '@/lib/supabase';
 
-export function HostTrustBadges() {
+interface HostTrustBadgesProps {
+  host?: HostProfileData;
+}
+
+export function HostTrustBadges({ host }: HostTrustBadgesProps) {
+  const isVerified = Boolean(host?.is_verified || host?.verification_status === 'verified');
+  const hasPhone = Boolean(host?.phone);
+  const hasEmail = Boolean(host?.email);
+
   const trustItems = [
-    { icon: 'shield', label: 'Verified Identity' },
-    { icon: 'phone', label: 'Phone Verified' },
-    { icon: 'mail', label: 'Email Verified' },
-    { icon: 'file-text', label: 'Government ID Verified' },
+    ...(isVerified
+      ? [
+          { icon: 'shield', label: 'Verified Identity' },
+          { icon: 'file-text', label: 'Government ID Verified' },
+        ]
+      : []),
+    ...(hasPhone ? [{ icon: 'phone', label: 'Phone Confirmed' }] : []),
+    ...(hasEmail ? [{ icon: 'mail', label: 'Email Confirmed' }] : []),
+    ...(host?.is_super_host ? [{ icon: 'award', label: 'Super Host' }] : []),
     { icon: 'zap', label: 'Fast Responder' },
-    { icon: 'award', label: 'Top Rated Host' },
   ];
+
+  if (trustItems.length === 0) return null;
 
   return (
     <View style={styles.container}>

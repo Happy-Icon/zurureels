@@ -15,7 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
+import { personaVerificationService } from '@/services/personaVerificationService';
 
 type EditFieldType =
   | 'legal_name'
@@ -40,6 +43,8 @@ function maskEmail(emailStr?: string): string {
 }
 
 export default function PersonalInfoScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, refreshProfile } = useAuth();
@@ -142,8 +147,39 @@ export default function PersonalInfoScreen() {
     }
   };
 
+  const handleStartVerification = async () => {
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please sign in to verify your identity.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await personaVerificationService.launchVerification({
+        userId: user.id,
+        onSuccess: async () => {
+          setSaving(false);
+          setIdentityStatus('Verified');
+          if (refreshProfile) await refreshProfile();
+          Alert.alert('Identity Verified', 'Your official identity has been successfully verified with Persona.');
+          setActiveEdit(null);
+        },
+        onCanceled: () => {
+          setSaving(false);
+        },
+        onError: (errorMessage) => {
+          setSaving(false);
+          Alert.alert('Verification Notice', errorMessage);
+        },
+      });
+    } catch (err: any) {
+      setSaving(false);
+      Alert.alert('Verification Error', err?.message || 'Could not start identity verification.');
+    }
+  };
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
@@ -155,7 +191,7 @@ export default function PersonalInfoScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={22} color="#111111" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -165,16 +201,16 @@ export default function PersonalInfoScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
         {/* Title */}
-        <Text style={styles.pageTitle}>Personal info</Text>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>Personal info</Text>
 
         {loading ? (
-          <ActivityIndicator size="small" color="#111111" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="small" color={colors.text} style={{ marginTop: 40 }} />
         ) : (
           <View style={styles.fieldsContainer}>
             {/* 1. Legal name */}
-            <View style={styles.rowWrapper}>
+            <View style={[styles.rowWrapper, { borderBottomColor: colors.border }]}>
               <View style={styles.rowTop}>
-                <Text style={styles.fieldLabel}>Legal name</Text>
+                <Text style={[styles.fieldLabel, { color: colors.text }]}>Legal name</Text>
                 <Pressable
                   testID="edit-legal-name-btn"
                   onPress={() => setActiveEdit('legal_name')}
@@ -183,13 +219,13 @@ export default function PersonalInfoScreen() {
                   <Text style={styles.actionBtnText}>{legalName ? 'Edit' : 'Add'}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.fieldValue}>{legalName || 'Not provided'}</Text>
+              <Text style={[styles.fieldValue, { color: colors.mutedForeground }]}>{legalName || 'Not provided'}</Text>
             </View>
 
             {/* 2. Preferred first name */}
-            <View style={styles.rowWrapper}>
+            <View style={[styles.rowWrapper, { borderBottomColor: colors.border }]}>
               <View style={styles.rowTop}>
-                <Text style={styles.fieldLabel}>Preferred first name</Text>
+                <Text style={[styles.fieldLabel, { color: colors.text }]}>Preferred first name</Text>
                 <Pressable
                   testID="edit-preferred-name-btn"
                   onPress={() => setActiveEdit('preferred_name')}
@@ -198,13 +234,13 @@ export default function PersonalInfoScreen() {
                   <Text style={styles.actionBtnText}>{preferredName ? 'Edit' : 'Add'}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.fieldValue}>{preferredName || 'Not provided'}</Text>
+              <Text style={[styles.fieldValue, { color: colors.mutedForeground }]}>{preferredName || 'Not provided'}</Text>
             </View>
 
             {/* 3. Host display name for experiences and services */}
-            <View style={styles.rowWrapper}>
+            <View style={[styles.rowWrapper, { borderBottomColor: colors.border }]}>
               <View style={styles.rowTop}>
-                <Text style={[styles.fieldLabel, { maxWidth: '80%' }]}>
+                <Text style={[styles.fieldLabel, { color: colors.text, maxWidth: '80%' }]}>
                   Host display name for experiences and services
                 </Text>
                 <Pressable
@@ -215,13 +251,13 @@ export default function PersonalInfoScreen() {
                   <Text style={styles.actionBtnText}>Edit</Text>
                 </Pressable>
               </View>
-              <Text style={styles.fieldValue}>{hostDisplayName || 'Show my first name only'}</Text>
+              <Text style={[styles.fieldValue, { color: colors.mutedForeground }]}>{hostDisplayName || 'Show my first name only'}</Text>
             </View>
 
             {/* 4. Phone number */}
-            <View style={styles.rowWrapper}>
+            <View style={[styles.rowWrapper, { borderBottomColor: colors.border }]}>
               <View style={styles.rowTop}>
-                <Text style={styles.fieldLabel}>Phone number</Text>
+                <Text style={[styles.fieldLabel, { color: colors.text }]}>Phone number</Text>
                 <Pressable
                   testID="edit-phone-btn"
                   onPress={() => setActiveEdit('phone')}
@@ -230,16 +266,16 @@ export default function PersonalInfoScreen() {
                   <Text style={styles.actionBtnText}>{phone ? 'Edit' : 'Add'}</Text>
                 </Pressable>
               </View>
-              <Text style={[styles.fieldValue, !phone && styles.explanatoryText]}>
+              <Text style={[styles.fieldValue, { color: phone ? colors.mutedForeground : colors.mutedForeground }, !phone && styles.explanatoryText]}>
                 {phone ||
                   'Add a number so confirmed guests and ZuruSasa can get in touch. You can add other numbers and choose how they’re used.'}
               </Text>
             </View>
 
             {/* 5. Email */}
-            <View style={styles.rowWrapper}>
+            <View style={[styles.rowWrapper, { borderBottomColor: colors.border }]}>
               <View style={styles.rowTop}>
-                <Text style={styles.fieldLabel}>Email</Text>
+                <Text style={[styles.fieldLabel, { color: colors.text }]}>Email</Text>
                 <Pressable
                   testID="edit-email-btn"
                   onPress={() => setActiveEdit('email')}
@@ -248,13 +284,13 @@ export default function PersonalInfoScreen() {
                   <Text style={styles.actionBtnText}>Edit</Text>
                 </Pressable>
               </View>
-              <Text style={styles.fieldValue}>{maskEmail(email)}</Text>
+              <Text style={[styles.fieldValue, { color: colors.mutedForeground }]}>{maskEmail(email)}</Text>
             </View>
 
             {/* 6. Residential address */}
-            <View style={styles.rowWrapper}>
+            <View style={[styles.rowWrapper, { borderBottomColor: colors.border }]}>
               <View style={styles.rowTop}>
-                <Text style={styles.fieldLabel}>Residential address</Text>
+                <Text style={[styles.fieldLabel, { color: colors.text }]}>Residential address</Text>
                 <Pressable
                   testID="edit-residential-addr-btn"
                   onPress={() => setActiveEdit('residential_address')}
@@ -263,13 +299,13 @@ export default function PersonalInfoScreen() {
                   <Text style={styles.actionBtnText}>{residentialAddress ? 'Edit' : 'Add'}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.fieldValue}>{residentialAddress || 'Not provided'}</Text>
+              <Text style={[styles.fieldValue, { color: colors.mutedForeground }]}>{residentialAddress || 'Not provided'}</Text>
             </View>
 
             {/* 7. Postal address */}
-            <View style={styles.rowWrapper}>
+            <View style={[styles.rowWrapper, { borderBottomColor: colors.border }]}>
               <View style={styles.rowTop}>
-                <Text style={styles.fieldLabel}>Postal address</Text>
+                <Text style={[styles.fieldLabel, { color: colors.text }]}>Postal address</Text>
                 <Pressable
                   testID="edit-postal-addr-btn"
                   onPress={() => setActiveEdit('postal_address')}
@@ -278,13 +314,13 @@ export default function PersonalInfoScreen() {
                   <Text style={styles.actionBtnText}>{postalAddress ? 'Edit' : 'Add'}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.fieldValue}>{postalAddress || 'Not provided'}</Text>
+              <Text style={[styles.fieldValue, { color: colors.mutedForeground }]}>{postalAddress || 'Not provided'}</Text>
             </View>
 
             {/* 8. Emergency contact */}
-            <View style={styles.rowWrapper}>
+            <View style={[styles.rowWrapper, { borderBottomColor: colors.border }]}>
               <View style={styles.rowTop}>
-                <Text style={styles.fieldLabel}>Emergency contact</Text>
+                <Text style={[styles.fieldLabel, { color: colors.text }]}>Emergency contact</Text>
                 <Pressable
                   testID="edit-emergency-contact-btn"
                   onPress={() => setActiveEdit('emergency_contact')}
@@ -293,18 +329,24 @@ export default function PersonalInfoScreen() {
                   <Text style={styles.actionBtnText}>{emergencyName ? 'Edit' : 'Add'}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.fieldValue}>
+              <Text style={[styles.fieldValue, { color: colors.mutedForeground }]}>
                 {emergencyName ? `${emergencyName} (${emergencyPhone || 'No phone'})` : 'Not provided'}
               </Text>
             </View>
 
             {/* 9. Identity verification */}
-            <View style={styles.rowWrapper}>
+            <View style={[styles.rowWrapper, { borderBottomColor: colors.border }]}>
               <View style={styles.rowTop}>
-                <Text style={styles.fieldLabel}>Identity verification</Text>
+                <Text style={[styles.fieldLabel, { color: colors.text }]}>Identity verification</Text>
                 <Pressable
                   testID="edit-identity-btn"
-                  onPress={() => setActiveEdit('identity_verification')}
+                  onPress={() => {
+                    if (identityStatus === 'Verified') {
+                      setActiveEdit('identity_verification');
+                    } else {
+                      handleStartVerification();
+                    }
+                  }}
                   hitSlop={8}
                 >
                   <Text style={styles.actionBtnText}>
@@ -312,7 +354,7 @@ export default function PersonalInfoScreen() {
                   </Text>
                 </Pressable>
               </View>
-              <Text style={styles.fieldValue}>{identityStatus}</Text>
+              <Text style={[styles.fieldValue, { color: colors.mutedForeground }]}>{identityStatus}</Text>
             </View>
           </View>
         )}
@@ -325,12 +367,12 @@ export default function PersonalInfoScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setActiveEdit(null)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.card, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Pressable onPress={() => setActiveEdit(null)} style={styles.modalCloseBtn} hitSlop={10}>
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>
               {activeEdit === 'legal_name' && 'Legal name'}
               {activeEdit === 'preferred_name' && 'Preferred first name'}
               {activeEdit === 'host_display_name' && 'Host display name'}
@@ -348,16 +390,16 @@ export default function PersonalInfoScreen() {
             {/* Legal Name */}
             {activeEdit === 'legal_name' && (
               <View>
-                <Text style={styles.modalFieldTitle}>Legal name</Text>
-                <Text style={styles.modalFieldSub}>
+                <Text style={[styles.modalFieldTitle, { color: colors.text }]}>Legal name</Text>
+                <Text style={[styles.modalFieldSub, { color: colors.mutedForeground }]}>
                   This is the name on your government travel document, such as your National ID, Passport, or Driver’s License.
                 </Text>
                 <TextInput
                   value={legalName}
                   onChangeText={setLegalName}
                   placeholder="First and last legal name"
-                  placeholderTextColor="#9E9E9E"
-                  style={styles.modalInput}
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
               </View>
             )}
@@ -365,16 +407,16 @@ export default function PersonalInfoScreen() {
             {/* Preferred Name */}
             {activeEdit === 'preferred_name' && (
               <View>
-                <Text style={styles.modalFieldTitle}>Preferred first name</Text>
-                <Text style={styles.modalFieldSub}>
+                <Text style={[styles.modalFieldTitle, { color: colors.text }]}>Preferred first name</Text>
+                <Text style={[styles.modalFieldSub, { color: colors.mutedForeground }]}>
                   This is what hosts and guests will call you across ZuruSasa experiences.
                 </Text>
                 <TextInput
                   value={preferredName}
                   onChangeText={setPreferredName}
                   placeholder="e.g. Angelo"
-                  placeholderTextColor="#9E9E9E"
-                  style={styles.modalInput}
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
               </View>
             )}
@@ -382,20 +424,24 @@ export default function PersonalInfoScreen() {
             {/* Host Display Name */}
             {activeEdit === 'host_display_name' && (
               <View>
-                <Text style={styles.modalFieldTitle}>Host display name</Text>
-                <Text style={styles.modalFieldSub}>
+                <Text style={[styles.modalFieldTitle, { color: colors.text }]}>Host display name</Text>
+                <Text style={[styles.modalFieldSub, { color: colors.mutedForeground }]}>
                   Choose how your name appears on your verified coastal listings and reel profiles.
                 </Text>
                 {['Show my first name only', 'Show my full legal name', 'Show my business / agency name'].map((opt) => (
                   <Pressable
                     key={opt}
                     onPress={() => setHostDisplayName(opt)}
-                    style={[styles.modalOptionCard, hostDisplayName === opt && styles.modalOptionActive]}
+                    style={[
+                      styles.modalOptionCard,
+                      { backgroundColor: isDark ? '#27272A' : '#FAFAFA', borderColor: colors.border },
+                      hostDisplayName === opt && [styles.modalOptionActive, { borderColor: '#F26522', backgroundColor: colors.card }],
+                    ]}
                   >
-                    <Text style={[styles.modalOptionText, hostDisplayName === opt && styles.modalOptionTextActive]}>
+                    <Text style={[styles.modalOptionText, { color: colors.text }, hostDisplayName === opt && styles.modalOptionTextActive]}>
                       {opt}
                     </Text>
-                    {hostDisplayName === opt && <Feather name="check" size={18} color="#111111" />}
+                    {hostDisplayName === opt && <Feather name="check" size={18} color="#F26522" />}
                   </Pressable>
                 ))}
               </View>
@@ -404,17 +450,17 @@ export default function PersonalInfoScreen() {
             {/* Phone */}
             {activeEdit === 'phone' && (
               <View>
-                <Text style={styles.modalFieldTitle}>Phone number</Text>
-                <Text style={styles.modalFieldSub}>
+                <Text style={[styles.modalFieldTitle, { color: colors.text }]}>Phone number</Text>
+                <Text style={[styles.modalFieldSub, { color: colors.mutedForeground }]}>
                   Used for booking notifications, M-Pesa STK payment confirmations, and host check-in calls.
                 </Text>
                 <TextInput
                   value={phone}
                   onChangeText={setPhone}
                   placeholder="+254 712 345678"
-                  placeholderTextColor="#9E9E9E"
+                  placeholderTextColor={colors.mutedForeground}
                   keyboardType="phone-pad"
-                  style={styles.modalInput}
+                  style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
               </View>
             )}
@@ -422,18 +468,18 @@ export default function PersonalInfoScreen() {
             {/* Email */}
             {activeEdit === 'email' && (
               <View>
-                <Text style={styles.modalFieldTitle}>Email address</Text>
-                <Text style={styles.modalFieldSub}>
+                <Text style={[styles.modalFieldTitle, { color: colors.text }]}>Email address</Text>
+                <Text style={[styles.modalFieldSub, { color: colors.mutedForeground }]}>
                   Use an address you always have access to for receipts, security alerts, and passkey recovery.
                 </Text>
                 <TextInput
                   value={email}
                   onChangeText={setEmail}
                   placeholder="name@example.com"
-                  placeholderTextColor="#9E9E9E"
+                  placeholderTextColor={colors.mutedForeground}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  style={styles.modalInput}
+                  style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
               </View>
             )}
@@ -441,16 +487,16 @@ export default function PersonalInfoScreen() {
             {/* Residential address */}
             {activeEdit === 'residential_address' && (
               <View>
-                <Text style={styles.modalFieldTitle}>Residential address</Text>
-                <Text style={styles.modalFieldSub}>
+                <Text style={[styles.modalFieldTitle, { color: colors.text }]}>Residential address</Text>
+                <Text style={[styles.modalFieldSub, { color: colors.mutedForeground }]}>
                   Your primary residence for tax documentation and verification compliance.
                 </Text>
                 <TextInput
                   value={residentialAddress}
                   onChangeText={setResidentialAddress}
                   placeholder="Street address, city, country"
-                  placeholderTextColor="#9E9E9E"
-                  style={styles.modalInput}
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
               </View>
             )}
@@ -458,16 +504,16 @@ export default function PersonalInfoScreen() {
             {/* Postal address */}
             {activeEdit === 'postal_address' && (
               <View>
-                <Text style={styles.modalFieldTitle}>Postal address</Text>
-                <Text style={styles.modalFieldSub}>
+                <Text style={[styles.modalFieldTitle, { color: colors.text }]}>Postal address</Text>
+                <Text style={[styles.modalFieldSub, { color: colors.mutedForeground }]}>
                   Postal box or mailing address for formal notices and invoices.
                 </Text>
                 <TextInput
                   value={postalAddress}
                   onChangeText={setPostalAddress}
                   placeholder="P.O. Box 80400 Mombasa, Kenya"
-                  placeholderTextColor="#9E9E9E"
-                  style={styles.modalInput}
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
               </View>
             )}
@@ -475,31 +521,31 @@ export default function PersonalInfoScreen() {
             {/* Emergency contact */}
             {activeEdit === 'emergency_contact' && (
               <View>
-                <Text style={styles.modalFieldTitle}>Emergency contact</Text>
-                <Text style={styles.modalFieldSub}>
-                  Someone we can reach if an urgent situation arises during a coastal booking.
+                <Text style={[styles.modalFieldTitle, { color: colors.text }]}>Emergency contact</Text>
+                <Text style={[styles.modalFieldSub, { color: colors.mutedForeground }]}>
+                  A trusted contact we can reach out to in an urgent situation during a trip.
                 </Text>
                 <TextInput
                   value={emergencyName}
                   onChangeText={setEmergencyName}
-                  placeholder="Contact full name"
-                  placeholderTextColor="#9E9E9E"
-                  style={styles.modalInput}
+                  placeholder="Contact Name"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
                 <TextInput
                   value={emergencyPhone}
                   onChangeText={setEmergencyPhone}
-                  placeholder="Phone number (+254...)"
-                  placeholderTextColor="#9E9E9E"
+                  placeholder="Contact Phone (+254...)"
+                  placeholderTextColor={colors.mutedForeground}
                   keyboardType="phone-pad"
-                  style={styles.modalInput}
+                  style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
                 <TextInput
                   value={emergencyRel}
                   onChangeText={setEmergencyRel}
                   placeholder="Relationship (e.g. Spouse, Parent, Friend)"
-                  placeholderTextColor="#9E9E9E"
-                  style={styles.modalInput}
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                 />
               </View>
             )}
@@ -507,14 +553,14 @@ export default function PersonalInfoScreen() {
             {/* Identity verification */}
             {activeEdit === 'identity_verification' && (
               <View>
-                <Text style={styles.modalFieldTitle}>Government ID Verification</Text>
-                <Text style={styles.modalFieldSub}>
+                <Text style={[styles.modalFieldTitle, { color: colors.text }]}>Government ID Verification</Text>
+                <Text style={[styles.modalFieldSub, { color: colors.mutedForeground }]}>
                   Upload a photo of your Kenyan National ID or Passport to receive the Verified badge on ZuruSasa.
                 </Text>
-                <View style={styles.idCardBox}>
-                  <Feather name="shield" size={32} color="#111111" style={{ marginBottom: 12 }} />
-                  <Text style={styles.idCardTitle}>Status: {identityStatus}</Text>
-                  <Text style={styles.idCardSub}>
+                <View style={[styles.idCardBox, { backgroundColor: isDark ? '#27272A' : '#F8FAFC', borderColor: colors.border }]}>
+                  <Feather name="shield" size={32} color={colors.text} style={{ marginBottom: 12 }} />
+                  <Text style={[styles.idCardTitle, { color: colors.text }]}>Status: {identityStatus}</Text>
+                  <Text style={[styles.idCardSub, { color: colors.mutedForeground }]}>
                     {identityStatus === 'Verified'
                       ? 'Your identity is fully verified with ZuruSasa.'
                       : 'Fast AI & manual verification completed within 2 hours.'}
@@ -523,22 +569,55 @@ export default function PersonalInfoScreen() {
               </View>
             )}
 
-            {/* Save Button */}
-            <Pressable
-              onPress={handleSaveField}
-              disabled={saving}
-              style={({ pressed }) => [
-                styles.modalSaveBtn,
-                pressed && { opacity: 0.85 },
-                saving && { opacity: 0.6 },
-              ]}
-            >
-              {saving ? (
-                <ActivityIndicator color="#FFFFFF" />
+            {/* Save / Verify Action Button */}
+            {activeEdit === 'identity_verification' ? (
+              identityStatus === 'Verified' ? (
+                <Pressable
+                  onPress={() => setActiveEdit(null)}
+                  style={({ pressed }) => [
+                    styles.modalSaveBtn,
+                    { backgroundColor: '#F26522' },
+                    pressed && { opacity: 0.85 },
+                  ]}
+                >
+                  <Text style={styles.modalSaveBtnText}>Done</Text>
+                </Pressable>
               ) : (
-                <Text style={styles.modalSaveBtnText}>Save</Text>
-              )}
-            </Pressable>
+                <Pressable
+                  onPress={handleStartVerification}
+                  disabled={saving}
+                  style={({ pressed }) => [
+                    styles.modalSaveBtn,
+                    { backgroundColor: '#F26522' },
+                    pressed && { opacity: 0.85 },
+                    saving && { opacity: 0.6 },
+                  ]}
+                >
+                  {saving ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.modalSaveBtnText}>Start Persona Verification</Text>
+                  )}
+                </Pressable>
+              )
+            ) : (
+              <Pressable
+                onPress={handleSaveField}
+                disabled={saving}
+                style={({ pressed }) => [
+                  styles.modalSaveBtn,
+                  { backgroundColor: '#F26522' },
+                  pressed && { opacity: 0.85 },
+                  saving && { opacity: 0.6 },
+                ]}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSaveBtnText}>Save</Text>
+                )}
+              </Pressable>
+            )}
           </ScrollView>
         </View>
       </Modal>
@@ -549,7 +628,6 @@ export default function PersonalInfoScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 24,
@@ -638,7 +716,6 @@ const styles = StyleSheet.create({
   /* Modal Styles */
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -719,7 +796,6 @@ const styles = StyleSheet.create({
   },
   modalOptionActive: {
     borderColor: '#111111',
-    backgroundColor: '#FFFFFF',
   },
   modalOptionText: {
     fontSize: 15,

@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useColors, useTheme } from '@/hooks/useColors';
 import type { NotificationRow, NotificationType } from '@/lib/supabase';
 
 interface NotificationCardProps {
@@ -62,6 +63,8 @@ export function NotificationCard({
   onPress,
   onDelete,
 }: NotificationCardProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const config = getNotificationTypeConfig(notification.type);
   const timeText = formatRelativeTime(notification.created_at);
 
@@ -89,7 +92,11 @@ export function NotificationCard({
       onPress={() => onPress(notification)}
       style={({ pressed }) => [
         styles.card,
-        !notification.is_read ? styles.cardUnread : null,
+        { backgroundColor: colors.card, borderColor: colors.border },
+        !notification.is_read && [
+          styles.cardUnread,
+          { backgroundColor: isDark ? '#2A1810' : '#FFFBF8', borderColor: isDark ? '#5C2D16' : '#FCE3D6' },
+        ],
         { opacity: pressed ? 0.92 : 1 },
       ]}
     >
@@ -100,16 +107,16 @@ export function NotificationCard({
 
         <View style={styles.contentWrap}>
           <View style={styles.titleRow}>
-            <Text style={styles.titleText} numberOfLines={1}>
+            <Text style={[styles.titleText, { color: colors.text }]} numberOfLines={1}>
               {notification.title}
             </Text>
             <View style={styles.metaRow}>
               {!notification.is_read ? <View style={styles.unreadDot} /> : null}
-              <Text style={styles.timeText}>{timeText}</Text>
+              <Text style={[styles.timeText, { color: colors.mutedForeground }]}>{timeText}</Text>
             </View>
           </View>
 
-          <Text style={styles.messageText} numberOfLines={2}>
+          <Text style={[styles.messageText, { color: colors.mutedForeground }]} numberOfLines={2}>
             {notification.message}
           </Text>
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { useColors, useTheme } from '@/hooks/useColors';
 import type { HostProfileData } from '@/lib/supabase';
 
 interface HostStatsCardProps {
@@ -8,62 +9,65 @@ interface HostStatsCardProps {
 }
 
 export function HostStatsCard({ host }: HostStatsCardProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.grid}>
         {/* Rating & Reviews */}
         <View style={styles.statCell}>
           <View style={styles.statHeaderRow}>
             <Ionicons name="star" size={16} color="#F26522" />
-            <Text style={styles.statValue}>
+            <Text style={[styles.statValue, { color: colors.text }]}>
               {host.average_rating ? host.average_rating.toFixed(2) : '4.95'}
             </Text>
           </View>
-          <Text style={styles.statLabel}>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
             {host.reviews_count ?? 112} {host.reviews_count === 1 ? 'Review' : 'Reviews'}
           </Text>
         </View>
 
-        <View style={styles.dividerVertical} />
+        <View style={[styles.dividerVertical, { backgroundColor: colors.border }]} />
 
         {/* Trips Hosted */}
         <View style={styles.statCell}>
-          <Text style={styles.statValue}>{host.trips_hosted ?? 148}</Text>
-          <Text style={styles.statLabel}>Trips Hosted</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>{host.trips_hosted ?? 148}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Trips Hosted</Text>
         </View>
 
-        <View style={styles.dividerVertical} />
+        <View style={[styles.dividerVertical, { backgroundColor: colors.border }]} />
 
         {/* Years Hosting */}
         <View style={styles.statCell}>
-          <Text style={styles.statValue}>{host.years_hosting ?? 3}</Text>
-          <Text style={styles.statLabel}>Years Hosting</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>{host.years_hosting ?? 3}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Years Hosting</Text>
         </View>
       </View>
 
-      <View style={styles.dividerHorizontal} />
+      <View style={[styles.dividerHorizontal, { backgroundColor: colors.border }]} />
 
       <View style={styles.grid}>
         {/* Properties / Listings */}
         <View style={styles.statCell}>
-          <Text style={styles.statValue}>{host.properties_count ?? 4}</Text>
-          <Text style={styles.statLabel}>Properties</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>{host.properties_count ?? 4}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Properties</Text>
         </View>
 
-        <View style={styles.dividerVertical} />
+        <View style={[styles.dividerVertical, { backgroundColor: colors.border }]} />
 
         {/* Repeat Guests */}
         <View style={styles.statCell}>
-          <Text style={styles.statValue}>{host.repeat_guest_rate ?? '42%'}</Text>
-          <Text style={styles.statLabel}>Repeat Guests</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>{host.repeat_guest_rate ?? '42%'}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Repeat Guests</Text>
         </View>
 
-        <View style={styles.dividerVertical} />
+        <View style={[styles.dividerVertical, { backgroundColor: colors.border }]} />
 
         {/* Response Rate */}
         <View style={styles.statCell}>
-          <Text style={styles.statValue}>{host.response_rate ?? '98%'}</Text>
-          <Text style={styles.statLabel}>Response Rate</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>{host.response_rate ?? '98%'}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Response Rate</Text>
         </View>
       </View>
     </View>

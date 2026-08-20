@@ -16,9 +16,13 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 
 export default function PrivacySettingsScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -128,7 +132,7 @@ export default function PrivacySettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
@@ -140,7 +144,7 @@ export default function PrivacySettingsScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={22} color="#111111" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -150,21 +154,21 @@ export default function PrivacySettingsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
         {/* Title */}
-        <Text style={styles.pageTitle}>Privacy</Text>
-        <Text style={styles.pageSubtitle}>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>Privacy</Text>
+        <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>
           Control how your information is used and shared with others on ZuruSasa.
         </Text>
 
         {loading ? (
-          <ActivityIndicator size="small" color="#111111" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="small" color={colors.text} style={{ marginTop: 40 }} />
         ) : (
           <View style={styles.sectionsBlock}>
             {/* ── SECTION 1: MESSAGES ───────────────────────────────────────── */}
             <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Messages</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Messages</Text>
               <View style={styles.toggleRow}>
                 <View style={styles.textContainer}>
-                  <Text style={styles.toggleLabel}>
+                  <Text style={[styles.toggleLabel, { color: colors.text }]}>
                     Show people when I've read their messages.{' '}
                     <Text
                       onPress={() =>
@@ -184,23 +188,23 @@ export default function PrivacySettingsScreen() {
                     setReadReceipts(val);
                     handleToggle('read_receipts', val);
                   }}
-                  trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                  trackColor={{ false: '#E2E8F0', true: colors.text }}
                   thumbColor="#FFFFFF"
                 />
               </View>
             </View>
 
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
 
             {/* ── SECTION 2: LISTINGS ───────────────────────────────────────── */}
             <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Listings</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Listings</Text>
               <View style={styles.toggleRow}>
                 <View style={styles.textContainer}>
-                  <Text style={styles.toggleMainTitle}>
+                  <Text style={[styles.toggleMainTitle, { color: colors.text }]}>
                     Include my listing(s) in search engines
                   </Text>
-                  <Text style={styles.toggleSubText}>
+                  <Text style={[styles.toggleSubText, { color: colors.mutedForeground }]}>
                     Turning this on means search engines, like Google, will display your listing page(s) in search results.
                   </Text>
                 </View>
@@ -210,18 +214,18 @@ export default function PrivacySettingsScreen() {
                     setSearchEngines(val);
                     handleToggle('search_engines', val);
                   }}
-                  trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                  trackColor={{ false: '#E2E8F0', true: colors.text }}
                   thumbColor="#FFFFFF"
                 />
               </View>
             </View>
 
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
 
             {/* ── SECTION 3: REVIEWS ────────────────────────────────────────── */}
             <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Reviews</Text>
-              <Text style={styles.sectionSub}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Reviews</Text>
+              <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
                 Choose what's shared when you write a review. Updating this setting will affect both past and future reviews.{' '}
                 <Text
                   onPress={() =>
@@ -238,8 +242,8 @@ export default function PrivacySettingsScreen() {
               {/* Review Toggle 1 */}
               <View style={styles.subToggleRow}>
                 <View style={styles.textContainer}>
-                  <Text style={styles.toggleMainTitle}>Show my home city and country</Text>
-                  <Text style={styles.exampleText}>Ex: City and country</Text>
+                  <Text style={[styles.toggleMainTitle, { color: colors.text }]}>Show my home city and country</Text>
+                  <Text style={[styles.exampleText, { color: colors.mutedForeground }]}>Ex: City and country</Text>
                 </View>
                 <Switch
                   value={showCityCountry}
@@ -247,7 +251,7 @@ export default function PrivacySettingsScreen() {
                     setShowCityCountry(val);
                     handleToggle('show_city_country', val);
                   }}
-                  trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                  trackColor={{ false: '#E2E8F0', true: colors.text }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -255,8 +259,8 @@ export default function PrivacySettingsScreen() {
               {/* Review Toggle 2 */}
               <View style={styles.subToggleRow}>
                 <View style={styles.textContainer}>
-                  <Text style={styles.toggleMainTitle}>Show my trip type</Text>
-                  <Text style={styles.exampleText}>Ex: Stayed with kids or pets</Text>
+                  <Text style={[styles.toggleMainTitle, { color: colors.text }]}>Show my trip type</Text>
+                  <Text style={[styles.exampleText, { color: colors.mutedForeground }]}>Ex: Stayed with kids or pets</Text>
                 </View>
                 <Switch
                   value={showTripType}
@@ -264,7 +268,7 @@ export default function PrivacySettingsScreen() {
                     setShowTripType(val);
                     handleToggle('show_trip_type', val);
                   }}
-                  trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                  trackColor={{ false: '#E2E8F0', true: colors.text }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -272,8 +276,8 @@ export default function PrivacySettingsScreen() {
               {/* Review Toggle 3 */}
               <View style={styles.subToggleRow}>
                 <View style={styles.textContainer}>
-                  <Text style={styles.toggleMainTitle}>Show my length of stay</Text>
-                  <Text style={styles.exampleText}>Ex: A few nights, about a week, etc.</Text>
+                  <Text style={[styles.toggleMainTitle, { color: colors.text }]}>Show my length of stay</Text>
+                  <Text style={[styles.exampleText, { color: colors.mutedForeground }]}>Ex: A few nights, about a week, etc.</Text>
                 </View>
                 <Switch
                   value={showLengthOfStay}
@@ -281,7 +285,7 @@ export default function PrivacySettingsScreen() {
                     setShowLengthOfStay(val);
                     handleToggle('show_length_of_stay', val);
                   }}
-                  trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                  trackColor={{ false: '#E2E8F0', true: colors.text }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -289,8 +293,8 @@ export default function PrivacySettingsScreen() {
               {/* Review Toggle 4 */}
               <View style={styles.subToggleRow}>
                 <View style={styles.textContainer}>
-                  <Text style={styles.toggleMainTitle}>Show my booked services</Text>
-                  <Text style={styles.exampleText}>Ex: Gourmet brunch or tasting menu</Text>
+                  <Text style={[styles.toggleMainTitle, { color: colors.text }]}>Show my booked services</Text>
+                  <Text style={[styles.exampleText, { color: colors.mutedForeground }]}>Ex: Gourmet brunch or tasting menu</Text>
                 </View>
                 <Switch
                   value={showBookedServices}
@@ -298,38 +302,42 @@ export default function PrivacySettingsScreen() {
                     setShowBookedServices(val);
                     handleToggle('show_booked_services', val);
                   }}
-                  trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                  trackColor={{ false: '#E2E8F0', true: colors.text }}
                   thumbColor="#FFFFFF"
                 />
               </View>
             </View>
 
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
 
             {/* ── SECTION 4: DATA PRIVACY ───────────────────────────────────── */}
             <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Data privacy</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Data privacy</Text>
 
               {/* Request Data Card */}
               <Pressable
                 testID="request-data-btn"
                 onPress={handleRequestData}
                 disabled={dataRequestLoading}
-                style={({ pressed }) => [styles.roundedCardBtn, pressed && styles.cardBtnPressed]}
+                style={({ pressed }) => [
+                  styles.roundedCardBtn,
+                  { borderColor: colors.border, backgroundColor: colors.card },
+                  pressed && styles.cardBtnPressed,
+                ]}
               >
-                <Text style={styles.cardBtnText}>Request my personal data</Text>
+                <Text style={[styles.cardBtnText, { color: colors.text }]}>Request my personal data</Text>
                 {dataRequestLoading ? (
-                  <ActivityIndicator size="small" color="#111111" />
+                  <ActivityIndicator size="small" color={colors.text} />
                 ) : (
-                  <Feather name="chevron-right" size={20} color="#717171" />
+                  <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
                 )}
               </Pressable>
 
               {/* AI Improvement Toggle */}
               <View style={[styles.toggleRow, { marginTop: 24 }]}>
                 <View style={styles.textContainer}>
-                  <Text style={styles.toggleMainTitle}>Help improve AI-powered features</Text>
-                  <Text style={styles.toggleSubText}>
+                  <Text style={[styles.toggleMainTitle, { color: colors.text }]}>Help improve AI-powered features</Text>
+                  <Text style={[styles.toggleSubText, { color: colors.mutedForeground }]}>
                     When this is on, we use your data to develop and improve AI models that power certain features on ZuruSasa.{' '}
                     <Text
                       onPress={() =>
@@ -349,7 +357,7 @@ export default function PrivacySettingsScreen() {
                     setAiImprovement(val);
                     handleToggle('ai_improvement', val);
                   }}
-                  trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                  trackColor={{ false: '#E2E8F0', true: colors.text }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -368,7 +376,7 @@ export default function PrivacySettingsScreen() {
         )}
       </ScrollView>
 
-      {/* ── LEARN MORE INFO MODAL ────────────────────────────────────────────── */}
+      {/* ── INFO / LEARN MORE MODAL ────────────────────────────────────────── */}
       <Modal
         visible={!!learnMoreModal}
         transparent
@@ -377,14 +385,14 @@ export default function PrivacySettingsScreen() {
       >
         <Pressable
           onPress={() => setLearnMoreModal(null)}
-          style={styles.modalOverlay}
+          style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}
         >
-          <View style={styles.infoDialog}>
-            <Text style={styles.infoDialogTitle}>About this setting</Text>
-            <Text style={styles.infoDialogBody}>{learnMoreModal}</Text>
+          <View style={[styles.infoDialog, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+            <Text style={[styles.infoDialogTitle, { color: colors.text }]}>About this setting</Text>
+            <Text style={[styles.infoDialogBody, { color: colors.mutedForeground }]}>{learnMoreModal}</Text>
             <Pressable
               onPress={() => setLearnMoreModal(null)}
-              style={styles.infoDialogBtn}
+              style={[styles.infoDialogBtn, { backgroundColor: '#F26522' }]}
             >
               <Text style={styles.infoDialogBtnText}>Got it</Text>
             </Pressable>
@@ -399,18 +407,18 @@ export default function PrivacySettingsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setDeleteModalVisible(false)}
       >
-        <View style={[styles.deleteModalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.deleteModalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Pressable onPress={() => setDeleteModalVisible(false)} style={styles.closeBtn} hitSlop={10}>
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Delete account</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Delete account</Text>
             <View style={{ width: 36 }} />
           </View>
 
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
             <Text style={[styles.modalHeadline, { color: '#B91C1C' }]}>Permanently delete account?</Text>
-            <Text style={styles.modalSub}>
+            <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
               This action cannot be undone. All your saved reels, past coastal bookings, host payouts, and registered passkeys will be permanently erased.
             </Text>
 
@@ -435,7 +443,6 @@ export default function PrivacySettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 24,
@@ -568,7 +575,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
   },
   cardBtnPressed: {
     backgroundColor: '#F9FAFB',
@@ -593,7 +599,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   infoDialog: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 24,
     width: '100%',
@@ -627,7 +632,6 @@ const styles = StyleSheet.create({
   /* Delete Modal */
   deleteModalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',

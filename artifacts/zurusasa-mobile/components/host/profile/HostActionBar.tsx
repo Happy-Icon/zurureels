@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useColors, useTheme } from '@/hooks/useColors';
 
 interface HostActionBarProps {
   onMessage: () => void;
@@ -9,19 +10,21 @@ interface HostActionBarProps {
 }
 
 export function HostActionBar({ onMessage, onShare }: HostActionBarProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const bottomPad = insets.bottom > 0 ? insets.bottom + 8 : 16;
 
   return (
-    <View style={[styles.container, { paddingBottom: bottomPad }]}>
+    <View style={[styles.container, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: bottomPad }]}>
       <Pressable
         onPress={onShare}
         style={({ pressed }) => [
           styles.shareBtn,
-          { opacity: pressed ? 0.7 : 1 },
+          { backgroundColor: isDark ? '#27272A' : '#FFFFFF', borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
         ]}
       >
-        <Feather name="share-2" size={18} color="#222222" />
+        <Feather name="share-2" size={18} color={colors.text} />
       </Pressable>
 
       <Pressable

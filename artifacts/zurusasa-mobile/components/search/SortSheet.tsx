@@ -2,6 +2,8 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { SearchFilters } from '@/services/filterService';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 
 interface SortSheetProps {
   visible: boolean;
@@ -25,14 +27,17 @@ export function SortSheet({
   onClose,
   onSelectSort,
 }: SortSheetProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Sort Results</Text>
+            <Text style={[styles.sheetTitle, { color: colors.text }]}>Sort Results</Text>
             <Pressable onPress={onClose} hitSlop={10}>
-              <Feather name="x" size={20} color="#222222" />
+              <Feather name="x" size={20} color={colors.text} />
             </Pressable>
           </View>
 
@@ -46,15 +51,27 @@ export function SortSheet({
                     onSelectSort(opt.id);
                     onClose();
                   }}
-                  style={[styles.optionRow, isSelected ? styles.optionRowActive : null]}
+                  style={[
+                    styles.optionRow,
+                    {
+                      backgroundColor: isSelected
+                        ? isDark
+                          ? '#2A1F1A'
+                          : '#FFFBF8'
+                        : isDark
+                        ? '#27272A'
+                        : '#F9F9F9',
+                      borderColor: isSelected ? '#F26522' : colors.border,
+                    },
+                  ]}
                 >
                   <View style={styles.optionLeft}>
                     <Feather
                       name={opt.icon as any}
                       size={18}
-                      color={isSelected ? '#F26522' : '#717171'}
+                      color={isSelected ? '#F26522' : colors.mutedForeground}
                     />
-                    <Text style={[styles.optionText, isSelected ? styles.optionTextActive : null]}>
+                    <Text style={[styles.optionText, { color: isSelected ? '#F26522' : colors.text }]}>
                       {opt.label}
                     </Text>
                   </View>

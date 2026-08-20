@@ -16,6 +16,8 @@ import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import {
   useBlockHostDates,
   useHostBlockedDates,
@@ -83,6 +85,8 @@ const BLOCK_REASONS = [
 ];
 
 export default function HostCalendarScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, role, viewMode } = useAuth();
@@ -427,18 +431,18 @@ export default function HostCalendarScreen() {
   // Signed Out / Non-Host Access Guard
   if (!user || !isHost) {
     return (
-      <View style={[styles.fill, styles.centered, { paddingTop: topPad, backgroundColor: '#FFFFFF' }]}>
-        <View style={styles.nonHostCard}>
-          <View style={styles.nonHostIconWrap}>
-            <Feather name="calendar" size={32} color="#000000" />
+      <View style={[styles.fill, styles.centered, { paddingTop: topPad, backgroundColor: colors.background }]}>
+        <View style={[styles.nonHostCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.nonHostIconWrap, { backgroundColor: isDark ? '#27272A' : '#F8FAFC' }]}>
+            <Feather name="calendar" size={32} color={colors.text} />
           </View>
-          <Text style={styles.nonHostTitle}>Host Calendar</Text>
-          <Text style={styles.nonHostSub}>
+          <Text style={[styles.nonHostTitle, { color: colors.text }]}>Host Calendar</Text>
+          <Text style={[styles.nonHostSub, { color: colors.mutedForeground }]}>
             The Smart Calendar is reserved for ZuruSasa hosts to manage property availability, reservations, and date blocks.
           </Text>
           <Pressable
             onPress={() => router.push('/become-host')}
-            style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.9 }]}
+            style={({ pressed }) => [styles.primaryBtn, { backgroundColor: '#F26522' }, pressed && { opacity: 0.9 }]}
           >
             <Text style={styles.primaryBtnText}>Become a host</Text>
           </Pressable>
@@ -450,7 +454,7 @@ export default function HostCalendarScreen() {
   const pageLoading = listingsLoading || bookingsLoading || blockedLoading;
 
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad }]}>
+    <View style={[styles.fill, { backgroundColor: colors.background, paddingTop: topPad }]}>
       {/* ── 1. TOP HEADER (Airbnb Style) ─────────────────────────────────── */}
       <View style={styles.topHeader}>
         <Pressable
@@ -458,20 +462,20 @@ export default function HostCalendarScreen() {
             if (router.canGoBack()) router.back();
             else router.push('/profile');
           }}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
+          style={({ pressed }) => [styles.backBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }, pressed && styles.backBtnActive]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={20} color="#000000" />
+          <Feather name="arrow-left" size={20} color={colors.text} />
         </Pressable>
 
-        <Text style={styles.headerTitle}>Calendar</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Calendar</Text>
 
         <Pressable
           onPress={() => handleOpenBlockForm()}
-          style={({ pressed }) => [styles.plusBtn, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.plusBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }, pressed && { opacity: 0.7 }]}
           hitSlop={10}
         >
-          <Feather name="plus" size={20} color="#000000" />
+          <Feather name="plus" size={20} color={colors.text} />
         </Pressable>
       </View>
 
@@ -484,19 +488,19 @@ export default function HostCalendarScreen() {
           <View style={styles.listingSelectorRow}>
             <Pressable
               onPress={() => setShowListingDropdown(!showListingDropdown)}
-              style={({ pressed }) => [styles.listingDropdownBtn, pressed && { opacity: 0.8 }]}
+              style={({ pressed }) => [styles.listingDropdownBtn, { backgroundColor: colors.card, borderColor: colors.border }, pressed && { opacity: 0.8 }]}
             >
-              <Text style={styles.listingDropdownText} numberOfLines={1}>
+              <Text style={[styles.listingDropdownText, { color: colors.text }]} numberOfLines={1}>
                 {currentListingTitle}
               </Text>
-              <Feather name="chevron-down" size={16} color="#000000" />
+              <Feather name="chevron-down" size={16} color={colors.text} />
             </Pressable>
           </View>
         )}
 
         {/* Listing Dropdown Menu */}
         {showListingDropdown && (
-          <View style={styles.dropdownMenu}>
+          <View style={[styles.dropdownMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Pressable
               onPress={() => {
                 setSelectedExperienceId('all');
@@ -504,12 +508,12 @@ export default function HostCalendarScreen() {
               }}
               style={styles.dropdownItem}
             >
-              <Text style={[styles.dropdownItemText, selectedExperienceId === 'all' && styles.dropdownItemActive]}>
+              <Text style={[styles.dropdownItemText, { color: colors.text }, selectedExperienceId === 'all' && styles.dropdownItemActive]}>
                 All listings
               </Text>
-              {selectedExperienceId === 'all' && <Feather name="check" size={16} color="#000000" />}
+              {selectedExperienceId === 'all' && <Feather name="check" size={16} color={colors.text} />}
             </Pressable>
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
             {(listings ?? []).map((listing) => {
               const isSelected = selectedExperienceId === listing.id;
               return (
@@ -521,10 +525,10 @@ export default function HostCalendarScreen() {
                   }}
                   style={styles.dropdownItem}
                 >
-                  <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemActive]} numberOfLines={1}>
+                  <Text style={[styles.dropdownItemText, { color: colors.text }, isSelected && styles.dropdownItemActive]} numberOfLines={1}>
                     {listing.title || 'Untitled listing'}
                   </Text>
-                  {isSelected && <Feather name="check" size={16} color="#000000" />}
+                  {isSelected && <Feather name="check" size={16} color={colors.text} />}
                 </Pressable>
               );
             })}
@@ -533,41 +537,41 @@ export default function HostCalendarScreen() {
 
         {/* ── 3. MONTH NAVIGATION ROW ────────────────────────────────────── */}
         <View style={styles.monthNavRow}>
-          <Text style={styles.monthTitle}>
+          <Text style={[styles.monthTitle, { color: colors.text }]}>
             {MONTH_NAMES[currentMonth]} {currentYear}
           </Text>
 
           <View style={styles.monthNavRight}>
-            <Pressable onPress={handleGoToToday} style={({ pressed }) => [styles.todayBtn, pressed && { opacity: 0.7 }]}>
-              <Text style={styles.todayBtnText}>Today</Text>
+            <Pressable onPress={handleGoToToday} style={({ pressed }) => [styles.todayBtn, { backgroundColor: isDark ? '#27272A' : '#F1F5F9' }, pressed && { opacity: 0.7 }]}>
+              <Text style={[styles.todayBtnText, { color: colors.text }]}>Today</Text>
             </Pressable>
 
-            <Pressable onPress={handlePrevMonth} style={({ pressed }) => [styles.monthNavArrow, pressed && { opacity: 0.6 }]}>
-              <Feather name="chevron-left" size={20} color="#000000" />
+            <Pressable onPress={handlePrevMonth} style={({ pressed }) => [styles.monthNavArrow, { backgroundColor: isDark ? '#27272A' : '#F8FAFC' }, pressed && { opacity: 0.6 }]}>
+              <Feather name="chevron-left" size={20} color={colors.text} />
             </Pressable>
 
-            <Pressable onPress={handleNextMonth} style={({ pressed }) => [styles.monthNavArrow, pressed && { opacity: 0.6 }]}>
-              <Feather name="chevron-right" size={20} color="#000000" />
+            <Pressable onPress={handleNextMonth} style={({ pressed }) => [styles.monthNavArrow, { backgroundColor: isDark ? '#27272A' : '#F8FAFC' }, pressed && { opacity: 0.6 }]}>
+              <Feather name="chevron-right" size={20} color={colors.text} />
             </Pressable>
           </View>
         </View>
 
         {/* ── 4. SMART SUMMARY LINE ──────────────────────────────────────── */}
         <View style={styles.summaryLine}>
-          <Text style={styles.summaryText}>
-            <Text style={{ fontWeight: '700', color: '#000000' }}>{monthStats.bookedNights}</Text> booked nights ·{' '}
-            <Text style={{ fontWeight: '700', color: '#000000' }}>{monthStats.availableNights}</Text> available ·{' '}
-            <Text style={{ fontWeight: '700', color: '#000000' }}>{monthStats.blockedNights}</Text> blocked
+          <Text style={[styles.summaryText, { color: colors.mutedForeground }]}>
+            <Text style={{ fontWeight: '700', color: colors.text }}>{monthStats.bookedNights}</Text> booked nights ·{' '}
+            <Text style={{ fontWeight: '700', color: colors.text }}>{monthStats.availableNights}</Text> available ·{' '}
+            <Text style={{ fontWeight: '700', color: colors.text }}>{monthStats.blockedNights}</Text> blocked
           </Text>
         </View>
 
         {/* ── 5. SMART ALERTS ────────────────────────────────────────────── */}
         {alerts.length > 0 && (
-          <View style={styles.alertsContainer}>
+          <View style={[styles.alertsContainer, { backgroundColor: isDark ? '#27272A' : '#F8FAFC' }]}>
             {alerts.map((alertMsg, idx) => (
               <View key={idx} style={styles.alertRow}>
-                <Feather name="info" size={14} color="#000000" />
-                <Text style={styles.alertText}>{alertMsg}</Text>
+                <Feather name="info" size={14} color={colors.text} />
+                <Text style={[styles.alertText, { color: colors.text }]}>{alertMsg}</Text>
               </View>
             ))}
           </View>
@@ -579,11 +583,11 @@ export default function HostCalendarScreen() {
             <Skeleton style={{ height: 280, borderRadius: 20 }} />
           </View>
         ) : (
-          <View style={styles.calendarContainer}>
+          <View style={[styles.calendarContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {/* Weekdays Header */}
-            <View style={styles.weekdaysRow}>
+            <View style={[styles.weekdaysRow, { borderBottomColor: colors.border }]}>
               {WEEKDAYS.map((wd) => (
-                <Text key={wd} style={styles.weekdayText}>
+                <Text key={wd} style={[styles.weekdayText, { color: colors.mutedForeground }]}>
                   {wd}
                 </Text>
               ))}
@@ -606,17 +610,18 @@ export default function HostCalendarScreen() {
                     onPress={() => handleDayPress(cell)}
                     style={({ pressed }) => [
                       styles.dayCell,
-                      cell.isToday && styles.dayCellToday,
+                      cell.isToday && [styles.dayCellToday, { borderColor: '#F26522' }],
                       isBooked && styles.dayCellBooked,
-                      isPending && styles.dayCellPending,
-                      isBlocked && styles.dayCellBlocked,
+                      isPending && [styles.dayCellPending, { backgroundColor: isDark ? '#78350F30' : '#FEF3C7' }],
+                      isBlocked && [styles.dayCellBlocked, { backgroundColor: isDark ? '#27272A' : '#F1F5F9' }],
                       pressed && styles.dayCellPressed,
                     ]}
                   >
                     <Text
                       style={[
                         styles.dayNumber,
-                        cell.isToday && styles.dayNumberToday,
+                        { color: colors.text },
+                        cell.isToday && [styles.dayNumberToday, { color: '#F26522' }],
                         isBooked && styles.dayNumberBooked,
                         isPending && styles.dayNumberPending,
                         isBlocked && styles.dayNumberBlocked,
@@ -648,34 +653,34 @@ export default function HostCalendarScreen() {
         {/* Legend Row */}
         <View style={styles.legendRow}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' }]} />
-            <Text style={styles.legendLabel}>Available</Text>
+            <View style={[styles.legendDot, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', borderWidth: 1, borderColor: colors.border }]} />
+            <Text style={[styles.legendLabel, { color: colors.mutedForeground }]}>Available</Text>
           </View>
 
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: '#F26522' }]} />
-            <Text style={styles.legendLabel}>Booked</Text>
+            <Text style={[styles.legendLabel, { color: colors.mutedForeground }]}>Booked</Text>
           </View>
 
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: '#FCD34D' }]} />
-            <Text style={styles.legendLabel}>Pending</Text>
+            <Text style={[styles.legendLabel, { color: colors.mutedForeground }]}>Pending</Text>
           </View>
 
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#94A3B8' }]} />
-            <Text style={styles.legendLabel}>Blocked</Text>
+            <View style={[styles.legendDot, { backgroundColor: isDark ? '#52525B' : '#94A3B8' }]} />
+            <Text style={[styles.legendLabel, { color: colors.mutedForeground }]}>Blocked</Text>
           </View>
         </View>
 
         {/* ── 7. UPCOMING BOOKINGS LIST ──────────────────────────────────── */}
         <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>Upcoming reservations</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Upcoming reservations</Text>
 
           {(bookings ?? []).length === 0 ? (
-            <View style={styles.emptyBookingsBox}>
-              <Feather name="calendar" size={24} color="#94A3B8" />
-              <Text style={styles.emptyBookingsText}>No upcoming bookings for this listing</Text>
+            <View style={[styles.emptyBookingsBox, { backgroundColor: colors.card }]}>
+              <Feather name="calendar" size={24} color={colors.mutedForeground} />
+              <Text style={[styles.emptyBookingsText, { color: colors.mutedForeground }]}>No upcoming bookings for this listing</Text>
             </View>
           ) : (
             (bookings ?? []).slice(0, 5).map((b) => (
@@ -685,18 +690,18 @@ export default function HostCalendarScreen() {
                   setActiveBooking(b);
                   setShowBookingSheet(true);
                 }}
-                style={({ pressed }) => [styles.bookingCardRow, pressed && { opacity: 0.7 }]}
+                style={({ pressed }) => [styles.bookingCardRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.7 }]}
               >
                 <View style={styles.bookingCardLeft}>
-                  <Text style={styles.bookingCardDates}>
+                  <Text style={[styles.bookingCardDates, { color: colors.text }]}>
                     {formatDateFriendly(b.check_in)} → {formatDateFriendly(b.check_out)}
                   </Text>
-                  <Text style={styles.bookingCardTitle} numberOfLines={1}>
+                  <Text style={[styles.bookingCardTitle, { color: colors.mutedForeground }]} numberOfLines={1}>
                     {b.trip_title || (b.experience as any)?.title || 'Stay reservation'}
                   </Text>
                 </View>
                 <View style={styles.bookingCardRight}>
-                  <Text style={styles.bookingCardPrice}>
+                  <Text style={[styles.bookingCardPrice, { color: colors.text }]}>
                     KES {((b.amount ?? 0) / (b.amount && b.amount > 10000 ? 100 : 1)).toLocaleString()}
                   </Text>
                   <Text style={[styles.bookingBadge, b.status === 'pending' ? styles.badgePending : styles.badgeConfirmed]}>
@@ -711,12 +716,12 @@ export default function HostCalendarScreen() {
 
       {/* ── SHEET 1: AVAILABLE DATE SHEET ──────────────────────────────── */}
       <Modal visible={showAvailabilitySheet} animationType="slide" transparent>
-        <View style={styles.sheetOverlay}>
-          <View style={styles.sheetContainer}>
+        <View style={[styles.sheetOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.sheetContainer, { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>{formatFullDateFriendly(selectedDayISO)}</Text>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>{formatFullDateFriendly(selectedDayISO)}</Text>
               <Pressable onPress={() => setShowAvailabilitySheet(false)}>
-                <Feather name="x" size={20} color="#000000" />
+                <Feather name="x" size={20} color={colors.text} />
               </Pressable>
             </View>
 
@@ -726,23 +731,23 @@ export default function HostCalendarScreen() {
               </View>
             </View>
 
-            <View style={styles.sheetInfoGroup}>
+            <View style={[styles.sheetInfoGroup, { backgroundColor: isDark ? '#27272A' : '#F8FAFC' }]}>
               <View style={styles.infoRow}>
-                <Text style={styles.infoRowLabel}>Nightly price</Text>
-                <Text style={styles.infoRowVal}>
+                <Text style={[styles.infoRowLabel, { color: colors.mutedForeground }]}>Nightly price</Text>
+                <Text style={[styles.infoRowVal, { color: colors.text }]}>
                   KES {((listings ?? [])[0]?.current_price ?? 8000).toLocaleString()} / night
                 </Text>
               </View>
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
               <View style={styles.infoRow}>
-                <Text style={styles.infoRowLabel}>Minimum stay</Text>
-                <Text style={styles.infoRowVal}>1 night</Text>
+                <Text style={[styles.infoRowLabel, { color: colors.mutedForeground }]}>Minimum stay</Text>
+                <Text style={[styles.infoRowVal, { color: colors.text }]}>1 night</Text>
               </View>
             </View>
 
             <Pressable
               onPress={() => handleOpenBlockForm()}
-              style={({ pressed }) => [styles.sheetActionBtn, pressed && { opacity: 0.9 }]}
+              style={({ pressed }) => [styles.sheetActionBtn, { backgroundColor: '#F26522' }, pressed && { opacity: 0.9 }]}
             >
               <Feather name="slash" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
               <Text style={styles.sheetActionBtnText}>Block these dates</Text>
@@ -753,14 +758,14 @@ export default function HostCalendarScreen() {
 
       {/* ── SHEET 2: BOOKED DATE DETAILS SHEET ───────────────────────────── */}
       <Modal visible={showBookingSheet} animationType="slide" transparent>
-        <View style={styles.sheetOverlay}>
-          <View style={styles.sheetContainer}>
+        <View style={[styles.sheetOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.sheetContainer, { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>
                 {formatDateFriendly(activeBooking?.check_in)} – {formatDateFriendly(activeBooking?.check_out)}
               </Text>
               <Pressable onPress={() => setShowBookingSheet(false)}>
-                <Feather name="x" size={20} color="#000000" />
+                <Feather name="x" size={20} color={colors.text} />
               </Pressable>
             </View>
 
@@ -782,33 +787,33 @@ export default function HostCalendarScreen() {
               </View>
             </View>
 
-            <View style={styles.sheetInfoGroup}>
+            <View style={[styles.sheetInfoGroup, { backgroundColor: isDark ? '#27272A' : '#F8FAFC' }]}>
               <View style={styles.infoRow}>
-                <Text style={styles.infoRowLabel}>Listing</Text>
-                <Text style={styles.infoRowVal}>
+                <Text style={[styles.infoRowLabel, { color: colors.mutedForeground }]}>Listing</Text>
+                <Text style={[styles.infoRowVal, { color: colors.text }]}>
                   {activeBooking?.trip_title || (activeBooking?.experience as any)?.title || 'Stay'}
                 </Text>
               </View>
 
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
               <View style={styles.infoRow}>
-                <Text style={styles.infoRowLabel}>Check-in</Text>
-                <Text style={styles.infoRowVal}>{formatFullDateFriendly(activeBooking?.check_in)}</Text>
+                <Text style={[styles.infoRowLabel, { color: colors.mutedForeground }]}>Check-in</Text>
+                <Text style={[styles.infoRowVal, { color: colors.text }]}>{formatFullDateFriendly(activeBooking?.check_in)}</Text>
               </View>
 
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
               <View style={styles.infoRow}>
-                <Text style={styles.infoRowLabel}>Check-out</Text>
-                <Text style={styles.infoRowVal}>{formatFullDateFriendly(activeBooking?.check_out)}</Text>
+                <Text style={[styles.infoRowLabel, { color: colors.mutedForeground }]}>Check-out</Text>
+                <Text style={[styles.infoRowVal, { color: colors.text }]}>{formatFullDateFriendly(activeBooking?.check_out)}</Text>
               </View>
 
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
               <View style={styles.infoRow}>
-                <Text style={styles.infoRowLabel}>Total amount</Text>
-                <Text style={styles.infoRowVal}>
+                <Text style={[styles.infoRowLabel, { color: colors.mutedForeground }]}>Total amount</Text>
+                <Text style={[styles.infoRowVal, { color: colors.text }]}>
                   KES {((activeBooking?.amount ?? 0) / (activeBooking?.amount && activeBooking.amount > 10000 ? 100 : 1)).toLocaleString()}
                 </Text>
               </View>
@@ -819,7 +824,7 @@ export default function HostCalendarScreen() {
                 setShowBookingSheet(false);
                 router.push('/reservations');
               }}
-              style={({ pressed }) => [styles.sheetActionBtn, pressed && { opacity: 0.9 }]}
+              style={({ pressed }) => [styles.sheetActionBtn, { backgroundColor: '#F26522' }, pressed && { opacity: 0.9 }]}
             >
               <Text style={styles.sheetActionBtnText}>View reservation details</Text>
             </Pressable>
@@ -829,32 +834,32 @@ export default function HostCalendarScreen() {
 
       {/* ── SHEET 3: BLOCKED DATE DETAILS SHEET ──────────────────────────── */}
       <Modal visible={showBlockSheet} animationType="slide" transparent>
-        <View style={styles.sheetOverlay}>
-          <View style={styles.sheetContainer}>
+        <View style={[styles.sheetOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.sheetContainer, { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Blocked dates</Text>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>Blocked dates</Text>
               <Pressable onPress={() => setShowBlockSheet(false)}>
-                <Feather name="x" size={20} color="#000000" />
+                <Feather name="x" size={20} color={colors.text} />
               </Pressable>
             </View>
 
             <View style={styles.sheetBadgeRow}>
-              <View style={[styles.statusPill, { backgroundColor: '#F3F4F6' }]}>
-                <Text style={[styles.statusPillText, { color: '#4B5563' }]}>Blocked</Text>
+              <View style={[styles.statusPill, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                <Text style={[styles.statusPillText, { color: colors.mutedForeground }]}>Blocked</Text>
               </View>
             </View>
 
-            <View style={styles.sheetInfoGroup}>
+            <View style={[styles.sheetInfoGroup, { backgroundColor: isDark ? '#27272A' : '#F8FAFC' }]}>
               <View style={styles.infoRow}>
-                <Text style={styles.infoRowLabel}>Date range</Text>
-                <Text style={styles.infoRowVal}>
+                <Text style={[styles.infoRowLabel, { color: colors.mutedForeground }]}>Date range</Text>
+                <Text style={[styles.infoRowVal, { color: colors.text }]}>
                   {formatDateFriendly(activeBlock?.start_date)} → {formatDateFriendly(activeBlock?.end_date)}
                 </Text>
               </View>
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
               <View style={styles.infoRow}>
-                <Text style={styles.infoRowLabel}>Reason</Text>
-                <Text style={styles.infoRowVal}>{activeBlock?.reason || 'Personal use'}</Text>
+                <Text style={[styles.infoRowLabel, { color: colors.mutedForeground }]}>Reason</Text>
+                <Text style={[styles.infoRowVal, { color: colors.text }]}>{activeBlock?.reason || 'Personal use'}</Text>
               </View>
             </View>
 
@@ -875,47 +880,57 @@ export default function HostCalendarScreen() {
 
       {/* ── FORM MODAL: BLOCK DATES RANGE ────────────────────────────────── */}
       <Modal visible={showBlockFormModal} animationType="slide" transparent>
-        <View style={styles.sheetOverlay}>
-          <View style={styles.sheetContainer}>
+        <View style={[styles.sheetOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.sheetContainer, { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Block dates</Text>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>Block dates</Text>
               <Pressable onPress={() => setShowBlockFormModal(false)}>
-                <Feather name="x" size={20} color="#000000" />
+                <Feather name="x" size={20} color={colors.text} />
               </Pressable>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>Start date (YYYY-MM-DD)</Text>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>Start date (YYYY-MM-DD)</Text>
               <TextInput
                 value={blockStartDate}
                 onChangeText={setBlockStartDate}
                 placeholder="2026-08-20"
-                placeholderTextColor="#9CA3AF"
-                style={styles.fieldInput}
+                placeholderTextColor={colors.mutedForeground}
+                style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>End date (YYYY-MM-DD)</Text>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>End date (YYYY-MM-DD)</Text>
               <TextInput
                 value={blockEndDate}
                 onChangeText={setBlockEndDate}
                 placeholder="2026-08-24"
-                placeholderTextColor="#9CA3AF"
-                style={styles.fieldInput}
+                placeholderTextColor={colors.mutedForeground}
+                style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>Reason for blocking</Text>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>Reason for blocking</Text>
               <View style={styles.reasonPickerRow}>
                 {BLOCK_REASONS.map((r) => (
                   <Pressable
                     key={r}
                     onPress={() => setBlockReason(r)}
-                    style={[styles.reasonChip, blockReason === r && styles.reasonChipActive]}
+                    style={[
+                      styles.reasonChip,
+                      { backgroundColor: isDark ? '#27272A' : '#F1F5F9' },
+                      blockReason === r && [styles.reasonChipActive, { backgroundColor: '#F26522' }],
+                    ]}
                   >
-                    <Text style={[styles.reasonChipText, blockReason === r && styles.reasonChipTextActive]}>
+                    <Text
+                      style={[
+                        styles.reasonChipText,
+                        { color: colors.text },
+                        blockReason === r && styles.reasonChipTextActive,
+                      ]}
+                    >
                       {r}
                     </Text>
                   </Pressable>
@@ -926,7 +941,7 @@ export default function HostCalendarScreen() {
             <Pressable
               onPress={handleSubmitBlock}
               disabled={blockMutation.isPending}
-              style={({ pressed }) => [styles.sheetActionBtn, pressed && { opacity: 0.9 }]}
+              style={({ pressed }) => [styles.sheetActionBtn, { backgroundColor: '#F26522' }, pressed && { opacity: 0.9 }]}
             >
               {blockMutation.isPending ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
@@ -953,7 +968,6 @@ const styles = StyleSheet.create({
   nonHostCard: {
     maxWidth: 360,
     width: '100%',
-    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -1051,7 +1065,6 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   dropdownMenu: {
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 16,
@@ -1142,7 +1155,6 @@ const styles = StyleSheet.create({
 
   // 6. Calendar Grid
   calendarContainer: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -1340,7 +1352,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,

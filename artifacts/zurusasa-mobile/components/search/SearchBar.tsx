@@ -8,6 +8,9 @@ import {
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
+
 interface SearchBarProps {
   value: string;
   onChangeText: (text: string) => void;
@@ -27,11 +30,22 @@ export function SearchBar({
   activeFilterCount,
   inputRef,
 }: SearchBarProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
+
   return (
     <View style={styles.container}>
       {/* Floating Search Pill Bar */}
-      <View style={styles.floatingPill}>
-        <Feather name="search" size={18} color="#222222" style={styles.searchIcon} />
+      <View
+        style={[
+          styles.floatingPill,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <Feather name="search" size={18} color={colors.text} style={styles.searchIcon} />
 
         <TextInput
           ref={inputRef as any}
@@ -39,14 +53,14 @@ export function SearchBar({
           onChangeText={onChangeText}
           onFocus={onFocus}
           placeholder="Where to? · Try 'Villa in Diani under 20k'"
-          placeholderTextColor="#9CA3AF"
-          style={styles.input}
+          placeholderTextColor={colors.mutedForeground}
+          style={[styles.input, { color: colors.text }]}
           returnKeyType="search"
         />
 
         {value.length > 0 ? (
           <Pressable onPress={() => onChangeText('')} hitSlop={8} style={styles.clearBtn}>
-            <Feather name="x-circle" size={16} color="#9CA3AF" />
+            <Feather name="x-circle" size={16} color={colors.mutedForeground} />
           </Pressable>
         ) : null}
 
@@ -55,10 +69,10 @@ export function SearchBar({
           onPress={onSortPress}
           style={({ pressed }) => [
             styles.iconCircleBtn,
-            { opacity: pressed ? 0.7 : 1 },
+            { backgroundColor: isDark ? '#27272A' : '#F7F7F7', opacity: pressed ? 0.7 : 1 },
           ]}
         >
-          <Ionicons name="swap-vertical" size={16} color="#222222" />
+          <Ionicons name="swap-vertical" size={16} color={colors.text} />
         </Pressable>
 
         {/* Filter Button */}
@@ -67,12 +81,12 @@ export function SearchBar({
           style={({ pressed }) => [
             styles.iconCircleBtn,
             styles.filterBtn,
-            { opacity: pressed ? 0.7 : 1 },
+            { backgroundColor: isDark ? '#27272A' : '#F7F7F7', opacity: pressed ? 0.7 : 1 },
           ]}
         >
-          <Feather name="sliders" size={15} color="#222222" />
+          <Feather name="sliders" size={15} color={colors.text} />
           {activeFilterCount > 0 ? (
-            <View style={styles.badgePill}>
+            <View style={[styles.badgePill, { borderColor: colors.card }]}>
               <Text style={styles.badgeText}>{activeFilterCount}</Text>
             </View>
           ) : null}

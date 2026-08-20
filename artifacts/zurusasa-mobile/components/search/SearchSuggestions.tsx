@@ -9,6 +9,8 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import type { RecentSearchItem } from '@/services/searchService';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 
 interface SearchSuggestionsProps {
   recentSearches: RecentSearchItem[];
@@ -27,15 +29,22 @@ export function SearchSuggestions({
   onSelectCity,
   onClearHistory,
 }: SearchSuggestionsProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
       {/* 1. RECENT SEARCHES */}
       {recentSearches.length > 0 ? (
         <View style={styles.sectionBlock}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Recent Searches</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Searches</Text>
             <Pressable onPress={onClearHistory} hitSlop={8}>
-              <Text style={styles.clearText}>Clear</Text>
+              <Text style={[styles.clearText, { color: colors.mutedForeground }]}>Clear</Text>
             </Pressable>
           </View>
 
@@ -44,10 +53,10 @@ export function SearchSuggestions({
               <Pressable
                 key={item.id}
                 onPress={() => onSelectQuery(item.query)}
-                style={styles.recentRow}
+                style={[styles.recentRow, { borderBottomColor: colors.border }]}
               >
-                <Feather name="clock" size={15} color="#717171" />
-                <Text style={styles.recentQueryText}>{item.query}</Text>
+                <Feather name="clock" size={15} color={colors.mutedForeground} />
+                <Text style={[styles.recentQueryText, { color: colors.text }]}>{item.query}</Text>
               </Pressable>
             ))}
           </View>
@@ -56,7 +65,7 @@ export function SearchSuggestions({
 
       {/* 2. TRENDING SEARCHES */}
       <View style={styles.sectionBlock}>
-        <Text style={styles.sectionTitle}>Trending Coastal Searches</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Trending Coastal Searches</Text>
         <View style={styles.tagWrap}>
           {trendingTags.map((tag, idx) => (
             <Pressable
@@ -64,11 +73,15 @@ export function SearchSuggestions({
               onPress={() => onSelectQuery(tag)}
               style={({ pressed }) => [
                 styles.trendingTag,
-                { opacity: pressed ? 0.8 : 1 },
+                {
+                  backgroundColor: isDark ? '#2A1F1A' : '#FFFBF8',
+                  borderColor: isDark ? '#5A2A1A' : '#FCE3D6',
+                  opacity: pressed ? 0.8 : 1,
+                },
               ]}
             >
               <Feather name="trending-up" size={13} color="#F26522" />
-              <Text style={styles.tagText}>{tag}</Text>
+              <Text style={[styles.tagText, { color: colors.text }]}>{tag}</Text>
             </Pressable>
           ))}
         </View>
@@ -76,7 +89,7 @@ export function SearchSuggestions({
 
       {/* 3. POPULAR DESTINATIONS */}
       <View style={styles.sectionBlock}>
-        <Text style={styles.sectionTitle}>Popular Destinations</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Popular Destinations</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
           {popularDestinations.map((dest) => (
             <Pressable
@@ -84,13 +97,17 @@ export function SearchSuggestions({
               onPress={() => onSelectCity(dest.name)}
               style={({ pressed }) => [
                 styles.destCard,
-                { opacity: pressed ? 0.9 : 1 },
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.9 : 1,
+                },
               ]}
             >
               <Image source={{ uri: dest.image }} style={styles.destImage} contentFit="cover" />
               <View style={styles.destInfo}>
-                <Text style={styles.destName}>{dest.name}</Text>
-                <Text style={styles.destCount}>{dest.count}</Text>
+                <Text style={[styles.destName, { color: colors.text }]}>{dest.name}</Text>
+                <Text style={[styles.destCount, { color: colors.mutedForeground }]}>{dest.count}</Text>
               </View>
             </Pressable>
           ))}

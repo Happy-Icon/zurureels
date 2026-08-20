@@ -13,15 +13,32 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { useTheme } from '@/context/ThemeContext';
+import { useColors } from '@/hooks/useColors';
+import { AppearanceModalSheet } from '@/components/settings/AppearanceSelector';
 
 type SettingsModalType =
   | 'booking_permissions'
   | 'accessibility'
+  | 'appearance'
   | null;
+
+interface SettingsMenuItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  iconFamily: 'feather' | 'ionicons' | 'material';
+  iconName: string;
+  onPress: () => void;
+}
 
 export default function AccountSettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const colors = useColors();
+  const { appearanceMode, isDark } = useTheme();
 
   const [activeModal, setActiveModal] = useState<SettingsModalType>(null);
 
@@ -34,80 +51,116 @@ export default function AccountSettingsScreen() {
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 16;
   const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 24;
 
-  const mainMenuItems = [
+  const appearanceLabel =
+    appearanceMode === 'system'
+      ? 'System'
+      : appearanceMode === 'dark'
+      ? 'Dark'
+      : 'Light';
+
+  const accountMenuItems: SettingsMenuItem[] = [
     {
       id: 'personal_info',
       title: 'Personal information',
-      iconFamily: 'feather' as const,
-      iconName: 'user' as const,
+      iconFamily: 'feather',
+      iconName: 'user',
       onPress: () => router.push('/profile/info'),
     },
     {
       id: 'security',
       title: 'Login & security',
-      iconFamily: 'feather' as const,
-      iconName: 'shield' as const,
+      iconFamily: 'feather',
+      iconName: 'shield',
       onPress: () => router.push('/profile/security'),
     },
     {
       id: 'privacy',
       title: 'Privacy',
-      iconFamily: 'ionicons' as const,
-      iconName: 'hand-right-outline' as const,
+      iconFamily: 'ionicons',
+      iconName: 'hand-right-outline',
       onPress: () => router.push('/profile/privacy'),
     },
     {
       id: 'notifications',
       title: 'Notifications',
-      iconFamily: 'material' as const,
-      iconName: 'bell-cog-outline' as const,
+      iconFamily: 'material',
+      iconName: 'bell-cog-outline',
       onPress: () => router.push('/profile/notifications'),
     },
     {
       id: 'payments',
       title: 'Payments',
-      iconFamily: 'material' as const,
-      iconName: 'cash-multiple' as const,
+      iconFamily: 'material',
+      iconName: 'cash-multiple',
       onPress: () => router.push('/profile/payments'),
     },
     {
       id: 'translation',
       title: 'Translation',
-      iconFamily: 'feather' as const,
-      iconName: 'globe' as const,
+      iconFamily: 'feather',
+      iconName: 'globe',
       onPress: () => router.push('/profile/translation'),
     },
+  ];
+
+  const preferencesMenuItems: SettingsMenuItem[] = [
     {
-      id: 'booking_permissions',
-      title: 'Booking permissions',
-      badge: 'New',
-      iconFamily: 'material' as const,
-      iconName: 'key-outline' as const,
-      onPress: () => setActiveModal('booking_permissions'),
+      id: 'appearance',
+      title: 'Appearance',
+      subtitle: appearanceLabel,
+      iconFamily: 'ionicons',
+      iconName: 'color-palette-outline',
+      onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setActiveModal('appearance');
+      },
+    },
+    {
+      id: 'all_preferences',
+      title: 'Preferences & Playback',
+      iconFamily: 'ionicons',
+      iconName: 'options-outline',
+      onPress: () => router.push('/profile/preferences'),
     },
     {
       id: 'accessibility',
       title: 'Accessibility',
-      iconFamily: 'material' as const,
-      iconName: 'cog-outline' as const,
+      iconFamily: 'material',
+      iconName: 'cog-outline',
       onPress: () => setActiveModal('accessibility'),
     },
   ];
 
+  const hostingMenuItems: SettingsMenuItem[] = [
+    {
+      id: 'booking_permissions',
+      title: 'Booking permissions',
+      badge: 'New',
+      iconFamily: 'material',
+      iconName: 'key-outline',
+      onPress: () => setActiveModal('booking_permissions'),
+    },
+  ];
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
           testID="settings-back-btn"
           onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             if (router.canGoBack()) router.back();
             else router.push('/(tabs)/profile');
           }}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
+          style={({ pressed }) => [
+            styles.backBtn,
+            { backgroundColor: isDark ? '#27272A' : '#F5F5F5' },
+            pressed && { opacity: 0.7 },
+          ]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={22} color="#111111" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -117,33 +170,113 @@ export default function AccountSettingsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
         {/* Title */}
-        <Text style={styles.pageTitle}>Account Settings</Text>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>Account Settings</Text>
 
-        {/* Top Menu Block */}
-        <View style={styles.menuBlock}>
-          {mainMenuItems.map((item) => (
+        {/* Section 1: Account */}
+        <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>ACCOUNT</Text>
+        <View style={[styles.menuBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {accountMenuItems.map((item, idx) => (
             <Pressable
               key={item.id}
               testID={`settings-item-${item.id}`}
               onPress={item.onPress}
-              style={({ pressed }) => [styles.rowItem, pressed && styles.rowItemPressed]}
+              style={({ pressed }) => [
+                styles.rowItem,
+                idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+                pressed && { opacity: 0.6 },
+              ]}
             >
               {/* Left Icon */}
               <View style={styles.iconWrapper}>
                 {item.iconFamily === 'feather' && (
-                  <Feather name={item.iconName as any} size={22} color="#1E1E1E" />
+                  <Feather name={item.iconName as any} size={20} color={colors.text} />
                 )}
                 {item.iconFamily === 'ionicons' && (
-                  <Ionicons name={item.iconName as any} size={22} color="#1E1E1E" />
+                  <Ionicons name={item.iconName as any} size={21} color={colors.text} />
                 )}
                 {item.iconFamily === 'material' && (
-                  <MaterialCommunityIcons name={item.iconName as any} size={23} color="#1E1E1E" />
+                  <MaterialCommunityIcons name={item.iconName as any} size={22} color={colors.text} />
+                )}
+              </View>
+
+              {/* Title */}
+              <View style={styles.titleWrapper}>
+                <Text style={[styles.rowTitle, { color: colors.text }]}>{item.title}</Text>
+              </View>
+
+              {/* Right Chevron */}
+              <Feather name="chevron-right" size={18} color={colors.mutedForeground} style={styles.chevron} />
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Section 2: Preferences */}
+        <Text style={[styles.sectionHeader, { color: colors.mutedForeground, marginTop: 24 }]}>PREFERENCES</Text>
+        <View style={[styles.menuBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {preferencesMenuItems.map((item, idx) => (
+            <Pressable
+              key={item.id}
+              testID={`settings-item-${item.id}`}
+              onPress={item.onPress}
+              style={({ pressed }) => [
+                styles.rowItem,
+                idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+                pressed && { opacity: 0.6 },
+              ]}
+            >
+              {/* Left Icon */}
+              <View style={styles.iconWrapper}>
+                {item.iconFamily === 'feather' && (
+                  <Feather name={item.iconName as any} size={20} color={colors.text} />
+                )}
+                {item.iconFamily === 'ionicons' && (
+                  <Ionicons name={item.iconName as any} size={21} color={colors.text} />
+                )}
+                {item.iconFamily === 'material' && (
+                  <MaterialCommunityIcons name={item.iconName as any} size={22} color={colors.text} />
+                )}
+              </View>
+
+              {/* Title & Subtitle */}
+              <View style={styles.titleWrapper}>
+                <Text style={[styles.rowTitle, { color: colors.text }]}>{item.title}</Text>
+                {item.subtitle && (
+                  <View style={[styles.valueBadge, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                    <Text style={[styles.valueBadgeText, { color: colors.primary }]}>{item.subtitle}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Right Chevron */}
+              <Feather name="chevron-right" size={18} color={colors.mutedForeground} style={styles.chevron} />
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Section 3: Hosting */}
+        <Text style={[styles.sectionHeader, { color: colors.mutedForeground, marginTop: 24 }]}>HOSTING & OPERATIONS</Text>
+        <View style={[styles.menuBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {hostingMenuItems.map((item, idx) => (
+            <Pressable
+              key={item.id}
+              testID={`settings-item-${item.id}`}
+              onPress={item.onPress}
+              style={({ pressed }) => [
+                styles.rowItem,
+                idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+                pressed && { opacity: 0.6 },
+              ]}
+            >
+              {/* Left Icon */}
+              <View style={styles.iconWrapper}>
+                {item.iconFamily === 'material' && (
+                  <MaterialCommunityIcons name={item.iconName as any} size={22} color={colors.text} />
                 )}
               </View>
 
               {/* Title & Badge */}
               <View style={styles.titleWrapper}>
-                <Text style={styles.rowTitle}>{item.title}</Text>
+                <Text style={[styles.rowTitle, { color: colors.text }]}>{item.title}</Text>
                 {item.badge && (
                   <View style={styles.badgePill}>
                     <Text style={styles.badgeText}>{item.badge}</Text>
@@ -152,17 +285,20 @@ export default function AccountSettingsScreen() {
               </View>
 
               {/* Right Chevron */}
-              <Feather name="chevron-right" size={20} color="#717171" style={styles.chevron} />
+              <Feather name="chevron-right" size={18} color={colors.mutedForeground} style={styles.chevron} />
             </Pressable>
           ))}
         </View>
 
-        {/* Divider before Version */}
-        <View style={styles.dividerLine} />
-
         {/* App Version Footer */}
-        <Text style={styles.versionFooter}>Version 0.1.0</Text>
+        <Text style={[styles.versionFooter, { color: colors.mutedForeground }]}>ZuruSasa Mobile · Version 0.1.0</Text>
       </ScrollView>
+
+      {/* ── MODAL: APPEARANCE SELECTOR SHEET ─────────────────────────────────── */}
+      <AppearanceModalSheet
+        visible={activeModal === 'appearance'}
+        onClose={() => setActiveModal(null)}
+      />
 
       {/* ── MODAL 1: BOOKING PERMISSIONS ─────────────────────────────────────── */}
       <Modal
@@ -171,43 +307,49 @@ export default function AccountSettingsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setActiveModal(null)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
-            <Pressable onPress={() => setActiveModal(null)} style={styles.modalCloseBtn} hitSlop={10}>
-              <Feather name="x" size={22} color="#111111" />
+        <View style={[styles.modalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <Pressable onPress={() => setActiveModal(null)} style={[styles.modalCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }]} hitSlop={10}>
+              <Feather name="x" size={20} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Booking permissions</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Booking permissions</Text>
             <View style={{ width: 36 }} />
           </View>
 
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
-            <Text style={styles.docHeadline}>Manage who can book</Text>
-            <Text style={styles.formSub}>
+            <Text style={[styles.docHeadline, { color: colors.text }]}>Manage who can book</Text>
+            <Text style={[styles.formSub, { color: colors.mutedForeground }]}>
               Control permissions for team members, co-hosts, and assistant accounts on ZuruSasa.
             </Text>
 
-            <View style={styles.switchRow}>
+            <View style={[styles.switchRow, { borderBottomColor: colors.border }]}>
               <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={styles.switchTitle}>Allow Co-Hosts to accept bookings</Text>
-                <Text style={styles.switchSub}>Co-hosts can manage reservation requests on your behalf</Text>
+                <Text style={[styles.switchTitle, { color: colors.text }]}>Allow Co-Hosts to accept bookings</Text>
+                <Text style={[styles.switchSub, { color: colors.mutedForeground }]}>Co-hosts can manage reservation requests on your behalf</Text>
               </View>
               <Switch
                 value={coHostBooking}
-                onValueChange={setCoHostBooking}
-                trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                onValueChange={(v) => {
+                  Haptics.selectionAsync();
+                  setCoHostBooking(v);
+                }}
+                trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: '#F26522' }}
                 thumbColor="#FFFFFF"
               />
             </View>
 
-            <View style={[styles.switchRow, { marginTop: 16 }]}>
+            <View style={[styles.switchRow, { borderBottomColor: colors.border, marginTop: 16 }]}>
               <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={styles.switchTitle}>Strict Guest Verification</Text>
-                <Text style={styles.switchSub}>Only allow guests with verified government ID to book instantly</Text>
+                <Text style={[styles.switchTitle, { color: colors.text }]}>Strict Guest Verification</Text>
+                <Text style={[styles.switchSub, { color: colors.mutedForeground }]}>Only allow guests with verified government ID to book instantly</Text>
               </View>
               <Switch
                 value={instantBookingRule}
-                onValueChange={setInstantBookingRule}
-                trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                onValueChange={(v) => {
+                  Haptics.selectionAsync();
+                  setInstantBookingRule(v);
+                }}
+                trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: '#F26522' }}
                 thumbColor="#FFFFFF"
               />
             </View>
@@ -217,7 +359,7 @@ export default function AccountSettingsScreen() {
                 Alert.alert('Permissions Updated', 'Your booking rules have been saved.');
                 setActiveModal(null);
               }}
-              style={styles.primaryBtn}
+              style={[styles.primaryBtn, { backgroundColor: '#F26522' }]}
             >
               <Text style={styles.primaryBtnText}>Save rules</Text>
             </Pressable>
@@ -232,43 +374,49 @@ export default function AccountSettingsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setActiveModal(null)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
-            <Pressable onPress={() => setActiveModal(null)} style={styles.modalCloseBtn} hitSlop={10}>
-              <Feather name="x" size={22} color="#111111" />
+        <View style={[styles.modalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <Pressable onPress={() => setActiveModal(null)} style={[styles.modalCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }]} hitSlop={10}>
+              <Feather name="x" size={20} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Accessibility</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Accessibility</Text>
             <View style={{ width: 36 }} />
           </View>
 
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
-            <Text style={styles.docHeadline}>Display & Accessibility</Text>
-            <Text style={styles.formSub}>
+            <Text style={[styles.docHeadline, { color: colors.text }]}>Display & Accessibility</Text>
+            <Text style={[styles.formSub, { color: colors.mutedForeground }]}>
               Customize visual contrast and readability preferences for coastal feeds and reels.
             </Text>
 
-            <View style={styles.switchRow}>
+            <View style={[styles.switchRow, { borderBottomColor: colors.border }]}>
               <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={styles.switchTitle}>High Contrast Mode</Text>
-                <Text style={styles.switchSub}>Enhances text outlines and button visibility in bright sunlight</Text>
+                <Text style={[styles.switchTitle, { color: colors.text }]}>High Contrast Mode</Text>
+                <Text style={[styles.switchSub, { color: colors.mutedForeground }]}>Enhances text outlines and button visibility in bright sunlight</Text>
               </View>
               <Switch
                 value={highContrast}
-                onValueChange={setHighContrast}
-                trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                onValueChange={(v) => {
+                  Haptics.selectionAsync();
+                  setHighContrast(v);
+                }}
+                trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: '#F26522' }}
                 thumbColor="#FFFFFF"
               />
             </View>
 
-            <View style={[styles.switchRow, { marginTop: 16 }]}>
+            <View style={[styles.switchRow, { borderBottomColor: colors.border, marginTop: 16 }]}>
               <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={styles.switchTitle}>Larger Typography</Text>
-                <Text style={styles.switchSub}>Scales text size across listing details and checkout</Text>
+                <Text style={[styles.switchTitle, { color: colors.text }]}>Larger Typography</Text>
+                <Text style={[styles.switchSub, { color: colors.mutedForeground }]}>Scales text size across listing details and checkout</Text>
               </View>
               <Switch
                 value={largeText}
-                onValueChange={setLargeText}
-                trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                onValueChange={(v) => {
+                  Haptics.selectionAsync();
+                  setLargeText(v);
+                }}
+                trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: '#F26522' }}
                 thumbColor="#FFFFFF"
               />
             </View>
@@ -278,7 +426,7 @@ export default function AccountSettingsScreen() {
                 Alert.alert('Accessibility Updated', 'Display preferences have been applied.');
                 setActiveModal(null);
               }}
-              style={styles.primaryBtn}
+              style={[styles.primaryBtn, { backgroundColor: '#F26522' }]}
             >
               <Text style={styles.primaryBtnText}>Apply settings</Text>
             </Pressable>
@@ -292,7 +440,6 @@ export default function AccountSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 24,
@@ -316,7 +463,6 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#111111',
     letterSpacing: -0.5,
     marginBottom: 20,
     fontFamily: Platform.select({
@@ -325,13 +471,24 @@ const styles = StyleSheet.create({
       default: 'sans-serif',
     }),
   },
+  sectionHeader: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
   menuBlock: {
     width: '100%',
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    overflow: 'hidden',
   },
   rowItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 18,
+    paddingVertical: 16,
   },
   rowItemPressed: {
     opacity: 0.6,
@@ -340,22 +497,26 @@ const styles = StyleSheet.create({
     width: 32,
     alignItems: 'flex-start',
     justifyContent: 'center',
-    marginRight: 16,
+    marginRight: 14,
   },
   titleWrapper: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   rowTitle: {
-    fontSize: 16,
-    color: '#1E1E1E',
-    fontWeight: '400',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontSize: 15.5,
+    fontFamily: 'DMSans_500Medium',
+  },
+  valueBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  valueBadgeText: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_700Bold',
   },
   badgePill: {
     backgroundColor: '#FF385C',
@@ -375,28 +536,18 @@ const styles = StyleSheet.create({
     }),
   },
   chevron: {
-    marginLeft: 12,
-  },
-  dividerLine: {
-    height: 1,
-    backgroundColor: '#F0F0F0',
-    marginVertical: 16,
+    marginLeft: 8,
   },
   versionFooter: {
     fontSize: 13,
-    color: '#717171',
-    marginTop: 8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_400Regular',
-      default: 'sans-serif',
-    }),
+    marginTop: 28,
+    textAlign: 'center',
+    fontFamily: 'DMSans_400Regular',
   },
 
   /* Modal Sheets */
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',

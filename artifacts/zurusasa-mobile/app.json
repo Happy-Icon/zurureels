@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "zurusasa-mobile",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/icon.png",
@@ -71,7 +71,8 @@
           "locationWhenInUsePermission": "Show your location on the map to find nearby stays, restaurants, and tours across the Kenyan coast."
         }
       ],
-      "react-native-maps"
+      "react-native-maps",
+      "./plugins/withPersonaAndroid.js"
     ],
     "experiments": {
       "typedRoutes": true,

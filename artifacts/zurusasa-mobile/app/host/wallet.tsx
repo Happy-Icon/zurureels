@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { useColors } from '@/hooks/useColors';
+import { useColors, useTheme } from '@/hooks/useColors';
 import { supabase, type BookingRow } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { Skeleton } from '@/components/Skeleton';
@@ -53,6 +53,7 @@ export default function HostWalletScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const colors = useColors();
+  const { isDark } = useTheme();
   const { user, profile, refreshProfile } = useAuth();
   const { showAlert } = useCustomAlert();
 
@@ -333,7 +334,7 @@ export default function HostWalletScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+      <View style={[styles.fill, { backgroundColor: colors.background }]}>
         <ScrollView
           contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottomPad, paddingHorizontal: 20, gap: 20 }}
           showsVerticalScrollIndicator={false}
@@ -348,7 +349,7 @@ export default function HostWalletScreen() {
   }
 
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       {/* Top Header Navigation */}
       <View style={[styles.topNavBar, { paddingTop: topPad }]}>
         <Pressable
@@ -357,10 +358,14 @@ export default function HostWalletScreen() {
             if (router.canGoBack()) router.back();
             else router.push('/profile');
           }}
-          style={({ pressed }) => [styles.backIconBtn, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [
+            styles.backIconBtn,
+            { backgroundColor: isDark ? '#27272A' : '#F8FAFC', borderColor: colors.border },
+            pressed && { opacity: 0.6 },
+          ]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={22} color="#0F172A" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -377,8 +382,8 @@ export default function HostWalletScreen() {
       >
         {/* Large Page Header */}
         <View style={styles.headerBlock}>
-          <Text style={styles.pageTitle}>Host Wallet</Text>
-          <Text style={styles.pageSubtitle}>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Host Wallet</Text>
+          <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>
             Track your earnings, pending payouts, and automated transfer history.
           </Text>
         </View>
@@ -406,61 +411,61 @@ export default function HostWalletScreen() {
 
         {/* ── SECTION 2: FINANCIAL OVERVIEW GRID (4 CARDS) ───────────────────── */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Financial Overview</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Financial Overview</Text>
         </View>
         <View style={styles.overviewGrid}>
-          <View style={styles.gridCard}>
-            <View style={[styles.gridIconCircle, { backgroundColor: '#FFF7ED' }]}>
+          <View style={[styles.gridCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.gridIconCircle, { backgroundColor: isDark ? '#3D2010' : '#FFF7ED' }]}>
               <MaterialCommunityIcons name="wallet" size={16} color="#F26522" />
             </View>
-            <Text style={styles.gridVal}>KES {availableBalance.toLocaleString()}</Text>
-            <Text style={styles.gridSub}>Available Balance</Text>
+            <Text style={[styles.gridVal, { color: colors.text }]}>KES {availableBalance.toLocaleString()}</Text>
+            <Text style={[styles.gridSub, { color: colors.mutedForeground }]}>Available Balance</Text>
           </View>
 
-          <View style={styles.gridCard}>
-            <View style={[styles.gridIconCircle, { backgroundColor: '#F0F9FF' }]}>
+          <View style={[styles.gridCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.gridIconCircle, { backgroundColor: isDark ? '#082F49' : '#F0F9FF' }]}>
               <Feather name="clock" size={16} color="#0284C7" />
             </View>
-            <Text style={styles.gridVal}>KES {pendingRelease.toLocaleString()}</Text>
-            <Text style={styles.gridSub}>Pending Release</Text>
+            <Text style={[styles.gridVal, { color: colors.text }]}>KES {pendingRelease.toLocaleString()}</Text>
+            <Text style={[styles.gridSub, { color: colors.mutedForeground }]}>Pending Release</Text>
           </View>
 
-          <View style={styles.gridCard}>
-            <View style={[styles.gridIconCircle, { backgroundColor: '#ECFDF5' }]}>
+          <View style={[styles.gridCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.gridIconCircle, { backgroundColor: isDark ? '#064E3B40' : '#ECFDF5' }]}>
               <Feather name="trending-up" size={16} color="#059669" />
             </View>
-            <Text style={styles.gridVal}>KES {lifetimeEarnings.toLocaleString()}</Text>
-            <Text style={styles.gridSub}>Lifetime Earnings</Text>
+            <Text style={[styles.gridVal, { color: colors.text }]}>KES {lifetimeEarnings.toLocaleString()}</Text>
+            <Text style={[styles.gridSub, { color: colors.mutedForeground }]}>Lifetime Earnings</Text>
           </View>
 
-          <View style={styles.gridCard}>
-            <View style={[styles.gridIconCircle, { backgroundColor: '#FDF4FF' }]}>
+          <View style={[styles.gridCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.gridIconCircle, { backgroundColor: isDark ? '#3B076440' : '#FDF4FF' }]}>
               <Feather name="calendar" size={16} color="#C084FC" />
             </View>
-            <Text style={styles.gridVal}>KES {thisMonthEarnings.toLocaleString()}</Text>
-            <Text style={styles.gridSub}>This Month Revenue</Text>
+            <Text style={[styles.gridVal, { color: colors.text }]}>KES {thisMonthEarnings.toLocaleString()}</Text>
+            <Text style={[styles.gridSub, { color: colors.mutedForeground }]}>This Month Revenue</Text>
           </View>
         </View>
 
         {/* ── SECTION 3: UPCOMING PAYOUT ──────────────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Upcoming Payout</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Upcoming Payout</Text>
         </View>
-        <View style={styles.upcomingPayoutCard}>
+        <View style={[styles.upcomingPayoutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.upcomingTopRow}>
             <View style={{ gap: 2 }}>
-              <Text style={styles.upcomingDateText}>Next Payout Cycle</Text>
-              <Text style={styles.upcomingAmountText}>KES {pendingRelease.toLocaleString()}</Text>
+              <Text style={[styles.upcomingDateText, { color: colors.mutedForeground }]}>Next Payout Cycle</Text>
+              <Text style={[styles.upcomingAmountText, { color: colors.text }]}>KES {pendingRelease.toLocaleString()}</Text>
             </View>
             <View style={styles.scheduledStatusTag}>
               <Feather name="check-circle" size={12} color="#16A34A" />
               <Text style={styles.scheduledStatusText}>Scheduled</Text>
             </View>
           </View>
-          <View style={styles.upcomingDivider} />
+          <View style={[styles.upcomingDivider, { backgroundColor: colors.border }]} />
           <View style={styles.destinationRow}>
-            <Text style={styles.destLabel}>Payout Destination</Text>
-            <Text style={styles.destVal}>
+            <Text style={[styles.destLabel, { color: colors.mutedForeground }]}>Payout Destination</Text>
+            <Text style={[styles.destVal, { color: colors.text }]}>
               {defaultMethod ? `${defaultMethod.name} (${defaultMethod.details})` : 'No Method Configured'}
             </Text>
           </View>
@@ -468,24 +473,24 @@ export default function HostWalletScreen() {
 
         {/* ── SECTION 4: PAYOUT METHOD MANAGER ───────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Payout Method</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Payout Method</Text>
           <Pressable onPress={() => setShowManageModal(true)} hitSlop={8}>
             <Text style={styles.manageBtnText}>+ Add Method</Text>
           </Pressable>
         </View>
-        <View style={styles.methodsCard}>
+        <View style={[styles.methodsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {payoutMethods.length === 0 ? (
             <View style={{ gap: 8, alignItems: 'center', paddingVertical: 12 }}>
-              <Feather name="credit-card" size={24} color="#94A3B8" />
-              <Text style={{ fontSize: 13, fontFamily: 'DMSans_500Medium', color: '#64748B' }}>
+              <Feather name="credit-card" size={24} color={colors.mutedForeground} />
+              <Text style={{ fontSize: 13, fontFamily: 'DMSans_500Medium', color: colors.mutedForeground }}>
                 No payout destination added yet
               </Text>
               <Pressable
                 onPress={() => setShowManageModal(true)}
                 style={{
-                  backgroundColor: '#FFF7ED',
+                  backgroundColor: isDark ? '#3D2010' : '#FFF7ED',
                   borderWidth: 1,
-                  borderColor: '#FFEDD5',
+                  borderColor: isDark ? '#5C2D16' : '#FFEDD5',
                   borderRadius: 12,
                   paddingHorizontal: 14,
                   paddingVertical: 6,
@@ -508,14 +513,14 @@ export default function HostWalletScreen() {
                 </View>
                 <View style={{ flex: 1, gap: 2 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.methodName}>{m.name}</Text>
+                    <Text style={[styles.methodName, { color: colors.text }]}>{m.name}</Text>
                     {m.isDefault ? (
                       <View style={styles.defaultPill}>
                         <Text style={styles.defaultPillText}>DEFAULT</Text>
                       </View>
                     ) : null}
                   </View>
-                  <Text style={styles.methodDetails}>{m.details}</Text>
+                  <Text style={[styles.methodDetails, { color: colors.mutedForeground }]}>{m.details}</Text>
                 </View>
                 {!m.isDefault ? (
                   <Pressable
@@ -536,18 +541,18 @@ export default function HostWalletScreen() {
         </View>
 
         {/* ── SECTION 5: AUTOMATIC PAYOUTS TOGGLE ────────────────────────────── */}
-        <View style={styles.autoPayoutCard}>
+        <View style={[styles.autoPayoutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.autoPayoutHeaderRow}>
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={styles.autoPayoutTitle}>Automatic Payouts</Text>
-              <Text style={styles.autoPayoutSub}>
+              <Text style={[styles.autoPayoutTitle, { color: colors.text }]}>Automatic Payouts</Text>
+              <Text style={[styles.autoPayoutSub, { color: colors.mutedForeground }]}>
                 Once enabled, available earnings will automatically be transferred to your selected payout method according to your schedule.
               </Text>
             </View>
             <Switch
               value={autoPayoutEnabled}
               onValueChange={setAutoPayoutEnabled}
-              trackColor={{ false: '#E2E8F0', true: '#F26522' }}
+              trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: '#F26522' }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -555,13 +560,13 @@ export default function HostWalletScreen() {
 
         {/* ── SECTION 6: RECENT TRANSACTIONS TIMELINE ─────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Transactions</Text>
         </View>
-        <View style={styles.txCard}>
+        <View style={[styles.txCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {transactions.length === 0 ? (
             <View style={{ paddingVertical: 16, alignItems: 'center', gap: 6 }}>
-              <Feather name="inbox" size={24} color="#94A3B8" />
-              <Text style={{ fontSize: 13, fontFamily: 'DMSans_500Medium', color: '#64748B' }}>
+              <Feather name="inbox" size={24} color={colors.mutedForeground} />
+              <Text style={{ fontSize: 13, fontFamily: 'DMSans_500Medium', color: colors.mutedForeground }}>
                 No completed transactions recorded yet.
               </Text>
             </View>
@@ -571,19 +576,19 @@ export default function HostWalletScreen() {
               const isPositive = tx.amount > 0;
 
               return (
-                <View key={tx.id} style={[styles.txRow, !isLast && styles.txRowBorder]}>
+                <View key={tx.id} style={[styles.txRow, !isLast && [styles.txRowBorder, { borderBottomColor: colors.border }]]}>
                   <View
                     style={[
                       styles.txIconBox,
                       {
                         backgroundColor:
                           tx.type === 'income'
-                            ? '#ECFDF5'
+                            ? isDark ? '#064E3B40' : '#ECFDF5'
                             : tx.type === 'fee'
-                            ? '#FFF7ED'
+                            ? isDark ? '#3D2010' : '#FFF7ED'
                             : tx.type === 'refund'
-                            ? '#F5F3FF'
-                            : '#F0F9FF',
+                            ? isDark ? '#2E106540' : '#F5F3FF'
+                            : isDark ? '#082F49' : '#F0F9FF',
                       },
                     ]}
                   >
@@ -611,22 +616,22 @@ export default function HostWalletScreen() {
                   </View>
 
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={styles.txTitle} numberOfLines={1}>
+                    <Text style={[styles.txTitle, { color: colors.text }]} numberOfLines={1}>
                       {tx.title}
                     </Text>
-                    <Text style={styles.txDate}>{tx.date}</Text>
+                    <Text style={[styles.txDate, { color: colors.mutedForeground }]}>{tx.date}</Text>
                   </View>
 
                   <View style={{ alignItems: 'flex-end', gap: 2 }}>
                     <Text
                       style={[
                         styles.txAmount,
-                        { color: isPositive ? '#059669' : '#0F172A' },
+                        { color: isPositive ? '#059669' : colors.text },
                       ]}
                     >
                       {isPositive ? `+KES ${tx.amount.toLocaleString()}` : `-KES ${Math.abs(tx.amount).toLocaleString()}`}
                     </Text>
-                    <Text style={styles.txStatus}>{tx.status}</Text>
+                    <Text style={[styles.txStatus, { color: colors.mutedForeground }]}>{tx.status}</Text>
                   </View>
                 </View>
               );
@@ -636,25 +641,25 @@ export default function HostWalletScreen() {
 
         {/* ── SECTION 7: PAYOUT HISTORY ────────────────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Payout History</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Payout History</Text>
         </View>
-        <View style={styles.historyCard}>
+        <View style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {availableBalance === 0 && lifetimeEarnings === 0 ? (
             <View style={{ paddingVertical: 14, alignItems: 'center', gap: 4 }}>
-              <Text style={{ fontSize: 13, fontFamily: 'DMSans_400Regular', color: '#64748B' }}>
+              <Text style={{ fontSize: 13, fontFamily: 'DMSans_400Regular', color: colors.mutedForeground }}>
                 No completed payouts processed yet.
               </Text>
             </View>
           ) : (
             <View style={styles.historyRow}>
               <View style={{ gap: 2 }}>
-                <Text style={styles.historyDate}>Current Settlement Cycle</Text>
-                <Text style={styles.historyDest}>
+                <Text style={[styles.historyDate, { color: colors.text }]}>Current Settlement Cycle</Text>
+                <Text style={[styles.historyDest, { color: colors.mutedForeground }]}>
                   Destination: {defaultMethod ? defaultMethod.name : 'M-Pesa / Bank'}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                <Text style={styles.historyVal}>KES {availableBalance.toLocaleString()}</Text>
+                <Text style={[styles.historyVal, { color: colors.text }]}>KES {availableBalance.toLocaleString()}</Text>
                 <View style={styles.paidBadge}>
                   <Text style={styles.paidBadgeText}>Pending Release</Text>
                 </View>
@@ -665,24 +670,24 @@ export default function HostWalletScreen() {
 
         {/* ── SECTION 8: EARNINGS INSIGHTS & ANALYTICS ────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Earnings Insights</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Earnings Insights</Text>
         </View>
         <View style={styles.insightsGrid}>
-          <View style={styles.insightItem}>
-            <Text style={styles.insightVal}>{monthBookingsCount} Stays</Text>
-            <Text style={styles.insightLbl}>This Month Bookings</Text>
+          <View style={[styles.insightItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.insightVal, { color: colors.text }]}>{monthBookingsCount} Stays</Text>
+            <Text style={[styles.insightLbl, { color: colors.mutedForeground }]}>This Month Bookings</Text>
           </View>
-          <View style={styles.insightItem}>
-            <Text style={styles.insightVal}>KES {avgBookingValue.toLocaleString()}</Text>
-            <Text style={styles.insightLbl}>Avg Booking Value</Text>
+          <View style={[styles.insightItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.insightVal, { color: colors.text }]}>KES {avgBookingValue.toLocaleString()}</Text>
+            <Text style={[styles.insightLbl, { color: colors.mutedForeground }]}>Avg Booking Value</Text>
           </View>
-          <View style={styles.insightItem}>
-            <Text style={styles.insightVal}>{monthBookingsCount > 0 ? '78%' : '0%'}</Text>
-            <Text style={styles.insightLbl}>Occupancy Rate</Text>
+          <View style={[styles.insightItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.insightVal, { color: colors.text }]}>{monthBookingsCount > 0 ? '78%' : '0%'}</Text>
+            <Text style={[styles.insightLbl, { color: colors.mutedForeground }]}>Occupancy Rate</Text>
           </View>
-          <View style={styles.insightItem}>
-            <Text style={styles.insightVal}>85%</Text>
-            <Text style={styles.insightLbl}>Net Host Margin</Text>
+          <View style={[styles.insightItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.insightVal, { color: colors.text }]}>85%</Text>
+            <Text style={[styles.insightLbl, { color: colors.mutedForeground }]}>Net Host Margin</Text>
           </View>
         </View>
       </ScrollView>
@@ -694,13 +699,13 @@ export default function HostWalletScreen() {
         animationType="slide"
         onRequestClose={() => setShowManageModal(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]}>
           <Pressable style={styles.backdropTouch} onPress={() => setShowManageModal(false)} />
-          <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Add Payout Method</Text>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>Add Payout Method</Text>
               <Pressable onPress={() => setShowManageModal(false)} hitSlop={10}>
-                <Feather name="x" size={20} color="#717171" />
+                <Feather name="x" size={20} color={colors.text} />
               </Pressable>
             </View>
 
@@ -711,14 +716,18 @@ export default function HostWalletScreen() {
                   setNewMethodType('mpesa');
                   setNewBankCode('744');
                 }}
-                style={[styles.typeTile, newMethodType === 'mpesa' && styles.typeTileSelected]}
+                style={[
+                  styles.typeTile,
+                  { backgroundColor: isDark ? '#27272A' : '#F8FAFC', borderColor: colors.border },
+                  newMethodType === 'mpesa' && [styles.typeTileSelected, { backgroundColor: isDark ? '#3D2010' : '#FFF7ED', borderColor: '#F26522' }],
+                ]}
               >
                 <Feather
                   name="smartphone"
                   size={16}
-                  color={newMethodType === 'mpesa' ? '#F26522' : '#64748B'}
+                  color={newMethodType === 'mpesa' ? '#F26522' : colors.mutedForeground}
                 />
-                <Text style={[styles.typeTileText, newMethodType === 'mpesa' && styles.typeTileTextSelected]}>
+                <Text style={[styles.typeTileText, { color: colors.text }, newMethodType === 'mpesa' && styles.typeTileTextSelected]}>
                   M-Pesa
                 </Text>
               </Pressable>
@@ -728,14 +737,18 @@ export default function HostWalletScreen() {
                   setNewMethodType('bank');
                   setNewBankCode('013');
                 }}
-                style={[styles.typeTile, newMethodType === 'bank' && styles.typeTileSelected]}
+                style={[
+                  styles.typeTile,
+                  { backgroundColor: isDark ? '#27272A' : '#F8FAFC', borderColor: colors.border },
+                  newMethodType === 'bank' && [styles.typeTileSelected, { backgroundColor: isDark ? '#3D2010' : '#FFF7ED', borderColor: '#F26522' }],
+                ]}
               >
                 <Feather
                   name="credit-card"
                   size={16}
-                  color={newMethodType === 'bank' ? '#F26522' : '#64748B'}
+                  color={newMethodType === 'bank' ? '#F26522' : colors.mutedForeground}
                 />
-                <Text style={[styles.typeTileText, newMethodType === 'bank' && styles.typeTileTextSelected]}>
+                <Text style={[styles.typeTileText, { color: colors.text }, newMethodType === 'bank' && styles.typeTileTextSelected]}>
                   Bank Account
                 </Text>
               </Pressable>
@@ -744,11 +757,11 @@ export default function HostWalletScreen() {
             {/* Form Inputs */}
             {newMethodType === 'mpesa' ? (
               <View style={styles.inputStack}>
-                <Text style={styles.inputLabel}>M-Pesa Phone Number</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>M-Pesa Phone Number</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                   placeholder="0712345678 or +254..."
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.mutedForeground}
                   keyboardType="phone-pad"
                   value={newNumber}
                   onChangeText={setNewNumber}
@@ -756,11 +769,11 @@ export default function HostWalletScreen() {
               </View>
             ) : (
               <View style={styles.inputStack}>
-                <Text style={styles.inputLabel}>Bank Account Number</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Bank Account Number</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
                   placeholder="Account Number"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.mutedForeground}
                   keyboardType="number-pad"
                   value={newNumber}
                   onChangeText={setNewNumber}
@@ -863,7 +876,6 @@ const styles = StyleSheet.create({
   overviewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   gridCard: {
     width: '48%',
-    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
@@ -880,7 +892,6 @@ const styles = StyleSheet.create({
 
   /* Upcoming Payout */
   upcomingPayoutCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
@@ -909,7 +920,6 @@ const styles = StyleSheet.create({
 
   /* Methods Card */
   methodsCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
@@ -960,7 +970,6 @@ const styles = StyleSheet.create({
 
   /* Transactions */
   txCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
@@ -976,7 +985,6 @@ const styles = StyleSheet.create({
 
   /* History */
   historyCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
@@ -1018,7 +1026,6 @@ const styles = StyleSheet.create({
   },
   backdropTouch: { flex: 1 },
   modalSheet: {
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingTop: 20,

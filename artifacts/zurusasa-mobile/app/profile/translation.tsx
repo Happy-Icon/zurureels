@@ -13,9 +13,13 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 
 export default function TranslationSettingsScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -62,7 +66,7 @@ export default function TranslationSettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
@@ -74,7 +78,7 @@ export default function TranslationSettingsScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={22} color="#111111" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -84,18 +88,18 @@ export default function TranslationSettingsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
         {/* Title */}
-        <Text style={styles.pageTitle}>Translation</Text>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>Translation</Text>
 
         {/* Intro Subtitle */}
-        <Text style={styles.pageSubtitle}>
+        <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>
           Automatically translate the reviews, descriptions and messages written by guests and Hosts to English. Turn this feature off if you'd like to show the original language.
         </Text>
 
         {/* Automatic translation row */}
         <View style={styles.toggleRow}>
           <View style={styles.textContainer}>
-            <Text style={styles.toggleTitle}>Automatic translation</Text>
-            <Text style={styles.toggleSubtitle}>
+            <Text style={[styles.toggleTitle, { color: colors.text }]}>Automatic translation</Text>
+            <Text style={[styles.toggleSubtitle, { color: colors.mutedForeground }]}>
               Translate reviews, descriptions and messages into English.
             </Text>
           </View>
@@ -103,8 +107,8 @@ export default function TranslationSettingsScreen() {
           <Switch
             value={autoTranslate}
             onValueChange={handleToggle}
-            trackColor={{ false: '#E2E8F0', true: '#111111' }}
-            thumbColor="#FFFFFF"
+            trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: colors.text }}
+            thumbColor={isDark ? '#FFFFFF' : '#FFFFFF'}
           />
         </View>
       </ScrollView>
@@ -115,7 +119,6 @@ export default function TranslationSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 24,

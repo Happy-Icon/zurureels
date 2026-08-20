@@ -22,6 +22,8 @@ import {
   useHostConfirmBooking,
   useHostDeclineBooking,
 } from '@/lib/queries';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { Skeleton } from '@/components/Skeleton';
 import type { BookingRow } from '@/lib/supabase';
 
@@ -60,6 +62,8 @@ interface HostReservationsViewProps {
 }
 
 export function HostReservationsView({ initialTab = 'requests' }: HostReservationsViewProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -232,7 +236,7 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
   };
 
   return (
-    <View testID="host-reservations-view" style={[styles.fill, { backgroundColor: '#FAFAFA' }]}>
+    <View testID="host-reservations-view" style={[styles.fill, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -253,24 +257,28 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
         {/* ── Top Header ────────────────────────────────────────────── */}
         <View style={styles.headerBlock}>
           <View>
-            <Text style={styles.headerTitle}>Host Reservations</Text>
-            <Text style={styles.headerSub}>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Host Reservations</Text>
+            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
               Review reservation requests and oversee guest stays.
             </Text>
           </View>
         </View>
 
         {/* ── Segmented Control Filter Tabs ──────────────────────────── */}
-        <View style={styles.tabTrack}>
+        <View style={[styles.tabTrack, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
           <Pressable
             testID="host-tab-requests"
             onPress={() => setActiveTab('requests')}
-            style={[styles.tabBtn, activeTab === 'requests' && styles.tabBtnActive]}
+            style={[
+              styles.tabBtn,
+              activeTab === 'requests' && [styles.tabBtnActive, { backgroundColor: colors.card }],
+            ]}
           >
             <View style={styles.tabLabelRow}>
               <Text
                 style={[
                   styles.tabBtnText,
+                  { color: activeTab === 'requests' ? colors.text : colors.mutedForeground },
                   activeTab === 'requests' && styles.tabBtnTextActive,
                 ]}
               >
@@ -299,12 +307,16 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
           <Pressable
             testID="host-tab-upcoming"
             onPress={() => setActiveTab('upcoming')}
-            style={[styles.tabBtn, activeTab === 'upcoming' && styles.tabBtnActive]}
+            style={[
+              styles.tabBtn,
+              activeTab === 'upcoming' && [styles.tabBtnActive, { backgroundColor: colors.card }],
+            ]}
           >
             <View style={styles.tabLabelRow}>
               <Text
                 style={[
                   styles.tabBtnText,
+                  { color: activeTab === 'upcoming' ? colors.text : colors.mutedForeground },
                   activeTab === 'upcoming' && styles.tabBtnTextActive,
                 ]}
               >
@@ -316,11 +328,15 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
           <Pressable
             testID="host-tab-history"
             onPress={() => setActiveTab('history')}
-            style={[styles.tabBtn, activeTab === 'history' && styles.tabBtnActive]}
+            style={[
+              styles.tabBtn,
+              activeTab === 'history' && [styles.tabBtnActive, { backgroundColor: colors.card }],
+            ]}
           >
             <Text
               style={[
                 styles.tabBtnText,
+                { color: activeTab === 'history' ? colors.text : colors.mutedForeground },
                 activeTab === 'history' && styles.tabBtnTextActive,
               ]}
             >

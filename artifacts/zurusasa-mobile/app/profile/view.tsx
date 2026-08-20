@@ -19,6 +19,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
 import { supabase } from '@/lib/supabase';
@@ -59,40 +61,42 @@ const PROFILE_FIELDS: ProfileFieldConfig[] = [
     label: 'Pets',
     iconFamily: 'material',
     iconName: 'paw',
-    placeholder: 'Do you have pets? (e.g. cat, dog, none)',
+    placeholder: 'Do you have any pets? (e.g. Cats, Dogs, None)',
   },
   {
     id: 'location',
     label: 'Where I live',
     iconFamily: 'feather',
     iconName: 'map-pin',
-    placeholder: 'Your current hometown (e.g. Nairobi, Kenya)',
+    placeholder: 'Where do you live? (e.g. Diani Beach, Nairobi)',
   },
   {
     id: 'languages',
     label: 'Languages I speak',
-    iconFamily: 'ionicons',
-    iconName: 'chatbubble-ellipses-outline',
+    iconFamily: 'feather',
+    iconName: 'message-circle',
     placeholder: 'Languages you speak (e.g. English, Swahili)',
   },
   {
     id: 'foodScenes',
-    label: 'Food scenes',
+    label: "What's for breakfast",
     iconFamily: 'material',
-    iconName: 'noodles',
-    placeholder: 'Favorite food or dining vibes (e.g. Swahili seafood)',
+    iconName: 'food-croissant',
+    placeholder: 'Favorite breakfast or coastal meal (e.g. Mahamri, Coconut coffee)',
   },
   {
     id: 'bio',
-    label: 'About me',
+    label: 'About you',
     iconFamily: 'feather',
     iconName: 'user',
-    placeholder: 'Tell others a little bit about yourself...',
+    placeholder: 'Write a short bio so hosts and guests can learn more about your travel journey...',
     multiline: true,
   },
 ];
 
 export default function ViewProfileScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile, refreshProfile, viewMode } = useAuth();
@@ -357,7 +361,7 @@ export default function ViewProfileScreen() {
   };
 
   return (
-    <View style={styles.fill}>
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       {/* ── TOP HEADER BAR ───────────────────────────────────────────────────── */}
       <View style={[styles.headerRow, { paddingTop: topPad }]}>
         <Pressable
@@ -369,16 +373,16 @@ export default function ViewProfileScreen() {
           style={styles.circleBtn}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={24} color="#111111" />
+          <Feather name="arrow-left" size={24} color={colors.text} />
         </Pressable>
 
         <Pressable
           testID="view-profile-edit-btn"
           onPress={() => setEditModalVisible(true)}
-          style={styles.editPillBtn}
+          style={[styles.editPillBtn, { backgroundColor: isDark ? '#27272A' : '#F7F7F7', borderColor: colors.border }]}
           hitSlop={8}
         >
-          <Text style={styles.editPillBtnText}>Edit</Text>
+          <Text style={[styles.editPillBtnText, { color: colors.text }]}>Edit</Text>
         </Pressable>
       </View>
 
@@ -387,7 +391,7 @@ export default function ViewProfileScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
       >
         {/* ── HERO PROFILE CARD (MATCHING SCREENSHOT 1 & 2) ────────────────────── */}
-        <View style={styles.heroCard}>
+        <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Pressable
             onPress={() => setEditModalVisible(true)}
             style={styles.avatarContainer}
@@ -395,20 +399,20 @@ export default function ViewProfileScreen() {
             {currentAvatarUrl ? (
               <Image source={{ uri: currentAvatarUrl }} style={styles.avatarImg} contentFit="cover" />
             ) : (
-              <View style={styles.avatarInitialBox}>
-                <Text style={styles.avatarInitialText}>{initial}</Text>
+              <View style={[styles.avatarInitialBox, { backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}>
+                <Text style={[styles.avatarInitialText, { color: colors.text }]}>{initial}</Text>
               </View>
             )}
           </Pressable>
-          <Text style={styles.heroName}>{displayName}</Text>
-          <Text style={styles.heroRole}>{isHost ? 'Host' : 'Guest'}</Text>
+          <Text style={[styles.heroName, { color: colors.text }]}>{displayName}</Text>
+          <Text style={[styles.heroRole, { color: colors.mutedForeground }]}>{isHost ? 'Host' : 'Guest'}</Text>
         </View>
 
         {/* ── STATE 1: UNCOMPLETED PROFILE (SCREENSHOT 2) ─────────────────────── */}
         {!hasCompletedProfile ? (
           <View style={styles.uncompletedSection}>
-            <Text style={styles.completeTitle}>Complete your profile</Text>
-            <Text style={styles.completeSub}>
+            <Text style={[styles.completeTitle, { color: colors.text }]}>Complete your profile</Text>
+            <Text style={[styles.completeSub, { color: colors.mutedForeground }]}>
               Your ZuruSasa profile is an important part of every reservation. Create yours to help other hosts and guests get to know you.
             </Text>
 
@@ -420,77 +424,78 @@ export default function ViewProfileScreen() {
               }}
               style={({ pressed }) => [
                 styles.getStartedBtn,
+                { backgroundColor: colors.text },
                 pressed && styles.getStartedBtnPressed,
               ]}
             >
-              <Text style={styles.getStartedBtnText}>Get started</Text>
+              <Text style={[styles.getStartedBtnText, { color: colors.background }]}>Get started</Text>
             </Pressable>
           </View>
         ) : (
           /* ── STATE 2: COMPLETED PROFILE (SCREENSHOT 1) ───────────────────────── */
           <View style={styles.completedSection}>
             {formValues.work.trim() ? (
-              <View style={styles.attributeRow}>
+              <View style={[styles.attributeRow, { borderBottomColor: colors.border }]}>
                 <View style={styles.attributeIconWrap}>
-                  <Feather name="briefcase" size={22} color="#222222" />
+                  <Feather name="briefcase" size={22} color={colors.text} />
                 </View>
-                <Text style={styles.attributeText}>
-                  My work: <Text style={styles.attributeValue}>{formValues.work}</Text>
+                <Text style={[styles.attributeText, { color: colors.mutedForeground }]}>
+                  My work: <Text style={[styles.attributeValue, { color: colors.text }]}>{formValues.work}</Text>
                 </Text>
               </View>
             ) : null}
 
             {formValues.dreamDestination.trim() ? (
-              <View style={styles.attributeRow}>
+              <View style={[styles.attributeRow, { borderBottomColor: colors.border }]}>
                 <View style={styles.attributeIconWrap}>
-                  <Feather name="globe" size={22} color="#222222" />
+                  <Feather name="globe" size={22} color={colors.text} />
                 </View>
-                <Text style={styles.attributeText}>
-                  Where I've always wanted to go: <Text style={styles.attributeValue}>{formValues.dreamDestination}</Text>
+                <Text style={[styles.attributeText, { color: colors.mutedForeground }]}>
+                  Where I've always wanted to go: <Text style={[styles.attributeValue, { color: colors.text }]}>{formValues.dreamDestination}</Text>
                 </Text>
               </View>
             ) : null}
 
             {formValues.uselessSkill.trim() ? (
-              <View style={styles.attributeRow}>
+              <View style={[styles.attributeRow, { borderBottomColor: colors.border }]}>
                 <View style={styles.attributeIconWrap}>
-                  <MaterialCommunityIcons name="magic-staff" size={22} color="#222222" />
+                  <MaterialCommunityIcons name="magic-staff" size={22} color={colors.text} />
                 </View>
-                <Text style={styles.attributeText}>
-                  Most useless skill: <Text style={styles.attributeValue}>{formValues.uselessSkill}</Text>
+                <Text style={[styles.attributeText, { color: colors.mutedForeground }]}>
+                  Most useless skill: <Text style={[styles.attributeValue, { color: colors.text }]}>{formValues.uselessSkill}</Text>
                 </Text>
               </View>
             ) : null}
 
             {formValues.pets.trim() ? (
-              <View style={styles.attributeRow}>
+              <View style={[styles.attributeRow, { borderBottomColor: colors.border }]}>
                 <View style={styles.attributeIconWrap}>
-                  <MaterialCommunityIcons name="paw" size={22} color="#222222" />
+                  <MaterialCommunityIcons name="paw" size={22} color={colors.text} />
                 </View>
-                <Text style={styles.attributeText}>
-                  Pets: <Text style={styles.attributeValue}>{formValues.pets}</Text>
+                <Text style={[styles.attributeText, { color: colors.mutedForeground }]}>
+                  Pets: <Text style={[styles.attributeValue, { color: colors.text }]}>{formValues.pets}</Text>
                 </Text>
               </View>
             ) : null}
 
             {formValues.location.trim() ? (
-              <View style={styles.attributeRow}>
+              <View style={[styles.attributeRow, { borderBottomColor: colors.border }]}>
                 <View style={styles.attributeIconWrap}>
-                  <Feather name="map-pin" size={22} color="#222222" />
+                  <Feather name="map-pin" size={22} color={colors.text} />
                 </View>
-                <Text style={styles.attributeText}>
-                  Where I live: <Text style={styles.attributeValue}>{formValues.location}</Text>
+                <Text style={[styles.attributeText, { color: colors.mutedForeground }]}>
+                  Where I live: <Text style={[styles.attributeValue, { color: colors.text }]}>{formValues.location}</Text>
                 </Text>
               </View>
             ) : null}
 
             {formValues.languages.trim() ? (
-              <View style={styles.attributeRow}>
+              <View style={[styles.attributeRow, { borderBottomColor: colors.border }]}>
                 <View style={styles.attributeIconWrap}>
-                  <Ionicons name="chatbubble-ellipses-outline" size={22} color="#222222" />
+                  <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.text} />
                 </View>
-                <Text style={styles.attributeText}>
-                  Languages: <Text style={styles.attributeValue}>{formValues.languages}</Text>
+                <Text style={[styles.attributeText, { color: colors.mutedForeground }]}>
+                  Languages: <Text style={[styles.attributeValue, { color: colors.text }]}>{formValues.languages}</Text>
                 </Text>
               </View>
             ) : null}
@@ -498,15 +503,15 @@ export default function ViewProfileScreen() {
             {/* Divider */}
             {formValues.foodScenes.trim() ? (
               <>
-                <View style={styles.sectionDivider} />
+                <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.interestsSection}>
-                  <Text style={styles.interestsHeading}>My interests</Text>
-                  <View style={styles.attributeRow}>
+                  <Text style={[styles.interestsHeading, { color: colors.text }]}>My interests</Text>
+                  <View style={[styles.attributeRow, { borderBottomColor: colors.border }]}>
                     <View style={styles.attributeIconWrap}>
-                      <MaterialCommunityIcons name="noodles" size={22} color="#222222" />
+                      <MaterialCommunityIcons name="noodles" size={22} color={colors.text} />
                     </View>
-                    <Text style={styles.attributeText}>
-                      Food scenes: <Text style={styles.attributeValue}>{formValues.foodScenes}</Text>
+                    <Text style={[styles.attributeText, { color: colors.mutedForeground }]}>
+                      Food scenes: <Text style={[styles.attributeValue, { color: colors.text }]}>{formValues.foodScenes}</Text>
                     </Text>
                   </View>
                 </View>
@@ -515,10 +520,10 @@ export default function ViewProfileScreen() {
 
             {formValues.bio.trim() ? (
               <>
-                <View style={styles.sectionDivider} />
+                <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.interestsSection}>
-                  <Text style={styles.interestsHeading}>About me</Text>
-                  <Text style={styles.bioText}>{formValues.bio}</Text>
+                  <Text style={[styles.interestsHeading, { color: colors.text }]}>About me</Text>
+                  <Text style={[styles.bioText, { color: colors.mutedForeground }]}>{formValues.bio}</Text>
                 </View>
               </>
             ) : null}
@@ -538,22 +543,22 @@ export default function ViewProfileScreen() {
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalSheet}
+          style={[styles.modalSheet, { backgroundColor: colors.background }]}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
         >
           {/* Modal Header */}
-          <View style={[styles.modalHeader, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
             <View style={{ width: 36 }} />
-            <Text style={styles.modalHeaderTitle}>Edit profile</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Edit profile</Text>
             <Pressable
               onPress={() => {
                 Keyboard.dismiss();
                 setEditModalVisible(false);
               }}
-              style={styles.modalCloseCircle}
+              style={[styles.modalCloseCircle, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }]}
               hitSlop={10}
             >
-              <Feather name="x" size={20} color="#111111" />
+              <Feather name="x" size={20} color={colors.text} />
             </Pressable>
           </View>
 
@@ -578,8 +583,8 @@ export default function ViewProfileScreen() {
                 {currentAvatarUrl ? (
                   <Image source={{ uri: currentAvatarUrl }} style={styles.avatarImg} contentFit="cover" />
                 ) : (
-                  <View style={styles.avatarInitialBox}>
-                    <Text style={styles.avatarInitialText}>{initial}</Text>
+                  <View style={[styles.avatarInitialBox, { backgroundColor: isDark ? '#27272A' : '#111111' }]}>
+                    <Text style={[styles.avatarInitialText, { color: colors.text }]}>{initial}</Text>
                   </View>
                 )}
                 {uploadingAvatar && (
@@ -592,17 +597,17 @@ export default function ViewProfileScreen() {
               <Pressable
                 onPress={handlePickAvatar}
                 disabled={uploadingAvatar}
-                style={styles.avatarEditPill}
+                style={[styles.avatarEditPill, { backgroundColor: colors.card, borderColor: colors.border }]}
               >
-                <Feather name="camera" size={14} color="#111111" style={{ marginRight: 4 }} />
-                <Text style={styles.avatarEditPillText}>Edit</Text>
+                <Feather name="camera" size={14} color={colors.text} style={{ marginRight: 4 }} />
+                <Text style={[styles.avatarEditPillText, { color: colors.text }]}>Edit</Text>
               </Pressable>
             </View>
 
             {/* Intro text */}
             <View style={styles.introBlock}>
-              <Text style={styles.introTitle}>My profile</Text>
-              <Text style={styles.introDesc}>
+              <Text style={[styles.introTitle, { color: colors.text }]}>My profile</Text>
+              <Text style={[styles.introDesc, { color: colors.mutedForeground }]}>
                 Hosts and guests can see your profile, and it may appear across ZuruSasa to help us build trust in our community.{' '}
                 <Text
                   onPress={() =>
@@ -613,7 +618,7 @@ export default function ViewProfileScreen() {
                       icon: 'shield',
                     })
                   }
-                  style={styles.learnMoreLink}
+                  style={[styles.learnMoreLink, { color: colors.text }]}
                 >
                   Learn more
                 </Text>
@@ -627,7 +632,7 @@ export default function ViewProfileScreen() {
                 const isExpanded = activeFieldId === field.id || val.length > 0;
 
                 return (
-                  <View key={field.id} style={styles.fieldRowContainer}>
+                  <View key={field.id} style={[styles.fieldRowContainer, { borderBottomColor: colors.border }]}>
                     <Pressable
                       onPress={() => {
                         if (activeFieldId === field.id) {
@@ -639,18 +644,18 @@ export default function ViewProfileScreen() {
                       style={styles.fieldHeaderPressable}
                     >
                       <View style={styles.fieldIconCol}>
-                        {renderFieldIcon(field, 22, '#222222')}
+                        {renderFieldIcon(field, 22, colors.text)}
                       </View>
                       <View style={styles.fieldLabelCol}>
-                        <Text style={styles.fieldRowLabel}>{field.label}</Text>
+                        <Text style={[styles.fieldRowLabel, { color: colors.text }]}>{field.label}</Text>
                         {!isExpanded && (
-                          <Text style={styles.fieldAddPrompt}>Tap to add</Text>
+                          <Text style={[styles.fieldAddPrompt, { color: colors.mutedForeground }]}>Tap to add</Text>
                         )}
                       </View>
                       <Feather
                         name={isExpanded ? 'chevron-down' : 'chevron-right'}
                         size={18}
-                        color="#9E9E9E"
+                        color={colors.mutedForeground}
                       />
                     </Pressable>
 
@@ -662,11 +667,12 @@ export default function ViewProfileScreen() {
                           onChangeText={(text) => updateField(field.id, text)}
                           onFocus={() => handleFieldFocus(field.id, index)}
                           placeholder={field.placeholder}
-                          placeholderTextColor="#9E9E9E"
+                          placeholderTextColor={colors.mutedForeground}
                           multiline={field.multiline}
                           autoFocus={activeFieldId === field.id && val.length === 0}
                           style={[
                             styles.fieldAnswerInput,
+                            { backgroundColor: colors.card, borderColor: colors.border, color: colors.text },
                             field.multiline && { height: 78, textAlignVertical: 'top' },
                           ]}
                         />
@@ -682,12 +688,12 @@ export default function ViewProfileScreen() {
               testID="edit-profile-done-btn"
               onPress={handleSaveProfile}
               disabled={saving}
-              style={({ pressed }) => [styles.doneBtn, pressed && { opacity: 0.9 }]}
+              style={({ pressed }) => [styles.doneBtn, { backgroundColor: colors.text }, pressed && { opacity: 0.9 }]}
             >
               {saving ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={colors.background} />
               ) : (
-                <Text style={styles.doneBtnText}>Done</Text>
+                <Text style={[styles.doneBtnText, { color: colors.background }]}>Done</Text>
               )}
             </Pressable>
           </ScrollView>
@@ -700,7 +706,6 @@ export default function ViewProfileScreen() {
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   headerRow: {
     flexDirection: 'row',
@@ -734,7 +739,6 @@ const styles = StyleSheet.create({
 
   /* ── Hero Profile Card (Screenshot 1 & 2) ───────────────────────────────── */
   heroCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 28,
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -880,7 +884,6 @@ const styles = StyleSheet.create({
   /* ── Edit Profile Modal Sheet (Screenshot 3) ───────────────────────────── */
   modalSheet: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -935,7 +938,6 @@ const styles = StyleSheet.create({
   avatarEditPill: {
     position: 'absolute',
     bottom: -6,
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 5,

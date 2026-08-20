@@ -2,12 +2,16 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import type { ReviewSummaryData } from '@/services/reviewService';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 
 interface RatingBreakdownProps {
   summary: ReviewSummaryData;
 }
 
 export function RatingBreakdown({ summary }: RatingBreakdownProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const { averageRating, totalCount, ratingBreakdown, categoryAverages } = summary;
 
   const categories = [
@@ -22,14 +26,22 @@ export function RatingBreakdown({ summary }: RatingBreakdownProps) {
   return (
     <View style={styles.container}>
       {/* 1. Rating Summary Banner */}
-      <View style={styles.heroBanner}>
+      <View
+        style={[
+          styles.heroBanner,
+          {
+            backgroundColor: isDark ? '#27272A' : '#FFFBF8',
+            borderColor: isDark ? '#3F3F46' : '#FCE3D6',
+          },
+        ]}
+      >
         <View style={styles.heroLeft}>
-          <Text style={styles.heroRatingNumber}>
+          <Text style={[styles.heroRatingNumber, { color: colors.text }]}>
             {averageRating ? averageRating.toFixed(2) : '5.0'}
           </Text>
           <View style={styles.heroStarsRow}>
             <Ionicons name="star" size={16} color="#F26522" />
-            <Text style={styles.heroReviewCountText}>
+            <Text style={[styles.heroReviewCountText, { color: colors.mutedForeground }]}>
               Based on {totalCount} {totalCount === 1 ? 'review' : 'reviews'}
             </Text>
           </View>
@@ -43,11 +55,11 @@ export function RatingBreakdown({ summary }: RatingBreakdownProps) {
 
             return (
               <View key={star} style={styles.barRow}>
-                <Text style={styles.starLabel}>{star}★</Text>
-                <View style={styles.track}>
+                <Text style={[styles.starLabel, { color: colors.mutedForeground }]}>{star}★</Text>
+                <View style={[styles.track, { backgroundColor: isDark ? '#3F3F46' : '#EBEBEB' }]}>
                   <View style={[styles.fillBar, { width: `${pct}%` }]} />
                 </View>
-                <Text style={styles.countText}>{count}</Text>
+                <Text style={[styles.countText, { color: colors.mutedForeground }]}>{count}</Text>
               </View>
             );
           })}
@@ -57,12 +69,21 @@ export function RatingBreakdown({ summary }: RatingBreakdownProps) {
       {/* 2. Category Averages Grid */}
       <View style={styles.categoriesGrid}>
         {categories.map((cat, idx) => (
-          <View key={idx} style={styles.categoryCell}>
+          <View
+            key={idx}
+            style={[
+              styles.categoryCell,
+              {
+                backgroundColor: isDark ? '#1E1E1E' : '#F9F9F9',
+                borderColor: colors.border,
+              },
+            ]}
+          >
             <View style={styles.catHeader}>
-              <Feather name={cat.icon as any} size={15} color="#717171" />
-              <Text style={styles.catLabel}>{cat.label}</Text>
+              <Feather name={cat.icon as any} size={15} color={colors.mutedForeground} />
+              <Text style={[styles.catLabel, { color: colors.mutedForeground }]}>{cat.label}</Text>
             </View>
-            <Text style={styles.catScore}>{cat.score.toFixed(1)}</Text>
+            <Text style={[styles.catScore, { color: colors.text }]}>{cat.score.toFixed(1)}</Text>
           </View>
         ))}
       </View>

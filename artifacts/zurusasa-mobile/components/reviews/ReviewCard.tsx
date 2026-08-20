@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import type { FullReviewRow } from '@/lib/supabase';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { RatingStars } from '@/components/reviews/RatingStars';
 import { ReviewPhotoViewer } from '@/components/reviews/ReviewPhotoViewer';
 
@@ -18,6 +20,8 @@ function formatDate(iso: string): string {
 }
 
 export function ReviewCard({ review, onHelpful }: ReviewCardProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   const reviewerName = review.reviewer?.full_name || 'Verified Traveler';
@@ -30,33 +34,35 @@ export function ReviewCard({ review, onHelpful }: ReviewCardProps) {
     .toUpperCase();
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       {/* Header Row */}
       <View style={styles.headerRow}>
         {reviewerAvatar ? (
           <Image source={{ uri: reviewerAvatar }} style={styles.avatar} contentFit="cover" />
         ) : (
-          <View style={styles.avatarFallback}>
-            <Text style={styles.initialsText}>{initials}</Text>
+          <View style={[styles.avatarFallback, { backgroundColor: isDark ? '#27272A' : '#E5E7EB' }]}>
+            <Text style={[styles.initialsText, { color: colors.text }]}>{initials}</Text>
           </View>
         )}
 
         <View style={styles.reviewerInfo}>
           <View style={styles.nameRow}>
-            <Text style={styles.nameText}>{reviewerName}</Text>
-            <View style={styles.verifiedBadge}>
-              <Feather name="check" size={10} color="#FFFFFF" />
-            </View>
+            <Text style={[styles.nameText, { color: colors.text }]}>{reviewerName}</Text>
+            {review.reviewer?.verification_status === 'verified' ? (
+              <View style={styles.verifiedBadge}>
+                <Feather name="check" size={10} color="#FFFFFF" />
+              </View>
+            ) : null}
           </View>
 
-          <Text style={styles.dateText}>{formatDate(review.created_at)}</Text>
+          <Text style={[styles.dateText, { color: colors.mutedForeground }]}>{formatDate(review.created_at)}</Text>
         </View>
 
         <RatingStars rating={review.rating} size={14} />
       </View>
 
       {/* Comment */}
-      <Text style={styles.commentText}>{review.comment}</Text>
+      <Text style={[styles.commentText, { color: colors.text }]}>{review.comment}</Text>
 
       {/* Review Photos Gallery */}
       {review.photos && review.photos.length > 0 ? (

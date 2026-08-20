@@ -16,11 +16,15 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { passkeyService, type PasskeyCredential } from '@/services/passkeyService';
 import { PasskeySetupSheet } from '@/components/passkey/PasskeySetupSheet';
 
 export default function LoginAndSecurityScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -189,7 +193,7 @@ export default function LoginAndSecurityScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
@@ -201,7 +205,7 @@ export default function LoginAndSecurityScreen() {
           style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnActive]}
           hitSlop={12}
         >
-          <Feather name="x" size={22} color="#111111" />
+          <Feather name="x" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -211,16 +215,16 @@ export default function LoginAndSecurityScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
         {/* Title */}
-        <Text style={styles.pageTitle}>Login & security</Text>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>Login & security</Text>
 
         {/* Tab Switcher */}
-        <View style={styles.tabContainer}>
+        <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
           <Pressable
             testID="tab-login"
             onPress={() => setActiveTab('login')}
-            style={[styles.tabBtn, activeTab === 'login' && styles.tabBtnActive]}
+            style={[styles.tabBtn, activeTab === 'login' && [styles.tabBtnActive, { borderBottomColor: colors.text }]]}
           >
-            <Text style={[styles.tabText, activeTab === 'login' && styles.tabTextActive]}>
+            <Text style={[styles.tabText, { color: activeTab === 'login' ? colors.text : colors.mutedForeground }, activeTab === 'login' && styles.tabTextActive]}>
               Login
             </Text>
           </Pressable>
@@ -228,26 +232,26 @@ export default function LoginAndSecurityScreen() {
           <Pressable
             testID="tab-shared-access"
             onPress={() => setActiveTab('shared_access')}
-            style={[styles.tabBtn, activeTab === 'shared_access' && styles.tabBtnActive]}
+            style={[styles.tabBtn, activeTab === 'shared_access' && [styles.tabBtnActive, { borderBottomColor: colors.text }]]}
           >
-            <Text style={[styles.tabText, activeTab === 'shared_access' && styles.tabTextActive]}>
+            <Text style={[styles.tabText, { color: activeTab === 'shared_access' ? colors.text : colors.mutedForeground }, activeTab === 'shared_access' && styles.tabTextActive]}>
               Shared access
             </Text>
           </Pressable>
         </View>
 
         {pageLoading ? (
-          <ActivityIndicator size="small" color="#111111" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="small" color={colors.text} style={{ marginTop: 40 }} />
         ) : activeTab === 'login' ? (
           <View style={styles.tabContentBlock}>
             {/* ── SECTION 1: LOGIN ─────────────────────────────────────────── */}
-            <Text style={styles.sectionHeader}>Login</Text>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>Login</Text>
 
             {/* Passkeys */}
-            <View style={styles.dividedRow}>
+            <View style={[styles.dividedRow, { borderBottomColor: colors.border }]}>
               <View style={styles.rowLeft}>
-                <Text style={styles.itemTitle}>Passkeys</Text>
-                <Text style={styles.itemSubtitle}>Use your fingerprint, face, or PIN.</Text>
+                <Text style={[styles.itemTitle, { color: colors.text }]}>Passkeys</Text>
+                <Text style={[styles.itemSubtitle, { color: colors.mutedForeground }]}>Use your fingerprint, face, or PIN.</Text>
               </View>
               <Pressable
                 testID="passkey-action-btn"
@@ -256,9 +260,9 @@ export default function LoginAndSecurityScreen() {
                 hitSlop={8}
               >
                 {passkeyLoading ? (
-                  <ActivityIndicator size="small" color="#111111" />
+                  <ActivityIndicator size="small" color={colors.text} />
                 ) : (
-                  <Text style={styles.underlinedActionText}>
+                  <Text style={[styles.underlinedActionText, { color: colors.text }]}>
                     {passkeyEnabled ? 'Manage' : 'Add'}
                   </Text>
                 )}
@@ -266,30 +270,30 @@ export default function LoginAndSecurityScreen() {
             </View>
 
             {/* Password */}
-            <View style={styles.dividedRow}>
+            <View style={[styles.dividedRow, { borderBottomColor: colors.border }]}>
               <View style={styles.rowLeft}>
-                <Text style={styles.itemTitle}>Password</Text>
-                <Text style={styles.itemSubtitle}>{hasPassword ? 'Password set' : 'Not created'}</Text>
+                <Text style={[styles.itemTitle, { color: colors.text }]}>Password</Text>
+                <Text style={[styles.itemSubtitle, { color: colors.mutedForeground }]}>{hasPassword ? 'Password set' : 'Not created'}</Text>
               </View>
               <Pressable
                 testID="password-action-btn"
                 onPress={() => setPasswordModalVisible(true)}
                 hitSlop={8}
               >
-                <Text style={styles.underlinedActionText}>
+                <Text style={[styles.underlinedActionText, { color: colors.text }]}>
                   {hasPassword ? 'Update' : 'Create'}
                 </Text>
               </Pressable>
             </View>
 
             {/* ── SECTION 2: SOCIAL ACCOUNTS ───────────────────────────────── */}
-            <Text style={[styles.sectionHeader, { marginTop: 36 }]}>Social accounts</Text>
+            <Text style={[styles.sectionHeader, { color: colors.text, marginTop: 36 }]}>Social accounts</Text>
 
             {/* Google */}
-            <View style={styles.dividedRow}>
+            <View style={[styles.dividedRow, { borderBottomColor: colors.border }]}>
               <View style={styles.rowLeft}>
-                <Text style={styles.itemTitle}>Google</Text>
-                <Text style={styles.itemSubtitle}>Connected</Text>
+                <Text style={[styles.itemTitle, { color: colors.text }]}>Google</Text>
+                <Text style={[styles.itemSubtitle, { color: colors.mutedForeground }]}>Connected</Text>
               </View>
               <Pressable
                 testID="google-disconnect-btn"
@@ -301,39 +305,39 @@ export default function LoginAndSecurityScreen() {
                 }}
                 hitSlop={8}
               >
-                <Text style={styles.underlinedActionText}>Disconnect</Text>
+                <Text style={[styles.underlinedActionText, { color: colors.text }]}>Disconnect</Text>
               </Pressable>
             </View>
 
             {/* ── SECTION 3: DEVICE HISTORY ────────────────────────────────── */}
-            <Text style={[styles.sectionHeader, { marginTop: 36 }]}>Device history</Text>
+            <Text style={[styles.sectionHeader, { color: colors.text, marginTop: 36 }]}>Device history</Text>
 
             {/* Device 1 (Current Session) */}
-            <View style={styles.dividedRow}>
+            <View style={[styles.dividedRow, { borderBottomColor: colors.border }]}>
               <View style={styles.deviceIconWrapper}>
-                <Feather name="smartphone" size={24} color="#1E1E1E" />
+                <Feather name="smartphone" size={24} color={colors.text} />
               </View>
               <View style={styles.deviceTextStack}>
                 <View style={styles.deviceTitleRow}>
-                  <Text style={styles.deviceTitle}>Android</Text>
-                  <View style={styles.currentSessionBadge}>
-                    <Text style={styles.currentSessionBadgeText}>CURRENT SESSION</Text>
+                  <Text style={[styles.deviceTitle, { color: colors.text }]}>Android</Text>
+                  <View style={[styles.currentSessionBadge, { backgroundColor: isDark ? '#27272A' : '#E8F5E9' }]}>
+                    <Text style={[styles.currentSessionBadgeText, { color: isDark ? '#4ADE80' : '#2E7D32' }]}>CURRENT SESSION</Text>
                   </View>
                 </View>
-                <Text style={styles.deviceSubtitle}>
+                <Text style={[styles.deviceSubtitle, { color: colors.mutedForeground }]}>
                   Nairobi, Nairobi County · August 15, 2026 at 21:09
                 </Text>
               </View>
             </View>
 
             {/* Device 2 */}
-            <View style={styles.dividedRow}>
+            <View style={[styles.dividedRow, { borderBottomColor: colors.border }]}>
               <View style={styles.deviceIconWrapper}>
-                <Feather name="monitor" size={24} color="#1E1E1E" />
+                <Feather name="monitor" size={24} color={colors.text} />
               </View>
               <View style={styles.deviceTextStack}>
-                <Text style={styles.deviceTitle}>Android 10 · Chrome Mobile</Text>
-                <Text style={styles.deviceSubtitle}>
+                <Text style={[styles.deviceTitle, { color: colors.text }]}>Android 10 · Chrome Mobile</Text>
+                <Text style={[styles.deviceSubtitle, { color: colors.mutedForeground }]}>
                   Nairobi, Nairobi County · July 26, 2026 at 12:48
                 </Text>
               </View>
@@ -341,18 +345,37 @@ export default function LoginAndSecurityScreen() {
                 onPress={() => Alert.alert('Session Terminated', 'Logged out of Android 10 Chrome Mobile session.')}
                 hitSlop={8}
               >
-                <Text style={styles.underlinedActionText}>Log out</Text>
+                <Text style={[styles.underlinedActionText, { color: colors.text }]}>Log out</Text>
               </Pressable>
             </View>
 
             {/* Device 3 */}
-            <View style={styles.dividedRow}>
+            <View style={[styles.dividedRow, { borderBottomColor: colors.border }]}>
               <View style={styles.deviceIconWrapper}>
-                <Feather name="monitor" size={24} color="#1E1E1E" />
+                <Feather name="tablet" size={24} color={colors.text} />
               </View>
               <View style={styles.deviceTextStack}>
-                <Text style={styles.deviceTitle}>Windows 10.0 · Chrome</Text>
-                <Text style={styles.deviceSubtitle}>
+                <Text style={[styles.deviceTitle, { color: colors.text }]}>iPad OS · Safari</Text>
+                <Text style={[styles.deviceSubtitle, { color: colors.mutedForeground }]}>
+                  Mombasa, Coast · June 10, 2026 at 08:14
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => Alert.alert('Session Terminated', 'Logged out of iPad OS Safari session.')}
+                hitSlop={8}
+              >
+                <Text style={[styles.underlinedActionText, { color: colors.text }]}>Log out</Text>
+              </Pressable>
+            </View>
+
+            {/* Device 4 */}
+            <View style={[styles.dividedRow, { borderBottomColor: colors.border }]}>
+              <View style={styles.deviceIconWrapper}>
+                <Feather name="monitor" size={24} color={colors.text} />
+              </View>
+              <View style={styles.deviceTextStack}>
+                <Text style={[styles.deviceTitle, { color: colors.text }]}>Windows 10.0 · Chrome</Text>
+                <Text style={[styles.deviceSubtitle, { color: colors.mutedForeground }]}>
                   Nairobi, Nairobi County · August 5, 2026 at 17:12
                 </Text>
               </View>
@@ -360,33 +383,33 @@ export default function LoginAndSecurityScreen() {
                 onPress={() => Alert.alert('Session Terminated', 'Logged out of Windows Chrome session.')}
                 hitSlop={8}
               >
-                <Text style={styles.underlinedActionText}>Log out</Text>
+                <Text style={[styles.underlinedActionText, { color: colors.text }]}>Log out</Text>
               </Pressable>
             </View>
 
             {/* ── SECTION 4: ACCOUNT ───────────────────────────────────────── */}
-            <Text style={[styles.sectionHeader, { marginTop: 36 }]}>Account</Text>
+            <Text style={[styles.sectionHeader, { color: colors.text, marginTop: 36 }]}>Account</Text>
 
             {/* Account deactivation */}
-            <View style={styles.dividedRow}>
+            <View style={[styles.dividedRow, { borderBottomColor: colors.border }]}>
               <View style={styles.rowLeft}>
-                <Text style={styles.itemTitle}>Account deactivation</Text>
-                <Text style={styles.itemSubtitle}>This action cannot be undone</Text>
+                <Text style={[styles.itemTitle, { color: colors.text }]}>Account deactivation</Text>
+                <Text style={[styles.itemSubtitle, { color: colors.mutedForeground }]}>This action cannot be undone</Text>
               </View>
               <Pressable
                 testID="deactivate-account-btn"
                 onPress={() => setDeactivateModalVisible(true)}
                 hitSlop={8}
               >
-                <Text style={styles.underlinedActionText}>Deactivate</Text>
+                <Text style={[styles.underlinedActionText, { color: colors.text }]}>Deactivate</Text>
               </Pressable>
             </View>
           </View>
         ) : (
           /* ── SHARED ACCESS TAB CONTENT ───────────────────────────────────── */
           <View style={styles.tabContentBlock}>
-            <Text style={styles.sectionHeader}>Co-Hosts & Team Access</Text>
-            <Text style={styles.tabDescription}>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>Co-Hosts & Team Access</Text>
+            <Text style={[styles.tabDescription, { color: colors.mutedForeground }]}>
               Allow trusted co-hosts or assistants to help manage your bookings, message guests, and coordinate check-ins without sharing your password or passkeys.
             </Text>
 
@@ -415,39 +438,39 @@ export default function LoginAndSecurityScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setPasswordModalVisible(false)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Pressable onPress={() => setPasswordModalVisible(false)} style={styles.closeBtn} hitSlop={10}>
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>{hasPassword ? 'Update password' : 'Create password'}</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>{hasPassword ? 'Update password' : 'Create password'}</Text>
             <View style={{ width: 36 }} />
           </View>
 
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
-            <Text style={styles.modalHeadline}>Choose a secure password</Text>
-            <Text style={styles.modalSub}>
+            <Text style={[styles.modalHeadline, { color: colors.text }]}>Choose a secure password</Text>
+            <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
               Use at least 6 characters including numbers and letters. Passkeys are also enabled on this device for one-tap biometric access.
             </Text>
 
-            <Text style={styles.inputLabel}>New password</Text>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>New password</Text>
             <TextInput
               value={newPassword}
               onChangeText={setNewPassword}
               placeholder="Enter new password"
-              placeholderTextColor="#9E9E9E"
+              placeholderTextColor={colors.mutedForeground}
               secureTextEntry
-              style={styles.modalInput}
+              style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
             />
 
-            <Text style={styles.inputLabel}>Confirm password</Text>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Confirm password</Text>
             <TextInput
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               placeholder="Re-enter new password"
-              placeholderTextColor="#9E9E9E"
+              placeholderTextColor={colors.mutedForeground}
               secureTextEntry
-              style={styles.modalInput}
+              style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
             />
 
             <Pressable
@@ -472,18 +495,18 @@ export default function LoginAndSecurityScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setDeactivateModalVisible(false)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Pressable onPress={() => setDeactivateModalVisible(false)} style={styles.closeBtn} hitSlop={10}>
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Deactivate account</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Deactivate account</Text>
             <View style={{ width: 36 }} />
           </View>
 
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
             <Text style={[styles.modalHeadline, { color: '#B91C1C' }]}>Deactivate your account?</Text>
-            <Text style={styles.modalSub}>
+            <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
               Deactivating your account will hide your public profile, unpublish your active coastal listings, and cancel upcoming reservations.
             </Text>
 
@@ -509,30 +532,30 @@ export default function LoginAndSecurityScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setSharedAccessModal(false)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Pressable onPress={() => setSharedAccessModal(false)} style={styles.closeBtn} hitSlop={10}>
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Invite a co-host</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Invite a co-host</Text>
             <View style={{ width: 36 }} />
           </View>
 
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
-            <Text style={styles.modalHeadline}>Co-Host Invitation</Text>
-            <Text style={styles.modalSub}>
+            <Text style={[styles.modalHeadline, { color: colors.text }]}>Co-Host Invitation</Text>
+            <Text style={[styles.modalSub, { color: colors.mutedForeground }]}>
               Enter the email address of the person you want to invite as a co-host.
             </Text>
 
-            <Text style={styles.inputLabel}>Co-Host Email</Text>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>Co-Host Email</Text>
             <TextInput
               value={coHostEmail}
               onChangeText={setCoHostEmail}
               placeholder="cohost@example.com"
-              placeholderTextColor="#9E9E9E"
+              placeholderTextColor={colors.mutedForeground}
               keyboardType="email-address"
               autoCapitalize="none"
-              style={styles.modalInput}
+              style={[styles.modalInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
             />
 
             <Pressable
@@ -555,7 +578,6 @@ export default function LoginAndSecurityScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 24,
@@ -736,7 +758,6 @@ const styles = StyleSheet.create({
   /* Modal Styles */
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',

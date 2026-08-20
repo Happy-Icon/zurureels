@@ -1886,7 +1886,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   pickerSheet: {
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingBottom: 32,
@@ -1930,7 +1929,6 @@ const styles = StyleSheet.create({
   // ── White screen (profile / commitment / email_sent) ───────────────────────
   whiteScreen: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   whiteHeader: {
     flexDirection: 'row',

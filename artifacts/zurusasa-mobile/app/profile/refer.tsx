@@ -16,9 +16,13 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 
 export default function ReferAHostScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -53,7 +57,7 @@ export default function ReferAHostScreen() {
      ───────────────────────────────────────────────────────────────────────────── */
   if (currentSubView === 'your_referrals') {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
         <View style={[styles.headerRow, { paddingTop: topPad }]}>
           <Pressable
@@ -61,15 +65,15 @@ export default function ReferAHostScreen() {
             style={styles.circleBtn}
             hitSlop={12}
           >
-            <Feather name="x" size={22} color="#111111" />
+            <Feather name="x" size={22} color={colors.text} />
           </Pressable>
 
           <Pressable
             onPress={() => setCustomLinkModal(true)}
-            style={styles.pillTopBtn}
+            style={[styles.pillTopBtn, { backgroundColor: isDark ? '#27272A' : '#F7F7F7', borderColor: colors.border }]}
             hitSlop={8}
           >
-            <Text style={styles.pillTopBtnText}>Custom links</Text>
+            <Text style={[styles.pillTopBtnText, { color: colors.text }]}>Custom links</Text>
           </Pressable>
         </View>
 
@@ -81,11 +85,11 @@ export default function ReferAHostScreen() {
           ]}
         >
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyHeadline}>You haven't referred anyone yet</Text>
+            <Text style={[styles.emptyHeadline, { color: colors.text }]}>You haven't referred anyone yet</Text>
 
             {/* Cozy Sofa Illustration */}
             <View style={styles.sofaIllustrationWrapper}>
-              <View style={styles.sofaBadgeBox}>
+              <View style={[styles.sofaBadgeBox, { backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}>
                 <Text style={{ fontSize: 64 }}>🛋️</Text>
               </View>
             </View>
@@ -95,9 +99,9 @@ export default function ReferAHostScreen() {
           <View style={styles.bottomBlock}>
             <Pressable
               onPress={() => setCurrentSubView('main')}
-              style={styles.blackActionBtn}
+              style={[styles.blackActionBtn, { backgroundColor: colors.text }]}
             >
-              <Text style={styles.blackActionBtnText}>Refer a host</Text>
+              <Text style={[styles.blackActionBtnText, { color: colors.background }]}>Refer a host</Text>
             </Pressable>
 
             <Pressable
@@ -111,7 +115,7 @@ export default function ReferAHostScreen() {
               }
               style={{ alignSelf: 'center', marginTop: 16 }}
             >
-              <Text style={styles.cantFindText}>Can't find your referral?</Text>
+              <Text style={[styles.cantFindText, { color: colors.text }]}>Can't find your referral?</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -123,7 +127,7 @@ export default function ReferAHostScreen() {
      RENDER VIEW 1: MAIN REFER A HOST (SCREENSHOT 1)
      ───────────────────────────────────────────────────────────────────────────── */
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={[styles.headerRow, { paddingTop: topPad }]}>
         <Pressable
@@ -135,17 +139,17 @@ export default function ReferAHostScreen() {
           style={styles.circleBtn}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={22} color="#111111" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
 
         <View style={styles.headerRightGroup}>
           <Pressable
             testID="your-referrals-btn"
             onPress={() => setCurrentSubView('your_referrals')}
-            style={styles.pillTopBtn}
+            style={[styles.pillTopBtn, { backgroundColor: isDark ? '#27272A' : '#F7F7F7', borderColor: colors.border }]}
             hitSlop={8}
           >
-            <Text style={styles.pillTopBtnText}>Your referrals</Text>
+            <Text style={[styles.pillTopBtnText, { color: colors.text }]}>Your referrals</Text>
           </Pressable>
 
           <Pressable
@@ -154,7 +158,7 @@ export default function ReferAHostScreen() {
             style={styles.circleBtn}
             hitSlop={8}
           >
-            <MaterialCommunityIcons name="dots-horizontal" size={22} color="#111111" />
+            <MaterialCommunityIcons name="dots-horizontal" size={22} color={colors.text} />
           </Pressable>
         </View>
       </View>
@@ -165,19 +169,20 @@ export default function ReferAHostScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
         {/* Title */}
-        <Text style={styles.pageTitleCenter}>Refer a host,{'\n'}earn cash</Text>
+        <Text style={[styles.pageTitleCenter, { color: colors.text }]}>Refer a host,{'\n'}earn cash</Text>
 
         {/* ── REWARD CARD 1: HOME ────────────────────────────────────────────── */}
         <Pressable
           onPress={() => setSelectedReward('home')}
           style={[
             styles.rewardCard,
-            selectedReward === 'home' && styles.rewardCardSelected,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            selectedReward === 'home' && [styles.rewardCardSelected, { borderColor: '#F26522' }],
           ]}
         >
           <View style={styles.rewardCardTextStack}>
-            <Text style={styles.rewardCardTitle}>Home</Text>
-            <Text style={styles.rewardCardSubtitle}>
+            <Text style={[styles.rewardCardTitle, { color: colors.text }]}>Home</Text>
+            <Text style={[styles.rewardCardSubtitle, { color: colors.mutedForeground }]}>
               Reward varies based on listing location.
             </Text>
           </View>
@@ -191,14 +196,15 @@ export default function ReferAHostScreen() {
           onPress={() => setSelectedReward('experience')}
           style={[
             styles.rewardCard,
-            selectedReward === 'experience' && styles.rewardCardSelected,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            selectedReward === 'experience' && [styles.rewardCardSelected, { borderColor: '#F26522' }],
             { marginTop: 14 },
           ]}
         >
           <View style={styles.rewardCardTextStack}>
-            <Text style={styles.rewardCardTitle}>Experience</Text>
-            <Text style={styles.rewardCardSubtitle}>
-              You'll earn <Text style={styles.boldAmount}>KSh 6,462 KES</Text>.
+            <Text style={[styles.rewardCardTitle, { color: colors.text }]}>Experience</Text>
+            <Text style={[styles.rewardCardSubtitle, { color: colors.mutedForeground }]}>
+              You'll earn <Text style={[styles.boldAmount, { color: colors.text }]}>KSh 6,462 KES</Text>.
             </Text>
           </View>
           <View style={styles.rewardCardIllustration}>
@@ -211,14 +217,15 @@ export default function ReferAHostScreen() {
           onPress={() => setSelectedReward('service')}
           style={[
             styles.rewardCard,
-            selectedReward === 'service' && styles.rewardCardSelected,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            selectedReward === 'service' && [styles.rewardCardSelected, { borderColor: '#F26522' }],
             { marginTop: 14 },
           ]}
         >
           <View style={styles.rewardCardTextStack}>
-            <Text style={styles.rewardCardTitle}>Service</Text>
-            <Text style={styles.rewardCardSubtitle}>
-              You'll earn <Text style={styles.boldAmount}>KSh 12,923 KES</Text>.
+            <Text style={[styles.rewardCardTitle, { color: colors.text }]}>Service</Text>
+            <Text style={[styles.rewardCardSubtitle, { color: colors.mutedForeground }]}>
+              You'll earn <Text style={[styles.boldAmount, { color: colors.text }]}>KSh 12,923 KES</Text>.
             </Text>
           </View>
           <View style={styles.rewardCardIllustration}>
@@ -230,13 +237,13 @@ export default function ReferAHostScreen() {
         <Pressable
           testID="share-referral-btn"
           onPress={handleShare}
-          style={styles.pinkShareBtn}
+          style={[styles.pinkShareBtn, { backgroundColor: '#F26522' }]}
         >
           <Text style={styles.pinkShareBtnText}>Share referral link</Text>
         </Pressable>
 
         {/* Disclaimer */}
-        <Text style={styles.disclaimerText}>
+        <Text style={[styles.disclaimerText, { color: colors.mutedForeground }]}>
           Eligible locations & listing types only. Amounts expire on Oct 14, 2026.{' '}
           <Text
             onPress={() =>
@@ -244,49 +251,39 @@ export default function ReferAHostScreen() {
                 title: 'Referral Terms',
                 message:
                   'Referrals must result in a completed booking of at least KES 10,000 within 180 days of publishing the listing.',
-                icon: 'file-text',
+                icon: 'info',
               })
             }
-            style={styles.underlineLink}
+            style={[styles.underlineLink, { color: colors.text }]}
           >
             Terms apply
-          </Text>{' '}
-          ·{' '}
-          <Text
-            onPress={() =>
-              showAlert({
-                title: 'How Referrals Work',
-                message:
-                  '1. Send your referral link to friends.\n2. They publish their home, experience, or service.\n3. You receive cash rewards directly to your M-Pesa account when their first reservation is completed.',
-                icon: 'gift',
-              })
-            }
-            style={styles.underlineLink}
-          >
-            How referrals work
           </Text>
         </Text>
       </ScrollView>
 
-      {/* ── MORE WAYS TO SHARE BOTTOM SHEET (SCREENSHOT 3) ───────────────────── */}
+      {/* ── MORE OPTIONS BOTTOM SHEET (SCREENSHOT 3) ─────────────────────────── */}
       <Modal
         visible={moreOptionsSheet}
         transparent
         animationType="fade"
         onRequestClose={() => setMoreOptionsSheet(false)}
       >
-        <View style={styles.sheetOverlay}>
-          <Pressable style={{ flex: 1 }} onPress={() => setMoreOptionsSheet(false)} />
+        <View style={[styles.sheetOverlay, { backgroundColor: colors.overlay }]}>
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => setMoreOptionsSheet(false)}
+          />
 
-          <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + 24 }]}>
+          <View style={[styles.sheetContainer, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
+            {/* Sheet Header */}
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>More ways to share</Text>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>More referral options</Text>
               <Pressable
                 onPress={() => setMoreOptionsSheet(false)}
                 style={styles.sheetCloseBtn}
                 hitSlop={10}
               >
-                <Feather name="x" size={20} color="#111111" />
+                <Feather name="x" size={20} color={colors.text} />
               </Pressable>
             </View>
 
@@ -298,8 +295,8 @@ export default function ReferAHostScreen() {
               }}
               style={styles.sheetOptionRow}
             >
-              <Ionicons name="qr-code-outline" size={24} color="#111111" style={{ marginRight: 16 }} />
-              <Text style={styles.sheetOptionText}>QR code</Text>
+              <Ionicons name="qr-code-outline" size={24} color={colors.text} style={{ marginRight: 16 }} />
+              <Text style={[styles.sheetOptionText, { color: colors.text }]}>QR code</Text>
             </Pressable>
 
             {/* Customise Link Option */}
@@ -310,8 +307,8 @@ export default function ReferAHostScreen() {
               }}
               style={styles.sheetOptionRow}
             >
-              <Feather name="edit-2" size={22} color="#111111" style={{ marginRight: 16 }} />
-              <Text style={styles.sheetOptionText}>Customise link</Text>
+              <Feather name="edit-2" size={22} color={colors.text} style={{ marginRight: 16 }} />
+              <Text style={[styles.sheetOptionText, { color: colors.text }]}>Customise link</Text>
             </Pressable>
           </View>
         </View>
@@ -324,18 +321,18 @@ export default function ReferAHostScreen() {
         animationType="fade"
         onRequestClose={() => setQrModalVisible(false)}
       >
-        <Pressable onPress={() => setQrModalVisible(false)} style={styles.dialogOverlay}>
-          <View style={styles.qrDialog}>
-            <Text style={styles.qrDialogTitle}>Scan to Host</Text>
-            <Text style={styles.qrDialogSub}>Point a phone camera at this QR code to join ZuruSasa as a host.</Text>
+        <Pressable onPress={() => setQrModalVisible(false)} style={[styles.dialogOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.qrDialog, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+            <Text style={[styles.qrDialogTitle, { color: colors.text }]}>Scan to Host</Text>
+            <Text style={[styles.qrDialogSub, { color: colors.mutedForeground }]}>Point a phone camera at this QR code to join ZuruSasa as a host.</Text>
 
-            <View style={styles.qrCodeBox}>
+            <View style={[styles.qrCodeBox, { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12 }]}>
               <MaterialCommunityIcons name="qrcode" size={160} color="#111111" />
             </View>
 
-            <Text style={styles.qrCodeLinkText}>{referralUrl}</Text>
+            <Text style={[styles.qrCodeLinkText, { color: colors.mutedForeground }]}>{referralUrl}</Text>
 
-            <Pressable onPress={() => setQrModalVisible(false)} style={styles.qrCloseBtn}>
+            <Pressable onPress={() => setQrModalVisible(false)} style={[styles.qrCloseBtn, { backgroundColor: '#F26522' }]}>
               <Text style={styles.qrCloseBtnText}>Done</Text>
             </Pressable>
           </View>
@@ -349,12 +346,12 @@ export default function ReferAHostScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setCustomLinkModal(false)}
       >
-        <View style={[styles.modalSheet, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalSheetHeader}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalSheetHeader, { borderBottomColor: colors.border }]}>
             <Pressable onPress={() => setCustomLinkModal(false)} style={styles.circleBtn}>
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Customise link</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Customise link</Text>
             <View style={{ width: 36 }} />
           </View>
 
@@ -395,7 +392,6 @@ export default function ReferAHostScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   headerRow: {
     flexDirection: 'row',
@@ -453,7 +449,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
   },
   rewardCardSelected: {
     borderColor: '#111111',
@@ -581,7 +576,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
@@ -625,7 +619,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   qrDialog: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 24,
     width: '100%',
@@ -674,7 +667,6 @@ const styles = StyleSheet.create({
   /* Custom Slug Modal */
   modalSheet: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalSheetHeader: {
     flexDirection: 'row',

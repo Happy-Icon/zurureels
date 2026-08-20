@@ -14,6 +14,7 @@ import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useConversations } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
 import { useColors } from '@/hooks/useColors';
@@ -37,6 +38,7 @@ function timeAgo(iso: string | null) {
 
 export default function InboxScreen() {
   const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -69,13 +71,13 @@ export default function InboxScreen() {
     };
   }, [user?.id, queryClient]);
 
+  // Refresh on tab focus
   useFocusEffect(
     useCallback(() => {
       if (user?.id) {
         refetch();
-        queryClient.invalidateQueries({ queryKey: ['unread-messages-count'] });
       }
-    }, [user?.id, refetch, queryClient]),
+    }, [user?.id, refetch]),
   );
 
   const handleRefresh = async () => {
@@ -84,23 +86,24 @@ export default function InboxScreen() {
     setRefreshing(false);
   };
 
-  const topPad = Platform.OS === 'web' ? 67 : insets.top + 10;
-  const bottomPad = Platform.OS === 'web' ? 110 : 100;
+  const topPad = Platform.OS === 'web' ? 24 : insets.top + 8;
+  const bottomPad = Platform.OS === 'web' ? 100 : insets.bottom + 90;
 
   if (!loading && !user) {
     return (
       <View
+        testID="inbox-guest-hero"
         style={[
-          styles.fill,
           styles.centered,
-          { backgroundColor: '#FAFAFA', paddingTop: topPad },
+          styles.fill,
+          { backgroundColor: colors.background, paddingTop: topPad + 40 },
         ]}
       >
-        <View style={styles.heroIcon}>
-          <Feather name="message-square" size={32} color="#EE7D30" />
+        <View style={[styles.heroIcon, { backgroundColor: isDark ? '#27272A' : '#FFF7ED' }]}>
+          <Feather name="message-square" size={32} color={colors.primary} />
         </View>
-        <Text style={styles.heroTitle}>Talk to your hosts</Text>
-        <Text style={styles.heroSub}>
+        <Text style={[styles.heroTitle, { color: colors.text }]}>Talk to your hosts</Text>
+        <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
           Sign in to message hosts and plan the details of your trip across the Kenyan coast.
         </Text>
         <Pressable
@@ -110,7 +113,7 @@ export default function InboxScreen() {
           }}
           style={({ pressed }) => [
             styles.primaryButton,
-            { opacity: pressed ? 0.88 : 1 },
+            { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 },
           ]}
         >
           <Text style={styles.primaryButtonText}>Sign in or Sign up</Text>
@@ -137,7 +140,12 @@ export default function InboxScreen() {
       style={({ pressed }) => [
         styles.row,
         {
-          backgroundColor: pressed ? '#F9FAFB' : '#FFFFFF',
+          backgroundColor: pressed
+            ? isDark
+              ? '#27272A'
+              : '#F9FAFB'
+            : colors.card,
+          borderBottomColor: colors.border,
         },
       ]}
     >
@@ -147,22 +155,22 @@ export default function InboxScreen() {
           style={styles.avatar}
         />
       ) : (
-        <View style={[styles.avatar, styles.avatarFallback]}>
-          <Text style={styles.avatarText}>
+        <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+          <Text style={[styles.avatarText, { color: colors.mutedForeground }]}>
             {item.other.full_name.charAt(0).toUpperCase()}
           </Text>
         </View>
       )}
       <View style={styles.rowInfo}>
-        <Text style={styles.rowName} numberOfLines={1}>
+        <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
           {item.other.full_name}
         </Text>
       </View>
       <View style={styles.rowRight}>
-        <Text style={styles.rowTime}>
+        <Text style={[styles.rowTime, { color: colors.mutedForeground }]}>
           {timeAgo(item.last_message_at)}
         </Text>
-        <Feather name="chevron-right" size={16} color="#9CA3AF" />
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
       </View>
     </Pressable>
   );
@@ -170,7 +178,7 @@ export default function InboxScreen() {
   return (
     <View
       testID="inbox-screen"
-      style={[styles.fill, { backgroundColor: '#FAFAFA' }]}
+      style={[styles.fill, { backgroundColor: colors.background }]}
     >
       <FlatList
         data={conversations ?? []}
@@ -180,7 +188,7 @@ export default function InboxScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#EE7D30"
+            tintColor={colors.primary}
           />
         }
         contentContainerStyle={{
@@ -189,8 +197,8 @@ export default function InboxScreen() {
         }}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.title}>Inbox</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.text }]}>Inbox</Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
               {conversations?.length
                 ? `${conversations.length} active conversation${conversations.length === 1 ? '' : 's'}`
                 : 'Direct messaging with hosts & guests'}
@@ -206,9 +214,9 @@ export default function InboxScreen() {
             </View>
           ) : (
             <View style={styles.empty}>
-              <Feather name="message-circle" size={44} color="#9CA3AF" style={{ opacity: 0.5 }} />
-              <Text style={styles.emptyTitle}>No conversations yet</Text>
-              <Text style={styles.emptySub}>
+              <Feather name="message-circle" size={44} color={colors.mutedForeground} style={{ opacity: 0.5 }} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No conversations yet</Text>
+              <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
                 Enquire on any stay or experience and your chat with the host will appear here.
               </Text>
             </View>

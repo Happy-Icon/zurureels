@@ -17,6 +17,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase, type ReelRow } from '@/lib/supabase';
 import { invalidateServerCache } from '@/lib/redis';
 import { useCustomAlert } from '@/context/CustomAlertContext';
@@ -34,6 +35,7 @@ interface HostReelItem extends ReelRow {
 
 export default function HostListingsScreen() {
   const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { height: winHeight } = useWindowDimensions();
@@ -59,9 +61,19 @@ export default function HostListingsScreen() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setReels((data as HostReelItem[]) ?? []);
+
+      const mapped: HostReelItem[] = (data || []).map((r: any) => ({
+        ...r,
+        title: r.experience?.title,
+        location: r.experience?.location,
+        price: r.experience?.current_price,
+        price_unit: r.experience?.price_unit,
+        availability_status: r.experience?.availability_status,
+      }));
+
+      setReels(mapped);
     } catch (err) {
-      console.error('Error fetching host listings:', err);
+      console.error('[HostListings] fetch error:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -77,30 +89,38 @@ export default function HostListingsScreen() {
     fetchListings();
   };
 
-  const handleToggleStatus = async (item: HostReelItem) => {
-    const newStatus = item.status === 'published' ? 'draft' : 'published';
+  const handleTogglePublish = async (id: string, currentStatus: string | null) => {
+    const nextStatus = currentStatus === 'published' ? 'draft' : 'published';
     try {
       const { error } = await supabase
         .from('reels')
-        .update({ status: newStatus })
-        .eq('id', item.id);
+        .update({ status: nextStatus })
+        .eq('id', id);
 
       if (error) throw error;
-      invalidateServerCache('invalidate_reels_feed').catch(() => null);
-      fetchListings();
+      setReels((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: nextStatus } : r)),
+      );
+      await invalidateServerCache('invalidate_reels_feed');
+      showAlert({
+        title: 'Listing Updated',
+        message: `Listing is now marked as ${nextStatus}.`,
+        icon: 'check-circle',
+      });
     } catch (err: any) {
       showAlert({
-        title: 'Error',
-        message: err.message || 'Failed to update status',
+        title: 'Error Updating',
+        message: err?.message || 'Could not update status.',
+        icon: 'alert-circle',
       });
     }
   };
 
   const handleDelete = (id: string) => {
     showAlert({
-      title: 'Delete Listing',
-      message: 'Are you sure you want to permanently delete this listing? This action cannot be undone.',
-      icon: 'trash-2',
+      title: 'Delete Listing?',
+      message: 'Are you sure you want to remove this reel listing? This cannot be undone.',
+      icon: 'alert-triangle',
       buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -110,11 +130,13 @@ export default function HostListingsScreen() {
             try {
               const { error } = await supabase.from('reels').delete().eq('id', id);
               if (error) throw error;
-              fetchListings();
+              setReels((prev) => prev.filter((r) => r.id !== id));
+              await invalidateServerCache('invalidate_reels_feed');
             } catch (err: any) {
               showAlert({
-                title: 'Error',
-                message: err.message || 'Failed to delete listing',
+                title: 'Delete Failed',
+                message: err?.message || 'Could not delete listing.',
+                icon: 'alert-circle',
               });
             }
           },
@@ -123,90 +145,93 @@ export default function HostListingsScreen() {
     });
   };
 
-  const filteredReels = reels.filter((r) => {
-    if (activeTab === 'published') return r.status === 'published' || r.status === 'active' || !r.status;
-    return r.status === 'draft';
-  });
+  const filteredReels = reels.filter((r) =>
+    activeTab === 'published' ? r.status === 'published' || !r.status : r.status === 'draft',
+  );
 
   const renderItem = ({ item }: { item: HostReelItem }) => {
-    const title = item.title || item.experience?.title || 'Untitled Experience';
-    const location = item.location || item.experience?.location || 'Kenya Coast';
-    const price = item.price ?? item.experience?.current_price ?? 0;
-    const priceUnit = item.price_unit || item.experience?.price_unit || 'night';
-    const isBookedOut =
-      item.availability_status === 'booked_out' ||
-      item.experience?.availability_status === 'booked_out';
+    const priceUnit = item.price_unit ? `/${item.price_unit}` : '';
+    const isBooked = item.availability_status === 'booked_out';
 
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Pressable
           onPress={() => setSelectedPreviewReel(item)}
-          style={({ pressed }) => [styles.thumbnailWrap, { opacity: pressed ? 0.88 : 1 }]}
+          style={[styles.thumbnailWrap, { backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}
         >
           {item.thumbnail_url ? (
             <Image source={{ uri: item.thumbnail_url }} style={styles.thumbnail} contentFit="cover" />
           ) : (
-            <View style={styles.placeholderThumb}>
-              <Feather name="film" size={24} color="#717171" />
+            <View style={[styles.placeholderThumb, { backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}>
+              <Feather name="film" size={24} color={colors.mutedForeground} />
             </View>
           )}
-
           <View style={styles.playBadgeCircle}>
-            <Feather name="play" size={14} color="#FFFFFF" />
+            <Feather name="play" size={11} color="#FFFFFF" />
           </View>
-
-          {isBookedOut ? (
+          {isBooked ? (
             <View style={styles.bookedOverlay}>
-              <Text style={styles.bookedTagText}>FULLY BOOKED</Text>
+              <Text style={styles.bookedTagText}>BOOKED OUT</Text>
             </View>
           ) : null}
         </Pressable>
 
         <View style={styles.cardContent}>
-          <Pressable onPress={() => setSelectedPreviewReel(item)}>
-            <View style={styles.cardHeaderRow}>
-              <View style={styles.titleArea}>
-                <Text style={styles.title} numberOfLines={1}>
-                  {title}
-                </Text>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.titleArea}>
+              <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+                {item.title || 'Untitled Listing'}
+              </Text>
+              {item.location ? (
                 <View style={styles.locationRow}>
-                  <Feather name="map-pin" size={12} color="#717171" />
-                  <Text style={styles.locationText} numberOfLines={1}>
-                    {location}
+                  <Feather name="map-pin" size={11} color={colors.mutedForeground} />
+                  <Text style={[styles.locationText, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    {item.location}
                   </Text>
                 </View>
-              </View>
+              ) : null}
             </View>
-          </Pressable>
+          </View>
 
           <View style={styles.metaRow}>
-            {item.category ? (
-              <View style={styles.categoryBadge}>
-                <Text style={styles.categoryBadgeText}>
-                  {item.category.toUpperCase().replace(/_/g, ' ')}
-                </Text>
-              </View>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryBadgeText}>
+                {item.category?.toUpperCase() || 'STAY'}
+              </Text>
+            </View>
+            {item.price != null ? (
+              <Text style={[styles.price, { color: colors.text }]}>
+                KES {item.price.toLocaleString()}
+                <Text style={[styles.priceUnitText, { color: colors.mutedForeground }]}>{priceUnit}</Text>
+              </Text>
             ) : null}
-            <Text style={styles.price}>
-              KES {price.toLocaleString()}
-              <Text style={styles.priceUnitText}> / {priceUnit}</Text>
-            </Text>
           </View>
 
           <View style={styles.actionsRow}>
             <Pressable
-              onPress={() => handleToggleStatus(item)}
+              onPress={() => router.push(`/host/edit-reel?id=${item.id}` as any)}
               style={({ pressed }) => [
                 styles.actionBtn,
-                { opacity: pressed ? 0.75 : 1 },
+                { backgroundColor: isDark ? '#27272A' : '#F7F7F7', opacity: pressed ? 0.75 : 1 },
+              ]}
+            >
+              <Feather name="edit-2" size={13} color={colors.text} />
+              <Text style={[styles.actionBtnText, { color: colors.text }]}>Edit</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => handleTogglePublish(item.id, item.status)}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                { backgroundColor: isDark ? '#27272A' : '#F7F7F7', opacity: pressed ? 0.75 : 1 },
               ]}
             >
               <Feather
                 name={item.status === 'published' ? 'eye-off' : 'eye'}
                 size={13}
-                color="#222222"
+                color={colors.text}
               />
-              <Text style={styles.actionBtnText}>
+              <Text style={[styles.actionBtnText, { color: colors.text }]}>
                 {item.status === 'published' ? 'Unpublish' : 'Publish'}
               </Text>
             </Pressable>
@@ -229,8 +254,7 @@ export default function HostListingsScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
-        {/* Header Bar Skeleton */}
+      <View style={[styles.fill, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: topPad }]}>
           <View style={styles.headerTextStack}>
             <Skeleton style={{ width: 160, height: 26, borderRadius: 6 }} />
@@ -239,16 +263,14 @@ export default function HostListingsScreen() {
           <Skeleton style={{ width: 84, height: 38, borderRadius: 20 }} />
         </View>
 
-        {/* Segmented Control Track Skeleton */}
-        <View style={styles.segmentedControlTrack}>
+        <View style={[styles.segmentedControlTrack, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
           <Skeleton style={{ flex: 1, height: 36, borderRadius: 9, marginHorizontal: 2 }} />
           <Skeleton style={{ flex: 1, height: 36, borderRadius: 9, marginHorizontal: 2 }} />
         </View>
 
-        {/* Listings Cards Skeletons */}
         <View style={{ paddingHorizontal: 20, gap: 14 }}>
           {[1, 2, 3].map((i) => (
-            <View key={i} style={styles.card}>
+            <View key={i} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Skeleton style={{ width: 100, height: 100, borderRadius: 12 }} />
               <View style={{ flex: 1, gap: 8, justifyContent: 'center' }}>
                 <Skeleton style={{ width: '80%', height: 18, borderRadius: 4 }} />
@@ -267,20 +289,23 @@ export default function HostListingsScreen() {
   }
 
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
-      {/* 1. Header Bar */}
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad }]}>
         <View style={styles.headerTextStack}>
-          <Text style={styles.headerTitle}>Host Listings</Text>
-          <Text style={styles.headerSub}>Manage your accommodation and tour reels.</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Host Listings</Text>
+          <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Manage your accommodation and tour reels.</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <Pressable
             testID="calendar-btn"
             onPress={() => router.push('/host/calendar' as any)}
-            style={({ pressed }) => [styles.calendarHeaderBtn, pressed && { opacity: 0.8 }]}
+            style={({ pressed }) => [
+              styles.calendarHeaderBtn,
+              { backgroundColor: isDark ? '#27272A' : '#F3F4F6' },
+              pressed && { opacity: 0.8 },
+            ]}
           >
-            <Feather name="calendar" size={16} color="#000000" />
+            <Feather name="calendar" size={16} color={colors.text} />
           </Pressable>
           <Pressable
             testID="create-listing-btn"
@@ -298,8 +323,7 @@ export default function HostListingsScreen() {
         </View>
       </View>
 
-      {/* 2. Segmented Tab Control */}
-      <View style={styles.segmentedControlTrack}>
+      <View style={[styles.segmentedControlTrack, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
         {(['published', 'drafts'] as const).map((t) => {
           const isActive = activeTab === t;
           const count = reels.filter((r) =>
@@ -314,12 +338,13 @@ export default function HostListingsScreen() {
               }}
               style={[
                 styles.segmentedTile,
-                isActive ? styles.segmentedTileActive : null,
+                isActive ? [styles.segmentedTileActive, { backgroundColor: colors.card }] : null,
               ]}
             >
               <Text
                 style={[
                   styles.segmentedTileText,
+                  { color: isActive ? colors.text : colors.mutedForeground },
                   isActive ? styles.segmentedTileTextActive : null,
                 ]}
               >
@@ -345,12 +370,12 @@ export default function HostListingsScreen() {
         }
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.compactEmptyCard}>
-            <View style={styles.emptyIconCircle}>
-              <Feather name="film" size={22} color="#717171" />
+          <View style={[styles.compactEmptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.emptyIconCircle, { backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}>
+              <Feather name="film" size={22} color={colors.mutedForeground} />
             </View>
-            <Text style={styles.emptyTitle}>No {activeTab} yet</Text>
-            <Text style={styles.emptySub}>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No {activeTab} yet</Text>
+            <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
               {activeTab === 'published'
                 ? 'Create your first video reel listing to showcase your stay or tour!'
                 : 'Saved draft reels will appear here.'}
@@ -467,7 +492,6 @@ const styles = StyleSheet.create({
     borderRadius: 9,
   },
   segmentedTileActive: {
-    backgroundColor: '#FFFFFF',
     shadowColor: '#000000',
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -491,7 +515,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#EBEBEB',
-    backgroundColor: '#FFFFFF',
     gap: 12,
     shadowColor: '#000000',
     shadowOpacity: 0.03,
@@ -635,7 +658,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#EBEBEB',
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     gap: 8,
   },

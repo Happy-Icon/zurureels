@@ -16,6 +16,8 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase, type MessageRow } from '@/lib/supabase';
 import { useMessages, useSendMessage, useMarkMessagesRead } from '@/lib/queries';
 import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
@@ -33,6 +35,8 @@ function formatTime(iso: string) {
 }
 
 export default function NativeChatScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -209,7 +213,9 @@ export default function NativeChatScreen() {
         <View
           style={[
             styles.bubbleContainer,
-            mine ? styles.mineBubble : styles.theirBubble,
+            mine
+              ? styles.mineBubble
+              : [styles.theirBubble, { backgroundColor: isDark ? '#27272A' : '#F2F2F7', borderColor: colors.border }],
           ]}
         >
           {item.image_url ? (
@@ -221,18 +227,23 @@ export default function NativeChatScreen() {
             />
           ) : null}
           {item.content && item.content !== '📷 Photo attachment' ? (
-            <Text style={[styles.bubbleText, mine ? styles.mineText : styles.theirText]}>
+            <Text
+              style={[
+                styles.bubbleText,
+                mine ? styles.mineText : [styles.theirText, { color: colors.text }],
+              ]}
+            >
               {item.content}
             </Text>
           ) : null}
         </View>
         <View style={styles.bubbleFooterRow}>
-          <Text style={styles.timestampText}>{formatTime(item.created_at)}</Text>
+          <Text style={[styles.timestampText, { color: colors.mutedForeground }]}>{formatTime(item.created_at)}</Text>
           {mine ? (
             item.is_read ? (
               <Feather name="check-circle" size={11} color="#10B981" />
             ) : (
-              <Feather name="check" size={11} color="#9CA3AF" />
+              <Feather name="check" size={11} color={colors.mutedForeground} />
             )
           ) : null}
         </View>
@@ -241,16 +252,16 @@ export default function NativeChatScreen() {
   };
 
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       {/* 1. Native Navigation Header Bar */}
-      <View style={[styles.headerBar, { paddingTop: topPad }]}>
+      <View style={[styles.headerBar, { backgroundColor: colors.card, borderBottomColor: colors.border, paddingTop: topPad }]}>
         <Pressable
           testID="chat-back"
           onPress={goBack}
           hitSlop={10}
           style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
         >
-          <Feather name="chevron-left" size={26} color="#222222" />
+          <Feather name="chevron-left" size={26} color={colors.text} />
         </Pressable>
 
         {/* Avatar & Title Group -> Clickable Host Profile Link */}
@@ -270,18 +281,18 @@ export default function NativeChatScreen() {
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
             ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
+              <View style={[styles.avatarFallback, { backgroundColor: isDark ? '#27272A' : '#E5E7EB' }]}>
+                <Text style={[styles.avatarInitial, { color: colors.text }]}>{displayName.charAt(0).toUpperCase()}</Text>
               </View>
             )}
             <View style={styles.onlineDot} />
           </View>
 
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerNameText} numberOfLines={1}>
+            <Text style={[styles.headerNameText, { color: colors.text }]} numberOfLines={1}>
               {displayName}
             </Text>
-            <Text style={styles.headerStatusText}>Typically replies within 1 hour</Text>
+            <Text style={[styles.headerStatusText, { color: colors.mutedForeground }]}>Typically replies within 1 hour</Text>
           </View>
         </Pressable>
 
@@ -293,7 +304,7 @@ export default function NativeChatScreen() {
           hitSlop={10}
           style={({ pressed }) => [styles.infoBtn, { opacity: pressed ? 0.6 : 1 }]}
         >
-          <Feather name="info" size={20} color="#222222" />
+          <Feather name="info" size={20} color={colors.text} />
         </Pressable>
       </View>
 
@@ -314,9 +325,9 @@ export default function NativeChatScreen() {
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           ListHeaderComponent={
             messages.length > 0 ? (
-              <View style={styles.contextBadgeCard}>
-                <Feather name="shield" size={13} color="#717171" />
-                <Text style={styles.contextBadgeText}>
+              <View style={[styles.contextBadgeCard, { backgroundColor: isDark ? '#27272A' : '#F7F7F7', borderColor: colors.border }]}>
+                <Feather name="shield" size={13} color={colors.mutedForeground} />
+                <Text style={[styles.contextBadgeText, { color: colors.mutedForeground }]}>
                   Support & Host Inquiry · Verified Conversation
                 </Text>
               </View>
@@ -331,11 +342,11 @@ export default function NativeChatScreen() {
               </View>
             ) : (
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <Feather name="message-square" size={28} color="#717171" />
+                <View style={[styles.emptyIconCircle, { backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}>
+                  <Feather name="message-square" size={28} color={colors.mutedForeground} />
                 </View>
-                <Text style={styles.emptyHeadline}>Start a conversation</Text>
-                <Text style={styles.emptyBody}>
+                <Text style={[styles.emptyHeadline, { color: colors.text }]}>Start a conversation</Text>
+                <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
                   Plan the details of your stay or experience directly with the host.
                 </Text>
               </View>
@@ -353,17 +364,17 @@ export default function NativeChatScreen() {
         {sendError ? <Text style={styles.sendErrorText}>{sendError}</Text> : null}
 
         {/* 4. Message Composer Bar */}
-        <View style={[styles.composerBar, { paddingBottom: bottomPad }]}>
+        <View style={[styles.composerBar, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: bottomPad }]}>
           <Pressable
             onPress={handlePickAttachment}
             disabled={uploadingPhoto || sending}
             style={({ pressed }) => [styles.attachmentBtn, { opacity: pressed ? 0.6 : 1 }]}
             hitSlop={8}
           >
-            <Feather name="image" size={20} color={uploadingPhoto ? '#EE7D30' : '#717171'} />
+            <Feather name="image" size={20} color={uploadingPhoto ? '#EE7D30' : colors.mutedForeground} />
           </Pressable>
 
-          <View style={styles.inputPillBox}>
+          <View style={[styles.inputPillBox, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', borderColor: colors.border }]}>
             <GrowingInput
               testID="message-input"
               value={text}
@@ -372,10 +383,10 @@ export default function NativeChatScreen() {
                 setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
               }}
               placeholder="Type a message..."
-              placeholderTextColor="#717171"
+              placeholderTextColor={colors.mutedForeground}
               minHeight={36}
               maxHeight={120}
-              style={styles.composerInputText}
+              style={[styles.composerInputText, { color: colors.text }]}
             />
           </View>
 
@@ -408,7 +419,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingBottom: 10,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EBEBEB',
     gap: 10,
@@ -606,7 +616,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#EBEBEB',
     paddingHorizontal: 16,

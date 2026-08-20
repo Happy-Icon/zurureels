@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import type { SearchFilters } from '@/services/filterService';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 
 interface FilterSheetProps {
   visible: boolean;
@@ -55,6 +57,8 @@ export function FilterSheet({
   onApply,
   onReset,
 }: FilterSheetProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const [draft, setDraft] = useState<SearchFilters>(initialFilters);
 
   useEffect(() => {
@@ -106,19 +110,19 @@ export function FilterSheet({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheetContainer}>
+        <View style={[styles.sheetContainer, { backgroundColor: colors.card }]}>
           {/* Header */}
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Filters</Text>
+          <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.sheetTitle, { color: colors.text }]}>Filters</Text>
             <Pressable onPress={onClose} hitSlop={10}>
-              <Feather name="x" size={22} color="#222222" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
           </View>
 
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {/* 1. CATEGORIES */}
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionHeading}>Category</Text>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>Category</Text>
               <View style={styles.gridRow}>
                 {CATEGORIES.map((cat) => {
                   const isSelected = draft.category === cat.id;
@@ -128,18 +132,27 @@ export function FilterSheet({
                       onPress={() => toggleCategory(cat.id)}
                       style={[
                         styles.catTile,
-                        isSelected ? styles.catTileActive : null,
+                        {
+                          backgroundColor: isSelected
+                            ? isDark
+                              ? '#2A1F1A'
+                              : '#FFFBF8'
+                            : isDark
+                            ? '#27272A'
+                            : '#F9F9F9',
+                          borderColor: isSelected ? '#F26522' : colors.border,
+                        },
                       ]}
                     >
                       <Feather
                         name={cat.icon as any}
                         size={18}
-                        color={isSelected ? '#F26522' : '#717171'}
+                        color={isSelected ? '#F26522' : colors.mutedForeground}
                       />
                       <Text
                         style={[
                           styles.catTileText,
-                          isSelected ? styles.catTileTextActive : null,
+                          { color: isSelected ? '#F26522' : colors.text },
                         ]}
                       >
                         {cat.label}
@@ -150,12 +163,12 @@ export function FilterSheet({
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             {/* 2. PRICE RANGE */}
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionHeading}>Max Price</Text>
-              <Text style={styles.sectionSub}>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>Max Price</Text>
+              <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
                 Up to KES {(draft.maxPrice ?? 150000).toLocaleString()} / night
               </Text>
               <View style={styles.pillRow}>
@@ -165,9 +178,19 @@ export function FilterSheet({
                     <Pressable
                       key={idx}
                       onPress={() => setDraft((prev) => ({ ...prev, maxPrice: p.max }))}
-                      style={[styles.presetPill, isSelected ? styles.presetPillActive : null]}
+                      style={[
+                        styles.presetPill,
+                        {
+                          backgroundColor: isSelected
+                            ? '#F26522'
+                            : isDark
+                            ? '#27272A'
+                            : '#F7F7F7',
+                          borderColor: isSelected ? '#F26522' : colors.border,
+                        },
+                      ]}
                     >
-                      <Text style={[styles.presetText, isSelected ? styles.presetTextActive : null]}>
+                      <Text style={[styles.presetText, { color: isSelected ? '#FFFFFF' : colors.text }]}>
                         {p.label}
                       </Text>
                     </Pressable>
@@ -176,11 +199,11 @@ export function FilterSheet({
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             {/* 3. DESTINATIONS / CITIES */}
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionHeading}>Location / Destination</Text>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>Location / Destination</Text>
               <View style={styles.pillRow}>
                 {CITIES.map((city) => {
                   const isSelected = (draft.cities || []).includes(city);
@@ -188,9 +211,21 @@ export function FilterSheet({
                     <Pressable
                       key={city}
                       onPress={() => toggleCity(city)}
-                      style={[styles.cityChip, isSelected ? styles.cityChipActive : null]}
+                      style={[
+                        styles.cityChip,
+                        {
+                          backgroundColor: isSelected
+                            ? isDark
+                              ? '#2A1F1A'
+                              : '#FFFBF8'
+                            : isDark
+                            ? '#27272A'
+                            : '#F7F7F7',
+                          borderColor: isSelected ? '#F26522' : colors.border,
+                        },
+                      ]}
                     >
-                      <Text style={[styles.cityChipText, isSelected ? styles.cityChipTextActive : null]}>
+                      <Text style={[styles.cityChipText, { color: isSelected ? '#F26522' : colors.text }]}>
                         {city}
                       </Text>
                     </Pressable>
@@ -199,11 +234,11 @@ export function FilterSheet({
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             {/* 4. RATING */}
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionHeading}>Minimum Rating</Text>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>Minimum Rating</Text>
               <View style={styles.pillRow}>
                 {[5, 4.5, 4.0].map((star) => {
                   const isSelected = draft.minRating === star;
@@ -216,14 +251,24 @@ export function FilterSheet({
                           minRating: isSelected ? null : star,
                         }))
                       }
-                      style={[styles.starChip, isSelected ? styles.starChipActive : null]}
+                      style={[
+                        styles.starChip,
+                        {
+                          backgroundColor: isSelected
+                            ? '#F26522'
+                            : isDark
+                            ? '#27272A'
+                            : '#F7F7F7',
+                          borderColor: isSelected ? '#F26522' : colors.border,
+                        },
+                      ]}
                     >
                       <Ionicons
                         name="star"
                         size={14}
                         color={isSelected ? '#FFFFFF' : '#F26522'}
                       />
-                      <Text style={[styles.starChipText, isSelected ? styles.starChipTextActive : null]}>
+                      <Text style={[styles.starChipText, { color: isSelected ? '#FFFFFF' : colors.text }]}>
                         {star}★+
                       </Text>
                     </Pressable>
@@ -232,11 +277,11 @@ export function FilterSheet({
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             {/* 5. AMENITIES */}
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionHeading}>Amenities</Text>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>Amenities</Text>
               <View style={styles.pillRow}>
                 {AMENITIES.map((amenity) => {
                   const isSelected = (draft.amenities || []).includes(amenity);
@@ -244,9 +289,21 @@ export function FilterSheet({
                     <Pressable
                       key={amenity}
                       onPress={() => toggleAmenity(amenity)}
-                      style={[styles.amenityChip, isSelected ? styles.amenityChipActive : null]}
+                      style={[
+                        styles.amenityChip,
+                        {
+                          backgroundColor: isSelected
+                            ? isDark
+                              ? '#2A1F1A'
+                              : '#FFFBF8'
+                            : isDark
+                            ? '#27272A'
+                            : '#F7F7F7',
+                          borderColor: isSelected ? '#F26522' : colors.border,
+                        },
+                      ]}
                     >
-                      <Text style={[styles.amenityText, isSelected ? styles.amenityTextActive : null]}>
+                      <Text style={[styles.amenityText, { color: isSelected ? '#F26522' : colors.text }]}>
                         {amenity}
                       </Text>
                     </Pressable>
@@ -255,11 +312,11 @@ export function FilterSheet({
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             {/* 6. HOST TYPE */}
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionHeading}>Host Type & Booking</Text>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>Host Type & Booking</Text>
               <View style={styles.pillRow}>
                 {[
                   { id: 'super_host', label: 'Super Host' },
@@ -271,9 +328,21 @@ export function FilterSheet({
                     <Pressable
                       key={ht.id}
                       onPress={() => toggleHostType(ht.id as any)}
-                      style={[styles.hostTypeChip, isSelected ? styles.hostTypeChipActive : null]}
+                      style={[
+                        styles.hostTypeChip,
+                        {
+                          backgroundColor: isSelected
+                            ? isDark
+                              ? '#2A1F1A'
+                              : '#FFFBF8'
+                            : isDark
+                            ? '#27272A'
+                            : '#F7F7F7',
+                          borderColor: isSelected ? '#F26522' : colors.border,
+                        },
+                      ]}
                     >
-                      <Text style={[styles.hostTypeText, isSelected ? styles.hostTypeTextActive : null]}>
+                      <Text style={[styles.hostTypeText, { color: isSelected ? '#F26522' : colors.text }]}>
                         {ht.label}
                       </Text>
                     </Pressable>
@@ -284,9 +353,9 @@ export function FilterSheet({
           </ScrollView>
 
           {/* Sticky Bottom Actions */}
-          <View style={styles.bottomBar}>
+          <View style={[styles.bottomBar, { borderTopColor: colors.border }]}>
             <Pressable onPress={onReset} style={styles.resetBtn}>
-              <Text style={styles.resetBtnText}>Clear all</Text>
+              <Text style={[styles.resetBtnText, { color: colors.text }]}>Clear all</Text>
             </Pressable>
 
             <Pressable

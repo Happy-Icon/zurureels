@@ -15,11 +15,15 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
+import { useColors } from '@/hooks/useColors';
 import { useSavedEvents, useSavedReels } from '@/lib/queries';
 
 export default function WishlistsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const colors = useColors();
+  const { isDark } = useTheme();
   const { user } = useAuth();
 
   const { data: reels, isLoading: reelsLoading, refetch: refetchReels } = useSavedReels(user?.id);
@@ -43,9 +47,9 @@ export default function WishlistsScreen() {
   const firstThumbnail = reels?.[0]?.thumbnail_url || null;
 
   return (
-    <View style={styles.fill}>
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <ScrollView
-        style={styles.fill}
+        style={[styles.fill, { backgroundColor: colors.background }]}
         contentContainerStyle={{
           paddingTop: topPad,
           paddingBottom: bottomPad,
@@ -58,7 +62,7 @@ export default function WishlistsScreen() {
       >
         {/* ── HEADER TITLE (MATCHING SCREENSHOT) ─────────────────────────────── */}
         <View style={styles.headerWrap}>
-          <Text style={styles.pageTitle}>Wishlists</Text>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Wishlists</Text>
         </View>
 
         {/* ── WISHLISTS 2-COLUMN GRID ────────────────────────────────────────── */}
@@ -72,7 +76,7 @@ export default function WishlistsScreen() {
             <View style={styles.historyGreyTile}>
               <MaterialCommunityIcons name="history" size={56} color="#FFFFFF" />
             </View>
-            <Text style={styles.cardTitle}>Recently viewed</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Recently viewed</Text>
           </Pressable>
 
           {/* Card 2: Saved Favorites */}
@@ -81,7 +85,7 @@ export default function WishlistsScreen() {
             onPress={() => setSavedFavoritesModal(true)}
             style={({ pressed }) => [styles.gridCard, pressed && { opacity: 0.88 }]}
           >
-            <View style={styles.collectionTile}>
+            <View style={[styles.collectionTile, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {firstThumbnail ? (
                 <Image
                   source={{ uri: firstThumbnail }}
@@ -89,16 +93,16 @@ export default function WishlistsScreen() {
                   contentFit="cover"
                 />
               ) : (
-                <View style={styles.collectionFallback}>
+                <View style={[styles.collectionFallback, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
                   <Ionicons name="heart" size={44} color="#F26522" />
                 </View>
               )}
-              <View style={styles.countBadge}>
+              <View style={[styles.countBadge, { backgroundColor: colors.primary }]}>
                 <Text style={styles.countBadgeText}>{totalSavedCount}</Text>
               </View>
             </View>
-            <Text style={styles.cardTitle}>Saved favorites</Text>
-            <Text style={styles.cardSub}>{totalSavedCount} saved</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Saved favorites</Text>
+            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>{totalSavedCount} saved</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -110,12 +114,12 @@ export default function WishlistsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setSavedFavoritesModal(false)}
       >
-        <View style={[styles.modalSheet, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
-            <Pressable onPress={() => setSavedFavoritesModal(false)} style={styles.circleCloseBtn}>
-              <Feather name="x" size={22} color="#111111" />
+        <View style={[styles.modalSheet, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <Pressable onPress={() => setSavedFavoritesModal(false)} style={[styles.circleCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }]}>
+              <Feather name="x" size={20} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Saved favorites</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Saved favorites</Text>
             <View style={{ width: 36 }} />
           </View>
 
@@ -132,22 +136,22 @@ export default function WishlistsScreen() {
                       setSavedFavoritesModal(false);
                       router.push('/discover');
                     }}
-                    style={styles.recentItemRow}
+                    style={[styles.recentItemRow, { borderBottomColor: colors.border }]}
                   >
                     <View style={styles.recentThumbBox}>
                       {reel.thumbnail_url ? (
                         <Image source={{ uri: reel.thumbnail_url }} style={styles.recentThumb} contentFit="cover" />
                       ) : (
-                        <View style={[styles.recentThumb, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
-                          <Feather name="film" size={20} color="#717171" />
+                        <View style={[styles.recentThumb, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
+                          <Feather name="film" size={20} color={colors.mutedForeground} />
                         </View>
                       )}
                     </View>
                     <View style={{ flex: 1, paddingLeft: 12 }}>
-                      <Text style={styles.recentTitle} numberOfLines={1}>
+                      <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={1}>
                         {reel.experience?.title ?? 'Coastal Stay'}
                       </Text>
-                      <Text style={styles.recentLocation} numberOfLines={1}>
+                      <Text style={[styles.recentLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
                         {reel.experience?.location ?? 'Kenya Coast'}
                       </Text>
                       <Text style={styles.recentPrice}>
@@ -165,22 +169,22 @@ export default function WishlistsScreen() {
                       setSavedFavoritesModal(false);
                       router.push('/discover');
                     }}
-                    style={styles.recentItemRow}
+                    style={[styles.recentItemRow, { borderBottomColor: colors.border }]}
                   >
                     <View style={styles.recentThumbBox}>
                       {ev.image_url ? (
                         <Image source={{ uri: ev.image_url }} style={styles.recentThumb} contentFit="cover" />
                       ) : (
-                        <View style={[styles.recentThumb, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
-                          <Feather name="calendar" size={20} color="#717171" />
+                        <View style={[styles.recentThumb, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
+                          <Feather name="calendar" size={20} color={colors.mutedForeground} />
                         </View>
                       )}
                     </View>
                     <View style={{ flex: 1, paddingLeft: 12 }}>
-                      <Text style={styles.recentTitle} numberOfLines={1}>
+                      <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={1}>
                         {ev.title ?? 'Coastal Event'}
                       </Text>
-                      <Text style={styles.recentLocation} numberOfLines={1}>
+                      <Text style={[styles.recentLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
                         {ev.location ?? 'Kenya Coast'}
                       </Text>
                       <Text style={styles.recentPrice}>
@@ -193,11 +197,11 @@ export default function WishlistsScreen() {
               </View>
             ) : (
               <View style={styles.emptyRecentWrap}>
-                <View style={styles.emptyRecentIconCircle}>
-                  <Ionicons name="heart-outline" size={32} color="#717171" />
+                <View style={[styles.emptyRecentIconCircle, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                  <Ionicons name="heart-outline" size={32} color={colors.mutedForeground} />
                 </View>
-                <Text style={styles.emptyRecentTitle}>No saved favorites yet</Text>
-                <Text style={styles.emptyRecentSub}>
+                <Text style={[styles.emptyRecentTitle, { color: colors.text }]}>No saved favorites yet</Text>
+                <Text style={[styles.emptyRecentSub, { color: colors.mutedForeground }]}>
                   Tap the heart icon on any stay, experience, or event to save it to your favorites list.
                 </Text>
                 <Pressable
@@ -205,7 +209,7 @@ export default function WishlistsScreen() {
                     setSavedFavoritesModal(false);
                     router.push('/discover');
                   }}
-                  style={styles.exploreCtaBtn}
+                  style={[styles.exploreCtaBtn, { backgroundColor: '#F26522' }]}
                 >
                   <Text style={styles.exploreCtaBtnText}>Explore coastal stays</Text>
                 </Pressable>
@@ -222,12 +226,12 @@ export default function WishlistsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setRecentlyViewedModal(false)}
       >
-        <View style={[styles.modalSheet, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
-            <Pressable onPress={() => setRecentlyViewedModal(false)} style={styles.circleCloseBtn}>
-              <Feather name="x" size={22} color="#111111" />
+        <View style={[styles.modalSheet, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <Pressable onPress={() => setRecentlyViewedModal(false)} style={[styles.circleCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }]}>
+              <Feather name="x" size={20} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Recently viewed</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Recently viewed</Text>
             <View style={{ width: 36 }} />
           </View>
 
@@ -243,38 +247,38 @@ export default function WishlistsScreen() {
                     setRecentlyViewedModal(false);
                     router.push('/discover');
                   }}
-                  style={styles.recentItemRow}
+                  style={[styles.recentItemRow, { borderBottomColor: colors.border }]}
                 >
                   <View style={styles.recentThumbBox}>
                     {reel.thumbnail_url ? (
                       <Image source={{ uri: reel.thumbnail_url }} style={styles.recentThumb} contentFit="cover" />
                     ) : (
-                      <View style={[styles.recentThumb, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
-                        <Feather name="film" size={20} color="#717171" />
+                      <View style={[styles.recentThumb, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Feather name="film" size={20} color={colors.mutedForeground} />
                       </View>
                     )}
                   </View>
                   <View style={{ flex: 1, paddingLeft: 12 }}>
-                    <Text style={styles.recentTitle} numberOfLines={1}>
+                    <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={1}>
                       {reel.experience?.title ?? 'Coastal Stay'}
                     </Text>
-                    <Text style={styles.recentLocation} numberOfLines={1}>
+                    <Text style={[styles.recentLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
                       {reel.experience?.location ?? 'Kenya Coast'}
                     </Text>
                     <Text style={styles.recentPrice}>
                       KES {Number(reel.experience?.current_price ?? 0).toLocaleString()} / night
                     </Text>
                   </View>
-                  <Feather name="chevron-right" size={18} color="#9E9E9E" />
+                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
                 </Pressable>
               ))
             ) : (
               <View style={styles.emptyRecentWrap}>
-                <View style={styles.emptyRecentIconCircle}>
-                  <MaterialCommunityIcons name="history" size={32} color="#717171" />
+                <View style={[styles.emptyRecentIconCircle, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                  <MaterialCommunityIcons name="history" size={32} color={colors.mutedForeground} />
                 </View>
-                <Text style={styles.emptyRecentTitle}>No recently viewed items</Text>
-                <Text style={styles.emptyRecentSub}>
+                <Text style={[styles.emptyRecentTitle, { color: colors.text }]}>No recently viewed items</Text>
+                <Text style={[styles.emptyRecentSub, { color: colors.mutedForeground }]}>
                   Stays and experiences you browse on Discover and Pulse will appear here automatically.
                 </Text>
                 <Pressable
@@ -282,7 +286,7 @@ export default function WishlistsScreen() {
                     setRecentlyViewedModal(false);
                     router.push('/discover');
                   }}
-                  style={styles.exploreCtaBtn}
+                  style={[styles.exploreCtaBtn, { backgroundColor: '#F26522' }]}
                 >
                   <Text style={styles.exploreCtaBtnText}>Explore coastal stays</Text>
                 </Pressable>
@@ -298,7 +302,6 @@ export default function WishlistsScreen() {
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   headerWrap: {
     marginBottom: 28,
@@ -384,7 +387,6 @@ const styles = StyleSheet.create({
   /* Recently viewed modal */
   modalSheet: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',

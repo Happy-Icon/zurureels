@@ -27,8 +27,11 @@ import { HostAchievements } from '@/components/host/profile/HostAchievements';
 import { HostSafetyCard } from '@/components/host/profile/HostSafetyCard';
 import { HostActionBar } from '@/components/host/profile/HostActionBar';
 import { HostProfileSkeleton } from '@/components/host/profile/HostProfileSkeleton';
+import { useColors, useTheme } from '@/hooks/useColors';
 
 export default function PublicHostProfileScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { hostId } = useLocalSearchParams<{ hostId: string }>();
@@ -97,14 +100,14 @@ export default function PublicHostProfileScreen() {
 
   if (isLoading || !host) {
     return (
-      <View style={[styles.fill, { backgroundColor: '#FFFFFF', paddingTop: topPad }]}>
+      <View style={[styles.fill, { backgroundColor: colors.background, paddingTop: topPad }]}>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.topNavBar}>
+        <View style={[styles.topNavBar, { borderBottomColor: colors.border }]}>
           <Pressable
             onPress={() => router.back()}
             style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
           >
-            <Feather name="arrow-left" size={22} color="#222222" />
+            <Feather name="arrow-left" size={22} color={colors.text} />
           </Pressable>
         </View>
         <HostProfileSkeleton />
@@ -113,20 +116,20 @@ export default function PublicHostProfileScreen() {
   }
 
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Top Header Navigation Bar */}
-      <View style={[styles.topNavBar, { paddingTop: topPad }]}>
+      <View style={[styles.topNavBar, { paddingTop: topPad, borderBottomColor: colors.border }]}>
         <Pressable
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
           hitSlop={10}
         >
-          <Feather name="arrow-left" size={22} color="#222222" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
 
-        <Text style={styles.headerTitleText} numberOfLines={1}>
+        <Text style={[styles.headerTitleText, { color: colors.text }]} numberOfLines={1}>
           {host.full_name}
         </Text>
 
@@ -135,7 +138,7 @@ export default function PublicHostProfileScreen() {
           style={({ pressed }) => [styles.moreBtn, { opacity: pressed ? 0.6 : 1 }]}
           hitSlop={10}
         >
-          <Feather name="more-horizontal" size={22} color="#222222" />
+          <Feather name="more-horizontal" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -154,7 +157,7 @@ export default function PublicHostProfileScreen() {
         <HostStatsCard host={host} />
 
         {/* 3. Verified Information Badges */}
-        <HostTrustBadges />
+        <HostTrustBadges host={host} />
 
         {/* 4. Host Biography */}
         <HostBio name={host.full_name} bio={host.host_bio || ''} />
@@ -184,12 +187,12 @@ export default function PublicHostProfileScreen() {
 
       {/* Profile Overflow Menu Modal Sheet */}
       <Modal visible={menuOpen} animationType="fade" transparent onRequestClose={() => setMenuOpen(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setMenuOpen(false)}>
-          <View style={styles.menuSheet}>
+        <Pressable style={[styles.modalOverlay, { backgroundColor: colors.overlay }]} onPress={() => setMenuOpen(false)}>
+          <View style={[styles.menuSheet, { backgroundColor: colors.card }]}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Host Profile Actions</Text>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>Host Profile Actions</Text>
               <Pressable onPress={() => setMenuOpen(false)}>
-                <Feather name="x" size={20} color="#717171" />
+                <Feather name="x" size={20} color={colors.text} />
               </Pressable>
             </View>
 
@@ -198,10 +201,10 @@ export default function PublicHostProfileScreen() {
                 toggleFollow();
                 setMenuOpen(false);
               }}
-              style={styles.menuOptionRow}
+              style={[styles.menuOptionRow, { borderBottomColor: colors.border }]}
             >
-              <Feather name={isFollowing ? 'user-check' : 'user-plus'} size={18} color="#222222" />
-              <Text style={styles.menuOptionText}>{isFollowing ? 'Following Host' : 'Follow Host'}</Text>
+              <Feather name={isFollowing ? 'user-check' : 'user-plus'} size={18} color={colors.text} />
+              <Text style={[styles.menuOptionText, { color: colors.text }]}>{isFollowing ? 'Following Host' : 'Follow Host'}</Text>
             </Pressable>
 
             <Pressable
@@ -209,10 +212,10 @@ export default function PublicHostProfileScreen() {
                 toggleSaveHost();
                 setMenuOpen(false);
               }}
-              style={styles.menuOptionRow}
+              style={[styles.menuOptionRow, { borderBottomColor: colors.border }]}
             >
-              <Feather name={isSaved ? 'bookmark' : 'bookmark'} size={18} color="#222222" />
-              <Text style={styles.menuOptionText}>{isSaved ? 'Host Saved' : 'Save Host'}</Text>
+              <Feather name="bookmark" size={18} color={colors.text} />
+              <Text style={[styles.menuOptionText, { color: colors.text }]}>{isSaved ? 'Host Saved' : 'Save Host'}</Text>
             </Pressable>
 
             <Pressable
@@ -220,10 +223,10 @@ export default function PublicHostProfileScreen() {
                 setMenuOpen(false);
                 handleShare();
               }}
-              style={styles.menuOptionRow}
+              style={[styles.menuOptionRow, { borderBottomColor: colors.border }]}
             >
-              <Feather name="share-2" size={18} color="#222222" />
-              <Text style={styles.menuOptionText}>Share Profile</Text>
+              <Feather name="share-2" size={18} color={colors.text} />
+              <Text style={[styles.menuOptionText, { color: colors.text }]}>Share Profile</Text>
             </Pressable>
 
             <Pressable
@@ -231,7 +234,7 @@ export default function PublicHostProfileScreen() {
                 setMenuOpen(false);
                 Alert.alert('Report Submitted', 'Thank you for keeping our community safe. Our team will review this host profile.');
               }}
-              style={styles.menuOptionRow}
+              style={[styles.menuOptionRow, { borderBottomColor: colors.border }]}
             >
               <Feather name="flag" size={18} color="#EF4444" />
               <Text style={[styles.menuOptionText, { color: '#EF4444' }]}>Report Host Profile</Text>
@@ -282,7 +285,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   menuSheet: {
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,

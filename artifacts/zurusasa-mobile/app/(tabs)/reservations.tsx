@@ -20,6 +20,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useEnquire, useGuestCancelBooking, useMyBookings } from '@/lib/queries';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { Skeleton } from '@/components/Skeleton';
 import { JourneyCompanionSheet } from '@/components/journey/JourneyCompanionSheet';
 import { HostReservationsView } from '@/components/host/HostReservationsView';
@@ -198,6 +200,8 @@ export default function ReservationsScreen() {
 // ── Guest Trips Screen ───────────────────────────────────────────────────────
 
 function GuestTripsView() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -362,27 +366,31 @@ function GuestTripsView() {
   // ── Unauthenticated State ──────────────────────────────────────────────────
   if (!loading && !user) {
     return (
-      <View style={[styles.fill, { backgroundColor: '#FAFAFA', paddingTop: topPad }]}>
+      <View style={[styles.fill, { backgroundColor: colors.background, paddingTop: topPad }]}>
         <View style={[styles.topNavBar, { paddingHorizontal: 20 }]}>
           <Pressable
             testID="reservations-back-btn"
             onPress={handleBack}
-            style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            style={({ pressed }) => [
+              styles.backIconBtn,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              { opacity: pressed ? 0.6 : 1 },
+            ]}
             hitSlop={10}
           >
-            <Feather name="arrow-left" size={20} color="#111111" />
+            <Feather name="arrow-left" size={20} color={colors.text} />
           </Pressable>
-          <Text style={styles.pageTitle}>Trips</Text>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Trips</Text>
           <View style={{ width: 38 }} />
         </View>
 
         <View style={styles.loggedOutContainer}>
-          <View style={styles.loggedOutIconCircle}>
+          <View style={[styles.loggedOutIconCircle, { backgroundColor: isDark ? '#27272A' : '#FFF7ED' }]}>
             <MaterialCommunityIcons name="bag-suitcase-outline" size={36} color={ORANGE} />
           </View>
 
-          <Text style={styles.loggedOutTitle}>Log in to view trips</Text>
-          <Text style={styles.loggedOutSub}>
+          <Text style={[styles.loggedOutTitle, { color: colors.text }]}>Log in to view trips</Text>
+          <Text style={[styles.loggedOutSub, { color: colors.mutedForeground }]}>
             Check your active reservations, check-in instructions, and past memories once logged in.
           </Text>
 
@@ -401,7 +409,7 @@ function GuestTripsView() {
   const hasAnyBookings = (bookings ?? []).length > 0;
 
   return (
-    <View testID="reservations-screen" style={[styles.fill, { backgroundColor: '#FAFAFA' }]}>
+    <View testID="reservations-screen" style={[styles.fill, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -425,14 +433,18 @@ function GuestTripsView() {
             <Pressable
               testID="reservations-back-btn"
               onPress={handleBack}
-              style={({ pressed }) => [styles.backIconBtn, { opacity: pressed ? 0.6 : 1 }]}
+              style={({ pressed }) => [
+                styles.backIconBtn,
+                { backgroundColor: colors.card, borderColor: colors.border },
+                { opacity: pressed ? 0.6 : 1 },
+              ]}
               hitSlop={10}
             >
-              <Feather name="arrow-left" size={20} color="#111111" />
+              <Feather name="arrow-left" size={20} color={colors.text} />
             </Pressable>
             <View style={{ flex: 1 }}>
-              <Text style={styles.pageTitle}>Trips & Itineraries</Text>
-              <Text style={styles.pageSubtitle}>
+              <Text style={[styles.pageTitle, { color: colors.text }]}>Trips & Itineraries</Text>
+              <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>
                 Your upcoming coastal adventures & travel memories
               </Text>
             </View>
@@ -451,9 +463,29 @@ function GuestTripsView() {
                   <Pressable
                     key={chip.id}
                     onPress={() => setSelectedFilter(chip.id)}
-                    style={[styles.filterChip, isActive && styles.filterChipActive]}
+                    style={[
+                      styles.filterChip,
+                      {
+                        backgroundColor: isActive
+                          ? colors.text
+                          : isDark
+                          ? '#27272A'
+                          : '#F3F4F6',
+                        borderColor: colors.border,
+                      },
+                    ]}
                   >
-                    <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        {
+                          color: isActive
+                            ? colors.background
+                            : colors.mutedForeground,
+                          fontFamily: isActive ? 'DMSans_700Bold' : 'DMSans_500Medium',
+                        },
+                      ]}
+                    >
                       {chip.label}
                     </Text>
                   </Pressable>
@@ -645,6 +677,8 @@ function FeaturedNextTripCard({
   onMessageHost,
   onDirections,
 }: FeaturedNextTripCardProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const exp = booking.experience;
   const countdown = daysUntilLabel(booking.check_in);
   const range = dateRange(booking);
@@ -654,6 +688,7 @@ function FeaturedNextTripCard({
       onPress={onViewBooking}
       style={({ pressed }) => [
         styles.heroCard,
+        { backgroundColor: colors.card, borderColor: colors.border },
         pressed && { transform: [{ scale: 0.99 }] },
       ]}
     >
@@ -666,8 +701,8 @@ function FeaturedNextTripCard({
             contentFit="cover"
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, styles.imageFallback]}>
-            <Feather name="map-pin" size={32} color="#D1D5DB" />
+          <View style={[StyleSheet.absoluteFill, styles.imageFallback, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+            <Feather name="map-pin" size={32} color={colors.mutedForeground} />
           </View>
         )}
         <LinearGradient
@@ -723,10 +758,10 @@ function FeaturedNextTripCard({
         <TripProgressTimeline status={booking.status} checkIn={booking.check_in} />
 
         {/* Price & Action Dock */}
-        <View style={styles.heroDockRow}>
+        <View style={[styles.heroDockRow, { borderTopColor: colors.border }]}>
           {booking.amount != null ? (
             <View style={styles.heroPriceBlock}>
-              <Text style={styles.heroPriceLabel}>TOTAL PRICE</Text>
+              <Text style={[styles.heroPriceLabel, { color: colors.mutedForeground }]}>TOTAL PRICE</Text>
               <Text style={styles.heroPriceAmount}>
                 KES {Number(booking.amount).toLocaleString()}
               </Text>
@@ -736,23 +771,35 @@ function FeaturedNextTripCard({
           <View style={styles.heroActionsRow}>
             <Pressable
               onPress={onMessageHost}
-              style={({ pressed }) => [styles.heroIconBtn, pressed && { opacity: 0.8 }]}
+              style={({ pressed }) => [
+                styles.heroIconBtn,
+                { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border },
+                pressed && { opacity: 0.8 },
+              ]}
               hitSlop={6}
             >
-              <Feather name="message-square" size={16} color="#374151" />
+              <Feather name="message-square" size={16} color={colors.text} />
             </Pressable>
             <Pressable
               onPress={onDirections}
-              style={({ pressed }) => [styles.heroIconBtn, pressed && { opacity: 0.8 }]}
+              style={({ pressed }) => [
+                styles.heroIconBtn,
+                { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border },
+                pressed && { opacity: 0.8 },
+              ]}
               hitSlop={6}
             >
-              <Feather name="navigation" size={16} color="#374151" />
+              <Feather name="navigation" size={16} color={colors.text} />
             </Pressable>
             <Pressable
               onPress={onViewBooking}
-              style={({ pressed }) => [styles.heroPrimaryBtn, pressed && { opacity: 0.88 }]}
+              style={({ pressed }) => [
+                styles.heroPrimaryBtn,
+                { backgroundColor: colors.text },
+                pressed && { opacity: 0.88 },
+              ]}
             >
-              <Text style={styles.heroPrimaryBtnText}>View Itinerary</Text>
+              <Text style={[styles.heroPrimaryBtnText, { color: colors.background }]}>View Itinerary</Text>
             </Pressable>
           </View>
         </View>
@@ -784,6 +831,8 @@ function TripCard({
   onBookAgain,
   onBookSimilar,
 }: TripCardProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const exp = booking.experience;
   const range = dateRange(booking);
 
@@ -792,17 +841,18 @@ function TripCard({
       onPress={onViewBooking}
       style={({ pressed }) => [
         styles.card,
+        { backgroundColor: colors.card, borderColor: colors.border },
         type === 'cancelled' && styles.cardCancelled,
         pressed && { transform: [{ scale: 0.99 }] },
       ]}
     >
       {/* Cover Image */}
-      <View style={styles.cardImageWrap}>
+      <View style={[styles.cardImageWrap, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
         {exp?.image_url ? (
           <Image source={{ uri: exp.image_url }} style={styles.cardImage} contentFit="cover" />
         ) : (
-          <View style={[styles.cardImage, styles.imageFallback]}>
-            <Feather name="image" size={24} color="#D1D5DB" />
+          <View style={[styles.cardImage, styles.imageFallback, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+            <Feather name="image" size={24} color={colors.mutedForeground} />
           </View>
         )}
 
@@ -814,15 +864,15 @@ function TripCard({
       {/* Content */}
       <View style={styles.cardContent}>
         <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
             {exp?.title ?? 'Coastal Stay'}
           </Text>
         </View>
 
         {exp?.location ? (
           <View style={styles.cardLocationRow}>
-            <Feather name="map-pin" size={11} color="#9CA3AF" />
-            <Text style={styles.cardLocationText} numberOfLines={1}>
+            <Feather name="map-pin" size={11} color={colors.mutedForeground} />
+            <Text style={[styles.cardLocationText, { color: colors.mutedForeground }]} numberOfLines={1}>
               {exp.location}
             </Text>
           </View>
@@ -830,11 +880,11 @@ function TripCard({
 
         <View style={styles.cardMetaRow}>
           <View style={styles.cardMetaItem}>
-            <Feather name="calendar" size={11} color="#717171" />
-            <Text style={styles.cardMetaText}>{range || 'Dates set'}</Text>
+            <Feather name="calendar" size={11} color={colors.mutedForeground} />
+            <Text style={[styles.cardMetaText, { color: colors.mutedForeground }]}>{range || 'Dates set'}</Text>
           </View>
           {booking.amount != null ? (
-            <Text style={styles.cardPriceText}>
+            <Text style={[styles.cardPriceText, { color: colors.text }]}>
               KES {Number(booking.amount).toLocaleString()}
             </Text>
           ) : null}
@@ -847,23 +897,26 @@ function TripCard({
               {onMessageHost ? (
                 <Pressable
                   onPress={(e) => { e.stopPropagation(); onMessageHost(); }}
-                  style={styles.cardSecondaryBtn}
+                  style={[styles.cardSecondaryBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}
                 >
-                  <Feather name="message-square" size={13} color="#374151" />
-                  <Text style={styles.cardSecondaryBtnText}>Host</Text>
+                  <Feather name="message-square" size={13} color={colors.text} />
+                  <Text style={[styles.cardSecondaryBtnText, { color: colors.text }]}>Host</Text>
                 </Pressable>
               ) : null}
               {onDirections ? (
                 <Pressable
                   onPress={(e) => { e.stopPropagation(); onDirections(); }}
-                  style={styles.cardSecondaryBtn}
+                  style={[styles.cardSecondaryBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}
                 >
-                  <Feather name="navigation" size={13} color="#374151" />
-                  <Text style={styles.cardSecondaryBtnText}>Directions</Text>
+                  <Feather name="navigation" size={13} color={colors.text} />
+                  <Text style={[styles.cardSecondaryBtnText, { color: colors.text }]}>Directions</Text>
                 </Pressable>
               ) : null}
-              <Pressable onPress={onViewBooking} style={styles.cardPrimaryBtn}>
-                <Text style={styles.cardPrimaryBtnText}>Details</Text>
+              <Pressable
+                onPress={onViewBooking}
+                style={[styles.cardPrimaryBtn, { backgroundColor: colors.text }]}
+              >
+                <Text style={[styles.cardPrimaryBtnText, { color: colors.background }]}>Details</Text>
               </Pressable>
             </>
           ) : type === 'past' ? (
@@ -880,23 +933,26 @@ function TripCard({
               {onBookAgain ? (
                 <Pressable
                   onPress={(e) => { e.stopPropagation(); onBookAgain(); }}
-                  style={styles.cardPrimaryBtn}
+                  style={[styles.cardPrimaryBtn, { backgroundColor: colors.text }]}
                 >
-                  <Text style={styles.cardPrimaryBtnText}>Book Again</Text>
+                  <Text style={[styles.cardPrimaryBtnText, { color: colors.background }]}>Book Again</Text>
                 </Pressable>
               ) : null}
             </>
           ) : (
             <>
-              <Pressable onPress={onViewBooking} style={styles.cardSecondaryBtn}>
-                <Text style={styles.cardSecondaryBtnText}>Refund Status</Text>
+              <Pressable
+                onPress={onViewBooking}
+                style={[styles.cardSecondaryBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}
+              >
+                <Text style={[styles.cardSecondaryBtnText, { color: colors.text }]}>Refund Status</Text>
               </Pressable>
               {onBookSimilar ? (
                 <Pressable
                   onPress={(e) => { e.stopPropagation(); onBookSimilar(); }}
-                  style={styles.cardPrimaryBtn}
+                  style={[styles.cardPrimaryBtn, { backgroundColor: colors.text }]}
                 >
-                  <Text style={styles.cardPrimaryBtnText}>Book Similar</Text>
+                  <Text style={[styles.cardPrimaryBtnText, { color: colors.background }]}>Book Similar</Text>
                 </Pressable>
               ) : null}
             </>
@@ -926,6 +982,8 @@ function BookingDetailModal({
   onCancelBooking,
   isCancelling,
 }: BookingDetailModalProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const exp = booking.experience;
   const range = dateRange(booking);
   const status = (booking.status ?? '').toLowerCase();
@@ -936,52 +994,56 @@ function BookingDetailModal({
       <View style={styles.modalRoot}>
         <Pressable style={styles.modalBackdrop} onPress={onClose} />
 
-        <View style={styles.modalSheet}>
-          <View style={styles.modalHandle} />
-          <Pressable style={styles.modalCloseBtn} onPress={onClose} hitSlop={8}>
-            <Feather name="x" size={18} color="#374151" />
+        <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+          <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+          <Pressable
+            style={[styles.modalCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}
+            onPress={onClose}
+            hitSlop={8}
+          >
+            <Feather name="x" size={18} color={colors.text} />
           </Pressable>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 16 }}>
             <View style={styles.modalHeader}>
               <StatusPill status={booking.status} />
-              <Text style={styles.modalRefText}>
+              <Text style={[styles.modalRefText, { color: colors.mutedForeground }]}>
                 REF: #{booking.id.slice(0, 8).toUpperCase()}
               </Text>
             </View>
 
-            <Text style={styles.modalTitle}>{exp?.title ?? 'Coastal Experience'}</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{exp?.title ?? 'Coastal Experience'}</Text>
             {exp?.location ? (
               <View style={styles.cardLocationRow}>
-                <Feather name="map-pin" size={12} color="#9CA3AF" />
-                <Text style={styles.modalLocationText}>{exp.location}</Text>
+                <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+                <Text style={[styles.modalLocationText, { color: colors.mutedForeground }]}>{exp.location}</Text>
               </View>
             ) : null}
 
             {/* Travel dates block */}
-            <View style={styles.modalDatesBlock}>
+            <View style={[styles.modalDatesBlock, { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border }]}>
               <View style={styles.modalDateCol}>
-                <Text style={styles.modalDateLabel}>CHECK-IN</Text>
-                <Text style={styles.modalDateVal}>{formatDay(booking.check_in) || 'Set date'}</Text>
+                <Text style={[styles.modalDateLabel, { color: colors.mutedForeground }]}>CHECK-IN</Text>
+                <Text style={[styles.modalDateVal, { color: colors.text }]}>{formatDay(booking.check_in) || 'Set date'}</Text>
               </View>
-              <Feather name="arrow-right" size={16} color="#9CA3AF" />
+              <Feather name="arrow-right" size={16} color={colors.mutedForeground} />
               <View style={styles.modalDateCol}>
-                <Text style={styles.modalDateLabel}>CHECK-OUT</Text>
-                <Text style={styles.modalDateVal}>{formatDay(booking.check_out) || 'Set date'}</Text>
+                <Text style={[styles.modalDateLabel, { color: colors.mutedForeground }]}>CHECK-OUT</Text>
+                <Text style={[styles.modalDateVal, { color: colors.text }]}>{formatDay(booking.check_out) || 'Set date'}</Text>
               </View>
             </View>
 
             {/* Guest & Price info */}
             <View style={styles.modalInfoRow}>
-              <View style={styles.modalInfoBox}>
+              <View style={[styles.modalInfoBox, { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border }]}>
                 <Feather name="users" size={14} color={ORANGE} />
-                <Text style={styles.modalInfoBoxLabel}>Guests</Text>
-                <Text style={styles.modalInfoBoxVal}>{booking.guests ?? 1} Guests</Text>
+                <Text style={[styles.modalInfoBoxLabel, { color: colors.mutedForeground }]}>Guests</Text>
+                <Text style={[styles.modalInfoBoxVal, { color: colors.text }]}>{booking.guests ?? 1} Guests</Text>
               </View>
-              <View style={styles.modalInfoBox}>
+              <View style={[styles.modalInfoBox, { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border }]}>
                 <Feather name="credit-card" size={14} color={ORANGE} />
-                <Text style={styles.modalInfoBoxLabel}>Total Amount</Text>
-                <Text style={styles.modalInfoBoxVal}>
+                <Text style={[styles.modalInfoBoxLabel, { color: colors.mutedForeground }]}>Total Amount</Text>
+                <Text style={[styles.modalInfoBoxVal, { color: colors.text }]}>
                   KES {Number(booking.amount ?? 0).toLocaleString()}
                 </Text>
               </View>
@@ -993,9 +1055,12 @@ function BookingDetailModal({
                 <Feather name="message-square" size={16} color="#FFFFFF" />
                 <Text style={styles.modalPrimaryBtnText}>Message Host</Text>
               </Pressable>
-              <Pressable onPress={onDirections} style={styles.modalSecondaryBtn}>
-                <Feather name="navigation" size={16} color="#374151" />
-                <Text style={styles.modalSecondaryBtnText}>Get Directions</Text>
+              <Pressable
+                onPress={onDirections}
+                style={[styles.modalSecondaryBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}
+              >
+                <Feather name="navigation" size={16} color={colors.text} />
+                <Text style={[styles.modalSecondaryBtnText, { color: colors.text }]}>Get Directions</Text>
               </Pressable>
               {canCancel && onCancelBooking ? (
                 <Pressable
@@ -1038,7 +1103,6 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -1139,7 +1203,6 @@ const styles = StyleSheet.create({
 
   // Hero Card
   heroCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#EBEBEB',
@@ -1337,7 +1400,6 @@ const styles = StyleSheet.create({
 
   // Regular Card
   card: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#EBEBEB',
@@ -1604,7 +1666,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalSheet: {
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: 'hidden',
@@ -1727,7 +1788,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
   },
   modalSecondaryBtnText: {
     fontSize: 14.5,

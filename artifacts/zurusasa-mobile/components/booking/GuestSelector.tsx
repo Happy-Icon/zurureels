@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useColors, useTheme } from '@/hooks/useColors';
 
 const ORANGE = '#F26522';
 
@@ -19,17 +20,19 @@ interface GuestRowProps {
   max: number;
   onIncrement: () => void;
   onDecrement: () => void;
+  colors: ReturnType<typeof useColors>;
+  isDark: boolean;
 }
 
-function GuestRow({ label, sublabel, value, min, max, onIncrement, onDecrement }: GuestRowProps) {
+function GuestRow({ label, sublabel, value, min, max, onIncrement, onDecrement, colors, isDark }: GuestRowProps) {
   const canDec = value > min;
   const canInc = value < max;
 
   return (
     <View style={styles.row}>
       <View style={styles.labelBlock}>
-        <Text style={styles.label}>{label}</Text>
-        <Text style={styles.sublabel}>{sublabel}</Text>
+        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+        <Text style={[styles.sublabel, { color: colors.mutedForeground }]}>{sublabel}</Text>
       </View>
 
       <View style={styles.counter}>
@@ -39,14 +42,15 @@ function GuestRow({ label, sublabel, value, min, max, onIncrement, onDecrement }
           hitSlop={8}
           style={({ pressed }) => [
             styles.counterBtn,
-            !canDec && styles.counterBtnDisabled,
-            pressed && canDec && styles.counterBtnPressed,
+            { backgroundColor: isDark ? '#27272A' : '#FFFFFF', borderColor: colors.border },
+            !canDec && [styles.counterBtnDisabled, { backgroundColor: isDark ? '#1E1E1E' : '#F9FAFB', borderColor: colors.border }],
+            pressed && canDec && { backgroundColor: isDark ? '#333338' : '#F3F4F6' },
           ]}
         >
-          <Feather name="minus" size={14} color={canDec ? '#222222' : '#D1D5DB'} />
+          <Feather name="minus" size={14} color={canDec ? colors.text : isDark ? '#4B5563' : '#D1D5DB'} />
         </Pressable>
 
-        <Text style={styles.counterValue}>{value}</Text>
+        <Text style={[styles.counterValue, { color: colors.text }]}>{value}</Text>
 
         <Pressable
           onPress={onIncrement}
@@ -54,11 +58,12 @@ function GuestRow({ label, sublabel, value, min, max, onIncrement, onDecrement }
           hitSlop={8}
           style={({ pressed }) => [
             styles.counterBtn,
-            !canInc && styles.counterBtnDisabled,
-            pressed && canInc && styles.counterBtnPressed,
+            { backgroundColor: isDark ? '#27272A' : '#FFFFFF', borderColor: colors.border },
+            !canInc && [styles.counterBtnDisabled, { backgroundColor: isDark ? '#1E1E1E' : '#F9FAFB', borderColor: colors.border }],
+            pressed && canInc && { backgroundColor: isDark ? '#333338' : '#F3F4F6' },
           ]}
         >
-          <Feather name="plus" size={14} color={canInc ? '#222222' : '#D1D5DB'} />
+          <Feather name="plus" size={14} color={canInc ? colors.text : isDark ? '#4B5563' : '#D1D5DB'} />
         </Pressable>
       </View>
     </View>
@@ -72,6 +77,8 @@ interface GuestSelectorProps {
 }
 
 export function GuestSelector({ guests, maxGuests = 20, onChange }: GuestSelectorProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const totalGuests = guests.adults + guests.children;
 
   const update = (key: keyof GuestCounts, delta: number) => {
@@ -80,7 +87,7 @@ export function GuestSelector({ guests, maxGuests = 20, onChange }: GuestSelecto
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <GuestRow
         label="Adults"
         sublabel="Age 13+"
@@ -89,8 +96,10 @@ export function GuestSelector({ guests, maxGuests = 20, onChange }: GuestSelecto
         max={maxGuests}
         onDecrement={() => update('adults', -1)}
         onIncrement={() => update('adults', 1)}
+        colors={colors}
+        isDark={isDark}
       />
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
       <GuestRow
         label="Children"
         sublabel="Ages 2–12"
@@ -99,8 +108,10 @@ export function GuestSelector({ guests, maxGuests = 20, onChange }: GuestSelecto
         max={maxGuests - guests.adults}
         onDecrement={() => update('children', -1)}
         onIncrement={() => update('children', 1)}
+        colors={colors}
+        isDark={isDark}
       />
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
       <GuestRow
         label="Infants"
         sublabel="Under 2"
@@ -109,8 +120,10 @@ export function GuestSelector({ guests, maxGuests = 20, onChange }: GuestSelecto
         max={5}
         onDecrement={() => update('infants', -1)}
         onIncrement={() => update('infants', 1)}
+        colors={colors}
+        isDark={isDark}
       />
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
       <GuestRow
         label="Pets"
         sublabel="Bringing a pet?"
@@ -119,10 +132,12 @@ export function GuestSelector({ guests, maxGuests = 20, onChange }: GuestSelecto
         max={3}
         onDecrement={() => update('pets', -1)}
         onIncrement={() => update('pets', 1)}
+        colors={colors}
+        isDark={isDark}
       />
 
       {totalGuests >= maxGuests ? (
-        <View style={styles.maxNotice}>
+        <View style={[styles.maxNotice, { backgroundColor: isDark ? '#2A1810' : '#FFFBF8', borderTopColor: isDark ? '#5C2D16' : '#FCE3D6' }]}>
           <Feather name="info" size={13} color={ORANGE} />
           <Text style={styles.maxNoticeText}>
             Maximum {maxGuests} guests allowed for this experience.

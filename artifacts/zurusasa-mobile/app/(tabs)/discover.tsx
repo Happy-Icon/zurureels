@@ -48,6 +48,9 @@ import { AIFloatingButton } from '@/components/ai/AIFloatingButton';
 import { DiscoverMapView } from '@/components/map/DiscoverMapView';
 import { JourneyCompanionSheet } from '@/components/journey/JourneyCompanionSheet';
 
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
+
 const DISCOVERY_CATEGORIES = [
   { id: 'all', label: 'All', icon: 'grid', categories: ['all'] },
   { id: 'accommodation', label: 'Stays', icon: 'home', categories: ['hotel', 'villa', 'apartment', 'stay', 'parks_camps'] },
@@ -61,6 +64,8 @@ type CategoryId = (typeof DISCOVERY_CATEGORIES)[number]['id'];
 export default function AirbnbDiscoverScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const colors = useColors();
+  const { isDark } = useTheme();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
 
   const [activeCategory, setActiveCategory] = useState<CategoryId>('all');
@@ -178,6 +183,7 @@ export default function AirbnbDiscoverScreen() {
         category: r.category,
         location: r.experience?.location ?? null,
         price: r.experience?.current_price ?? null,
+        rating: null,
       })),
     [filteredReels],
   );
@@ -187,9 +193,9 @@ export default function AirbnbDiscoverScreen() {
   const bottomPad = Platform.OS === 'web' ? 100 : insets.bottom + 84;
 
   return (
-    <View style={[styles.screen, { backgroundColor: '#FFFFFF' }]}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
       {/* 1. Header & Search Integration */}
-      <View style={[styles.headerContainer, { paddingTop: topPad + 6 }]}>
+      <View style={[styles.headerContainer, { paddingTop: topPad + 6, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.headerTopRow}>
           <View style={{ flex: 1 }}>
             <SearchBar
@@ -243,17 +249,20 @@ export default function AirbnbDiscoverScreen() {
                   <Feather
                     name={cat.icon as any}
                     size={20}
-                    color={isActive ? '#222222' : '#717171'}
+                    color={isActive ? colors.text : colors.mutedForeground}
                   />
                   <Text
                     style={[
                       styles.categoryLabelText,
-                      isActive ? styles.categoryLabelActive : styles.categoryLabelInactive,
+                      {
+                        color: isActive ? colors.text : colors.mutedForeground,
+                        fontFamily: isActive ? 'DMSans_700Bold' : 'DMSans_500Medium',
+                      },
                     ]}
                   >
                     {cat.label}
                   </Text>
-                  {isActive ? <View style={styles.categoryUnderline} /> : null}
+                  {isActive ? <View style={[styles.categoryUnderline, { backgroundColor: colors.text }]} /> : null}
                 </Pressable>
               );
             })}
@@ -263,9 +272,9 @@ export default function AirbnbDiscoverScreen() {
 
       {/* MAIN VIEW CONTENT: MAP MODE vs GRID MODE */}
       {isSearchFocused ? (
-        <View style={[styles.suggestionsOverlay, { paddingBottom: bottomPad }]}>
-          <View style={styles.suggestionsHeader}>
-            <Text style={styles.suggestionsTitle}>Search Suggestions</Text>
+        <View style={[styles.suggestionsOverlay, { backgroundColor: colors.background, paddingBottom: bottomPad }]}>
+          <View style={[styles.suggestionsHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.suggestionsTitle, { color: colors.text }]}>Search Suggestions</Text>
             <Pressable onPress={() => setIsSearchFocused(false)} hitSlop={8}>
               <Text style={styles.closeSuggestionsText}>Done</Text>
             </Pressable>
@@ -420,7 +429,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   headerContainer: {
     paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EBEBEB',
     gap: 8,

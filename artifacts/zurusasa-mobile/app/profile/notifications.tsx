@@ -15,6 +15,8 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 
 interface ChannelPrefs {
@@ -67,7 +69,9 @@ const DEFAULT_ACCOUNT_WITH_SMS: ChannelPrefs = {
   phone_calls: false,
 };
 
-export default function NotificationsScreen() {
+export default function NotificationPreferencesScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -151,7 +155,7 @@ export default function NotificationsScreen() {
   const currentActivePrefs = activeItem ? (prefsMap[activeItem.id] || DEFAULT_OFF) : DEFAULT_OFF;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
@@ -163,7 +167,7 @@ export default function NotificationsScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={22} color="#111111" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -173,16 +177,16 @@ export default function NotificationsScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
         {/* Title */}
-        <Text style={styles.pageTitle}>Notifications</Text>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>Notifications</Text>
 
         {/* Tab Bar */}
-        <View style={styles.tabContainer}>
+        <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
           <Pressable
             testID="tab-offers"
             onPress={() => setActiveTab('offers')}
-            style={[styles.tabBtn, activeTab === 'offers' && styles.tabBtnActive]}
+            style={[styles.tabBtn, activeTab === 'offers' && [styles.tabBtnActive, { borderBottomColor: colors.text }]]}
           >
-            <Text style={[styles.tabText, activeTab === 'offers' && styles.tabTextActive]}>
+            <Text style={[styles.tabText, { color: activeTab === 'offers' ? colors.text : colors.mutedForeground }, activeTab === 'offers' && styles.tabTextActive]}>
               Offers and updates
             </Text>
           </Pressable>
@@ -190,22 +194,22 @@ export default function NotificationsScreen() {
           <Pressable
             testID="tab-account"
             onPress={() => setActiveTab('account')}
-            style={[styles.tabBtn, activeTab === 'account' && styles.tabBtnActive]}
+            style={[styles.tabBtn, activeTab === 'account' && [styles.tabBtnActive, { borderBottomColor: colors.text }]]}
           >
-            <Text style={[styles.tabText, activeTab === 'account' && styles.tabTextActive]}>
+            <Text style={[styles.tabText, { color: activeTab === 'account' ? colors.text : colors.mutedForeground }, activeTab === 'account' && styles.tabTextActive]}>
               Account
             </Text>
           </Pressable>
         </View>
 
         {loading ? (
-          <ActivityIndicator size="small" color="#111111" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="small" color={colors.text} style={{ marginTop: 40 }} />
         ) : activeTab === 'offers' ? (
           /* ── TAB 1: OFFERS AND UPDATES ───────────────────────────────────── */
           <View style={styles.tabContentBlock}>
             {/* Section 1: Hosting insights and rewards */}
-            <Text style={styles.sectionHeader}>Hosting insights and rewards</Text>
-            <Text style={styles.sectionSubtitle}>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>Hosting insights and rewards</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               Learn about best hosting practices, and get access to exclusive hosting perks.
             </Text>
 
@@ -401,8 +405,8 @@ export default function NotificationsScreen() {
           /* ── TAB 2: ACCOUNT ──────────────────────────────────────────────── */
           <View style={styles.tabContentBlock}>
             {/* Section 1: Account activity and policies */}
-            <Text style={styles.sectionHeader}>Account activity and policies</Text>
-            <Text style={styles.sectionSubtitle}>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>Account activity and policies</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               Confirm your booking and account activity, and learn about important ZuruSasa policies.
             </Text>
 
@@ -458,11 +462,11 @@ export default function NotificationsScreen() {
               }
             />
 
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
 
             {/* Section 2: Reminders */}
-            <Text style={styles.sectionHeader}>Reminders</Text>
-            <Text style={styles.sectionSubtitle}>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>Reminders</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               Get important reminders about your reservations, listings, and account activity.
             </Text>
 
@@ -502,7 +506,7 @@ export default function NotificationsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setActiveItem(null)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.card, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
           {/* Modal Header */}
           <View style={styles.modalHeader}>
             <Pressable
@@ -510,7 +514,7 @@ export default function NotificationsScreen() {
               style={styles.closeBtn}
               hitSlop={10}
             >
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
             <View style={{ width: 36 }} />
           </View>
@@ -521,57 +525,57 @@ export default function NotificationsScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Title & Description */}
-            <Text style={styles.modalTitle}>{activeItem?.title}</Text>
-            <Text style={styles.modalDescription}>{activeItem?.description}</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{activeItem?.title}</Text>
+            <Text style={[styles.modalDescription, { color: colors.mutedForeground }]}>{activeItem?.description}</Text>
 
             {/* Channel 1: Email */}
-            <View style={styles.channelRow}>
-              <Text style={styles.channelLabel}>Email</Text>
+            <View style={[styles.channelRow, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.channelLabel, { color: colors.text }]}>Email</Text>
               <Switch
                 value={currentActivePrefs.email}
                 onValueChange={(val) => {
                   if (activeItem) updateChannelPref(activeItem.id, 'email', val);
                 }}
-                trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: colors.text }}
                 thumbColor="#FFFFFF"
               />
             </View>
 
             {/* Channel 2: Push notifications */}
-            <View style={styles.channelRow}>
-              <Text style={styles.channelLabel}>Push notifications</Text>
+            <View style={[styles.channelRow, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.channelLabel, { color: colors.text }]}>Push notifications</Text>
               <Switch
                 value={currentActivePrefs.push}
                 onValueChange={(val) => {
                   if (activeItem) updateChannelPref(activeItem.id, 'push', val);
                 }}
-                trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: colors.text }}
                 thumbColor="#FFFFFF"
               />
             </View>
 
             {/* Channel 3: SMS */}
-            <View style={styles.channelRow}>
-              <Text style={styles.channelLabel}>SMS</Text>
+            <View style={[styles.channelRow, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.channelLabel, { color: colors.text }]}>SMS</Text>
               <Switch
                 value={currentActivePrefs.sms}
                 onValueChange={(val) => {
                   if (activeItem) updateChannelPref(activeItem.id, 'sms', val);
                 }}
-                trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: colors.text }}
                 thumbColor="#FFFFFF"
               />
             </View>
 
             {/* Channel 4: Phone calls */}
-            <View style={styles.channelRow}>
-              <Text style={styles.channelLabel}>Phone calls</Text>
+            <View style={[styles.channelRow, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.channelLabel, { color: colors.text }]}>Phone calls</Text>
               <Switch
                 value={currentActivePrefs.phone_calls}
                 onValueChange={(val) => {
                   if (activeItem) updateChannelPref(activeItem.id, 'phone_calls', val);
                 }}
-                trackColor={{ false: '#E2E8F0', true: '#111111' }}
+                trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: colors.text }}
                 thumbColor="#FFFFFF"
               />
             </View>
@@ -592,14 +596,15 @@ function NotificationRow({
   summary: string;
   onEdit: () => void;
 }) {
+  const colors = useColors();
   return (
-    <View style={styles.notificationRow}>
+    <View style={[styles.notificationRow, { borderBottomColor: colors.border }]}>
       <View style={styles.rowLeft}>
-        <Text style={styles.itemTitle}>{title}</Text>
-        <Text style={styles.itemSummary}>{summary}</Text>
+        <Text style={[styles.itemTitle, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.itemSummary, { color: colors.mutedForeground }]}>{summary}</Text>
       </View>
       <Pressable onPress={onEdit} hitSlop={8}>
-        <Text style={styles.editActionText}>Edit</Text>
+        <Text style={[styles.editActionText, { color: colors.text }]}>Edit</Text>
       </Pressable>
     </View>
   );
@@ -608,7 +613,6 @@ function NotificationRow({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 24,
@@ -741,7 +745,6 @@ const styles = StyleSheet.create({
   /* Bottom Sheet Modal Styles */
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     paddingHorizontal: 20,

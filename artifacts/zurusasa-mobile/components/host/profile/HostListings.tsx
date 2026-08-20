@@ -9,6 +9,7 @@ import {
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useColors, useTheme } from '@/hooks/useColors';
 import type { ExperienceRow } from '@/lib/supabase';
 
 interface HostListingsProps {
@@ -17,16 +18,18 @@ interface HostListingsProps {
 }
 
 export function HostListings({ hostName, listings }: HostListingsProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const router = useRouter();
 
   if (!listings || listings.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.sectionHeading}>{hostName.split(' ')[0]}'s Listings</Text>
-        <View style={styles.emptyCard}>
-          <Feather name="home" size={24} color="#9CA3AF" />
-          <Text style={styles.emptyTitle}>No active listings yet</Text>
-          <Text style={styles.emptySub}>Check back soon for new experiences and stays from {hostName.split(' ')[0]}.</Text>
+        <Text style={[styles.sectionHeading, { color: colors.text }]}>{hostName.split(' ')[0]}'s Listings</Text>
+        <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Feather name="home" size={24} color={colors.mutedForeground} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No active listings yet</Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>Check back soon for new experiences and stays from {hostName.split(' ')[0]}.</Text>
         </View>
       </View>
     );
@@ -35,7 +38,7 @@ export function HostListings({ hostName, listings }: HostListingsProps) {
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.sectionHeading}>
+        <Text style={[styles.sectionHeading, { color: colors.text }]}>
           {hostName.split(' ')[0]}'s Listings ({listings.length})
         </Text>
       </View>
@@ -59,7 +62,7 @@ export function HostListings({ hostName, listings }: HostListingsProps) {
               onPress={() => router.push('/discover')}
               style={({ pressed }) => [
                 styles.listingCard,
-                { opacity: pressed ? 0.92 : 1 },
+                { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.92 : 1 },
               ]}
             >
               <Image
@@ -71,21 +74,21 @@ export function HostListings({ hostName, listings }: HostListingsProps) {
 
               <View style={styles.cardInfo}>
                 <View style={styles.titleRow}>
-                  <Text style={styles.itemTitle} numberOfLines={1}>
+                  <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
                     {item.title || 'Coastal Stay'}
                   </Text>
                   <View style={styles.ratingRow}>
                     <Ionicons name="star" size={12} color="#F26522" />
-                    <Text style={styles.ratingText}>4.9</Text>
+                    <Text style={[styles.ratingText, { color: colors.text }]}>4.9</Text>
                   </View>
                 </View>
 
-                <Text style={styles.locationText} numberOfLines={1}>
+                <Text style={[styles.locationText, { color: colors.mutedForeground }]} numberOfLines={1}>
                   {item.location || 'Mombasa'} · {item.category || 'Experience'}
                 </Text>
 
-                <Text style={styles.priceText}>
-                  {priceText} <Text style={styles.priceUnit}>/ night</Text>
+                <Text style={[styles.priceText, { color: colors.text }]}>
+                  {priceText} <Text style={[styles.priceUnit, { color: colors.mutedForeground }]}>/ night</Text>
                 </Text>
               </View>
             </Pressable>

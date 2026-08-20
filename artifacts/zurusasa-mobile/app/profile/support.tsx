@@ -15,6 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase } from '@/lib/supabase';
 
@@ -49,6 +51,8 @@ const FAQ_LIST: FAQItem[] = [
 ];
 
 export default function GetHelpScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -304,7 +308,7 @@ export default function GetHelpScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── HEADER ───────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topPad }]}>
         <Pressable
@@ -316,7 +320,7 @@ export default function GetHelpScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnActive]}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={22} color="#111111" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -326,7 +330,7 @@ export default function GetHelpScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
       >
         {/* Title */}
-        <Text style={styles.pageTitle}>Get help</Text>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>Get help</Text>
 
         {/* List Rows */}
         <View style={styles.listBlock}>
@@ -335,22 +339,26 @@ export default function GetHelpScreen() {
               key={item.id}
               testID={`help-item-${item.id}`}
               onPress={() => setActiveSheet(item.id)}
-              style={({ pressed }) => [styles.rowItem, pressed && styles.rowItemPressed]}
+              style={({ pressed }) => [
+                styles.rowItem,
+                { borderBottomColor: colors.border },
+                pressed && styles.rowItemPressed,
+              ]}
             >
               {/* Left Icon */}
               <View style={styles.iconWrapper}>
                 {item.iconType === 'feather' ? (
-                  <Feather name={item.iconName as any} size={22} color="#1E1E1E" />
+                  <Feather name={item.iconName as any} size={22} color={colors.text} />
                 ) : (
-                  <Ionicons name={item.iconName as any} size={22} color="#1E1E1E" />
+                  <Ionicons name={item.iconName as any} size={22} color={colors.text} />
                 )}
               </View>
 
               {/* Title */}
-              <Text style={styles.rowTitle}>{item.title}</Text>
+              <Text style={[styles.rowTitle, { color: colors.text }]}>{item.title}</Text>
 
               {/* Right Chevron */}
-              <Feather name="chevron-right" size={20} color="#717171" style={styles.chevron} />
+              <Feather name="chevron-right" size={20} color={colors.mutedForeground} style={styles.chevron} />
             </Pressable>
           ))}
         </View>
@@ -363,16 +371,16 @@ export default function GetHelpScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setActiveSheet(null)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Pressable
               onPress={() => setActiveSheet(null)}
-              style={({ pressed }) => [styles.modalCloseBtn, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.modalCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }, pressed && { opacity: 0.6 }]}
               hitSlop={10}
             >
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Help Centre</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Help Centre</Text>
             <View style={{ width: 36 }} />
           </View>
 
@@ -382,24 +390,24 @@ export default function GetHelpScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Search Bar */}
-            <View style={styles.searchBox}>
-              <Feather name="search" size={18} color="#717171" style={{ marginRight: 10 }} />
+            <View style={[styles.searchBox, { backgroundColor: isDark ? '#27272A' : '#F7F7F7', borderColor: colors.border }]}>
+              <Feather name="search" size={18} color={colors.mutedForeground} style={{ marginRight: 10 }} />
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 placeholder="Search topics, bookings, M-Pesa..."
-                placeholderTextColor="#9E9E9E"
-                style={styles.searchInput}
+                placeholderTextColor={colors.mutedForeground}
+                style={[styles.searchInput, { color: colors.text }]}
               />
               {searchQuery.length > 0 && (
                 <Pressable onPress={() => setSearchQuery('')}>
-                  <Feather name="x-circle" size={16} color="#9E9E9E" />
+                  <Feather name="x-circle" size={16} color={colors.mutedForeground} />
                 </Pressable>
               )}
             </View>
 
             {/* Quick Actions */}
-            <Text style={styles.sectionHeading}>Frequently Asked Questions</Text>
+            <Text style={[styles.sectionHeading, { color: colors.text }]}>Frequently Asked Questions</Text>
             <View style={styles.faqList}>
               {filteredFaqs.map((faq, idx) => {
                 const isExp = expandedFaq === idx;
@@ -407,17 +415,17 @@ export default function GetHelpScreen() {
                   <Pressable
                     key={idx}
                     onPress={() => setExpandedFaq(isExp ? null : idx)}
-                    style={styles.faqCard}
+                    style={[styles.faqCard, { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border }]}
                   >
                     <View style={styles.faqHeaderRow}>
-                      <Text style={styles.faqQuestion}>{faq.q}</Text>
+                      <Text style={[styles.faqQuestion, { color: colors.text }]}>{faq.q}</Text>
                       <Feather
                         name={isExp ? 'chevron-up' : 'chevron-down'}
                         size={18}
-                        color="#717171"
+                        color={colors.mutedForeground}
                       />
                     </View>
-                    {isExp && <Text style={styles.faqAnswer}>{faq.a}</Text>}
+                    {isExp && <Text style={[styles.faqAnswer, { color: colors.mutedForeground }]}>{faq.a}</Text>}
                   </Pressable>
                 );
               })}
@@ -425,27 +433,27 @@ export default function GetHelpScreen() {
 
             {/* Contact Support Form */}
             <View style={styles.ticketSection}>
-              <Text style={styles.sectionHeading}>Send a message to Support</Text>
-              <Text style={styles.formSub}>Our team is available 7 days a week to help with your stays and excursions.</Text>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>Send a message to Support</Text>
+              <Text style={[styles.formSub, { color: colors.mutedForeground }]}>Our team is available 7 days a week to help with your stays and excursions.</Text>
 
-              <Text style={styles.fieldLabel}>Subject</Text>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>Subject</Text>
               <TextInput
                 value={ticketSubject}
                 onChangeText={setTicketSubject}
                 placeholder="e.g. Question about Diani villa check-in"
-                placeholderTextColor="#9E9E9E"
-                style={styles.inputField}
+                placeholderTextColor={colors.mutedForeground}
+                style={[styles.inputField, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
               />
 
-              <Text style={styles.fieldLabel}>Message</Text>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>Message</Text>
               <TextInput
                 value={ticketMessage}
                 onChangeText={setTicketMessage}
                 placeholder="Please describe how we can assist you..."
-                placeholderTextColor="#9E9E9E"
+                placeholderTextColor={colors.mutedForeground}
                 multiline
                 numberOfLines={4}
-                style={[styles.inputField, styles.textArea]}
+                style={[styles.inputField, styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
               />
 
               <Pressable
@@ -475,16 +483,16 @@ export default function GetHelpScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setActiveSheet(null)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Pressable
               onPress={() => setActiveSheet(null)}
-              style={({ pressed }) => [styles.modalCloseBtn, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.modalCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }, pressed && { opacity: 0.6 }]}
               hitSlop={10}
             >
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Safety & Emergency</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Safety & Emergency</Text>
             <View style={{ width: 36 }} />
           </View>
 
@@ -513,20 +521,20 @@ export default function GetHelpScreen() {
             </View>
 
             {/* Safety Dispatch Form */}
-            <Text style={styles.sectionHeading}>Report a safety incident to ZuruSasa</Text>
-            <Text style={styles.formSub}>
+            <Text style={[styles.sectionHeading, { color: colors.text }]}>Report a safety incident to ZuruSasa</Text>
+            <Text style={[styles.formSub, { color: colors.mutedForeground }]}>
               Our dedicated 24/7 Trust & Safety team prioritizes incident reports and will contact you immediately.
             </Text>
 
-            <Text style={styles.fieldLabel}>Describe the situation</Text>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Describe the situation</Text>
             <TextInput
               value={safetyMessage}
               onChangeText={setSafetyMessage}
               placeholder="Provide listing name, current location, and incident details..."
-              placeholderTextColor="#9E9E9E"
+              placeholderTextColor={colors.mutedForeground}
               multiline
               numberOfLines={5}
-              style={[styles.inputField, styles.textArea]}
+              style={[styles.inputField, styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
             />
 
             <Pressable
@@ -555,16 +563,16 @@ export default function GetHelpScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setActiveSheet(null)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Pressable
               onPress={() => setActiveSheet(null)}
-              style={({ pressed }) => [styles.modalCloseBtn, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.modalCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }, pressed && { opacity: 0.6 }]}
               hitSlop={10}
             >
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Neighbourhood concern</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Neighbourhood concern</Text>
             <View style={{ width: 36 }} />
           </View>
 
@@ -573,23 +581,23 @@ export default function GetHelpScreen() {
             contentContainerStyle={[styles.modalScrollContent, { paddingBottom: insets.bottom + 40 }]}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.docHeadline}>Report a neighbourhood concern</Text>
-            <Text style={styles.formSub}>
+            <Text style={[styles.docHeadline, { color: colors.text }]}>Report a neighbourhood concern</Text>
+            <Text style={[styles.formSub, { color: colors.mutedForeground }]}>
               We are committed to preserving peaceful coastal communities in Diani, Mombasa, Watamu, Kilifi, and Lamu. If a ZuruSasa listing is causing issues in your area, please let us know.
             </Text>
 
             {/* Location */}
-            <Text style={styles.fieldLabel}>Listing location or address</Text>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Listing location or address</Text>
             <TextInput
               value={listingAddress}
               onChangeText={setListingAddress}
               placeholder="e.g. Beach Road, Diani Beach, Villa #4"
-              placeholderTextColor="#9E9E9E"
-              style={styles.inputField}
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.inputField, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
             />
 
             {/* Concern Category */}
-            <Text style={styles.fieldLabel}>What is the concern?</Text>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>What is the concern?</Text>
             <View style={styles.categoryPills}>
               {[
                 { key: 'noise', label: '🔊 Noise / Party' },
@@ -602,12 +610,14 @@ export default function GetHelpScreen() {
                   onPress={() => setConcernType(c.key)}
                   style={[
                     styles.catPill,
+                    { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border },
                     concernType === c.key && styles.catPillActive,
                   ]}
                 >
                   <Text
                     style={[
                       styles.catPillText,
+                      { color: colors.text },
                       concernType === c.key && styles.catPillTextActive,
                     ]}
                   >
@@ -618,15 +628,15 @@ export default function GetHelpScreen() {
             </View>
 
             {/* Details */}
-            <Text style={styles.fieldLabel}>Details</Text>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Details</Text>
             <TextInput
               value={concernDesc}
               onChangeText={setConcernDesc}
               placeholder="Please provide specifics (time of disturbance, ongoing behavior, etc.)..."
-              placeholderTextColor="#9E9E9E"
+              placeholderTextColor={colors.mutedForeground}
               multiline
               numberOfLines={4}
-              style={[styles.inputField, styles.textArea]}
+              style={[styles.inputField, styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
             />
 
             {/* Anonymous toggle */}
@@ -637,10 +647,10 @@ export default function GetHelpScreen() {
               <Feather
                 name={isAnonymous ? 'check-square' : 'square'}
                 size={20}
-                color={isAnonymous ? '#000000' : '#888888'}
+                color={isAnonymous ? '#F26522' : colors.mutedForeground}
                 style={{ marginRight: 10 }}
               />
-              <Text style={styles.anonymousText}>Submit anonymously (keep my contact private from host)</Text>
+              <Text style={[styles.anonymousText, { color: colors.text }]}>Submit anonymously (keep my contact private from host)</Text>
             </Pressable>
 
             <Pressable
@@ -669,16 +679,16 @@ export default function GetHelpScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setActiveSheet(null)}
       >
-        <View style={[styles.modalContainer, { paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
             <Pressable
               onPress={() => setActiveSheet(null)}
-              style={({ pressed }) => [styles.modalCloseBtn, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.modalCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }, pressed && { opacity: 0.6 }]}
               hitSlop={10}
             >
-              <Feather name="x" size={22} color="#111111" />
+              <Feather name="x" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalHeaderTitle}>Give us feedback</Text>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Give us feedback</Text>
             <View style={{ width: 36 }} />
           </View>
 
@@ -687,27 +697,27 @@ export default function GetHelpScreen() {
             contentContainerStyle={[styles.modalScrollContent, { paddingBottom: insets.bottom + 40 }]}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.docHeadline}>Help us improve ZuruSasa</Text>
-            <Text style={styles.formSub}>
+            <Text style={[styles.docHeadline, { color: colors.text }]}>Help us improve ZuruSasa</Text>
+            <Text style={[styles.formSub, { color: colors.mutedForeground }]}>
               We read every piece of feedback to build a better coastal travel experience for everyone.
             </Text>
 
             {/* Star Rating */}
-            <Text style={styles.fieldLabel}>How has your experience been?</Text>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>How has your experience been?</Text>
             <View style={styles.starRow}>
               {[1, 2, 3, 4, 5].map((star) => (
                 <Pressable key={star} onPress={() => setRating(star)} style={{ padding: 6 }}>
                   <Ionicons
                     name={star <= rating ? 'star' : 'star-outline'}
                     size={32}
-                    color={star <= rating ? '#FFB800' : '#CBD5E1'}
+                    color={star <= rating ? '#FFB800' : colors.mutedForeground}
                   />
                 </Pressable>
               ))}
             </View>
 
             {/* Category Selector */}
-            <Text style={styles.fieldLabel}>Category</Text>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Category</Text>
             <View style={styles.categoryPills}>
               {['App Experience', 'Booking & M-Pesa', 'Reels & Discovery', 'Host Features', 'Other'].map((cat) => (
                 <Pressable
@@ -715,12 +725,14 @@ export default function GetHelpScreen() {
                   onPress={() => setFeedbackCategory(cat)}
                   style={[
                     styles.catPill,
+                    { backgroundColor: isDark ? '#27272A' : '#F9FAFB', borderColor: colors.border },
                     feedbackCategory === cat && styles.catPillActive,
                   ]}
                 >
                   <Text
                     style={[
                       styles.catPillText,
+                      { color: colors.text },
                       feedbackCategory === cat && styles.catPillTextActive,
                     ]}
                   >
@@ -731,15 +743,15 @@ export default function GetHelpScreen() {
             </View>
 
             {/* Feedback text */}
-            <Text style={styles.fieldLabel}>What can we do better?</Text>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>What can we do better?</Text>
             <TextInput
               value={feedbackText}
               onChangeText={setFeedbackText}
               placeholder="Tell us what you loved or what gave you trouble..."
-              placeholderTextColor="#9E9E9E"
+              placeholderTextColor={colors.mutedForeground}
               multiline
               numberOfLines={5}
-              style={[styles.inputField, styles.textArea]}
+              style={[styles.inputField, styles.textArea, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
             />
 
             <Pressable
@@ -754,7 +766,7 @@ export default function GetHelpScreen() {
               {submittingFeedback ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.primaryBtnText}>Send feedback</Text>
+                <Text style={styles.primaryBtnText}>Submit feedback</Text>
               )}
             </Pressable>
           </ScrollView>
@@ -767,7 +779,6 @@ export default function GetHelpScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 24,
@@ -838,7 +849,6 @@ const styles = StyleSheet.create({
   /* Modal Styles */
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',

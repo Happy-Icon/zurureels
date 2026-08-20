@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { useReviews } from '@/hooks/useReviews';
 import { RatingBreakdown } from '@/components/reviews/RatingBreakdown';
 import { ReviewCard } from '@/components/reviews/ReviewCard';
@@ -25,6 +27,8 @@ const SORT_OPTIONS = [
 ] as const;
 
 export default function ReviewsScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { listingId, bookingId, hostId, title } = useLocalSearchParams<{
@@ -58,20 +62,20 @@ export default function ReviewsScreen() {
   };
 
   return (
-    <View style={[styles.fill, { backgroundColor: '#FFFFFF' }]}>
+    <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header Bar */}
-      <View style={[styles.header, { paddingTop: topPad }]}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border, paddingTop: topPad }]}>
         <Pressable
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
           hitSlop={10}
         >
-          <Feather name="arrow-left" size={22} color="#222222" />
+          <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
 
-        <Text style={styles.headerTitle} numberOfLines={1}>
+        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
           Reviews & Ratings
         </Text>
 

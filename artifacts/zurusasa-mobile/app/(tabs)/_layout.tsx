@@ -25,6 +25,7 @@ const INACTIVE_COLOR = '#717171';
  */
 function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
   const { user, viewMode } = useAuth();
   const isHostMode = viewMode === 'host';
   const bottomPad = Platform.OS === 'web' ? 10 : Math.max(insets.bottom, 6);
@@ -44,9 +45,9 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
     ? ['index', 'listings', 'reservations', 'inbox', 'profile']
     : ['index', 'discover', 'saved', 'inbox', 'profile'];
 
-  const inactiveColor = INACTIVE_COLOR;
-  const barBg = '#FFFFFF';
-  const borderTopColor = '#E2E8F0';
+  const inactiveColor = colors.mutedForeground;
+  const barBg = colors.card;
+  const borderTopColor = colors.border;
 
   return (
     <View
@@ -148,6 +149,7 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: ACTIVE_COLOR,
         tabBarInactiveTintColor: INACTIVE_COLOR,
+        sceneStyle: { backgroundColor: colors.background },
       }}
     >
       <Tabs.Screen

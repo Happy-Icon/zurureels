@@ -14,6 +14,8 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { useReels } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
 import type { ReelRow } from '@/lib/supabase';
@@ -37,6 +39,8 @@ function capitalizeWords(str?: string | null): string {
 }
 
 export default function HistoryScreen() {
+  const colors = useColors();
+  const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { showAlert } = useCustomAlert();
@@ -117,10 +121,14 @@ export default function HistoryScreen() {
     return (
       <Pressable
         onPress={() => router.push('/discover')}
-        style={({ pressed }) => [styles.historyCard, pressed && { opacity: 0.92 }]}
+        style={({ pressed }) => [
+          styles.historyCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          pressed && { opacity: 0.92 },
+        ]}
       >
         {/* Left Thumbnail with guaranteed fallback image */}
-        <View style={styles.thumbContainer}>
+        <View style={[styles.thumbContainer, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
           <Image
             source={imageSource}
             style={styles.thumbImage}
@@ -132,27 +140,27 @@ export default function HistoryScreen() {
         {/* Right Details */}
         <View style={styles.detailsContainer}>
           <View style={styles.topMetaRow}>
-            <Text style={styles.viewTimeText}>{viewTime}</Text>
-            <View style={styles.ratingBadge}>
-              <Ionicons name="star" size={12} color="#111111" />
-              <Text style={styles.ratingText}>
+            <Text style={[styles.viewTimeText, { color: colors.mutedForeground }]}>{viewTime}</Text>
+            <View style={[styles.ratingBadge, { backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}>
+              <Ionicons name="star" size={12} color="#F26522" />
+              <Text style={[styles.ratingText, { color: colors.text }]}>
                 {rating} ({reviewCount})
               </Text>
             </View>
           </View>
 
-          <Text style={styles.itemTitle} numberOfLines={1}>
+          <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
             {title}
           </Text>
 
-          <Text style={styles.itemLocation} numberOfLines={1}>
+          <Text style={[styles.itemLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
             {location}
           </Text>
 
           <View style={styles.bottomPriceRow}>
-            <Text style={styles.priceText}>
+            <Text style={[styles.priceText, { color: colors.text }]}>
               KES {price.toLocaleString()}{' '}
-              <Text style={styles.priceUnitText}>/ {priceUnit}</Text>
+              <Text style={[styles.priceUnitText, { color: colors.mutedForeground }]}>/ {priceUnit}</Text>
             </Text>
 
             {/* Remove single item button */}
@@ -161,7 +169,7 @@ export default function HistoryScreen() {
               style={styles.removeBtn}
               hitSlop={12}
             >
-              <Feather name="x" size={14} color="#717171" />
+              <Feather name="x" size={14} color={colors.mutedForeground} />
             </Pressable>
           </View>
         </View>
@@ -182,21 +190,21 @@ export default function HistoryScreen() {
           style={styles.circleBtn}
           hitSlop={12}
         >
-          <Feather name="arrow-left" size={24} color="#111111" />
+          <Feather name="arrow-left" size={24} color={colors.text} />
         </Pressable>
 
         {rawList.length > 0 && (
           <Pressable onPress={handleClearAll} style={styles.clearBtn} hitSlop={8}>
-            <Text style={styles.clearBtnText}>Clear all</Text>
+            <Text style={[styles.clearBtnText, { color: colors.text }]}>Clear all</Text>
           </Pressable>
         )}
       </View>
 
       {/* ── PAGE TITLE ───────────────────────────────────────────────────────── */}
       <View style={styles.titleWrap}>
-        <Text style={styles.pageTitle}>History</Text>
+        <Text style={[styles.pageTitle, { color: colors.text }]}>History</Text>
         {rawList.length > 0 && (
-          <Text style={styles.pageSubTitle}>Recently viewed stays and experiences</Text>
+          <Text style={[styles.pageSubTitle, { color: colors.mutedForeground }]}>Recently viewed stays and experiences</Text>
         )}
       </View>
 
@@ -217,13 +225,25 @@ export default function HistoryScreen() {
                 onPress={() => setFilter(chip.id)}
                 style={[
                   styles.segmentPill,
-                  isActive ? styles.segmentPillActive : styles.segmentPillInactive,
+                  {
+                    backgroundColor: isActive
+                      ? colors.text
+                      : isDark
+                      ? '#27272A'
+                      : '#F7F7F7',
+                    borderColor: colors.border,
+                  },
                 ]}
               >
                 <Text
                   style={[
                     styles.segmentPillText,
-                    isActive ? styles.segmentPillTextActive : styles.segmentPillTextInactive,
+                    {
+                      color: isActive
+                        ? colors.background
+                        : colors.mutedForeground,
+                      fontFamily: isActive ? 'DMSans_700Bold' : 'DMSans_500Medium',
+                    },
                   ]}
                   numberOfLines={1}
                 >
@@ -238,7 +258,7 @@ export default function HistoryScreen() {
   );
 
   return (
-    <View style={[styles.fill, { paddingTop: topPad }]}>
+    <View style={[styles.fill, { backgroundColor: colors.background, paddingTop: topPad }]}>
       {isLoading ? (
         <View style={{ paddingHorizontal: 20, gap: 16 }}>
           {renderHeader()}
@@ -285,7 +305,6 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   headerSection: {
     paddingHorizontal: 20,
@@ -373,7 +392,6 @@ const styles = StyleSheet.create({
   },
   historyCard: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#E5E7EB',
