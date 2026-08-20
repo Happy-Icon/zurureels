@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
@@ -48,6 +49,7 @@ export default function PersonalInfoScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, refreshProfile } = useAuth();
+  const { showAlert } = useCustomAlert();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -138,10 +140,18 @@ export default function PersonalInfoScreen() {
       });
 
       if (refreshProfile) await refreshProfile();
-      Alert.alert('Saved', 'Your personal information has been updated.');
+      showAlert({
+        title: 'Saved',
+        message: 'Your personal information has been updated.',
+        icon: 'check',
+      });
       setActiveEdit(null);
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not update profile information.');
+      showAlert({
+        title: 'Error',
+        message: err?.message || 'Could not update profile information.',
+        icon: 'alert-circle',
+      });
     } finally {
       setSaving(false);
     }
@@ -149,7 +159,10 @@ export default function PersonalInfoScreen() {
 
   const handleStartVerification = async () => {
     if (!user) {
-      Alert.alert('Sign In Required', 'Please sign in to verify your identity.');
+      showAlert({
+        title: 'Sign In Required',
+        message: 'Please sign in to verify your identity.',
+      });
       return;
     }
 
@@ -161,7 +174,11 @@ export default function PersonalInfoScreen() {
           setSaving(false);
           setIdentityStatus('Verified');
           if (refreshProfile) await refreshProfile();
-          Alert.alert('Identity Verified', 'Your official identity has been successfully verified with Persona.');
+          showAlert({
+            title: 'Identity Verified',
+            message: 'Your official identity has been successfully verified with Persona.',
+            icon: 'check-circle',
+          });
           setActiveEdit(null);
         },
         onCanceled: () => {
@@ -169,12 +186,20 @@ export default function PersonalInfoScreen() {
         },
         onError: (errorMessage) => {
           setSaving(false);
-          Alert.alert('Verification Notice', errorMessage);
+          showAlert({
+            title: 'Verification Notice',
+            message: errorMessage,
+            icon: 'alert-circle',
+          });
         },
       });
     } catch (err: any) {
       setSaving(false);
-      Alert.alert('Verification Error', err?.message || 'Could not start identity verification.');
+      showAlert({
+        title: 'Verification Error',
+        message: err?.message || 'Could not start identity verification.',
+        icon: 'alert-circle',
+      });
     }
   };
 
@@ -552,36 +577,156 @@ export default function PersonalInfoScreen() {
 
             {/* Identity verification */}
             {activeEdit === 'identity_verification' && (
-              <View>
-                <Text style={[styles.modalFieldTitle, { color: colors.text }]}>Government ID Verification</Text>
-                <Text style={[styles.modalFieldSub, { color: colors.mutedForeground }]}>
-                  Upload a photo of your Kenyan National ID or Passport to receive the Verified badge on ZuruSasa.
-                </Text>
-                <View style={[styles.idCardBox, { backgroundColor: isDark ? '#27272A' : '#F8FAFC', borderColor: colors.border }]}>
-                  <Feather name="shield" size={32} color={colors.text} style={{ marginBottom: 12 }} />
-                  <Text style={[styles.idCardTitle, { color: colors.text }]}>Status: {identityStatus}</Text>
-                  <Text style={[styles.idCardSub, { color: colors.mutedForeground }]}>
+              <View style={{ gap: 16 }}>
+                <View
+                  style={[
+                    styles.idCardBox,
+                    identityStatus === 'Verified'
+                      ? {
+                          backgroundColor: isDark ? '#064E3B20' : '#F0FDF4',
+                          borderColor: isDark ? '#05966940' : '#BBF7D0',
+                          padding: 24,
+                          borderRadius: 20,
+                        }
+                      : {
+                          backgroundColor: isDark ? '#27272A' : '#F8FAFC',
+                          borderColor: colors.border,
+                          padding: 20,
+                        },
+                  ]}
+                >
+                  <View
+                    style={{
+                      width: 60,
+                      height: 60,
+                      borderRadius: 30,
+                      backgroundColor: identityStatus === 'Verified' ? '#10B98120' : '#F2652218',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 14,
+                    }}
+                  >
+                    <Feather
+                      name={identityStatus === 'Verified' ? 'shield' : 'user-check'}
+                      size={30}
+                      color={identityStatus === 'Verified' ? '#10B981' : '#F26522'}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.idCardTitle,
+                      identityStatus === 'Verified'
+                        ? { color: isDark ? '#A7F3D0' : '#166534', fontSize: 18 }
+                        : { color: colors.text },
+                    ]}
+                  >
+                    {identityStatus === 'Verified' ? 'Identity Verified ✓' : 'Government ID Verification'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.idCardSub,
+                      identityStatus === 'Verified'
+                        ? { color: isDark ? '#A7F3D0' : '#166534' }
+                        : { color: colors.mutedForeground },
+                    ]}
+                  >
                     {identityStatus === 'Verified'
-                      ? 'Your identity is fully verified with ZuruSasa.'
-                      : 'Fast AI & manual verification completed within 2 hours.'}
+                      ? 'Your official Kenyan National ID / Passport and 3D facial liveness biometric checks have been securely verified with Persona.'
+                      : 'Government ID verification ensures safety and unlocks full host privileges and instant booking across ZuruSasa.'}
                   </Text>
                 </View>
+
+                {identityStatus === 'Verified' ? (
+                  <View
+                    style={{
+                      backgroundColor: isDark ? '#27272A' : '#F9FAFB',
+                      borderColor: colors.border,
+                      padding: 16,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      gap: 12,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Feather name="check-circle" size={16} color="#10B981" />
+                      <Text style={{ fontSize: 14, fontFamily: 'DMSans_500Medium', color: colors.text }}>
+                        Government Issued Photo ID Verified
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Feather name="check-circle" size={16} color="#10B981" />
+                      <Text style={{ fontSize: 14, fontFamily: 'DMSans_500Medium', color: colors.text }}>
+                        3D Biometric Facial Match Confirmed
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Feather name="check-circle" size={16} color="#10B981" />
+                      <Text style={{ fontSize: 14, fontFamily: 'DMSans_500Medium', color: colors.text }}>
+                        Protected via Persona Security Engine
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View
+                    style={{
+                      backgroundColor: isDark ? '#27272A' : '#F9FAFB',
+                      borderColor: colors.border,
+                      padding: 16,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      gap: 12,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Feather name="credit-card" size={16} color="#F26522" />
+                      <Text style={{ fontSize: 14, fontFamily: 'DMSans_500Medium', color: colors.text }}>
+                        1. Passport, National ID or Driver's License
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Feather name="camera" size={16} color="#F26522" />
+                      <Text style={{ fontSize: 14, fontFamily: 'DMSans_500Medium', color: colors.text }}>
+                        2. Quick 3D Selfie Check
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </View>
             )}
 
             {/* Save / Verify Action Button */}
             {activeEdit === 'identity_verification' ? (
               identityStatus === 'Verified' ? (
-                <Pressable
-                  onPress={() => setActiveEdit(null)}
-                  style={({ pressed }) => [
-                    styles.modalSaveBtn,
-                    { backgroundColor: '#F26522' },
-                    pressed && { opacity: 0.85 },
-                  ]}
-                >
-                  <Text style={styles.modalSaveBtnText}>Done</Text>
-                </Pressable>
+                <View style={{ gap: 10 }}>
+                  <Pressable
+                    onPress={() => setActiveEdit(null)}
+                    style={({ pressed }) => [
+                      styles.modalSaveBtn,
+                      { backgroundColor: '#F26522' },
+                      pressed && { opacity: 0.85 },
+                    ]}
+                  >
+                    <Text style={styles.modalSaveBtnText}>Done</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={handleStartVerification}
+                    disabled={saving}
+                    style={({ pressed }) => [
+                      styles.modalSaveBtn,
+                      {
+                        backgroundColor: 'transparent',
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      },
+                      pressed && { opacity: 0.85 },
+                    ]}
+                  >
+                    <Text style={[styles.modalSaveBtnText, { color: colors.text }]}>
+                      Re-verify Identity
+                    </Text>
+                  </Pressable>
+                </View>
               ) : (
                 <Pressable
                   onPress={handleStartVerification}

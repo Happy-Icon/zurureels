@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { personaVerificationService } from '@/services/personaVerificationService';
 import { useColors, useTheme } from '@/hooks/useColors';
 import * as Haptics from 'expo-haptics';
@@ -32,6 +33,7 @@ export function PersonaVerificationModal({
   const colors = useColors();
   const { isDark } = useTheme();
   const { user, refreshProfile } = useAuth();
+  const { showAlert } = useCustomAlert();
   const [verifying, setVerifying] = useState(false);
 
   const handleStartPersona = async () => {
@@ -46,6 +48,11 @@ export function PersonaVerificationModal({
           await refreshProfile();
           setVerifying(false);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showAlert({
+            title: 'Identity Verified',
+            message: 'Your official identity has been successfully verified with Persona.',
+            icon: 'check-circle',
+          });
           onSuccess?.();
           onClose();
         },
@@ -54,13 +61,21 @@ export function PersonaVerificationModal({
         },
         onError: (errorMessage) => {
           setVerifying(false);
-          Alert.alert('Identity Verification', errorMessage);
+          showAlert({
+            title: 'Verification Notice',
+            message: errorMessage,
+            icon: 'alert-circle',
+          });
         },
       });
     } catch (err: any) {
       console.error('Verification launch failed:', err);
       setVerifying(false);
-      Alert.alert('Verification Error', err?.message || 'Could not start identity verification.');
+      showAlert({
+        title: 'Verification Error',
+        message: err?.message || 'Could not start identity verification.',
+        icon: 'alert-circle',
+      });
     }
   };
 
