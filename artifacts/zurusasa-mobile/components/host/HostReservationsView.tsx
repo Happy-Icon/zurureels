@@ -528,6 +528,22 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
                         <Text style={styles.detailLabel}>Booking ID</Text>
                         <Text style={styles.detailValueCode}>{b.id.substring(0, 13)}...</Text>
                       </View>
+                      {(b.cancellation_policy_snapshot?.policy_type || b.cancellation_policy_snapshot?.type) ? (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Cancellation Policy</Text>
+                          <Text style={styles.detailValue}>
+                            {((b.cancellation_policy_snapshot.policy_type || b.cancellation_policy_snapshot.type)!).charAt(0).toUpperCase() + ((b.cancellation_policy_snapshot.policy_type || b.cancellation_policy_snapshot.type)!).slice(1)} (Locked)
+                          </Text>
+                        </View>
+                      ) : null}
+                      {b.house_rules_snapshot ? (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>House Rules</Text>
+                          <Text style={styles.detailValue}>
+                            {b.house_rules_snapshot.smoking_allowed ? 'Smoking OK' : 'No smoking'} · {b.house_rules_snapshot.pets_allowed ? 'Pets OK' : 'No pets'} · {b.house_rules_snapshot.parties_allowed ? 'Events OK' : 'No parties'}
+                          </Text>
+                        </View>
+                      ) : null}
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Net Host Payout</Text>
                         <Text style={[styles.detailValue, { color: '#16A34A', fontFamily: 'DMSans_700Bold' }]}>

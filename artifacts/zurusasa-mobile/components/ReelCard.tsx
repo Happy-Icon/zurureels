@@ -25,7 +25,6 @@ import {
   type ReelInteractions,
 } from '@/lib/queries';
 import { BookingSheet } from '@/components/BookingSheet';
-import { ReelInfoSheet } from '@/components/ReelInfoSheet';
 import { EnquireModal } from '@/components/EnquireModal';
 import type { ReelRow } from '@/lib/supabase';
 
@@ -73,7 +72,6 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
   const toggleFollow = useToggleFollow();
   const [booked, setBooked] = useState<boolean>(false);
   const [muted, setMuted] = useState<boolean>(globalMuted);
-  const [infoOpen, setInfoOpen] = useState<boolean>(false);
   const [enquireOpen, setEnquireOpen] = useState<boolean>(false);
   const [bookingOpen, setBookingOpen] = useState<boolean>(false);
 
@@ -98,7 +96,8 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
     isPlaying: player.playing,
   });
 
-  const shouldPlay = isActive && isScreenFocused && viewMode === 'guest';
+  const isAnyModalOpen = enquireOpen || bookingOpen;
+  const shouldPlay = isActive && isScreenFocused && viewMode === 'guest' && !isAnyModalOpen;
 
   useEffect(() => {
     if (!videoUrl) return;
@@ -134,7 +133,8 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
 
   const exp = reel.experience;
   const meta = (exp?.metadata ?? {}) as Record<string, unknown>;
-  const rating = Number((meta.rating as number | string | undefined) ?? 5.0);
+  const rawRating = (meta.rating as number | string | undefined);
+  const rating = rawRating != null && Number(rawRating) > 0 ? Number(rawRating) : null;
   const hostName = reel.host?.full_name ?? 'Zuru Host';
   const avatarUrl =
     (reel.host?.metadata as { avatar_url?: string } | null)?.avatar_url ?? null;
@@ -207,11 +207,13 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
       Alert.alert('This is your reel', 'You cannot enquire on your own listing.');
       return;
     }
+    player.pause();
     setEnquireOpen(true);
   };
 
   const onBook = () => {
     if (bookedOut || !exp?.id) return;
+    player.pause();
     setBookingOpen(true);
   };
 
@@ -362,7 +364,10 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         {/* Info Button */}
         <Pressable
           testID={`info-button-${reel.id}`}
-          onPress={() => setInfoOpen(true)}
+          onPress={() => {
+            player.pause();
+            setBookingOpen(true);
+          }}
           hitSlop={6}
           style={styles.railItem}
         >
@@ -390,41 +395,50 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
 
       {/* 4. Bottom Information Stack & 5. Action Dock */}
       <View style={[styles.bottomOverlay, { bottom: baseBottom }]}>
-        {/* Category Glass Pill */}
-        {reel.category ? (
-          <View style={styles.categoryGlassPill}>
-            <Text style={styles.categoryGlassText}>
-              {(reel.category ?? 'Reel').toUpperCase().replace(/_/g, ' ')}
+        <Pressable
+          testID={`listing-details-${reel.id}`}
+          onPress={() => {
+            player.pause();
+            setBookingOpen(true);
+          }}
+          style={{ gap: 4 }}
+        >
+          {/* Category Glass Pill */}
+          {reel.category ? (
+            <View style={styles.categoryGlassPill}>
+              <Text style={styles.categoryGlassText}>
+                {(reel.category ?? 'Reel').toUpperCase().replace(/_/g, ' ')}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Title & Rating Row */}
+          <View style={styles.titleRatingRow}>
+            <Text style={styles.titleText} numberOfLines={1}>
+              {exp?.title ?? 'Coastal Experience'}
+            </Text>
+            <View style={styles.ratingBadge}>
+              <Ionicons name="star" size={13} color="#FFD166" />
+              <Text style={styles.ratingText}>{rating != null ? rating.toFixed(1) : 'New'}</Text>
+            </View>
+          </View>
+
+          {/* Location Row */}
+          <View style={styles.locationRow}>
+            <Feather name="map-pin" size={12} color="rgba(255,255,255,0.85)" />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {exp?.location ?? 'Kenyan Coast'}
             </Text>
           </View>
-        ) : null}
 
-        {/* Title & Rating Row */}
-        <View style={styles.titleRatingRow}>
-          <Text style={styles.titleText} numberOfLines={1}>
-            {exp?.title ?? 'Coastal Experience'}
-          </Text>
-          <View style={styles.ratingBadge}>
-            <Ionicons name="star" size={13} color="#FFD166" />
-            <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
-          </View>
-        </View>
-
-        {/* Location Row */}
-        <View style={styles.locationRow}>
-          <Feather name="map-pin" size={12} color="rgba(255,255,255,0.85)" />
-          <Text style={styles.locationText} numberOfLines={1}>
-            {exp?.location ?? 'Kenyan Coast'}
-          </Text>
-        </View>
-
-        {/* Price Row */}
-        {priceAmount != null ? (
-          <Text style={styles.priceText}>
-            KES {Number(priceAmount).toLocaleString()}
-            <Text style={styles.priceUnitText}> / {priceUnit}</Text>
-          </Text>
-        ) : null}
+          {/* Price Row */}
+          {priceAmount != null ? (
+            <Text style={styles.priceText}>
+              KES {Number(priceAmount).toLocaleString()}
+              <Text style={styles.priceUnitText}> / {priceUnit}</Text>
+            </Text>
+          ) : null}
+        </Pressable>
 
         {/* Zuru AI Concierge Prompt Badge → opens new Zuru AI chat */}
         <Pressable
@@ -489,15 +503,10 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         </View>
       </View>
 
-      <ReelInfoSheet
-        reel={reel}
-        visible={infoOpen}
-        onClose={() => setInfoOpen(false)}
-      />
-
       <BookingSheet
         reel={reel}
         visible={bookingOpen}
+        initialStep="details"
         onClose={() => setBookingOpen(false)}
         onSuccess={() => setBooked(true)}
       />

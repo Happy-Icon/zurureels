@@ -81,6 +81,8 @@ Deno.serve(async (request) => {
   const eventId = data.id ? String(data.id) : null;
   const providerEventKey = `paystack_${eventType}_${eventId || providerReference || payloadSha256.slice(0, 16)}`;
 
+  let eventRecordId: string;
+
   // Store & deduplicate incoming event
   const { data: eventRecord, error: eventInsertError } = await admin
     .from('payment_events')
@@ -96,21 +98,42 @@ Deno.serve(async (request) => {
     .single();
 
   if (eventInsertError) {
-    // Unique violation means event was already received and processed
+    // Unique violation means event was already received
     if (eventInsertError.code === '23505') {
-      return json({ status: 'already_processed' }, 200);
-    }
-    console.error('Failed to log payment event:', eventInsertError);
-    return json({ error: 'Failed to record event' }, 500);
-  }
+      const { data: existingEvent } = await admin
+        .from('payment_events')
+        .select('id, processed_at, processing_error')
+        .eq('provider_event_key', providerEventKey)
+        .maybeSingle();
 
-  const eventRecordId = eventRecord.id;
+      // If it already succeeded and was processed without error, return already_processed (idempotent 200)
+      if (existingEvent?.processed_at && !existingEvent?.processing_error) {
+        return json({ status: 'already_processed' }, 200);
+      }
+      if (existingEvent) {
+        eventRecordId = existingEvent.id;
+      } else {
+        return json({ status: 'already_processed' }, 200);
+      }
+    } else {
+      console.error('Failed to log payment event:', eventInsertError);
+      return json({ error: 'Failed to record event' }, 500);
+    }
+  } else {
+    eventRecordId = eventRecord.id;
+  }
 
   try {
     if (eventType === 'charge.success') {
       if (!providerReference) {
         throw new Error('charge.success event payload missing reference');
       }
+
+      console.log('[WEBHOOK_RECEIVED]', {
+        event: eventType,
+        reference: providerReference,
+        amount: data.amount,
+      });
 
       // Step 1: Query Paystack verification API for authoritative transaction state
       const verifyResponse = await fetch(
@@ -145,7 +168,7 @@ Deno.serve(async (request) => {
       // Step 2: Fetch corresponding payment attempt from database to verify amount
       const { data: attempt, error: attemptError } = await admin
         .from('payment_attempts')
-        .select('id, amount, currency, status')
+        .select('id, quote_id, amount, currency, status')
         .eq('provider_reference', providerReference)
         .single();
 
@@ -158,6 +181,12 @@ Deno.serve(async (request) => {
         throw new Error(`Amount mismatch: stored ${attempt.amount} minor units, verified ${verifiedAmount}`);
       }
 
+      console.log('[SETTLEMENT_START]', {
+        quoteId: attempt.quote_id,
+        attemptId: attempt.id,
+        reference: providerReference,
+      });
+
       // Step 3: Invoke atomic settlement RPC
       const { data: bookingId, error: settleError } = await admin.rpc('settle_paystack_success', {
         p_provider_reference: providerReference,
@@ -166,8 +195,22 @@ Deno.serve(async (request) => {
       });
 
       if (settleError) {
+        console.error('[SETTLEMENT_FAILURE]', {
+          error: settleError.message,
+          sqlState: settleError.code,
+          quoteId: attempt.quote_id,
+          attemptId: attempt.id,
+          reference: providerReference,
+        });
         throw new Error(`Settlement RPC failed: ${settleError.message}`);
       }
+
+      console.log('[SETTLEMENT_SUCCESS]', {
+        bookingId,
+        bookingStatus: 'paid_or_confirmed',
+        paymentAttemptStatus: 'succeeded',
+        quoteStatus: 'consumed',
+      });
 
       // Step 4: Dispatch in-app notifications to Guest & Host
       try {

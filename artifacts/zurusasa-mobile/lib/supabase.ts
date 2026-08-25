@@ -22,10 +22,59 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   },
 });
 
+// ---- Structured marketplace types ----
+
+export interface HouseRules {
+  smoking_allowed: boolean;
+  pets_allowed: boolean;
+  parties_allowed: boolean;
+  children_allowed: boolean;
+  additional_guests_allowed: boolean;
+  quiet_hours_start?: string | null;
+  quiet_hours_end?: string | null;
+  custom_rules?: string | null;
+}
+
+export interface ArrivalInstructions {
+  check_in_method: string;
+  directions?: string | null;
+  parking_info?: string | null;
+  wifi_ssid?: string | null;
+  wifi_password?: string | null;
+  access_instructions?: string | null;
+}
+
+export interface CheckoutInstructions {
+  key_return_instructions?: string | null;
+  trash_instructions?: string | null;
+  cleaning_expectations?: string | null;
+  custom_notes?: string | null;
+}
+
+export interface TermsSnapshot {
+  title: string;
+  category?: string | null;
+  location?: string | null;
+  host_name?: string | null;
+  check_in_time?: string | null;
+  check_out_time?: string | null;
+  booking_mode?: 'instant' | 'approval_required';
+  image_url?: string | null;
+}
+
+export interface CancellationPolicySnapshot {
+  policy_type: 'flexible' | 'moderate' | 'strict';
+  type?: 'flexible' | 'moderate' | 'strict';
+  free_cancellation_until?: string;
+  after_free_cancellation_refund_bps?: number;
+  policy_note?: string;
+}
+
 // ---- Shared row types (mirrors web app tables) ----
 
 export interface ExperienceRow {
   id: string;
+  user_id?: string;
   title: string | null;
   description: string | null;
   location: string | null;
@@ -34,6 +83,17 @@ export interface ExperienceRow {
   entity_name: string | null;
   category: string | null;
   availability_status: string | null;
+  max_guests?: number | null;
+  min_stay_nights?: number | null;
+  max_stay_nights?: number | null;
+  check_in_time?: string | null;
+  check_out_time?: string | null;
+  booking_mode?: 'instant' | 'approval_required' | null;
+  cancellation_policy?: 'flexible' | 'moderate' | 'strict' | null;
+  house_rules?: HouseRules | null;
+  arrival_instructions?: ArrivalInstructions | null;
+  checkout_instructions?: CheckoutInstructions | null;
+  amenities?: string[] | null;
   metadata: Record<string, unknown> | null;
   image_url?: string | null;
 }
@@ -45,8 +105,11 @@ export interface ProfileRow {
   phone: string | null;
   role: string | null;
   verification_status: string | null;
+  is_verified?: boolean;
   metadata: Record<string, unknown> | null;
   avatar_url?: string | null;
+  created_at?: string | null;
+  bio?: string | null;
 }
 
 export interface HostReviewRow {
@@ -130,12 +193,23 @@ export interface ReelRow {
     | 'current_price'
     | 'price_unit'
     | 'availability_status'
+    | 'max_guests'
+    | 'min_stay_nights'
+    | 'max_stay_nights'
+    | 'check_in_time'
+    | 'check_out_time'
+    | 'booking_mode'
+    | 'cancellation_policy'
+    | 'house_rules'
+    | 'arrival_instructions'
+    | 'checkout_instructions'
+    | 'amenities'
     | 'metadata'
     | 'image_url'
   > | null;
   host?: Pick<
     ProfileRow,
-    'full_name' | 'verification_status' | 'metadata'
+    'id' | 'full_name' | 'verification_status' | 'is_verified' | 'metadata' | 'created_at' | 'bio' | 'role'
   > | null;
 }
 
@@ -144,6 +218,8 @@ export interface BookingRow {
   user_id: string | null;
   experience_id: string | null;
   reel_id: string | null;
+  quote_id?: string | null;
+  payment_attempt_id?: string | null;
   trip_title?: string | null;
   amount: number | null;
   status: string | null;
@@ -151,9 +227,30 @@ export interface BookingRow {
   check_out: string | null;
   guests: number | null;
   created_at?: string | null;
+  terms_snapshot?: TermsSnapshot | null;
+  house_rules_snapshot?: HouseRules | null;
+  cancellation_policy_snapshot?: CancellationPolicySnapshot | null;
+  arrival_snapshot?: ArrivalInstructions | null;
+  checkout_snapshot?: CheckoutInstructions | null;
+  terms_acknowledged_at?: string | null;
   experience?: Pick<
     ExperienceRow,
-    'id' | 'title' | 'location' | 'current_price' | 'price_unit' | 'image_url' | 'entity_name' | 'metadata'
+    | 'id'
+    | 'title'
+    | 'location'
+    | 'current_price'
+    | 'price_unit'
+    | 'image_url'
+    | 'entity_name'
+    | 'max_guests'
+    | 'check_in_time'
+    | 'check_out_time'
+    | 'cancellation_policy'
+    | 'house_rules'
+    | 'arrival_instructions'
+    | 'checkout_instructions'
+    | 'amenities'
+    | 'metadata'
   > | null;
   guest?: ProfileRow | null;
   host?: ProfileRow | null;

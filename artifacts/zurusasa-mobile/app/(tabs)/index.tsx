@@ -18,7 +18,8 @@ import { useAuth } from '@/context/AuthContext';
 import { HostDashboard } from '@/components/host/HostDashboard';
 import { ReelCard } from '@/components/ReelCard';
 import { useIsFocused } from '@react-navigation/native';
-import { CenteredState, Skeleton } from '@/components/Skeleton';
+import { CenteredState } from '@/components/Skeleton';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import { useReels, useBatchReelInteractions } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
 
@@ -118,16 +119,8 @@ function ZuruFlowFeed() {
 
   if (isLoading) {
     return (
-      <View style={[styles.fill, { backgroundColor: '#000000', paddingTop: topInset + 60, paddingHorizontal: 20 }]}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 100, gap: 14 }}>
-          <Skeleton style={{ height: 28, width: 220, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.15)' }} />
-          <Skeleton style={{ height: 18, width: 140, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.12)' }} />
-          <Skeleton style={{ height: 22, width: 160, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.15)' }} />
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-            <Skeleton style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-            <Skeleton style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)' }} />
-          </View>
-        </View>
+      <View style={[styles.fill, { backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }]}>
+        <PremiumLoader color="#EE7D30" size={10} />
         {topOverlay}
       </View>
     );

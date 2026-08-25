@@ -4,7 +4,7 @@ import { notificationService } from '@/services/notificationService';
 export interface CreateReviewParams {
   bookingId: string;
   reviewerId: string;
-  revieweeId: string;
+  revieweeId?: string;
   listingId?: string | null;
   rating: number;
   cleanliness?: number;
@@ -34,141 +34,108 @@ export interface ReviewSummaryData {
 
 export const reviewService = {
   /**
-   * Fetch reviews for a specific listing or experience
+   * Fetch real reviews and summary from Supabase for a specific listing or experience
    */
   async fetchReviewsForListing(
     listingId: string,
     sortBy: 'recent' | 'highest' | 'lowest' | 'helpful' = 'recent',
   ): Promise<{ reviews: FullReviewRow[]; summary: ReviewSummaryData }> {
     try {
-      const { data, error } = await supabase
+      if (!listingId) {
+        return {
+          reviews: [],
+          summary: this.computeReviewSummary([]),
+        };
+      }
+
+      // 1. Fetch real summary from authoritative RPC
+      let summaryData: ReviewSummaryData | null = null;
+      try {
+        const { data: rpcSummary, error: summaryErr } = await supabase.rpc('get_listing_reviews_summary', {
+          p_listing_id: listingId,
+        });
+        if (!summaryErr && rpcSummary) {
+          summaryData = rpcSummary as ReviewSummaryData;
+        }
+      } catch (err) {
+        console.warn('Could not fetch review summary RPC, computing locally:', err);
+      }
+
+      // 2. Query reviews table
+      let query = supabase
         .from('reviews')
         .select('*')
-        .eq('listing_id', listingId);
+        .eq('listing_id', listingId)
+        .eq('is_host_review', false);
 
-      if (error && error.code !== 'PGRST116') {
-        console.warn('Error fetching reviews:', error);
+      if (sortBy === 'highest') {
+        query = query.order('rating', { ascending: false }).order('created_at', { ascending: false });
+      } else if (sortBy === 'lowest') {
+        query = query.order('rating', { ascending: true }).order('created_at', { ascending: false });
+      } else if (sortBy === 'helpful') {
+        query = query.order('helpful_count', { ascending: false }).order('created_at', { ascending: false });
+      } else {
+        query = query.order('created_at', { ascending: false });
       }
 
-      let reviewsList: FullReviewRow[] = (data as FullReviewRow[]) ?? [];
-
-      if (!data || data.length === 0) {
-        // High quality demonstration reviews if database table has 0 reviews for this listing
-        reviewsList = [
-          {
-            id: 'rev-l1',
-            booking_id: 'b-101',
-            reviewer_id: 'u-1',
-            reviewee_id: 'host-1',
-            listing_id: listingId,
-            rating: 5,
-            cleanliness: 5,
-            communication: 5,
-            accuracy: 5,
-            location: 5,
-            value: 5,
-            check_in: 5,
-            comment:
-              'Absolutely breathtaking experience! The sunset views from the terrace were unmatched. Sarah was extremely welcoming and made us feel right at home.',
-            photos: [
-              'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=600',
-              'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600',
-            ],
-            is_host_review: false,
-            helpful_count: 14,
-            created_at: new Date(Date.now() - 3600 * 1000 * 24 * 2).toISOString(),
-            reviewer: {
-              full_name: 'Amina Kimani',
-              avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
-              verification_status: 'verified',
-            },
-          },
-          {
-            id: 'rev-l2',
-            booking_id: 'b-102',
-            reviewer_id: 'u-2',
-            reviewee_id: 'host-1',
-            listing_id: listingId,
-            rating: 5,
-            cleanliness: 5,
-            communication: 5,
-            accuracy: 4,
-            location: 5,
-            value: 5,
-            check_in: 5,
-            comment:
-              'Five stars all around! Super clean, fast Wi-Fi, and right next to Diani Beach. Check-in was smooth and effortless.',
-            photos: [],
-            is_host_review: false,
-            helpful_count: 8,
-            created_at: new Date(Date.now() - 3600 * 1000 * 24 * 7).toISOString(),
-            reviewer: {
-              full_name: 'David Ochieng',
-              avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-              verification_status: 'verified',
-            },
-          },
-          {
-            id: 'rev-l3',
-            booking_id: 'b-103',
-            reviewer_id: 'u-3',
-            reviewee_id: 'host-1',
-            listing_id: listingId,
-            rating: 4,
-            cleanliness: 4,
-            communication: 5,
-            accuracy: 4,
-            location: 5,
-            value: 4,
-            check_in: 5,
-            comment:
-              'Great location and very responsive host. Had a minor issue with hot water which was fixed in 10 minutes.',
-            photos: [],
-            is_host_review: false,
-            helpful_count: 5,
-            created_at: new Date(Date.now() - 3600 * 1000 * 24 * 14).toISOString(),
-            reviewer: {
-              full_name: 'Elena Rostova',
-              avatar_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200',
-              verification_status: 'verified',
-            },
-          },
-        ];
+      const { data, error } = await query;
+      if (error) {
+        console.warn('Error querying reviews:', error);
+        return {
+          reviews: [],
+          summary: summaryData || this.computeReviewSummary([]),
+        };
       }
 
-      // Sort reviews based on filter
-      reviewsList.sort((a, b) => {
-        if (sortBy === 'highest') return b.rating - a.rating;
-        if (sortBy === 'lowest') return a.rating - b.rating;
-        if (sortBy === 'helpful') return (b.helpful_count || 0) - (a.helpful_count || 0);
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
+      const rawReviews = (data as FullReviewRow[]) ?? [];
+      if (rawReviews.length === 0) {
+        return {
+          reviews: [],
+          summary: summaryData || this.computeReviewSummary([]),
+        };
+      }
 
-      const summary = this.computeReviewSummary(reviewsList);
-      return { reviews: reviewsList, summary };
+      // 3. Fetch reviewer profiles to populate avatar, name, verification
+      const reviewerIds = Array.from(new Set(rawReviews.map((r) => r.reviewer_id).filter(Boolean)));
+      const reviewerMap = new Map<string, { full_name: string; avatar_url: string | null; verification_status: string | null }>();
+
+      if (reviewerIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url, verification_status')
+          .in('id', reviewerIds);
+
+        (profiles ?? []).forEach((p) => {
+          reviewerMap.set(p.id, {
+            full_name: p.full_name || 'Guest Traveler',
+            avatar_url: p.avatar_url || null,
+            verification_status: p.verification_status || null,
+          });
+        });
+      }
+
+      const reviewsList: FullReviewRow[] = rawReviews.map((r) => ({
+        ...r,
+        reviewer: reviewerMap.get(r.reviewer_id) || {
+          full_name: 'Guest Traveler',
+          avatar_url: null,
+          verification_status: null,
+        },
+      }));
+
+      const finalSummary = summaryData || this.computeReviewSummary(reviewsList);
+      return { reviews: reviewsList, summary: finalSummary };
     } catch (err) {
       console.warn('Error in fetchReviewsForListing:', err);
       return {
         reviews: [],
-        summary: {
-          averageRating: 5.0,
-          totalCount: 0,
-          ratingBreakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
-          categoryAverages: {
-            cleanliness: 5.0,
-            communication: 5.0,
-            accuracy: 5.0,
-            location: 5.0,
-            value: 5.0,
-            checkIn: 5.0,
-          },
-        },
+        summary: this.computeReviewSummary([]),
       };
     }
   },
 
   /**
-   * Calculate rating breakdown & category averages
+   * Calculate rating breakdown & category averages locally
    */
   computeReviewSummary(reviews: FullReviewRow[]): ReviewSummaryData {
     if (!reviews || reviews.length === 0) {
@@ -200,13 +167,13 @@ export const reviewService = {
     for (const r of reviews) {
       const star = Math.min(5, Math.max(1, Math.round(r.rating || 5)));
       breakdown[star as 1 | 2 | 3 | 4 | 5] = (breakdown[star as 1 | 2 | 3 | 4 | 5] || 0) + 1;
-      sumRating += r.rating || 5;
-      sumCleanliness += r.cleanliness || r.rating || 5;
-      sumCommunication += r.communication || r.rating || 5;
-      sumAccuracy += r.accuracy || r.rating || 5;
-      sumLocation += r.location || r.rating || 5;
-      sumValue += r.value || r.rating || 5;
-      sumCheckIn += r.check_in || r.rating || 5;
+      sumRating += Number(r.rating || 5);
+      sumCleanliness += Number(r.cleanliness || r.rating || 5);
+      sumCommunication += Number(r.communication || r.rating || 5);
+      sumAccuracy += Number(r.accuracy || r.rating || 5);
+      sumLocation += Number(r.location || r.rating || 5);
+      sumValue += Number(r.value || r.rating || 5);
+      sumCheckIn += Number(r.check_in || r.rating || 5);
     }
 
     return {
@@ -227,78 +194,79 @@ export const reviewService = {
   /**
    * Check if a user is eligible to review a booking
    */
-  async checkReviewEligibility(bookingId: string, userId: string): Promise<boolean> {
+  async checkReviewEligibility(bookingId: string, userId: string): Promise<{ eligible: boolean; reason?: string }> {
     try {
-      // 1. Booking must exist and be confirmed/paid/completed
-      const { data: booking } = await supabase
+      if (!bookingId || !userId) {
+        return { eligible: false, reason: 'Missing booking or user ID' };
+      }
+
+      // 1. Booking must exist and belong to user
+      const { data: booking, error: bErr } = await supabase
         .from('bookings')
-        .select('id, status')
+        .select('id, user_id, status, check_out')
         .eq('id', bookingId)
         .single();
 
-      if (!booking || (booking.status !== 'confirmed' && booking.status !== 'completed' && booking.status !== 'paid')) {
-        return false;
+      if (bErr || !booking) {
+        return { eligible: false, reason: 'Reservation not found' };
       }
 
-      // 2. Check if review already exists for this booking & user
+      if (booking.user_id !== userId) {
+        return { eligible: false, reason: 'You can only review your own trips' };
+      }
+
+      const s = (booking.status || '').toLowerCase();
+      const checkoutPassed = booking.check_out ? new Date(booking.check_out).getTime() <= Date.now() : false;
+
+      if (s === 'cancelled' || s === 'refunded') {
+        return { eligible: false, reason: 'Cancelled trips cannot be reviewed' };
+      }
+
+      if (s !== 'completed' && !(s === 'confirmed' && checkoutPassed)) {
+        return { eligible: false, reason: 'Reviews are available after your stay is completed' };
+      }
+
+      // 2. Check if review already exists
       const { data: existing } = await supabase
         .from('reviews')
         .select('id')
         .eq('booking_id', bookingId)
-        .eq('reviewer_id', userId)
+        .eq('is_host_review', false)
         .maybeSingle();
 
-      return !existing;
-    } catch (err) {
+      if (existing) {
+        return { eligible: false, reason: 'You have already submitted a review for this trip' };
+      }
+
+      return { eligible: true };
+    } catch (err: any) {
       console.warn('Error checking review eligibility:', err);
-      return true; // Allow submission gracefully
+      return { eligible: false, reason: err?.message || 'Could not verify eligibility' };
     }
   },
 
   /**
-   * Submit a new review in Supabase
+   * Submit a new review via the authoritative Security Definer RPC
    */
-  async createReview(params: CreateReviewParams): Promise<FullReviewRow | null> {
-    try {
-      const { data, error } = await supabase
-        .from('reviews')
-        .insert({
-          booking_id: params.bookingId,
-          reviewer_id: params.reviewerId,
-          reviewee_id: params.revieweeId,
-          listing_id: params.listingId ?? null,
-          rating: params.rating,
-          cleanliness: params.cleanliness ?? params.rating,
-          communication: params.communication ?? params.rating,
-          accuracy: params.accuracy ?? params.rating,
-          location: params.location ?? params.rating,
-          value: params.value ?? params.rating,
-          check_in: params.checkIn ?? params.rating,
-          comment: params.comment,
-          photos: params.photos ?? [],
-          is_host_review: params.isHostReview ?? false,
-          helpful_count: 0,
-        })
-        .select()
-        .single();
+  async createReview(params: CreateReviewParams): Promise<FullReviewRow> {
+    const { data, error } = await supabase.rpc('submit_booking_review', {
+      p_booking_id: params.bookingId,
+      p_rating: params.rating,
+      p_cleanliness: params.cleanliness ?? params.rating,
+      p_accuracy: params.accuracy ?? params.rating,
+      p_communication: params.communication ?? params.rating,
+      p_location: params.location ?? params.rating,
+      p_value: params.value ?? params.rating,
+      p_check_in: params.checkIn ?? params.rating,
+      p_comment: params.comment.trim(),
+      p_photos: params.photos ?? [],
+    });
 
-      if (error) throw error;
-
-      // Trigger automatic notification to reviewee
-      notificationService.createNotification({
-        userId: params.revieweeId,
-        type: 'review_reminder',
-        title: 'New Review Received! ⭐',
-        message: `You received a ${params.rating}-star review: "${params.comment.substring(0, 50)}..."`,
-        actionType: 'discover',
-        actionId: params.listingId ?? undefined,
-      });
-
-      return data as FullReviewRow;
-    } catch (err) {
-      console.warn('Error creating review:', err);
-      return null;
+    if (error) {
+      throw new Error(error.message);
     }
+
+    return data as FullReviewRow;
   },
 
   /**

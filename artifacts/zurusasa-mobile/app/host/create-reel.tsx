@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -23,7 +24,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { notificationService } from '@/services/notificationService';
-import { KeyboardScreen, GrowingInput } from '@/components/keyboard';
+import { GrowingInput } from '@/components/keyboard';
 import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { uploadToCloudinaryMobile, getCloudinaryVideoThumbnail } from '@/lib/cloudinaryUpload';
@@ -39,6 +40,39 @@ const CATEGORIES = [
 ];
 
 const LOCATIONS = ['Diani', 'Watamu', 'Lamu', 'Mombasa', 'Malindi', 'Kilifi'];
+
+const POPULAR_AMENITIES = [
+  'Fast Wi-Fi',
+  'Air Conditioning',
+  'Swimming Pool',
+  'Ocean View',
+  'Free Parking',
+  'Fully Equipped Kitchen',
+  'TV / Streaming',
+  'Hot Water',
+  '24/7 Security',
+  'Dedicated Workspace',
+  'Balcony / Terrace',
+  'Beach Access',
+];
+
+const CANCELLATION_POLICIES = [
+  {
+    id: 'flexible',
+    title: 'Flexible',
+    desc: 'Full refund up to 24 hours before check-in',
+  },
+  {
+    id: 'moderate',
+    title: 'Moderate',
+    desc: 'Full refund up to 5 days before check-in',
+  },
+  {
+    id: 'strict',
+    title: 'Strict',
+    desc: 'Full refund up to 7 days before check-in, 50% thereafter',
+  },
+] as const;
 
 function InlineVideoPreview({ uri, onChangeVideo }: { uri: string; onChangeVideo: () => void }) {
   const player = useVideoPlayer(uri, (p) => {
@@ -88,6 +122,7 @@ export default function CreateReelScreen() {
   const { showAlert } = useCustomAlert();
   const scrollViewRef = useRef<ScrollView>(null);
 
+  // 1. Basic Experience Info
   const [category, setCategory] = useState('stays');
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('Diani');
@@ -95,6 +130,45 @@ export default function CreateReelScreen() {
   const [priceUnit, setPriceUnit] = useState('night');
   const [description, setDescription] = useState('');
 
+  // 2. Capacity & Stay Settings
+  const [maxGuests, setMaxGuests] = useState('2');
+  const [minStayNights, setMinStayNights] = useState('1');
+  const [checkInTime, setCheckInTime] = useState('14:00');
+  const [checkOutTime, setCheckOutTime] = useState('10:00');
+  const [bookingMode, setBookingMode] = useState<'approval_required' | 'instant'>('approval_required');
+  const [cancellationPolicy, setCancellationPolicy] = useState<'flexible' | 'moderate' | 'strict'>('flexible');
+
+  // 3. Structured House Rules
+  const [smokingAllowed, setSmokingAllowed] = useState(false);
+  const [petsAllowed, setPetsAllowed] = useState(false);
+  const [partiesAllowed, setPartiesAllowed] = useState(false);
+  const [childrenAllowed, setChildrenAllowed] = useState(true);
+  const [additionalGuestsAllowed, setAdditionalGuestsAllowed] = useState(false);
+  const [quietHoursStart, setQuietHoursStart] = useState('22:00');
+  const [quietHoursEnd, setQuietHoursEnd] = useState('07:00');
+  const [customRules, setCustomRules] = useState('');
+
+  // 4. Arrival & Checkout Instructions (Revealed only upon confirmed booking)
+  const [checkInMethod, setCheckInMethod] = useState('Self check-in (Smart Lock)');
+  const [directions, setDirections] = useState('');
+  const [parkingInfo, setParkingInfo] = useState('');
+  const [wifiSsid, setWifiSsid] = useState('');
+  const [wifiPassword, setWifiPassword] = useState('');
+  const [accessInstructions, setAccessInstructions] = useState('');
+  const [keyReturnInstructions, setKeyReturnInstructions] = useState('Leave keys on dining table and lock door.');
+  const [trashInstructions, setTrashInstructions] = useState('Dispose trash in bins outside gate.');
+  const [cleaningExpectations, setCleaningExpectations] = useState('Please wash used cookware before departure.');
+
+  // 5. Amenities
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([
+    'Fast Wi-Fi',
+    'Air Conditioning',
+    'Swimming Pool',
+    'Ocean View',
+    'Free Parking',
+  ]);
+
+  // Media & Upload States
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -105,6 +179,12 @@ export default function CreateReelScreen() {
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 16;
+
+  const toggleAmenity = (name: string) => {
+    setSelectedAmenities((prev) =>
+      prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]
+    );
+  };
 
   const recordVideoLive = async () => {
     const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
@@ -221,32 +301,11 @@ export default function CreateReelScreen() {
     }
 
     setUploading(true);
-    setUploadProgress(20);
-    setUploadStatusText('Publishing Reel...');
+    setUploadProgress(15);
+    setUploadStatusText('Preparing media assets...');
 
     try {
-      // 1. Create Experience record
-      const numPrice = parseFloat(price);
-      const { data: exp, error: expError } = await supabase
-        .from('experiences')
-        .insert({
-          user_id: user.id,
-          category,
-          entity_name: user.user_metadata?.full_name || 'Local Experience',
-          title: title.trim(),
-          location: location.toLowerCase(),
-          current_price: numPrice,
-          price_unit: priceUnit,
-          description: description.trim(),
-        })
-        .select()
-        .single();
-
-      if (expError) throw expError;
-      setUploadProgress(40);
-      setUploadStatusText('Publishing Reel...');
-
-      // 2. Video & Thumbnail Upload to Cloudinary
+      // 1. Video & Thumbnail Upload to Cloudinary
       let finalVideoUrl =
         'https://assets.mixkit.co/videos/preview/mixkit-beach-front-resort-with-palm-trees-41484-large.mp4';
       let finalThumbUrl =
@@ -258,11 +317,11 @@ export default function CreateReelScreen() {
           finalThumbUrl = getCloudinaryVideoThumbnail(videoUri);
         } else {
           try {
-            setUploadStatusText('Publishing Reel...');
+            setUploadStatusText('Uploading high-res video...');
             const cRes = await uploadToCloudinaryMobile(videoUri, {
               resourceType: 'video',
               folder: 'reels',
-              onProgress: (percent) => setUploadProgress(40 + Math.round(percent * 0.4)),
+              onProgress: (percent) => setUploadProgress(15 + Math.round(percent * 0.5)),
             });
             finalVideoUrl = cRes.secure_url;
             finalThumbUrl = getCloudinaryVideoThumbnail(cRes.secure_url);
@@ -278,7 +337,7 @@ export default function CreateReelScreen() {
           finalThumbUrl = thumbnailUri;
         } else {
           try {
-            setUploadStatusText('Publishing Reel...');
+            setUploadStatusText('Uploading cover image...');
             const cThumbRes = await uploadToCloudinaryMobile(thumbnailUri, {
               resourceType: 'image',
               folder: 'reels',
@@ -290,10 +349,67 @@ export default function CreateReelScreen() {
         }
       }
 
-      setUploadProgress(85);
+      setUploadProgress(70);
+      setUploadStatusText('Saving listing details & rules...');
+
+      // 2. Create Experience record with structured rules & arrival instructions
+      const numPrice = parseFloat(price);
+      const parsedMaxGuests = Math.max(1, parseInt(maxGuests, 10) || 2);
+      const parsedMinStay = Math.max(1, parseInt(minStayNights, 10) || 1);
+
+      const { data: exp, error: expError } = await supabase
+        .from('experiences')
+        .insert({
+          user_id: user.id,
+          category,
+          entity_name: user.user_metadata?.full_name || 'Local Experience',
+          title: title.trim(),
+          location: location.toLowerCase(),
+          current_price: numPrice,
+          price_unit: priceUnit,
+          description: description.trim(),
+          max_guests: parsedMaxGuests,
+          min_stay_nights: parsedMinStay,
+          check_in_time: checkInTime.trim() || '14:00',
+          check_out_time: checkOutTime.trim() || '10:00',
+          booking_mode: bookingMode,
+          cancellation_policy: cancellationPolicy,
+          house_rules: {
+            smoking_allowed: smokingAllowed,
+            pets_allowed: petsAllowed,
+            parties_allowed: partiesAllowed,
+            children_allowed: childrenAllowed,
+            additional_guests_allowed: additionalGuestsAllowed,
+            quiet_hours_start: quietHoursStart.trim(),
+            quiet_hours_end: quietHoursEnd.trim(),
+            custom_rules: customRules.trim(),
+          },
+          arrival_instructions: {
+            check_in_method: checkInMethod.trim(),
+            directions: directions.trim(),
+            parking_info: parkingInfo.trim(),
+            wifi_ssid: wifiSsid.trim(),
+            wifi_password: wifiPassword.trim(),
+            access_instructions: accessInstructions.trim(),
+          },
+          checkout_instructions: {
+            key_return_instructions: keyReturnInstructions.trim(),
+            trash_instructions: trashInstructions.trim(),
+            cleaning_expectations: cleaningExpectations.trim(),
+            custom_notes: '',
+          },
+          amenities: selectedAmenities,
+          image_url: finalThumbUrl,
+        })
+        .select()
+        .single();
+
+      if (expError) throw expError;
+
+      setUploadProgress(90);
       setUploadStatusText('Publishing Reel...');
 
-      // 3. Create Reel Record (status: 'published' for Discover & Host Listings visibility)
+      // 3. Create Reel Record
       const { data: newReel, error: reelError } = await supabase
         .from('reels')
         .insert({
@@ -311,42 +427,34 @@ export default function CreateReelScreen() {
 
       if (reelError) throw reelError;
 
-      // Invalidate Redis reels feed cache via server-side Edge Function
+      // Invalidate Redis reels feed cache
       invalidateServerCache('invalidate_reels_feed').catch(() => null);
-
-      // 4. Create Event Record if category is 'events'
-      if (category === 'events') {
-        await supabase.from('events').insert({
-          user_id: user.id,
-          title: title.trim(),
-          description: description.trim(),
-          location: location.toLowerCase(),
-          price: numPrice,
-          category: 'events',
-          event_date: new Date().toISOString(),
-        });
-      }
 
       setUploadProgress(100);
 
-      // Trigger notification
-      await notificationService.createNotification({
+      // Notify host of successful listing creation
+      notificationService.createNotification({
         userId: user.id,
-        type: 'listing_approved',
-        title: '🎬 Your reel is live!',
-        message: `"${title.trim()}" is now live on Pulse & Discover!`,
+        type: 'booking_request',
+        title: 'Listing Published Successfully! 🌟',
+        message: `Your listing "${title}" is now live on ZuruSasa with instant booking & cancellation settings active.`,
         actionType: 'discover',
-        actionId: newReel?.id ?? null,
+        actionId: exp.id,
       });
 
       showAlert({
-        title: 'Processing your reel...',
-        message: 'Your reel is being formatted and will automatically publish to Pulse shortly. You will receive a notification when it is live.',
+        title: 'Listing & Reel Published! 🎉',
+        message: 'Your experience is now live and ready to receive bookings from guests across ZuruSasa.',
         icon: 'check-circle',
         buttons: [
           {
-            text: 'View My Listings',
-            onPress: () => router.replace('/listings'),
+            text: 'View Listings',
+            onPress: () => router.replace('/(tabs)/listings' as any),
+          },
+          {
+            text: 'Go to Feed',
+            style: 'cancel',
+            onPress: () => router.replace('/' as any),
           },
         ],
       });
@@ -379,7 +487,7 @@ export default function CreateReelScreen() {
           >
             <Feather name="arrow-left" size={22} color={colors.text} />
           </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Create Listing Reel</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Create Listing & Reel</Text>
           <View style={{ width: 38 }} />
         </View>
 
@@ -403,7 +511,6 @@ export default function CreateReelScreen() {
           <View style={styles.sectionBlock}>
             <Text style={[styles.sectionHeading, { color: colors.text }]}>1. Media Assets</Text>
             <View style={styles.mediaRow}>
-              {/* Pick/Record Video Action Card or Inline Player */}
               {videoUri ? (
                 <InlineVideoPreview
                   uri={videoUri}
@@ -459,9 +566,9 @@ export default function CreateReelScreen() {
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-          {/* Step 2: Experience Details */}
+          {/* Step 2: Experience Category & Basic Info */}
           <View style={styles.sectionBlock}>
-            <Text style={[styles.sectionHeading, { color: colors.text }]}>2. Experience Category</Text>
+            <Text style={[styles.sectionHeading, { color: colors.text }]}>2. Experience Category & Details</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {CATEGORIES.map((c) => {
                 const selected = category === c.value;
@@ -499,9 +606,6 @@ export default function CreateReelScreen() {
               value={title}
               onChangeText={setTitle}
               style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
-              onFocus={() => {
-                scrollViewRef.current?.scrollTo({ y: 220, animated: true });
-              }}
             />
           </View>
 
@@ -530,7 +634,7 @@ export default function CreateReelScreen() {
             </ScrollView>
           </View>
 
-          {/* Price & Price Unit Row */}
+          {/* Price & Price Unit */}
           <View style={styles.rowTwoCol}>
             <View style={[styles.formGroup, { flex: 1 }]}>
               <Text style={[styles.inputLabel, { color: colors.text }]}>Price (KES) *</Text>
@@ -541,9 +645,6 @@ export default function CreateReelScreen() {
                 value={price}
                 onChangeText={setPrice}
                 style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
-                onFocus={() => {
-                  scrollViewRef.current?.scrollTo({ y: 340, animated: true });
-                }}
               />
             </View>
 
@@ -555,9 +656,6 @@ export default function CreateReelScreen() {
                 value={priceUnit}
                 onChangeText={setPriceUnit}
                 style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
-                onFocus={() => {
-                  scrollViewRef.current?.scrollTo({ y: 340, animated: true });
-                }}
               />
             </View>
           </View>
@@ -566,14 +664,383 @@ export default function CreateReelScreen() {
           <View style={styles.formGroup}>
             <Text style={[styles.inputLabel, { color: colors.text }]}>Description (Optional)</Text>
             <GrowingInput
-              placeholder="Describe what makes this experience special..."
+              placeholder="Describe what makes this experience special, nearby beaches, amenities..."
               placeholderTextColor={colors.mutedForeground}
               value={description}
               onChangeText={setDescription}
               minHeight={80}
-              maxHeight={180}
+              maxHeight={160}
               style={[styles.textInput, styles.textAreaInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
             />
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {/* Step 3: Capacity & Booking Settings */}
+          <View style={styles.sectionBlock}>
+            <Text style={[styles.sectionHeading, { color: colors.text }]}>3. Capacity & Booking Settings</Text>
+
+            <View style={styles.rowTwoCol}>
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Max Guests</Text>
+                <TextInput
+                  placeholder="2"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="numeric"
+                  value={maxGuests}
+                  onChangeText={setMaxGuests}
+                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+                />
+              </View>
+
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Min Stay (Nights)</Text>
+                <TextInput
+                  placeholder="1"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="numeric"
+                  value={minStayNights}
+                  onChangeText={setMinStayNights}
+                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+                />
+              </View>
+            </View>
+
+            <View style={styles.rowTwoCol}>
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Check-in Time</Text>
+                <TextInput
+                  placeholder="14:00"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={checkInTime}
+                  onChangeText={setCheckInTime}
+                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+                />
+              </View>
+
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Check-out Time</Text>
+                <TextInput
+                  placeholder="10:00"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={checkOutTime}
+                  onChangeText={setCheckOutTime}
+                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+                />
+              </View>
+            </View>
+
+            {/* Booking Mode */}
+            <View style={styles.formGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Booking Mode</Text>
+              <View style={styles.segmentContainer}>
+                <Pressable
+                  onPress={() => setBookingMode('approval_required')}
+                  style={[
+                    styles.segmentBtn,
+                    { backgroundColor: bookingMode === 'approval_required' ? '#F26522' : isDark ? '#27272A' : '#F3F4F6' },
+                  ]}
+                >
+                  <Feather
+                    name="user-check"
+                    size={14}
+                    color={bookingMode === 'approval_required' ? '#FFFFFF' : colors.text}
+                  />
+                  <Text
+                    style={[
+                      styles.segmentBtnText,
+                      { color: bookingMode === 'approval_required' ? '#FFFFFF' : colors.text },
+                    ]}
+                  >
+                    Host Approval Required
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setBookingMode('instant')}
+                  style={[
+                    styles.segmentBtn,
+                    { backgroundColor: bookingMode === 'instant' ? '#F26522' : isDark ? '#27272A' : '#F3F4F6' },
+                  ]}
+                >
+                  <Feather
+                    name="zap"
+                    size={14}
+                    color={bookingMode === 'instant' ? '#FFFFFF' : colors.text}
+                  />
+                  <Text
+                    style={[
+                      styles.segmentBtnText,
+                      { color: bookingMode === 'instant' ? '#FFFFFF' : colors.text },
+                    ]}
+                  >
+                    Instant Booking
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Cancellation Policy */}
+            <View style={styles.formGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Cancellation Policy</Text>
+              <View style={{ gap: 8 }}>
+                {CANCELLATION_POLICIES.map((cp) => {
+                  const sel = cancellationPolicy === cp.id;
+                  return (
+                    <Pressable
+                      key={cp.id}
+                      onPress={() => setCancellationPolicy(cp.id)}
+                      style={[
+                        styles.policyCard,
+                        {
+                          backgroundColor: sel ? (isDark ? '#3B2314' : '#FFF8F5') : (isDark ? '#27272A' : '#F9FAFB'),
+                          borderColor: sel ? '#F26522' : colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.policyCardHeader}>
+                        <Text style={[styles.policyCardTitle, { color: sel ? '#F26522' : colors.text }]}>
+                          {cp.title}
+                        </Text>
+                        <View style={[styles.radioCircle, sel && styles.radioCircleActive]}>
+                          {sel ? <View style={styles.radioDot} /> : null}
+                        </View>
+                      </View>
+                      <Text style={[styles.policyCardDesc, { color: colors.mutedForeground }]}>{cp.desc}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {/* Step 4: Structured House Rules */}
+          <View style={styles.sectionBlock}>
+            <Text style={[styles.sectionHeading, { color: colors.text }]}>4. House Rules</Text>
+
+            <View style={[styles.rulesListCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.ruleToggleRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.ruleToggleTitle, { color: colors.text }]}>Smoking Allowed</Text>
+                  <Text style={[styles.ruleToggleSub, { color: colors.mutedForeground }]}>Allow smoking inside the property</Text>
+                </View>
+                <Switch
+                  value={smokingAllowed}
+                  onValueChange={setSmokingAllowed}
+                  trackColor={{ false: '#767577', true: '#F26522' }}
+                />
+              </View>
+
+              <View style={[styles.ruleDivider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.ruleToggleRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.ruleToggleTitle, { color: colors.text }]}>Pets Allowed</Text>
+                  <Text style={[styles.ruleToggleSub, { color: colors.mutedForeground }]}>Welcome guests with pets</Text>
+                </View>
+                <Switch
+                  value={petsAllowed}
+                  onValueChange={setPetsAllowed}
+                  trackColor={{ false: '#767577', true: '#F26522' }}
+                />
+              </View>
+
+              <View style={[styles.ruleDivider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.ruleToggleRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.ruleToggleTitle, { color: colors.text }]}>Parties & Events</Text>
+                  <Text style={[styles.ruleToggleSub, { color: colors.mutedForeground }]}>Allow gatherings or celebrations</Text>
+                </View>
+                <Switch
+                  value={partiesAllowed}
+                  onValueChange={setPartiesAllowed}
+                  trackColor={{ false: '#767577', true: '#F26522' }}
+                />
+              </View>
+
+              <View style={[styles.ruleDivider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.ruleToggleRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.ruleToggleTitle, { color: colors.text }]}>Children & Infants</Text>
+                  <Text style={[styles.ruleToggleSub, { color: colors.mutedForeground }]}>Property suitable for kids</Text>
+                </View>
+                <Switch
+                  value={childrenAllowed}
+                  onValueChange={setChildrenAllowed}
+                  trackColor={{ false: '#767577', true: '#F26522' }}
+                />
+              </View>
+
+              <View style={[styles.ruleDivider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.ruleToggleRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.ruleToggleTitle, { color: colors.text }]}>Additional Unregistered Guests</Text>
+                  <Text style={[styles.ruleToggleSub, { color: colors.mutedForeground }]}>Allow non-registered visitors</Text>
+                </View>
+                <Switch
+                  value={additionalGuestsAllowed}
+                  onValueChange={setAdditionalGuestsAllowed}
+                  trackColor={{ false: '#767577', true: '#F26522' }}
+                />
+              </View>
+            </View>
+
+            {/* Quiet Hours Row */}
+            <View style={styles.rowTwoCol}>
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Quiet Hours Start</Text>
+                <TextInput
+                  placeholder="22:00"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={quietHoursStart}
+                  onChangeText={setQuietHoursStart}
+                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+                />
+              </View>
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Quiet Hours End</Text>
+                <TextInput
+                  placeholder="07:00"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={quietHoursEnd}
+                  onChangeText={setQuietHoursEnd}
+                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Custom House Rules (Optional)</Text>
+              <TextInput
+                placeholder="e.g. Please remove shoes at the door, no swimming after 10 PM..."
+                placeholderTextColor={colors.mutedForeground}
+                value={customRules}
+                onChangeText={setCustomRules}
+                style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+              />
+            </View>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {/* Step 5: Arrival & Checkout Instructions */}
+          <View style={styles.sectionBlock}>
+            <Text style={[styles.sectionHeading, { color: colors.text }]}>5. Arrival & Departure Instructions</Text>
+            <Text style={[styles.sectionSubText, { color: colors.mutedForeground }]}>
+              Sensitive details (Wi-Fi password, access codes) are only shared with guests who have a confirmed reservation.
+            </Text>
+
+            <View style={styles.formGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Check-in Method</Text>
+              <TextInput
+                placeholder="e.g. Self check-in (Smart Lock), Host greets in person"
+                placeholderTextColor={colors.mutedForeground}
+                value={checkInMethod}
+                onChangeText={setCheckInMethod}
+                style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+              />
+            </View>
+
+            <View style={styles.rowTwoCol}>
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Wi-Fi Network Name</Text>
+                <TextInput
+                  placeholder="e.g. ZuruSunset_Guest"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={wifiSsid}
+                  onChangeText={setWifiSsid}
+                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+                />
+              </View>
+
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Wi-Fi Password</Text>
+                <TextInput
+                  placeholder="e.g. SunsetVilla2026"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={wifiPassword}
+                  onChangeText={setWifiPassword}
+                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Access / Gate Code Instructions</Text>
+              <TextInput
+                placeholder="e.g. Gate code #4492, smart lock code sent on arrival"
+                placeholderTextColor={colors.mutedForeground}
+                value={accessInstructions}
+                onChangeText={setAccessInstructions}
+                style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Directions & Parking Info</Text>
+              <TextInput
+                placeholder="e.g. Behind Diani Reef Resort, dedicated shaded parking slot #4"
+                placeholderTextColor={colors.mutedForeground}
+                value={directions}
+                onChangeText={setDirections}
+                style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Key Return & Checkout Instructions</Text>
+              <TextInput
+                placeholder="e.g. Leave keys on table, lock gate, switch off AC"
+                placeholderTextColor={colors.mutedForeground}
+                value={keyReturnInstructions}
+                onChangeText={setKeyReturnInstructions}
+                style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+              />
+            </View>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {/* Step 6: Amenities Checklist */}
+          <View style={styles.sectionBlock}>
+            <Text style={[styles.sectionHeading, { color: colors.text }]}>6. Amenities</Text>
+            <View style={styles.amenitiesWrap}>
+              {POPULAR_AMENITIES.map((am) => {
+                const selected = selectedAmenities.includes(am);
+                return (
+                  <Pressable
+                    key={am}
+                    onPress={() => toggleAmenity(am)}
+                    style={[
+                      styles.amenityChip,
+                      {
+                        backgroundColor: selected ? (isDark ? '#3B2314' : '#FFF8F5') : (isDark ? '#27272A' : '#F9FAFB'),
+                        borderColor: selected ? '#F26522' : colors.border,
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name={selected ? 'check' : 'plus'}
+                      size={13}
+                      color={selected ? '#F26522' : colors.mutedForeground}
+                    />
+                    <Text
+                      style={[
+                        styles.amenityChipText,
+                        { color: selected ? '#F26522' : colors.text },
+                      ]}
+                    >
+                      {am}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         </ScrollView>
 
@@ -595,12 +1062,12 @@ export default function CreateReelScreen() {
                 </Text>
               </View>
             ) : (
-              <Text style={styles.publishBtnText}>Publish Reel</Text>
+              <Text style={styles.publishBtnText}>Publish Experience & Reel</Text>
             )}
           </Pressable>
         </View>
 
-        {/* Video Source Selection Modal (Record vs Gallery) */}
+        {/* Video Source Selection Modal */}
         <Modal
           visible={showVideoSourceModal}
           transparent
@@ -700,16 +1167,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F26522',
   },
   sectionBlock: {
-    gap: 10,
+    gap: 12,
   },
   sectionHeading: {
     fontSize: 16,
     fontFamily: 'DMSans_700Bold',
-    color: '#222222',
+  },
+  sectionSubText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'DMSans_400Regular',
   },
   divider: {
     height: 1,
-    backgroundColor: '#EBEBEB',
   },
 
   /* Media Action Cards */
@@ -721,9 +1191,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 110,
     borderRadius: 16,
-    backgroundColor: '#F7F7F7',
     borderWidth: 1,
-    borderColor: '#EBEBEB',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -743,77 +1211,91 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mediaBadgeActive: {
-    backgroundColor: 'rgba(242, 101, 34, 0.12)',
-  },
   mediaCardTitle: {
     fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-    color: '#222222',
-    textAlign: 'center',
+    fontFamily: 'DMSans_700Bold',
   },
   mediaCardSub: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontFamily: 'DMSans_400Regular',
-    color: '#717171',
-    textAlign: 'center',
+  },
+
+  /* Video & Thumb Previews */
+  videoPreviewWrap: {
+    flex: 1,
+    height: 110,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  videoPreviewView: {
+    width: '100%',
+    height: '100%',
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoPlayBtnCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoChangeBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  videoChangeBadgeText: {
+    color: '#FFF',
+    fontSize: 9.5,
+    fontFamily: 'DMSans_700Bold',
   },
   thumbPreviewWrap: {
-    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    position: 'relative',
   },
   thumbPreviewImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 15,
   },
   thumbChangeOverlay: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 4,
-    paddingVertical: 4,
   },
   thumbChangeText: {
-    fontSize: 11,
-    fontFamily: 'DMSans_600SemiBold',
-    color: '#FFFFFF',
+    color: '#FFF',
+    fontSize: 9.5,
+    fontFamily: 'DMSans_700Bold',
   },
 
-  /* Inputs & Form Groups */
-  formGroup: {
-    gap: 6,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-    color: '#222222',
-  },
-  textInput: {
-    backgroundColor: '#F7F7F7',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
-    color: '#222222',
-  },
-  textAreaInput: {
-    minHeight: 84,
-    textAlignVertical: 'top',
-  },
-  rowTwoCol: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+  /* Categories & Locations */
   categoryChip: {
     paddingHorizontal: 16,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: '#F7F7F7',
   },
   categoryChipSelected: {
     backgroundColor: '#F26522',
@@ -821,47 +1303,172 @@ const styles = StyleSheet.create({
   categoryChipText: {
     fontSize: 13,
     fontFamily: 'DMSans_500Medium',
-    color: '#717171',
   },
   categoryChipTextSelected: {
-    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
+    fontFamily: 'DMSans_700Bold',
   },
   locChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#F7F7F7',
+    borderRadius: 14,
   },
   locChipSelected: {
-    backgroundColor: 'rgba(242, 101, 34, 0.1)',
+    backgroundColor: '#F26522',
   },
   locChipText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontFamily: 'DMSans_500Medium',
-    color: '#717171',
   },
   locChipTextSelected: {
+    color: '#FFFFFF',
     fontFamily: 'DMSans_700Bold',
-    color: '#F26522',
+  },
+
+  /* Form Controls */
+  formGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  textInput: {
+    height: 48,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
+  },
+  textAreaInput: {
+    height: 'auto',
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  rowTwoCol: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  /* Segments */
+  segmentContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  segmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 42,
+    borderRadius: 12,
+  },
+  segmentBtnText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+  },
+
+  /* Policies */
+  policyCard: {
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 4,
+  },
+  policyCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  policyCardTitle: {
+    fontSize: 13.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  policyCardDesc: {
+    fontSize: 11.5,
+    fontFamily: 'DMSans_400Regular',
+  },
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: '#9CA3AF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioCircleActive: {
+    borderColor: '#F26522',
+  },
+  radioDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#F26522',
+  },
+
+  /* House Rules */
+  rulesListCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  ruleToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    gap: 12,
+  },
+  ruleToggleTitle: {
+    fontSize: 13.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  ruleToggleSub: {
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
+    marginTop: 1,
+  },
+  ruleDivider: {
+    height: 1,
+  },
+
+  /* Amenities */
+  amenitiesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  amenityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  amenityChipText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
   },
 
   /* Bottom Dock */
   bottomDock: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopWidth: 1,
     paddingTop: 12,
     paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#EBEBEB',
-    shadowColor: '#000000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 6,
   },
   publishBtn: {
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#F26522',
-    borderRadius: 24,
-    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -876,29 +1483,25 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
-  /* Modal Styles */
+  /* Modals */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 36,
+    gap: 14,
   },
   modalTitle: {
     fontSize: 18,
     fontFamily: 'DMSans_700Bold',
-    color: '#111827',
-    marginBottom: 4,
   },
   modalSubtitle: {
     fontSize: 13,
     fontFamily: 'DMSans_400Regular',
-    color: '#6B7280',
-    marginBottom: 20,
+    marginTop: -6,
   },
   modalOptionBtn: {
     flexDirection: 'row',
@@ -906,82 +1509,32 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 12,
-    gap: 12,
+    gap: 14,
   },
   modalIconWrap: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalOptionTitle: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontFamily: 'DMSans_700Bold',
-    color: '#111827',
   },
   modalOptionSub: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontFamily: 'DMSans_400Regular',
-    color: '#6B7280',
     marginTop: 2,
   },
   modalCancelBtn: {
-    paddingVertical: 14,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
-    marginTop: 4,
+    justifyContent: 'center',
   },
   modalCancelText: {
-    fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
-    color: '#6B7280',
-  },
-
-  /* Inline Video Preview Styles */
-  videoPreviewWrap: {
-    flex: 1,
-    height: 150,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#000000',
-    position: 'relative',
-  },
-  videoPreviewView: {
-    width: '100%',
-    height: '100%',
-  },
-  videoPlayOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-  },
-  videoPlayBtnCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(242, 101, 34, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingLeft: 2,
-  },
-  videoChangeBadge: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  videoChangeBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 14,
     fontFamily: 'DMSans_700Bold',
   },
 });

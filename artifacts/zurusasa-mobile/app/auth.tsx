@@ -36,6 +36,7 @@ import { useColors } from '@/hooks/useColors';
 import { supabase } from '@/lib/supabase';
 import { passkeyService } from '@/services/passkeyService';
 import { KeyboardScreen, KeyboardModal } from '@/components/keyboard';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
@@ -108,72 +109,6 @@ function GoogleLogo() {
         fill="#EA4335"
       />
     </Svg>
-  );
-}
-
-// ── Premium Loading Indicator ──────────────────────────────────────────────────
-function PremiumLoader({ color = '#FFFFFF', size = 8 }: { color?: string; size?: number }) {
-  const dot1 = useRef(new Animated.Value(0)).current;
-  const dot2 = useRef(new Animated.Value(0)).current;
-  const dot3 = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const wave = (anim: Animated.Value, delay: number) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(anim, {
-            toValue: 1,
-            duration: 380,
-            easing: Easing.out(Easing.sin),
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim, {
-            toValue: 0,
-            duration: 380,
-            easing: Easing.in(Easing.sin),
-            useNativeDriver: true,
-          }),
-          Animated.delay(260),
-        ]),
-      );
-
-    const a1 = wave(dot1, 0);
-    const a2 = wave(dot2, 140);
-    const a3 = wave(dot3, 280);
-    a1.start();
-    a2.start();
-    a3.start();
-    return () => {
-      a1.stop();
-      a2.stop();
-      a3.stop();
-    };
-  }, []);
-
-  const lift = (anim: Animated.Value) =>
-    anim.interpolate({ inputRange: [0, 1], outputRange: [0, -(size + 4)] });
-  const fade = (anim: Animated.Value) =>
-    anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] });
-  const scl = (anim: Animated.Value) =>
-    anim.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1.15] });
-
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.9 }}>
-      {[dot1, dot2, dot3].map((d, i) => (
-        <Animated.View
-          key={i}
-          style={{
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            backgroundColor: color,
-            opacity: fade(d),
-            transform: [{ translateY: lift(d) }, { scale: scl(d) }],
-          }}
-        />
-      ))}
-    </View>
   );
 }
 

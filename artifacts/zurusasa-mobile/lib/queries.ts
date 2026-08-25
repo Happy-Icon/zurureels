@@ -24,7 +24,7 @@ export function useReels() {
           .select(
             `*,
             experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
-            host:profiles!reels_user_id_profiles_fkey(full_name, verification_status, metadata)`,
+            host:profiles!reels_user_id_profiles_fkey(id, full_name, verification_status, is_verified, metadata, created_at, role)`,
           )
           .in('status', ['active', 'published'])
           .order('created_at', { ascending: false })
@@ -73,13 +73,22 @@ export function useMyBookings(userId: string | undefined) {
         .from('bookings')
         .select(
           `*,
-          experience:experiences(id, title, location, current_price, price_unit, image_url, entity_name)`,
+          experience:experiences(id, title, location, current_price, price_unit, image_url, entity_name, max_guests, check_in_time, check_out_time, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata)`,
         )
         .eq('user_id', userId!)
         .order('created_at', { ascending: false })
-        .limit(30);
+        .limit(40);
       if (error) throw new Error(error.message);
-      return (data as unknown as BookingRow[]) ?? [];
+      const rows = (data as unknown as BookingRow[]) ?? [];
+      if (__DEV__) {
+        console.log('[TRIPS]', {
+          userId,
+          bookingsReturned: rows.length,
+          latestBookingId: rows[0]?.id,
+          latestBookingStatus: rows[0]?.status,
+        });
+      }
+      return rows;
     },
   });
 
@@ -400,28 +409,30 @@ export function useEnquire() {
   });
 }
 
-// ---- Saved tab (mirrors web Saved.tsx: reel_saves -> reels join + event_subscribers) ----
 
 export function useSavedReels(userId: string | undefined) {
   return useQuery<ReelRow[]>({
     queryKey: ['saved-reels', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const saves = await supabase
+      const { data: saves, error: savesErr } = await supabase
         .from('reel_saves')
         .select('reel_id')
         .eq('user_id', userId!)
-        .order('created_at', { ascending: false });
-      if (saves.error) throw new Error(saves.error.message);
-      const reelIds = (saves.data ?? []).map((s) => s.reel_id as string);
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (savesErr) throw new Error(savesErr.message);
+      const reelIds = (saves ?? []).map((s) => s.reel_id).filter(Boolean);
       if (reelIds.length === 0) return [];
 
       const { data, error } = await supabase
         .from('reels')
         .select(
-          `*,
-          experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
-          host:profiles!reels_user_id_profiles_fkey(full_name, verification_status, metadata)`,
+          `
+          *,
+          experience:experiences(*),
+          host:profiles!reels_user_id_fkey(*)
+        `,
         )
         .in('id', reelIds);
       if (error) throw new Error(error.message);
@@ -674,7 +685,7 @@ export function useHostListings(userId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('experiences')
-        .select('id, title, location, current_price, price_unit, image_url, availability_status, entity_name, category')
+        .select('id, title, location, current_price, price_unit, image_url, availability_status, entity_name, category, max_guests, min_stay_nights, max_stay_nights, check_in_time, check_out_time, booking_mode, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata')
         .eq('user_id', userId!)
         .order('created_at', { ascending: false });
       if (error) throw new Error(error.message);
@@ -697,7 +708,7 @@ export function useHostCalendarBookings(
         .from('bookings')
         .select(`
           id, user_id, experience_id, reel_id, trip_title, amount, status, check_in, check_out, guests, created_at,
-          experience:experiences(id, title, location, current_price, price_unit, image_url)
+          experience:experiences(id, title, location, current_price, price_unit, image_url, max_guests, check_in_time, check_out_time, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata)
         `)
         .neq('status', 'cancelled');
 
@@ -934,7 +945,7 @@ export function useHostBookings(hostId: string | undefined) {
         .from('bookings')
         .select(
           `*,
-          experience:experiences(id, title, location, current_price, price_unit, image_url, entity_name, metadata)`
+          experience:experiences(id, title, location, current_price, price_unit, image_url, entity_name, max_guests, check_in_time, check_out_time, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata)`
         )
         .order('created_at', { ascending: false });
 
