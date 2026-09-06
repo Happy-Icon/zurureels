@@ -3,51 +3,43 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs, useRouter } from 'expo-router';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useUnreadMessageCount } from '@/lib/queries';
 
 const ACTIVE_COLOR = '#F26522';
-const INACTIVE_COLOR = '#717171';
+const INACTIVE_COLOR = '#94A3B8';
+
+type TabsTabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 /**
- * Premium Bottom Navigation Bar (Pulse, Discover, Listings, Bookings, Inbox, Profile).
- * Clean, thin, rounded outline icon style:
- * - Inbox: Two overlapping speech bubbles outline (chatbubbles-outline) with unread status dot when not viewed
- * - Discover: Thin outline magnifying glass (search-outline)
- * - Pulse: Thin outline Home (home-outline)
- * - Bookings: Thin outline calendar (calendar-outline)
- * - Profile: Thin outline person/profile (person-outline) or user avatar
- * - Host Listings: Two slightly overlapping cards outline (cards-outline)
- * - Colors: Active = ZuruSasa Orange (#F26522), Inactive = Neutral Gray (#717171)
+ * Persistent Bottom Navigation Bar across all views (Dynamic Auth-State: 3 tabs logged out, 5 tabs logged in).
+ * - Colors: Active = #F26522, Inactive = #94A3B8
+ * - Dark gradient scrim when over full-bleed video.
  */
-function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+function CustomBottomTabBar({ state, descriptors, navigation }: TabsTabBarProps) {
   const insets = useSafeAreaInsets();
-  const colors = useColors();
   const { user, viewMode } = useAuth();
   const isHostMode = viewMode === 'host';
-  const bottomPad = Platform.OS === 'web' ? 10 : Math.max(insets.bottom, 6);
+  const bottomPad = Platform.OS === 'web' ? 8 : Math.max(insets.bottom, 6);
   const { data: unreadCount = 0 } = useUnreadMessageCount(user?.id);
 
   const focusedRoute = state.routes[state.index];
-
-  // Hide bottom tab bar on full-screen ZuruFlow video feed in Guest / signed-out mode
-  if (!isHostMode && focusedRoute.name === 'index') {
-    return null;
-  }
+  const isOverVideo = !isHostMode && focusedRoute.name === 'index';
 
   // Dynamic allowed routes per authentication and mode
+  // LOGGED OUT: 3 tabs (Home, Discover, Log In)
+  // LOGGED IN: 5 tabs (Home, Discover, Wishlist, Inbox, Profile)
   const allowedRoutes = !user
     ? ['index', 'discover', 'profile']
     : isHostMode
     ? ['index', 'listings', 'reservations', 'inbox', 'profile']
     : ['index', 'discover', 'saved', 'inbox', 'profile'];
 
-  const inactiveColor = colors.mutedForeground;
-  const barBg = colors.card;
-  const borderTopColor = colors.border;
+  const inactiveColor = '#FFFFFF';
+  const barBg = isOverVideo ? 'rgba(0,0,0,0.95)' : '#0F172A';
 
   return (
     <View
@@ -55,13 +47,13 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
         styles.bottomBarContainer,
         {
           paddingBottom: bottomPad,
+          height: 56 + bottomPad,
           backgroundColor: barBg,
-          borderTopColor,
         },
       ]}
     >
       <View style={styles.barRow}>
-        {state.routes.map((route, index) => {
+        {state.routes.map((route: any, index: number) => {
           if (!allowedRoutes.includes(route.name)) return null;
 
           const { options } = descriptors[route.key];
@@ -88,14 +80,12 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
             <Pressable
               key={route.key}
               onPress={onPress}
+              accessibilityLabel={label}
               style={({ pressed }) => [
                 styles.tabItem,
-                { transform: [{ scale: pressed ? 0.95 : 1 }] },
+                { transform: [{ scale: pressed ? 0.90 : 1 }] },
               ]}
             >
-              {/* Soft Top Accent Pill Centered Above Active Tab */}
-              {isFocused ? <View style={styles.activeTopPill} /> : null}
-
               {/* Clean Icon Container */}
               <View style={styles.iconBox}>
                 {options.tabBarIcon ? (
@@ -106,21 +96,21 @@ function CustomBottomTabBar({ state, descriptors, navigation }: BottomTabBarProp
                   })
                 ) : (
                   <Ionicons
-                    name="grid-outline"
+                    name={isFocused ? 'grid' : 'grid-outline'}
                     size={22}
                     color={isFocused ? ACTIVE_COLOR : inactiveColor}
                   />
                 )}
-                {/* Unread Messages Orange Status Dot directly on icon top-right */}
+                {/* Red Unread Notification Dot */}
                 {showUnreadDot ? <View style={styles.unreadDotBadge} /> : null}
               </View>
 
-              {/* Typography */}
+              {/* Text Label */}
               <Text
                 style={[
                   styles.tabLabel,
                   {
-                    color: isFocused ? ACTIVE_COLOR : inactiveColor,
+                    color: isFocused ? ACTIVE_COLOR : 'rgba(255, 255, 255, 0.65)',
                     fontFamily: isFocused ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
                   },
                 ]}
@@ -156,8 +146,12 @@ export default function TabLayout() {
         name="index"
         options={{
           title: isHostMode ? 'Dashboard' : 'Home',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name={isHostMode ? 'grid-outline' : 'home-outline'} size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={isHostMode ? (focused ? 'grid' : 'grid-outline') : (focused ? 'home' : 'home-outline')}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />
@@ -166,8 +160,12 @@ export default function TabLayout() {
         options={{
           title: 'Listings',
           href: isHostMode ? undefined : null,
-          tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="cards-outline" size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? 'cards' : 'cards-outline'}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />
@@ -176,8 +174,12 @@ export default function TabLayout() {
         options={{
           title: 'Discover',
           href: isHostMode ? null : undefined,
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="search-outline" size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'search' : 'search-outline'}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />
@@ -186,8 +188,12 @@ export default function TabLayout() {
         options={{
           title: 'Wishlists',
           href: isHostMode || !user ? null : undefined,
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="heart-outline" size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'heart' : 'heart-outline'}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />
@@ -196,8 +202,12 @@ export default function TabLayout() {
         options={{
           title: isHostMode ? 'Bookings' : 'Trips',
           href: isHostMode && user ? undefined : null,
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="calendar-outline" size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'calendar' : 'calendar-outline'}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />
@@ -206,8 +216,12 @@ export default function TabLayout() {
         options={{
           title: 'Inbox',
           href: user ? undefined : null,
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="chatbubbles-outline" size={22} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'chatbubbles' : 'chatbubbles-outline'}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />
@@ -222,10 +236,10 @@ export default function TabLayout() {
                   <Image
                     source={{ uri: userAvatarUrl }}
                     style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 11,
-                      borderWidth: focused ? 1.5 : 0,
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      borderWidth: focused ? 2 : 0,
                       borderColor: ACTIVE_COLOR,
                     }}
                     contentFit="cover"
@@ -235,10 +249,12 @@ export default function TabLayout() {
               return (
                 <View
                   style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 11,
-                    backgroundColor: focused ? ACTIVE_COLOR : color,
+                    width: 26,
+                    height: 26,
+                    borderRadius: 13,
+                    backgroundColor: focused ? ACTIVE_COLOR : 'rgba(255,255,255,0.15)',
+                    borderWidth: focused ? 2 : 0,
+                    borderColor: ACTIVE_COLOR,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
@@ -256,7 +272,7 @@ export default function TabLayout() {
                 </View>
               );
             }
-            return <Ionicons name="person-outline" size={22} color={color} />;
+            return <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />;
           },
         }}
         listeners={{
@@ -278,50 +294,36 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderTopWidth: 1,
-    shadowColor: '#000000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 6,
+    borderTopWidth: 0,
     zIndex: 100,
   },
   barRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingTop: 4,
+    height: '100%',
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    paddingVertical: 6,
-    minHeight: 50,
-  },
-  activeTopPill: {
-    position: 'absolute',
-    top: 0,
-    width: 20,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: ACTIVE_COLOR,
+    height: '100%',
   },
   unreadDotBadge: {
     position: 'absolute',
-    top: 0,
-    right: 4,
+    top: -2,
+    right: -2,
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: ACTIVE_COLOR,
+    backgroundColor: '#EF4444',
     borderWidth: 1.5,
-    borderColor: '#FFFFFF',
+    borderColor: '#000000',
     zIndex: 10,
   },
   iconBox: {
-    width: 38,
+    width: 32,
     height: 26,
     alignItems: 'center',
     justifyContent: 'center',

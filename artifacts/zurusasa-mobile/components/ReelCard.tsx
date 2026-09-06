@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useIsFocused } from 'expo-router';
 import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useAuth } from '@/context/AuthContext';
@@ -44,7 +44,6 @@ interface ReelCardProps {
   prefetchInteractions?: ReelInteractions;
 }
 
-import { useIsFocused } from '@react-navigation/native';
 
 function getOptimizedCloudinaryVideoUrl(url: string | null | undefined): string {
   if (!url) return '';
@@ -143,7 +142,7 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
   const priceUnit = exp?.price_unit ?? 'person';
   const bookedOut = exp?.availability_status === 'booked_out';
 
-  const baseBottom = Math.max(16, insets.bottom + 12);
+  const baseBottom = Math.max(80, insets.bottom + 76);
   const railBottom = baseBottom + 120;
 
   const requireAuth = (): boolean => {
@@ -541,7 +540,7 @@ const styles = StyleSheet.create({
     height: 280,
   },
   playOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

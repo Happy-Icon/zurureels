@@ -126,7 +126,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeContext.Provider value={value}>
-      <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={themeColors.background} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       {children}
     </ThemeContext.Provider>
   );

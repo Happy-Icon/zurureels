@@ -705,7 +705,7 @@ export default function AuthScreen() {
       >
         <Image
           source={dest.image}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           contentFit="cover"
           transition={600}
           priority="high"
@@ -721,7 +721,7 @@ export default function AuthScreen() {
           'rgba(10,6,3,0.88)',
         ]}
         locations={[0, 0.3, 0.6, 1]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
 
       {/* ── TOP HEADER AREA ────────────────────────────────────────────────── */}
@@ -1468,7 +1468,7 @@ const styles = StyleSheet.create({
 
   // ── Hero ──────────────────────────────────────────────────────────────────
   heroContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     overflow: 'hidden',
   },
 

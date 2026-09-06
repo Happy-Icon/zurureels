@@ -13,11 +13,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useIsFocused } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { HostDashboard } from '@/components/host/HostDashboard';
 import { ReelCard } from '@/components/ReelCard';
-import { useIsFocused } from '@react-navigation/native';
 import { CenteredState } from '@/components/Skeleton';
 import { PremiumLoader } from '@/components/PremiumLoader';
 import { useReels, useBatchReelInteractions } from '@/lib/queries';
@@ -38,6 +37,7 @@ function ZuruFlowFeed() {
   const { height } = useWindowDimensions();
   const isFocused = useIsFocused();
   const { data: reels, isLoading, isError, refetch } = useReels();
+  const [feedStream, setFeedStream] = useState<'around' | 'zuruflow'>('around');
   const [activeIndex, setActiveIndex] = useState<number>(0);
 
   const reelIds = React.useMemo(() => (reels ?? []).map((r) => r.id), [reels]);
@@ -81,21 +81,25 @@ function ZuruFlowFeed() {
       />
 
       <View style={styles.topBarContent}>
-        {/* Top Switcher: ZuruFlow / Discover */}
+        {/* Top Switcher: Around You / ZuruFlow */}
         <View style={styles.tabsRow}>
-          <Pressable style={styles.tabItem}>
-            <Text style={styles.tabActive}>ZuruFlow</Text>
-            <View style={styles.tabIndicator} />
+          <Pressable
+            testID="top-tab-around"
+            onPress={() => setFeedStream('around')}
+            hitSlop={10}
+            style={({ pressed }) => [styles.tabItem, { transform: [{ scale: pressed ? 0.95 : 1 }] }]}
+          >
+            <Text style={feedStream === 'around' ? styles.tabActive : styles.tabInactive}>Around You</Text>
+            {feedStream === 'around' && <View style={styles.tabIndicator} />}
           </Pressable>
           <Pressable
-            testID="top-tab-discover"
-            onPress={() => {
-              router.navigate('/discover');
-            }}
+            testID="top-tab-zuruflow"
+            onPress={() => setFeedStream('zuruflow')}
             hitSlop={10}
-            style={styles.tabItem}
+            style={({ pressed }) => [styles.tabItem, { transform: [{ scale: pressed ? 0.95 : 1 }] }]}
           >
-            <Text style={styles.tabInactive}>Discover</Text>
+            <Text style={feedStream === 'zuruflow' ? styles.tabActive : styles.tabInactive}>ZuruFlow</Text>
+            {feedStream === 'zuruflow' && <View style={styles.tabIndicator} />}
           </Pressable>
         </View>
 
@@ -225,18 +229,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontFamily: 'DMSans_700Bold',
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   tabIndicator: {
-    width: 16,
+    width: 32,
     height: 3,
     borderRadius: 2,
-    backgroundColor: '#EE7D30',
-    marginTop: 3,
+    backgroundColor: '#F26522',
+    marginTop: 4,
   },
   tabInactive: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 16,
     fontFamily: 'DMSans_600SemiBold',
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   frostedSearchBtn: {
     position: 'absolute',

@@ -3188,7 +3188,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   successModalDismissArea: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   successModalCard: {
     width: '100%',

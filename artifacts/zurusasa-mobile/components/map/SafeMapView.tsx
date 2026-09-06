@@ -209,7 +209,7 @@ export function DiscoverMapView({
         <MapComponent
           ref={mapRef}
           provider={NativeProviderGoogle}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           initialRegion={initialRegion}
           showsUserLocation
           showsMyLocationButton={false}
@@ -376,7 +376,7 @@ export function SafeRouteMapView({
       <NativeMapView
         ref={mapRef}
         provider={NativeProviderGoogle}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         initialRegion={{
           latitude: (userLocation.latitude + destLocation.latitude) / 2,
           longitude: (userLocation.longitude + destLocation.longitude) / 2,
@@ -426,7 +426,7 @@ export function SafeRouteMapView({
 
   // Authentic Google Maps Route Fallback View (for JS / Expo Go)
   return (
-    <View style={StyleSheet.absoluteFillObject}>
+    <View style={StyleSheet.absoluteFill}>
       <Svg width="100%" height="100%" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice">
         {/* Google Landmass & Ocean */}
         <Rect width="400" height="800" fill="#F4F3F0" />
@@ -498,7 +498,7 @@ function GoogleMapsTemplateView({
   const selectedExp = selectedReel?.experience;
 
   return (
-    <View style={StyleSheet.absoluteFillObject}>
+    <View style={StyleSheet.absoluteFill}>
       {/* Real Google Maps Tile System (Vector SVG matching Google's color palette) */}
       <Svg width="100%" height="100%" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice">
         {/* Landmass — Google Maps Light Beige (#F4F3F0) */}
@@ -680,7 +680,7 @@ const styles = StyleSheet.create({
 
   // ── FALLBACK CANVAS ───────────────────────────────────────────
   fallbackCanvas: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#DBEAFE',
     overflow: 'hidden',
   },

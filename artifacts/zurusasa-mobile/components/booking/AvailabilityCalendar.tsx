@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   rangeFill: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#F26522' + '18',
     top: 6,
     bottom: 6,
