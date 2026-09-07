@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { Passkey } from 'react-native-passkey';
 import { supabase } from '@/lib/supabase';
 
@@ -39,6 +40,20 @@ function parsePasskeyError(err: any): {
   ).toLowerCase();
   const name = (err?.name || err?.error || err?.code || '').toLowerCase();
 
+  // 0. Expo Go / Missing Native Module
+  if (
+    rawMsg.includes('native passkey module is not available') ||
+    rawMsg.includes('native module is not available') ||
+    rawMsg.includes('expo go')
+  ) {
+    return {
+      message:
+        'Passkeys require native Android Credential Manager and cannot run inside Expo Go. Please test on an EAS Development Build or standalone APK.',
+      code: 'unsupported',
+      isCancelled: false,
+    };
+  }
+
   // 1. User Cancellation
   if (
     name.includes('notallowederror') ||
@@ -75,7 +90,7 @@ function parsePasskeyError(err: any): {
     };
   }
 
-  // 3. No Create Option / Unsupported Device / No Provider / Missing native module
+  // 3. No Create Option / Unsupported Device / No Provider / Digital Asset Links
   if (
     name.includes('nocreateoption') ||
     name.includes('notsupported') ||
@@ -85,9 +100,16 @@ function parsePasskeyError(err: any): {
     rawMsg.includes('no credential provider') ||
     rawMsg.includes('no create option') ||
     rawMsg.includes('not supported') ||
-    rawMsg.includes('not available') ||
     rawMsg.includes("doesn't seem to be linked")
   ) {
+    if (rawMsg.includes("doesn't seem to be linked") || rawMsg.includes('assetlinks')) {
+      return {
+        message:
+          'Passkey relying party verification failed. Your app package must be linked via Digital Asset Links (assetlinks.json) on your Supabase domain.',
+        code: 'invalid',
+        isCancelled: false,
+      };
+    }
     return {
       message:
         'Passkey setup requires a screen lock (PIN, fingerprint, or Face unlock) and Google Password Manager enabled on your device.',
@@ -151,11 +173,17 @@ export const passkeyService = {
         typeof window.navigator.credentials.get === 'function'
       );
     }
+    const isExpoGo =
+      Constants.appOwnership === 'expo' ||
+      (Constants as any).executionEnvironment === 'storeClient';
+    if (isExpoGo) {
+      return false;
+    }
     try {
       if (typeof Passkey?.isSupported === 'function') {
         return Passkey.isSupported();
       }
-      return true;
+      return false;
     } catch {
       return false;
     }
@@ -179,6 +207,17 @@ export const passkeyService = {
       }
 
       // 2. Native Mobile Flow (Android & iOS)
+      const isExpoGo =
+        Constants.appOwnership === 'expo' ||
+        (Constants as any).executionEnvironment === 'storeClient';
+      if (isExpoGo) {
+        return {
+          success: false,
+          error:
+            'Passkeys require native Android Credential Manager and cannot run inside Expo Go. Please test on an EAS Development Build or standalone APK.',
+        };
+      }
+
       console.log('[Passkey][Auth 1/4] Starting passkey authentication with Supabase...');
       const res = await (supabase.auth as any).passkey.startAuthentication();
       if (res?.error || !res?.data) {
@@ -295,6 +334,17 @@ export const passkeyService = {
       }
 
       // 2. Native Mobile Flow (Android & iOS)
+      const isExpoGo =
+        Constants.appOwnership === 'expo' ||
+        (Constants as any).executionEnvironment === 'storeClient';
+      if (isExpoGo) {
+        return {
+          success: false,
+          error:
+            'Passkeys require native Android Credential Manager and cannot run inside Expo Go. Please test on an EAS Development Build or standalone APK.',
+        };
+      }
+
       console.log('[Passkey][1/5] Requesting registration challenge from Supabase for user:', userData.user.id);
       const res = await (supabase.auth as any).passkey.startRegistration();
       if (res?.error || !res?.data) {

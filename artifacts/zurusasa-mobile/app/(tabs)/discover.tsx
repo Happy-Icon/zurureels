@@ -337,12 +337,16 @@ export default function AirbnbDiscoverScreen() {
           )}
           ListEmptyComponent={
             reelsQuery.isLoading ? (
-              <View style={styles.gridColumnWrapper}>
-                {[1, 2, 3, 4].map((i) => (
-                  <View key={i} style={{ width: cardWidth, gap: 8 }}>
-                    <Skeleton style={{ width: '100%', height: 220, borderRadius: 16 }} />
-                    <Skeleton style={{ width: '80%', height: 16, borderRadius: 4 }} />
-                    <Skeleton style={{ width: '50%', height: 14, borderRadius: 4 }} />
+              <View style={styles.skeletonGridWrapper}>
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <View key={i} style={[styles.skeletonCard, { width: cardWidth }]}>
+                    <Skeleton style={{ width: '100%', height: Math.round(cardWidth * 1.25), borderRadius: 16 }} />
+                    <View style={styles.skeletonTitleRow}>
+                      <Skeleton style={{ width: '68%', height: 16, borderRadius: 4 }} />
+                      <Skeleton style={{ width: '24%', height: 14, borderRadius: 4 }} />
+                    </View>
+                    <Skeleton style={{ width: '50%', height: 13, borderRadius: 4 }} />
+                    <Skeleton style={{ width: '60%', height: 14, borderRadius: 4 }} />
                   </View>
                 ))}
               </View>
@@ -507,6 +511,20 @@ const styles = StyleSheet.create({
   },
   gridColumnWrapper: {
     justifyContent: 'space-between',
+  },
+  skeletonGridWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 20,
+  },
+  skeletonCard: {
+    gap: 7,
+  },
+  skeletonTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   fab: {
     position: 'absolute',

@@ -7,7 +7,15 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { useTheme } from '@/context/ThemeContext';
+
 export function Skeleton({ style }: { style?: ViewStyle }) {
+  let isDark = false;
+  try {
+    const theme = useTheme();
+    isDark = theme?.isDark ?? false;
+  } catch {}
+
   const opacity = useSharedValue(0.4);
 
   useEffect(() => {
@@ -20,6 +28,7 @@ export function Skeleton({ style }: { style?: ViewStyle }) {
     <Animated.View
       style={[
         styles.base,
+        { backgroundColor: isDark ? '#27272A' : '#E2E8F0' },
         style,
         animatedStyle,
       ]}

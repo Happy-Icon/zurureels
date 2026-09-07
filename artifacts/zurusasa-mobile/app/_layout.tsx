@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -145,15 +146,13 @@ function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      // Safety timeout: ensure splash screen hides even if initial screen takes longer
-      const timer = setTimeout(() => {
-        SplashScreen.hideAsync().catch(() => {});
-      }, 1500);
-      return () => clearTimeout(timer);
+      SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!fontsLoaded && !fontError) {
+    return <View style={{ flex: 1, backgroundColor: '#000000' }} />;
+  }
 
   return (
     <SafeAreaProvider>

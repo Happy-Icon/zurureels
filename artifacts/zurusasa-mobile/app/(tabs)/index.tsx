@@ -203,37 +203,11 @@ function ZuruFlowFeed() {
 }
 
 function FeedLoadingState({ topOverlay }: { topOverlay: React.ReactNode }) {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 0.95,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulseAnim]);
-
   return (
     <View style={[styles.fill, styles.loadingContainer]}>
-      <Animated.View style={[styles.loadingContent, { transform: [{ scale: pulseAnim }] }]}>
-        <Image
-          source={require('@/assets/images/splash-icon.png')}
-          style={styles.loadingLogo}
-          resizeMode="contain"
-        />
-        <PremiumLoader color="#EE7D30" size={8} style={styles.loadingLoader} />
-      </Animated.View>
+      <View style={styles.loadingContent}>
+        <PremiumLoader color="#EE7D30" size={9} />
+      </View>
       {topOverlay}
     </View>
   );
@@ -251,13 +225,6 @@ const styles = StyleSheet.create({
   loadingContent: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  loadingLogo: {
-    width: 200,
-    height: 200,
-  },
-  loadingLoader: {
-    marginTop: 12,
   },
   topBarWrap: {
     position: 'absolute',
