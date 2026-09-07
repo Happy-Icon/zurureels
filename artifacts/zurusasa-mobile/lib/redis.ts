@@ -17,15 +17,24 @@ export async function fetchServerCachedQuery<T>(
   params?: { category?: string }
 ): Promise<T> {
   try {
-    const { data: res, error } = await supabase.functions.invoke('redis-cache', {
+    const edgePromise = supabase.functions.invoke('redis-cache', {
       body: { action, ...params },
     });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Redis cache timeout')), 3500)
+    );
+
+    const { data: res, error } = (await Promise.race([
+      edgePromise,
+      timeoutPromise,
+    ])) as any;
 
     if (!error && res?.data) {
       return res.data as T;
     }
   } catch (err) {
-    console.warn(`[Server Redis Cache] Function call failed for ${action}, using DB fallback:`, err);
+    console.warn(`[Server Redis Cache] Fast fallback for ${action}:`, err);
   }
 
   return await dbFallbackFn();

@@ -17,6 +17,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useConversations } from '@/lib/queries';
 import { Skeleton } from '@/components/Skeleton';
+import { OfflineState } from '@/components/OfflineState';
+import { useNetworkStatus } from '@/lib/networkManager';
 import { useColors } from '@/hooks/useColors';
 import { supabase, type ConversationRow } from '@/lib/supabase';
 
@@ -43,6 +45,7 @@ export default function InboxScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, loading } = useAuth();
+  const { isOnline } = useNetworkStatus();
   const { data: conversations, isLoading, refetch } = useConversations(user?.id);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -82,8 +85,13 @@ export default function InboxScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
+    try {
+      await refetch();
+    } catch (err) {
+      console.warn('[Inbox] Refresh error (offline):', err);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 8;
@@ -212,6 +220,12 @@ export default function InboxScreen() {
               <Skeleton style={styles.skeletonRow} />
               <Skeleton style={styles.skeletonRow} />
             </View>
+          ) : !isOnline && (!conversations || conversations.length === 0) ? (
+            <OfflineState
+              fullScreen={false}
+              onRetry={refetch}
+              message="Check your internet connection to view your conversations."
+            />
           ) : (
             <View style={styles.empty}>
               <Feather name="message-circle" size={44} color={colors.mutedForeground} style={{ opacity: 0.5 }} />

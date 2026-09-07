@@ -22,6 +22,8 @@ import { HostDashboard } from '@/components/host/HostDashboard';
 import { ReelCard } from '@/components/ReelCard';
 import { CenteredState } from '@/components/Skeleton';
 import { PremiumLoader } from '@/components/PremiumLoader';
+import { OfflineState } from '@/components/OfflineState';
+import { useNetworkStatus } from '@/lib/networkManager';
 import { useReels, useBatchReelInteractions } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
 
@@ -46,6 +48,7 @@ function ZuruFlowFeed() {
   const { user } = useAuth();
   const { height } = useWindowDimensions();
   const isFocused = useIsFocused();
+  const { isOnline } = useNetworkStatus();
   const { data: reels, isLoading, isError, refetch } = useReels();
   const [feedStream, setFeedStream] = useState<'around' | 'zuruflow'>('around');
   const [activeIndex, setActiveIndex] = useState<number>(0);
@@ -137,15 +140,30 @@ function ZuruFlowFeed() {
     </View>
   );
 
+  // 1. Offline State (No cached data & offline, or request failed while offline)
+  if ((!isOnline && (!reels || reels.length === 0)) || (isError && !isOnline)) {
+    return (
+      <View style={[styles.fill, { backgroundColor: '#000000' }]}>
+        <OfflineState
+          onRetry={refetch}
+          message="Check your internet connection. We'll automatically reload your feed as soon as you're back online."
+        />
+        {topOverlay}
+      </View>
+    );
+  }
+
+  // 2. Loading State (Online & fetching initial data)
   if (isLoading) {
     return <FeedLoadingState topOverlay={topOverlay} />;
   }
 
+  // 3. Server Error State (Online, but request returned error)
   if (isError) {
     return (
       <View style={[styles.fill, { backgroundColor: '#000000' }]}>
         <CenteredState>
-          <Feather name="wifi-off" size={32} color="rgba(255,255,255,0.7)" />
+          <Feather name="alert-circle" size={32} color="rgba(255,255,255,0.7)" />
           <Text style={styles.stateText}>Couldn't load the feed</Text>
           <Pressable
             testID="retry-reels"

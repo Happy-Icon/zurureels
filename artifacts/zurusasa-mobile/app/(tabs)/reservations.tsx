@@ -23,6 +23,8 @@ import { useEnquire, useGuestCancelBooking, useMyBookings } from '@/lib/queries'
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { Skeleton } from '@/components/Skeleton';
+import { OfflineState } from '@/components/OfflineState';
+import { useNetworkStatus } from '@/lib/networkManager';
 import { JourneyCompanionSheet } from '@/components/journey/JourneyCompanionSheet';
 import { HostReservationsView } from '@/components/host/HostReservationsView';
 import { LeaveReviewModal } from '@/components/reviews/LeaveReviewModal';
@@ -206,6 +208,7 @@ function GuestTripsView() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { isOnline } = useNetworkStatus();
   const enquire = useEnquire();
 
   const { bookingId } = useLocalSearchParams<{ bookingId?: string }>();
@@ -515,6 +518,12 @@ function GuestTripsView() {
             <Skeleton style={styles.skeletonCard} />
             <Skeleton style={styles.skeletonCard} />
           </View>
+        ) : !hasAnyBookings && !isOnline ? (
+          <OfflineState
+            fullScreen={false}
+            onRetry={refetch}
+            message="Check your internet connection to view your booked trips."
+          />
         ) : !hasAnyBookings ? (
           /* ── Premium Empty State ───────────────────────────────────── */
           <View style={styles.emptyContainer}>

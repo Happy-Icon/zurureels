@@ -45,40 +45,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [hasListings, setHasListings] = useState<boolean>(false);
 
   const loadProfile = useCallback(async (userId: string) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-    setProfile((data as ProfileRow | null) ?? null);
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      if (data) {
+        setProfile(data as ProfileRow);
+      }
 
-    // Register Expo push token into user_devices canonical store
-    notificationService.registerPushToken(userId).catch((err) => {
-      console.warn('Push token registration note:', err);
-    });
+      // Register Expo push token into user_devices canonical store
+      notificationService.registerPushToken(userId).catch((err) => {
+        console.warn('Push token registration note:', err);
+      });
 
-    // Also check if user has created any listings
-    const { count } = await supabase
-      .from('experiences')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId);
+      // Also check if user has created any listings
+      const { count } = await supabase
+        .from('experiences')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
 
-    setHasListings((count ?? 0) > 0);
+      setHasListings((count ?? 0) > 0);
+    } catch (err) {
+      console.warn('[AuthContext] loadProfile note (offline or network failure):', err);
+    }
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (data.session?.user) {
-        loadProfile(data.session.user.id);
+    let isMounted = true;
+    // 6s fallback timer ensures app never gets stuck on auth loading if device is offline
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    }, 6000);
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!isMounted) return;
+        setSession(data?.session ?? null);
+        if (data?.session?.user) {
+          loadProfile(data.session.user.id).catch(() => {});
+        }
+      })
+      .catch((err) => {
+        console.warn('[AuthContext] getSession error (offline):', err);
+      })
+      .finally(() => {
+        if (isMounted) {
+          clearTimeout(safetyTimer);
+          setLoading(false);
+        }
+      });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (!isMounted) return;
       setSession(newSession);
       if (newSession?.user) {
-        loadProfile(newSession.user.id);
+        loadProfile(newSession.user.id).catch(() => {});
       } else {
         setProfile(null);
         setHasListings(false);
@@ -86,6 +112,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
       sub.subscription.unsubscribe();
     };
   }, [loadProfile]);

@@ -10,6 +10,48 @@ const supabaseKey =
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqemd6eHhkcmx0bHRlZXNodHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNDc4MjUsImV4cCI6MjA4MzkyMzgyNX0.rRudHu14sWNALKESz2Wwsjn_40xYaStRUlfdXZFVikA';
 
+const DEFAULT_FETCH_TIMEOUT_MS = 15_000; // 15s timeout on mobile requests
+
+/**
+ * Resilient fetch wrapper with AbortController timeout.
+ * Prevents dead/dropped mobile connections from hanging requests indefinitely.
+ */
+const customFetchWithTimeout: typeof fetch = async (input, init) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(new Error('Network request timed out'));
+  }, DEFAULT_FETCH_TIMEOUT_MS);
+
+  if (init?.signal) {
+    if (init.signal.aborted) {
+      clearTimeout(timeoutId);
+      controller.abort(init.signal.reason);
+    } else {
+      init.signal.addEventListener('abort', () => {
+        clearTimeout(timeoutId);
+        controller.abort(init.signal?.reason);
+      });
+    }
+  }
+
+  try {
+    const response = await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+    return response;
+  } catch (error: any) {
+    if (controller.signal.aborted) {
+      const err = new Error('Network request timed out. Please check your internet connection.');
+      (err as any).name = 'TimeoutError';
+      throw err;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     storage: Platform.OS === 'web' ? undefined : AsyncStorage,
@@ -19,6 +61,9 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     experimental: {
       passkey: true,
     },
+  },
+  global: {
+    fetch: customFetchWithTimeout,
   },
 });
 

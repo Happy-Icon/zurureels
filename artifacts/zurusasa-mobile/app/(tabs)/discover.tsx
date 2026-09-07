@@ -32,6 +32,8 @@ import { ReelGridCard } from '@/components/ReelGridCard';
 import { ReelCard } from '@/components/ReelCard';
 import { ZuruAgentChat, type ReelSummary } from '@/components/ZuruAgentChat';
 import { Skeleton } from '@/components/Skeleton';
+import { OfflineState } from '@/components/OfflineState';
+import { useNetworkStatus } from '@/lib/networkManager';
 import type { BookingRow, ReelRow } from '@/lib/supabase';
 
 // Advanced Search & Smart Filters Imports
@@ -67,6 +69,7 @@ export default function AirbnbDiscoverScreen() {
   const colors = useColors();
   const { isDark } = useTheme();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
+  const { isOnline } = useNetworkStatus();
 
   const [activeCategory, setActiveCategory] = useState<CategoryId>('all');
   const [selectedCity, setSelectedCity] = useState('Mombasa');
@@ -350,6 +353,12 @@ export default function AirbnbDiscoverScreen() {
                   </View>
                 ))}
               </View>
+            ) : (!isOnline && filteredReels.length === 0) || (reelsQuery.isError && filteredReels.length === 0) ? (
+              <OfflineState
+                fullScreen={false}
+                onRetry={reelsQuery.refetch}
+                message="Check your internet connection to explore stays, villas, and experiences across the coast."
+              />
             ) : (
               <SearchEmptyState
                 onResetFilters={resetFilters}

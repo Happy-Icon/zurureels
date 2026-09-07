@@ -39,8 +39,13 @@ export default function WishlistsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refetchReels(), refetchEvents()]);
-    setRefreshing(false);
+    try {
+      await Promise.all([refetchReels(), refetchEvents()]);
+    } catch (e) {
+      console.warn('[Saved] Refresh error (offline):', e);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const totalSavedCount = (reels?.length ?? 0) + (events?.length ?? 0);
