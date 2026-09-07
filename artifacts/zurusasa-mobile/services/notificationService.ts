@@ -356,6 +356,17 @@ export const notificationService = {
       }
 
       // 3. Fetch Expo Push Token with EAS Project ID
+      const isExpoGo =
+        Constants.appOwnership === 'expo' ||
+        (Constants as any).executionEnvironment === 'storeClient';
+
+      if (isExpoGo && Platform.OS === 'android') {
+        console.log(
+          '[Push] Running in Expo Go on Android: Remote push notifications were removed in Expo SDK 53+. Use an EAS Development Build for remote push. Local notifications remain active.',
+        );
+        return null;
+      }
+
       const projectId =
         Constants.expoConfig?.extra?.eas?.projectId ??
         (Constants as any).easConfig?.projectId ??
@@ -606,6 +617,32 @@ export const notificationService = {
         success: false,
         error: err?.message || 'Failed to trigger test push notification on device.',
       };
+    }
+  },
+
+  /**
+   * Immediately displays a native local notification banner on the device
+   */
+  async presentLocalNotification(params: {
+    title: string;
+    body: string;
+    data?: Record<string, unknown>;
+  }): Promise<void> {
+    if (Platform.OS === 'web' || !Notifications) return;
+    try {
+      if (Notifications.scheduleNotificationAsync) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: params.title,
+            body: params.body,
+            sound: 'default',
+            data: params.data ?? {},
+          },
+          trigger: null,
+        });
+      }
+    } catch (err) {
+      console.log('[Push] Local notification presentation note:', err);
     }
   },
 };

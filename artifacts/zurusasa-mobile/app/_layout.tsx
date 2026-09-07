@@ -145,7 +145,11 @@ function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      // Safety timeout: ensure splash screen hides even if initial screen takes longer
+      const timer = setTimeout(() => {
+        SplashScreen.hideAsync().catch(() => {});
+      }, 1500);
+      return () => clearTimeout(timer);
     }
   }, [fontsLoaded, fontError]);
 

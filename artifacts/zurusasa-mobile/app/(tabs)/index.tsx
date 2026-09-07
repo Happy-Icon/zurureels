@@ -1,7 +1,9 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
+  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -10,6 +12,7 @@ import {
   View,
   type ViewToken,
 } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,6 +27,13 @@ import type { ReelRow } from '@/lib/supabase';
 
 export default function HomeScreen() {
   const { viewMode } = useAuth();
+
+  useEffect(() => {
+    if (viewMode === 'host') {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [viewMode]);
+
   if (viewMode === 'host') {
     return <HostDashboard />;
   }
@@ -39,6 +49,12 @@ function ZuruFlowFeed() {
   const { data: reels, isLoading, isError, refetch } = useReels();
   const [feedStream, setFeedStream] = useState<'around' | 'zuruflow'>('around');
   const [activeIndex, setActiveIndex] = useState<number>(0);
+
+  useEffect(() => {
+    if (!isLoading) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isLoading]);
 
   const reelIds = React.useMemo(() => (reels ?? []).map((r) => r.id), [reels]);
   const { data: interactionsMap } = useBatchReelInteractions(
@@ -122,12 +138,7 @@ function ZuruFlowFeed() {
   );
 
   if (isLoading) {
-    return (
-      <View style={[styles.fill, { backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }]}>
-        <PremiumLoader color="#EE7D30" size={10} />
-        {topOverlay}
-      </View>
-    );
+    return <FeedLoadingState topOverlay={topOverlay} />;
   }
 
   if (isError) {
@@ -191,9 +202,62 @@ function ZuruFlowFeed() {
   );
 }
 
+function FeedLoadingState({ topOverlay }: { topOverlay: React.ReactNode }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.95,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseAnim]);
+
+  return (
+    <View style={[styles.fill, styles.loadingContainer]}>
+      <Animated.View style={[styles.loadingContent, { transform: [{ scale: pulseAnim }] }]}>
+        <Image
+          source={require('@/assets/images/splash-icon.png')}
+          style={styles.loadingLogo}
+          resizeMode="contain"
+        />
+        <PremiumLoader color="#EE7D30" size={8} style={styles.loadingLoader} />
+      </Animated.View>
+      {topOverlay}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
+  },
+  loadingContainer: {
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingLogo: {
+    width: 200,
+    height: 200,
+  },
+  loadingLoader: {
+    marginTop: 12,
   },
   topBarWrap: {
     position: 'absolute',

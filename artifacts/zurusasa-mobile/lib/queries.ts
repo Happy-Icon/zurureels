@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchServerCachedQuery } from '@/lib/redis';
 import { notificationService } from '@/services/notificationService';
+import { emailService } from '@/services/emailService';
 import {
   supabase,
   type BookingRow,
@@ -861,11 +862,40 @@ export function useHostConfirmBooking() {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+
+      // Multi-channel dispatch: Push notification & Email to guest
+      if (data?.user_id) {
+        const tripTitle = data.trip_title || 'Coastal Stay';
+        notificationService
+          .sendPushNotificationForUser(
+            data.user_id,
+            'Reservation Confirmed! 🎉',
+            `Your reservation for "${tripTitle}" was confirmed by the host.`,
+            {
+              type: 'booking_confirmed',
+              actionType: 'booking',
+              actionId: data.id,
+              bookingId: data.id,
+            },
+          )
+          .catch((err) => console.warn('[Push] Error dispatching confirm push:', err));
+
+        emailService
+          .sendBookingConfirmedEmail({
+            userId: data.user_id,
+            bookingId: data.id,
+            tripTitle,
+            amount: data.amount,
+            startDate: data.start_date,
+            endDate: data.end_date,
+          })
+          .catch((err) => console.warn('[Email] Error dispatching confirm email:', err));
+      }
     },
   });
 }
@@ -882,11 +912,38 @@ export function useHostDeclineBooking() {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any, vars) => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+
+      // Multi-channel dispatch: Push notification & Email to guest
+      if (data?.user_id) {
+        const tripTitle = data.trip_title || 'Coastal Stay';
+        notificationService
+          .sendPushNotificationForUser(
+            data.user_id,
+            'Reservation Request Declined',
+            `Your reservation for "${tripTitle}" could not be accommodated by the host. Refund processing initiated.`,
+            {
+              type: 'booking_cancelled',
+              actionType: 'booking',
+              actionId: data.id,
+              bookingId: data.id,
+            },
+          )
+          .catch((err) => console.warn('[Push] Error dispatching decline push:', err));
+
+        emailService
+          .sendBookingCancelledEmail({
+            userId: data.user_id,
+            bookingId: data.id,
+            tripTitle,
+            reason: vars?.reason,
+          })
+          .catch((err) => console.warn('[Email] Error dispatching decline email:', err));
+      }
     },
   });
 }

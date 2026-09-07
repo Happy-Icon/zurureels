@@ -83,6 +83,18 @@ export function useNotifications(modeOverride?: 'guest' | 'host') {
               setTotalUnreadCount((c) => c + 1);
             }
 
+            // Immediately trigger native notification banner and alert on device
+            notificationService.presentLocalNotification({
+              title: newNotif.title,
+              body: newNotif.message,
+              data: {
+                id: newNotif.id,
+                type: newNotif.type,
+                actionType: newNotif.action_type,
+                actionId: newNotif.action_id,
+              },
+            });
+
             // Immediately invalidate React Query caches when a booking notification arrives
             if (
               newNotif.action_type === 'booking' ||
