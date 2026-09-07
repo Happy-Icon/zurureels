@@ -15,14 +15,23 @@ export function setupNetworkAndFocusManagers() {
   isNetworkSetup = true;
 
   // 1. Hook React Query's onlineManager to NetInfo
-  onlineManager.setEventListener((setOnline) => {
-    return NetInfo.addEventListener((state: NetInfoState) => {
-      const isOnline = Boolean(
-        state.isConnected && state.isInternetReachable !== false,
-      );
-      setOnline(isOnline);
+  try {
+    onlineManager.setEventListener((setOnline) => {
+      try {
+        return NetInfo.addEventListener((state: NetInfoState) => {
+          const isOnline = Boolean(
+            state.isConnected && state.isInternetReachable !== false,
+          );
+          setOnline(isOnline);
+        });
+      } catch (err) {
+        console.warn('[NetworkManager] NetInfo listener setup fallback:', err);
+        return () => {};
+      }
     });
-  });
+  } catch (err) {
+    console.warn('[NetworkManager] NetInfo module not in binary:', err);
+  }
 
   // 2. Hook React Query's focusManager to AppState (foreground / background)
   if (Platform.OS !== 'web') {
@@ -30,12 +39,16 @@ export function setupNetworkAndFocusManagers() {
       focusManager.setFocused(status === 'active');
       if (status === 'active') {
         // Re-check network connectivity when user returns to the app
-        NetInfo.fetch().then((state) => {
-          const isOnline = Boolean(
-            state.isConnected && state.isInternetReachable !== false,
-          );
-          onlineManager.setOnline(isOnline);
-        });
+        try {
+          NetInfo.fetch()
+            .then((state) => {
+              const isOnline = Boolean(
+                state.isConnected && state.isInternetReachable !== false,
+              );
+              onlineManager.setOnline(isOnline);
+            })
+            .catch(() => {});
+        } catch {}
       }
     });
   }
@@ -58,32 +71,40 @@ export function useNetworkStatus(): NetworkStatus {
   }));
 
   useEffect(() => {
-    // Initial fetch
-    NetInfo.fetch().then((state) => {
-      const isOnline = Boolean(
-        state.isConnected && state.isInternetReachable !== false,
-      );
-      setStatus({
-        isOnline,
-        isConnected: state.isConnected,
-        isInternetReachable: state.isInternetReachable,
-      });
-    });
+    try {
+      NetInfo.fetch()
+        .then((state) => {
+          const isOnline = Boolean(
+            state.isConnected && state.isInternetReachable !== false,
+          );
+          setStatus({
+            isOnline,
+            isConnected: state.isConnected,
+            isInternetReachable: state.isInternetReachable,
+          });
+        })
+        .catch(() => {});
 
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      const isOnline = Boolean(
-        state.isConnected && state.isInternetReachable !== false,
-      );
-      setStatus({
-        isOnline,
-        isConnected: state.isConnected,
-        isInternetReachable: state.isInternetReachable,
+      const unsubscribe = NetInfo.addEventListener((state) => {
+        const isOnline = Boolean(
+          state.isConnected && state.isInternetReachable !== false,
+        );
+        setStatus({
+          isOnline,
+          isConnected: state.isConnected,
+          isInternetReachable: state.isInternetReachable,
+        });
       });
-    });
 
-    return () => {
-      unsubscribe();
-    };
+      return () => {
+        try {
+          unsubscribe();
+        } catch {}
+      };
+    } catch (err) {
+      console.warn('[NetworkStatus] NetInfo native module note:', err);
+      return () => {};
+    }
   }, []);
 
   return status;
