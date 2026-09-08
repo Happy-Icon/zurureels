@@ -70,6 +70,7 @@
     "@sentry/react-native": "~7.11.0",
     "@supabase/supabase-js": "^2.110.7",
     "expo-insights": "~57.0.16",
+    "expo-observe": "~57.0.19",
     "expo-updates": "~57.0.21",
     "expo-video": "~57.0.3",
     "react-native-map-clustering": "^4.0.0",

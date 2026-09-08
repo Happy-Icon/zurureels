@@ -8,12 +8,13 @@ let Notifications: any = null;
 try {
   Notifications = require('expo-notifications');
 
-  // 1. Configure foreground notification display behavior
+  // 1. Configure foreground notification display behavior (SDK 52+ format)
   Notifications?.setNotificationHandler?.({
     handleNotification: async () => ({
-      shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
     }),
   });
 
@@ -25,6 +26,7 @@ try {
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#F26522',
       sound: 'default',
+      enableVibrate: true,
       showBadge: true,
     }).catch((err: any) => console.warn('[Push] Android channel setup note:', err?.message || err));
   }
@@ -351,6 +353,7 @@ export const notificationService = {
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#F26522',
           sound: 'default',
+          enableVibrate: true,
           showBadge: true,
         });
       }
@@ -379,13 +382,16 @@ export const notificationService = {
         });
         token = tokenData?.data ?? null;
       } catch (tokenErr: any) {
-        console.log('[Push] getExpoPushTokenAsync with projectId note:', tokenErr?.message || tokenErr);
+        console.warn('[Push] getExpoPushTokenAsync with projectId error:', tokenErr?.message || tokenErr);
         try {
           const fallbackToken = await Notifications.getExpoPushTokenAsync();
           token = fallbackToken?.data ?? null;
         } catch (fallbackErr: any) {
-          console.log('[Push] Push token fallback note:', fallbackErr?.message || fallbackErr);
-          token = `ExponentPushToken[dev_${Platform.OS}_${userId.slice(0, 8)}]`;
+          console.warn(
+            '[Push] Push token generation error. Note: Standalone APKs require Firebase Cloud Messaging (google-services.json & FCM V1) configured in EAS to generate remote push tokens:',
+            fallbackErr?.message || fallbackErr,
+          );
+          token = null;
         }
       }
 
@@ -589,6 +595,7 @@ export const notificationService = {
                 title: '🌴 ZuruSasa Coastal Alert',
                 body: 'Test Push Notification: Your booking alerts and trip reminders are working correctly!',
                 sound: 'default',
+                channelId: 'default',
                 data: { type: 'test_push', timestamp: new Date().toISOString() },
               },
               trigger: null,
@@ -636,6 +643,7 @@ export const notificationService = {
             title: params.title,
             body: params.body,
             sound: 'default',
+            channelId: 'default',
             data: params.data ?? {},
           },
           trigger: null,

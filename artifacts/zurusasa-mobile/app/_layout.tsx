@@ -1,15 +1,17 @@
 import React, { useEffect } from 'react';
 import { View } from 'react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeProvider } from '@/context/ThemeContext';
-import { AuthProvider } from '@/context/AuthContext';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { CustomAlertProvider } from '@/context/CustomAlertContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useColors } from '@/hooks/useColors';
+import { supabase } from '@/lib/supabase';
+import { notificationService } from '@/services/notificationService';
 import {
   DMSans_400Regular,
   DMSans_500Medium,
@@ -28,9 +30,15 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { initSentry, Sentry } from '@/lib/sentry';
+import { Observe, ObserveRoot, useObserve } from 'expo-observe';
 
 // Initialize Sentry Monitoring
 initSentry();
+
+// Initialize EAS Observe with Expo Router per-route navigation metrics
+Observe.configure({
+  integrations: { 'expo-router': true },
+});
 
 import { setupNetworkAndFocusManagers } from '@/lib/networkManager';
 
@@ -148,11 +156,78 @@ function RootLayoutNav() {
   );
 }
 
+function GlobalNotificationSubscriber() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!user) return;
+
+    // 1. Configure Android channel and push token registration
+    notificationService.registerPushToken(user.id).catch((e) => {
+      console.log('[Push] Global token registration note:', e);
+    });
+
+    // 2. Global Realtime subscription for incoming notifications to drop local banners on device
+    const channelName = `global_notifs_${user.id}_${Math.random().toString(36).substring(2, 6)}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newNotif = payload.new as any;
+          if (newNotif) {
+            // Trigger native notification heads-up banner on device immediately
+            notificationService.presentLocalNotification({
+              title: newNotif.title || 'ZuruSasa Notification',
+              body: newNotif.message || '',
+              data: {
+                id: newNotif.id,
+                type: newNotif.type,
+                actionType: newNotif.action_type,
+                actionId: newNotif.action_id,
+              },
+            });
+
+            // Invalidate React Query caches so all screens update seamlessly
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
+            queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
+            if (
+              newNotif.action_type === 'booking' ||
+              newNotif.type?.startsWith('booking_') ||
+              newNotif.type === 'payment_success' ||
+              newNotif.type === 'refund_processed'
+            ) {
+              queryClient.invalidateQueries({ queryKey: ['bookings'] });
+              queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+              queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
+              queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
+            }
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel).catch(() => {});
+    };
+  }, [user, queryClient]);
+
+  return null;
+}
+
 function RootLayoutInner() {
   const colors = useColors();
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <KeyboardProvider>
+        <GlobalNotificationSubscriber />
         <RootLayoutNav />
       </KeyboardProvider>
     </GestureHandlerRootView>
@@ -167,12 +242,14 @@ function RootLayout() {
     DMSans_700Bold,
     InstrumentSerif_400Regular,
   });
+  const { markInteractive } = useObserve();
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync().catch(() => {});
+      markInteractive();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, markInteractive]);
 
   if (!fontsLoaded && !fontError) {
     return <View style={{ flex: 1, backgroundColor: '#000000' }} />;
@@ -195,4 +272,4 @@ function RootLayout() {
   );
 }
 
-export default Sentry.wrap(RootLayout);
+export default ObserveRoot.wrap(Sentry.wrap(RootLayout));

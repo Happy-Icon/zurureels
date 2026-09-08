@@ -16,6 +16,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { useNotifications } from '@/hooks/useNotifications';
+import { notificationService } from '@/services/notificationService';
 import { NotificationCard } from '@/components/NotificationCard';
 import { Skeleton } from '@/components/Skeleton';
 import type { NotificationRow } from '@/lib/supabase';
@@ -58,7 +59,21 @@ export default function NotificationCenterScreen() {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { viewMode } = useAuth();
+  const { viewMode, user } = useAuth();
+  const [isTestingPush, setIsTestingPush] = useState(false);
+
+  const handleTestPush = async () => {
+    if (!user) return;
+    setIsTestingPush(true);
+    try {
+      await notificationService.triggerTestPush(user.id);
+    } catch (e) {
+      console.warn('Test push note:', e);
+    } finally {
+      setIsTestingPush(false);
+    }
+  };
+
   const {
     notifications: rawNotifications,
     isLoading,
@@ -175,14 +190,27 @@ export default function NotificationCenterScreen() {
           <Feather name="arrow-left" size={24} color={colors.text} />
         </Pressable>
 
-        {unreadCount > 0 && (
+        <View style={styles.headerRightActions}>
           <Pressable
-            onPress={markAllAsRead}
-            style={({ pressed }) => [styles.markAllBtn, pressed && { opacity: 0.7 }]}
+            onPress={handleTestPush}
+            disabled={isTestingPush}
+            style={({ pressed }) => [styles.testBannerBtn, pressed && { opacity: 0.7 }]}
           >
-            <Text style={[styles.markAllText, { color: colors.text }]}>Mark all read</Text>
+            <Feather name="bell" size={14} color="#F26522" style={{ marginRight: 4 }} />
+            <Text style={styles.testBannerText}>
+              {isTestingPush ? 'Testing...' : 'Test Banner'}
+            </Text>
           </Pressable>
-        )}
+
+          {unreadCount > 0 && (
+            <Pressable
+              onPress={markAllAsRead}
+              style={({ pressed }) => [styles.markAllBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={[styles.markAllText, { color: colors.text }]}>Mark all read</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* ── PAGE TITLE (MATCHING SCREENSHOT) ─────────────────────────────────── */}
@@ -259,6 +287,24 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'flex-start',
     justifyContent: 'center',
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  testBannerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    backgroundColor: 'rgba(242, 101, 34, 0.12)',
+  },
+  testBannerText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#F26522',
   },
   markAllBtn: {
     paddingVertical: 6,

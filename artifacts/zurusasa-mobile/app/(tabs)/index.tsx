@@ -26,15 +26,18 @@ import { OfflineState } from '@/components/OfflineState';
 import { useNetworkStatus } from '@/lib/networkManager';
 import { useReels, useBatchReelInteractions } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
+import { useObserve } from 'expo-observe';
 
 export default function HomeScreen() {
   const { viewMode } = useAuth();
+  const { markInteractive } = useObserve();
 
   useEffect(() => {
     if (viewMode === 'host') {
       SplashScreen.hideAsync().catch(() => {});
+      markInteractive();
     }
-  }, [viewMode]);
+  }, [viewMode, markInteractive]);
 
   if (viewMode === 'host') {
     return <HostDashboard />;
@@ -52,12 +55,14 @@ function ZuruFlowFeed() {
   const { data: reels, isLoading, isError, refetch } = useReels();
   const [feedStream, setFeedStream] = useState<'around' | 'zuruflow'>('around');
   const [activeIndex, setActiveIndex] = useState<number>(0);
+  const { markInteractive } = useObserve();
 
   useEffect(() => {
     if (!isLoading) {
       SplashScreen.hideAsync().catch(() => {});
+      markInteractive();
     }
-  }, [isLoading]);
+  }, [isLoading, markInteractive]);
 
   const reelIds = React.useMemo(() => (reels ?? []).map((r) => r.id), [reels]);
   const { data: interactionsMap } = useBatchReelInteractions(
