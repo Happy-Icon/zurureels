@@ -955,13 +955,45 @@ export default function AuthScreen() {
                     <Feather
                       name="shield"
                       size={12}
-                      color="rgba(255,255,255,0.5)"
+                      color="rgba(255,255,255,0.6)"
                     />
                     <Text style={styles.footerText}>
-                      Your information is protected.{' '}
-                      <Text style={styles.footerLink}>Privacy</Text>
+                      By signing in, you agree to our{' '}
+                      <Text
+                        onPress={() => router.push('/profile/legal?doc=privacy')}
+                        style={styles.footerLink}
+                        accessibilityRole="link"
+                        accessibilityLabel="Privacy Policy"
+                      >
+                        Privacy
+                      </Text>
                       {' · '}
-                      <Text style={styles.footerLink}>Terms</Text>
+                      <Text
+                        onPress={() => router.push('/profile/legal?doc=terms')}
+                        style={styles.footerLink}
+                        accessibilityRole="link"
+                        accessibilityLabel="Terms of Service"
+                      >
+                        Terms
+                      </Text>
+                      {' · '}
+                      <Text
+                        onPress={() => router.push('/profile/legal?doc=cookies')}
+                        style={styles.footerLink}
+                        accessibilityRole="link"
+                        accessibilityLabel="Cookie Policy"
+                      >
+                        Cookies
+                      </Text>
+                      {' · '}
+                      <Text
+                        onPress={() => router.push('/profile/legal?doc=refunds')}
+                        style={styles.footerLink}
+                        accessibilityRole="link"
+                        accessibilityLabel="Cancellation and Refund Policy"
+                      >
+                        Refunds
+                      </Text>
                     </Text>
                   </View>
                 </>
@@ -1051,11 +1083,27 @@ export default function AuthScreen() {
                   <Feather
                     name="shield"
                     size={12}
-                    color="rgba(255,255,255,0.4)"
+                    color="rgba(255,255,255,0.5)"
                   />
                   <Text style={styles.footerText}>
                     Your information is protected.{' '}
-                    <Text style={styles.footerLink}>Privacy Policy</Text>
+                    <Text
+                      onPress={() => router.push('/profile/legal?doc=privacy')}
+                      style={styles.footerLink}
+                      accessibilityRole="link"
+                      accessibilityLabel="Privacy Policy"
+                    >
+                      Privacy Policy
+                    </Text>
+                    {' · '}
+                    <Text
+                      onPress={() => router.push('/profile/legal?doc=terms')}
+                      style={styles.footerLink}
+                      accessibilityRole="link"
+                      accessibilityLabel="Terms of Service"
+                    >
+                      Terms
+                    </Text>
                   </Text>
                 </View>
               )}
@@ -1332,6 +1380,7 @@ function ProfileFlowScreen({
   onBack,
   goHome,
 }: any) {
+  const router = useRouter();
   if (step === 'email_sent') {
     return (
       <View style={[styles.whiteScreen, { paddingTop: insets.top }]}>
@@ -1509,9 +1558,33 @@ function ProfileFlowScreen({
 
         <Text style={styles.whiteLegal}>
           By selecting Agree and continue, you agree to ZuruSasa's{' '}
-          <Text style={styles.whiteLegalLink}>Terms of Service</Text>,{' '}
-          <Text style={styles.whiteLegalLink}>Payments Terms</Text>, and{' '}
-          <Text style={styles.whiteLegalLink}>Privacy Policy</Text>.
+          <Text
+            onPress={() => router.push('/profile/legal?doc=terms')}
+            style={styles.whiteLegalLink}
+            accessibilityRole="link"
+            accessibilityLabel="Terms of Service"
+          >
+            Terms of Service
+          </Text>
+          {', '}
+          <Text
+            onPress={() => router.push('/profile/legal?doc=privacy')}
+            style={styles.whiteLegalLink}
+            accessibilityRole="link"
+            accessibilityLabel="Privacy Policy"
+          >
+            Privacy Policy
+          </Text>
+          {', and '}
+          <Text
+            onPress={() => router.push('/profile/legal?doc=refunds')}
+            style={styles.whiteLegalLink}
+            accessibilityRole="link"
+            accessibilityLabel="Cancellation and Refund Policy"
+          >
+            Cancellation & Refund Policy
+          </Text>
+          .
         </Text>
 
         <Pressable
@@ -2044,6 +2117,25 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_600SemiBold',
     color: INK,
     textDecorationLine: 'underline',
+  },
+  dataMinimizationBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  dataMinimizationText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: 'DMSans_400Regular',
+    color: '#9A3412',
   },
   whiteScreenCta: {
     backgroundColor: ORANGE,

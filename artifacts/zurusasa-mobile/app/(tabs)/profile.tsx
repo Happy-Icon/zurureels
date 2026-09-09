@@ -31,6 +31,7 @@ import { useSavedEvents, useSavedReels } from '@/lib/queries';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationBadge } from '@/components/NotificationBadge';
 import { Skeleton } from '@/components/Skeleton';
+import { HistoryBottomSheet } from '@/components/history/HistoryBottomSheet';
 
 interface ProfileMenuItem {
   id: string;
@@ -61,6 +62,7 @@ export default function ProfileScreen() {
   const [targetMode, setTargetMode] = useState<'guest' | 'host'>('host');
   const [imageError, setImageError] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [historySheetVisible, setHistorySheetVisible] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
@@ -90,6 +92,12 @@ export default function ProfileScreen() {
       pulseAnim.setValue(1);
     }
   }, [switchingOverlayVisible, pulseAnim]);
+
+  const avatarUrl = resolveAvatarUrl(profile, user, profile);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [avatarUrl]);
 
   if (loading) {
     return (
@@ -140,12 +148,6 @@ export default function ProfileScreen() {
     user.email?.split('@')[0] ||
     user.phone ||
     'Traveler';
-
-  const avatarUrl = resolveAvatarUrl(profile, user, profile);
-
-  useEffect(() => {
-    setImageError(false);
-  }, [avatarUrl]);
 
   const initial = displayName.charAt(0).toUpperCase();
   const isHostMode = viewMode === 'host';
@@ -464,7 +466,7 @@ export default function ProfileScreen() {
 
           <Pressable
             testID="profile-quick-history"
-            onPress={() => router.push('/profile/history')}
+            onPress={() => setHistorySheetVisible(true)}
             style={({ pressed }) => [
               styles.quickCard,
               { backgroundColor: colors.card, borderColor: colors.border },
@@ -615,6 +617,12 @@ export default function ProfileScreen() {
           </Text>
         </View>
       </Modal>
+
+      {/* ── HISTORY BOTTOM SHEET ────────────────────────────────────────── */}
+      <HistoryBottomSheet
+        visible={historySheetVisible}
+        onClose={() => setHistorySheetVisible(false)}
+      />
     </View>
   );
 }

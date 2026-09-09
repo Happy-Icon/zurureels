@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Modal,
   Platform,
@@ -12,12 +12,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useColors } from '@/hooks/useColors';
 import { useSavedEvents, useSavedReels } from '@/lib/queries';
+import { HistoryBottomSheet } from '@/components/history/HistoryBottomSheet';
 
 export default function WishlistsScreen() {
   const insets = useSafeAreaInsets();
@@ -29,6 +30,16 @@ export default function WishlistsScreen() {
   const { data: reels, isLoading: reelsLoading, refetch: refetchReels } = useSavedReels(user?.id);
   const { data: events, isLoading: eventsLoading, refetch: refetchEvents } = useSavedEvents(user?.id);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Automatically refresh wishlists whenever user switches to this tab
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        refetchReels();
+        refetchEvents();
+      }
+    }, [user?.id, refetchReels, refetchEvents]),
+  );
 
   // Recently viewed & Saved Favorites modal state
   const [recentlyViewedModal, setRecentlyViewedModal] = useState(false);
@@ -224,82 +235,11 @@ export default function WishlistsScreen() {
         </View>
       </Modal>
 
-      {/* ── RECENTLY VIEWED MODAL SHEET ──────────────────────────────────────── */}
-      <Modal
+      {/* ── RECENTLY VIEWED BOTTOM SHEET ────────────────────────────────────── */}
+      <HistoryBottomSheet
         visible={recentlyViewedModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setRecentlyViewedModal(false)}
-      >
-        <View style={[styles.modalSheet, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Pressable onPress={() => setRecentlyViewedModal(false)} style={[styles.circleCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }]}>
-              <Feather name="x" size={20} color={colors.text} />
-            </Pressable>
-            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Recently viewed</Text>
-            <View style={{ width: 36 }} />
-          </View>
-
-          <ScrollView
-            contentContainerStyle={[styles.modalScrollContent, { paddingBottom: insets.bottom + 32 }]}
-            showsVerticalScrollIndicator={false}
-          >
-            {reels && reels.length > 0 ? (
-              reels.map((reel) => (
-                <Pressable
-                  key={reel.id}
-                  onPress={() => {
-                    setRecentlyViewedModal(false);
-                    router.push('/discover');
-                  }}
-                  style={[styles.recentItemRow, { borderBottomColor: colors.border }]}
-                >
-                  <View style={styles.recentThumbBox}>
-                    {reel.thumbnail_url ? (
-                      <Image source={{ uri: reel.thumbnail_url }} style={styles.recentThumb} contentFit="cover" />
-                    ) : (
-                      <View style={[styles.recentThumb, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
-                        <Feather name="film" size={20} color={colors.mutedForeground} />
-                      </View>
-                    )}
-                  </View>
-                  <View style={{ flex: 1, paddingLeft: 12 }}>
-                    <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={1}>
-                      {reel.experience?.title ?? 'Coastal Stay'}
-                    </Text>
-                    <Text style={[styles.recentLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
-                      {reel.experience?.location ?? 'Kenya Coast'}
-                    </Text>
-                    <Text style={styles.recentPrice}>
-                      KES {Number(reel.experience?.current_price ?? 0).toLocaleString()} / night
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-                </Pressable>
-              ))
-            ) : (
-              <View style={styles.emptyRecentWrap}>
-                <View style={[styles.emptyRecentIconCircle, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
-                  <MaterialCommunityIcons name="history" size={32} color={colors.mutedForeground} />
-                </View>
-                <Text style={[styles.emptyRecentTitle, { color: colors.text }]}>No recently viewed items</Text>
-                <Text style={[styles.emptyRecentSub, { color: colors.mutedForeground }]}>
-                  Stays and experiences you browse on Discover and Pulse will appear here automatically.
-                </Text>
-                <Pressable
-                  onPress={() => {
-                    setRecentlyViewedModal(false);
-                    router.push('/discover');
-                  }}
-                  style={[styles.exploreCtaBtn, { backgroundColor: '#F26522' }]}
-                >
-                  <Text style={styles.exploreCtaBtnText}>Explore coastal stays</Text>
-                </Pressable>
-              </View>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
+        onClose={() => setRecentlyViewedModal(false)}
+      />
     </View>
   );
 }

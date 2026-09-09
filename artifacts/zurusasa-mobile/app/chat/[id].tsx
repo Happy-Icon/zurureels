@@ -152,7 +152,7 @@ export default function NativeChatScreen() {
         conversationId: id,
         senderId: user.id,
         content,
-        recipientId: otherId,
+        recipientId: peerUserId || otherId,
         senderName: user.user_metadata?.full_name || 'Someone',
       });
     } catch (err: any) {
@@ -191,7 +191,7 @@ export default function NativeChatScreen() {
         senderId: user.id,
         content: '📷 Photo attachment',
         imageUrl: cRes.secure_url,
-        recipientId: otherId,
+        recipientId: peerUserId || otherId,
         senderName: user.user_metadata?.full_name || 'Someone',
       });
     } catch (err: any) {
@@ -202,12 +202,102 @@ export default function NativeChatScreen() {
     }
   };
 
-  const displayName = (name as string) || 'Support Team';
-  const avatarUrl = (avatar as string) || '';
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const [peerName, setPeerName] = useState<string>(name && name !== 'Support Team' ? name : '');
+  const [peerAvatar, setPeerAvatar] = useState<string>(avatar || '');
+  const [peerUserId, setPeerUserId] = useState<string>(otherId && UUID_REGEX.test(otherId) ? otherId : '');
+
+  // Keep state in sync if navigation params update
+  useEffect(() => {
+    if (name && name !== 'Support Team') setPeerName(name);
+    if (avatar) setPeerAvatar(avatar);
+    if (otherId && UUID_REGEX.test(otherId)) setPeerUserId(otherId);
+  }, [name, avatar, otherId]);
+
+  // Automatically resolve conversation partner (Host/Guest) details from Supabase
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchPeerInfo() {
+      if (!id) return;
+      try {
+        let targetOtherId = peerUserId;
+
+        // 1. If we don't have peer ID, look up conversation participants
+        if (!targetOtherId && user?.id) {
+          const { data: conv } = await supabase
+            .from('conversations')
+            .select('participant_one, participant_two')
+            .eq('id', id)
+            .maybeSingle();
+
+          if (conv) {
+            const resolvedPeer = conv.participant_one === user.id ? conv.participant_two : conv.participant_one;
+            if (resolvedPeer && UUID_REGEX.test(resolvedPeer)) {
+              targetOtherId = resolvedPeer;
+              if (isMounted) setPeerUserId(resolvedPeer);
+            }
+          }
+        }
+
+        // 2. Query peer's profile for real name and avatar
+        if (targetOtherId) {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('full_name, business_name, avatar_url, metadata')
+            .eq('id', targetOtherId)
+            .maybeSingle();
+
+          if (prof && isMounted) {
+            const resolvedTitle =
+              prof.business_name ||
+              prof.full_name ||
+              (prof.metadata as any)?.name ||
+              (prof.metadata as any)?.full_name ||
+              '';
+            if (resolvedTitle) {
+              setPeerName(resolvedTitle);
+            }
+
+            const resolvedPic =
+              prof.avatar_url ||
+              (prof.metadata as any)?.avatar_url ||
+              (prof.metadata as any)?.picture ||
+              '';
+            if (resolvedPic) {
+              setPeerAvatar(resolvedPic);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Chat] Peer info resolution warning:', err);
+      }
+    }
+
+    fetchPeerInfo();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id, peerUserId, user?.id]);
+
+  const displayName = peerName || (name && name !== 'Support Team' ? name : 'Host');
+  const avatarUrl = peerAvatar || avatar || '';
 
   // Render individual message bubble
   const renderMessage = ({ item }: { item: MessageRow }) => {
     const mine = item.sender_id === user?.id;
+    const isImg =
+      item.image_url ||
+      (typeof item.content === 'string' &&
+        (item.content.startsWith('https://res.cloudinary.com') ||
+          (item.content.startsWith('http') &&
+            (item.content.includes('/image/') ||
+              item.content.includes('/upload/') ||
+              /\.(jpg|jpeg|png|webp|gif)/i.test(item.content)))));
+    const imageUri = item.image_url || (isImg ? item.content : null);
+    const showText = item.content && item.content !== '📷 Photo attachment' && item.content !== imageUri;
+
     return (
       <View style={[styles.bubbleWrapper, mine ? styles.bubbleRight : styles.bubbleLeft]}>
         <View
@@ -218,15 +308,15 @@ export default function NativeChatScreen() {
               : [styles.theirBubble, { backgroundColor: isDark ? '#27272A' : '#F2F2F7', borderColor: colors.border }],
           ]}
         >
-          {item.image_url ? (
+          {imageUri ? (
             <Image
-              source={{ uri: item.image_url }}
+              source={{ uri: imageUri }}
               style={styles.attachmentImage}
               contentFit="cover"
               transition={200}
             />
           ) : null}
-          {item.content && item.content !== '📷 Photo attachment' ? (
+          {showText ? (
             <Text
               style={[
                 styles.bubbleText,
@@ -267,7 +357,7 @@ export default function NativeChatScreen() {
         {/* Avatar & Title Group -> Clickable Host Profile Link */}
         <Pressable
           onPress={() => {
-            const targetId = otherId || id;
+            const targetId = peerUserId || otherId;
             if (targetId) {
               router.push(`/profile/${targetId}` as any);
             }

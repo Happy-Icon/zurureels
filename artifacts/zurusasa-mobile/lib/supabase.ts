@@ -281,6 +281,7 @@ export interface BookingRow {
   experience?: Pick<
     ExperienceRow,
     | 'id'
+    | 'user_id'
     | 'title'
     | 'location'
     | 'current_price'

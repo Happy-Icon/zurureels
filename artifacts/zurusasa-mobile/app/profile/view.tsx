@@ -148,6 +148,7 @@ export default function ViewProfileScreen() {
 
   // Load existing profile metadata directly from user & profile record
   useEffect(() => {
+    if (editModalVisible) return; // Prevent overwriting inputs while user is actively editing
     const meta = (user?.user_metadata ?? {}) as Record<string, any>;
     const profMeta = ((profile?.metadata ?? {}) as Record<string, any>);
 
@@ -159,9 +160,9 @@ export default function ViewProfileScreen() {
       location: profMeta.location || meta.location || '',
       languages: profMeta.languages || meta.languages || '',
       foodScenes: profMeta.foodScenes || meta.foodScenes || '',
-      bio: profMeta.bio || meta.bio || '',
+      bio: profMeta.bio || meta.bio || profile?.bio || '',
     });
-  }, [user, profile]);
+  }, [user, profile, editModalVisible]);
 
   const meta = (user?.user_metadata ?? {}) as Record<string, any>;
   const displayName =
@@ -187,6 +188,8 @@ export default function ViewProfileScreen() {
     formValues.foodScenes.trim() ||
     formValues.bio.trim()
   );
+
+  const hasAnyDetails = hasCompletedProfile || Boolean(selectedAvatarUri);
 
   const updateField = (id: string, value: string) => {
     setFormValues((prev) => ({ ...prev, [id]: value }));
@@ -295,6 +298,16 @@ export default function ViewProfileScreen() {
 
   const handleSaveProfile = async () => {
     Keyboard.dismiss();
+
+    if (!hasAnyDetails) {
+      showAlert({
+        title: 'No Details Entered',
+        message: 'Please fill in at least one detail to complete your profile, or tap the close button (✕) to exit without saving.',
+        icon: 'info',
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const trimmedValues = {
@@ -311,7 +324,7 @@ export default function ViewProfileScreen() {
       if (user?.id) {
         const existingMeta = (profile?.metadata ?? {}) as Record<string, any>;
         const avatarToPersist = selectedAvatarUri || currentAvatarUrl || existingMeta.avatar_url;
-        await supabase
+        const { error: profileError } = await supabase
           .from('profiles')
           .update({
             metadata: {
@@ -319,8 +332,13 @@ export default function ViewProfileScreen() {
               ...trimmedValues,
               ...(avatarToPersist ? { avatar_url: avatarToPersist, picture: avatarToPersist } : {}),
             },
+            bio: trimmedValues.bio || null,
           })
           .eq('id', user.id);
+
+        if (profileError) {
+          console.warn('Profile DB update error:', profileError);
+        }
 
         const { error } = await supabase.auth.updateUser({
           data: {
@@ -331,6 +349,9 @@ export default function ViewProfileScreen() {
         });
 
         if (error) throw error;
+
+        // Keep local form values updated immediately
+        setFormValues(trimmedValues);
 
         if (refreshProfile) {
           await refreshProfile();
@@ -700,12 +721,34 @@ export default function ViewProfileScreen() {
               testID="edit-profile-done-btn"
               onPress={handleSaveProfile}
               disabled={saving}
-              style={({ pressed }) => [styles.doneBtn, { backgroundColor: colors.text }, pressed && { opacity: 0.9 }]}
+              style={({ pressed }) => [
+                styles.doneBtn,
+                {
+                  backgroundColor: hasAnyDetails
+                    ? colors.text
+                    : (isDark ? '#27272A' : '#E5E7EB'),
+                  borderColor: hasAnyDetails ? 'transparent' : colors.border,
+                  borderWidth: hasAnyDetails ? 0 : 1,
+                  opacity: saving ? 0.7 : 1,
+                },
+                pressed && hasAnyDetails && { opacity: 0.88 },
+              ]}
             >
               {saving ? (
                 <ActivityIndicator color={colors.background} />
               ) : (
-                <Text style={[styles.doneBtnText, { color: colors.background }]}>Done</Text>
+                <Text
+                  style={[
+                    styles.doneBtnText,
+                    {
+                      color: hasAnyDetails
+                        ? colors.background
+                        : (isDark ? '#71717A' : '#9CA3AF'),
+                    },
+                  ]}
+                >
+                  Done
+                </Text>
               )}
             </Pressable>
           </ScrollView>

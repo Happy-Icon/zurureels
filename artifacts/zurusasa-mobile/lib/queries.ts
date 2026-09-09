@@ -211,7 +211,7 @@ export function useMyBookings(userId: string | undefined) {
         .from('bookings')
         .select(
           `*,
-          experience:experiences(id, title, location, current_price, price_unit, image_url, entity_name, max_guests, check_in_time, check_out_time, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata)`,
+          experience:experiences(id, user_id, title, location, current_price, price_unit, image_url, entity_name, max_guests, check_in_time, check_out_time, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata)`,
         )
         .eq('user_id', userId!)
         .order('created_at', { ascending: false })
@@ -567,6 +567,10 @@ export function useEnquire() {
       userId: string;
       hostId: string;
     }) => {
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!UUID_REGEX.test(userId) || !UUID_REGEX.test(hostId)) {
+        throw new Error('Invalid conversation participant identifier.');
+      }
       const [participantOne, participantTwo] = [userId, hostId].sort();
       const found = await supabase
         .from('conversations')
@@ -623,15 +627,26 @@ export function useSavedReels(userId: string | undefined) {
           `
           *,
           experience:experiences(*),
-          host:profiles!reels_user_id_fkey(*)
+          host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)
         `,
         )
         .in('id', reelIds);
       if (error) throw new Error(error.message);
 
+      // Enrich host avatar URLs consistently
+      const resolvedRows = ((data ?? []) as unknown as ReelRow[]).map((r) => {
+        if (r.host) {
+          r.host = {
+            ...r.host,
+            avatar_url: resolveAvatarUrl(r.host),
+          };
+        }
+        return r;
+      });
+
       // Preserve most-recently-saved-first ordering from reel_saves.
       const byId = new Map(
-        ((data ?? []) as unknown as ReelRow[]).map((r) => [r.id, r]),
+        resolvedRows.map((r) => [r.id, r]),
       );
       return reelIds
         .map((id) => byId.get(id))
@@ -763,7 +778,20 @@ export function useMessages(conversationId: string | undefined) {
         .order('created_at', { ascending: true });
 
       if (error) throw new Error(error.message);
-      return (data as unknown as MessageRow[]) ?? [];
+      const rows = ((data as unknown as MessageRow[]) ?? []).map((m) => {
+        const isImg =
+          typeof m.content === 'string' &&
+          (m.content.startsWith('https://res.cloudinary.com') ||
+            (m.content.startsWith('http') &&
+              (m.content.includes('/image/') ||
+                m.content.includes('/upload/') ||
+                /\.(jpg|jpeg|png|webp|gif)/i.test(m.content))));
+        return {
+          ...m,
+          image_url: m.image_url || (isImg ? m.content : null),
+        };
+      });
+      return rows;
     },
   });
 }
@@ -783,14 +811,16 @@ export function useSendMessage() {
     mutationFn: async (input: SendMessageInput) => {
       const now = new Date().toISOString();
 
-      // 1. Insert message
+      // If imageUrl is sent, store the image URL directly in content
+      const messageContent = input.imageUrl ? input.imageUrl : input.content;
+
+      // 1. Insert message (messages table schema: id, conversation_id, sender_id, content, is_read, created_at)
       const { data, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: input.conversationId,
           sender_id: input.senderId,
-          content: input.content,
-          image_url: input.imageUrl ?? null,
+          content: messageContent,
         })
         .select('*')
         .single();
@@ -825,7 +855,7 @@ export function useSendMessage() {
             userId: recipientId,
             type: 'message',
             title: `New message from ${senderName}`,
-            message: input.content || (input.imageUrl ? 'Sent a photo' : 'New message'),
+            message: input.imageUrl ? '📷 Sent a photo' : input.content,
             actionType: 'chat',
             actionId: input.conversationId,
             metadata: {
@@ -837,7 +867,18 @@ export function useSendMessage() {
           .catch((e) => console.warn('Message notification warning:', e));
       }
 
-      return data as unknown as MessageRow;
+      const row = data as unknown as MessageRow;
+      const isImg =
+        typeof row.content === 'string' &&
+        (row.content.startsWith('https://res.cloudinary.com') ||
+          (row.content.startsWith('http') &&
+            (row.content.includes('/image/') ||
+              row.content.includes('/upload/') ||
+              /\.(jpg|jpeg|png|webp|gif)/i.test(row.content))));
+      return {
+        ...row,
+        image_url: isImg ? row.content : null,
+      };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['messages', data.conversation_id] });
@@ -1193,7 +1234,7 @@ export function useHostBookings(hostId: string | undefined) {
         .from('bookings')
         .select(
           `*,
-          experience:experiences(id, title, location, current_price, price_unit, image_url, entity_name, max_guests, check_in_time, check_out_time, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata)`
+          experience:experiences(id, user_id, title, location, current_price, price_unit, image_url, entity_name, max_guests, check_in_time, check_out_time, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata)`
         )
         .order('created_at', { ascending: false });
 

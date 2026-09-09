@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FlatList,
   Platform,
@@ -18,6 +18,7 @@ import { RatingBreakdown } from '@/components/reviews/RatingBreakdown';
 import { ReviewCard } from '@/components/reviews/ReviewCard';
 import { LeaveReviewModal } from '@/components/reviews/LeaveReviewModal';
 import { Skeleton } from '@/components/Skeleton';
+import { supabase } from '@/lib/supabase';
 
 const SORT_OPTIONS = [
   { id: 'recent', label: 'Most Recent' },
@@ -31,11 +32,12 @@ export default function ReviewsScreen() {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { listingId, bookingId, hostId, title } = useLocalSearchParams<{
+  const { listingId, bookingId, hostId, title, openWrite } = useLocalSearchParams<{
     listingId?: string;
     bookingId?: string;
     hostId?: string;
     title?: string;
+    openWrite?: string;
   }>();
 
   const activeListingId = listingId || 'exp-default';
@@ -49,7 +51,31 @@ export default function ReviewsScreen() {
     refresh,
   } = useReviews(activeListingId);
 
-  const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const [resolvedHostId, setResolvedHostId] = useState<string | null>(
+    hostId && UUID_REGEX.test(hostId) ? hostId : null
+  );
+
+  useEffect(() => {
+    if (hostId && UUID_REGEX.test(hostId)) {
+      setResolvedHostId(hostId);
+      return;
+    }
+    if (activeListingId && activeListingId !== 'exp-default') {
+      supabase
+        .from('experiences')
+        .select('user_id')
+        .eq('id', activeListingId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.user_id && UUID_REGEX.test(data.user_id)) {
+            setResolvedHostId(data.user_id);
+          }
+        });
+    }
+  }, [hostId, activeListingId]);
+
+  const [leaveModalOpen, setLeaveModalOpen] = useState(Boolean(bookingId && openWrite !== 'false'));
   const [refreshing, setRefreshing] = useState(false);
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
@@ -114,6 +140,21 @@ export default function ReviewsScreen() {
             {/* 1. Rating Summary & Category Averages */}
             <RatingBreakdown summary={summary} />
 
+            {/* Authenticity & Anti-Fake Review Safeguard Banner */}
+            <View style={[styles.trustBanner, { backgroundColor: isDark ? '#18181B' : '#F9FAFB', borderColor: colors.border }]}>
+              <View style={styles.trustBannerIcon}>
+                <Feather name="shield" size={16} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.trustBannerTitle, { color: colors.text }]}>
+                  Verified Guest Reviews Only
+                </Text>
+                <Text style={[styles.trustBannerBody, { color: colors.mutedForeground }]}>
+                  Every review on ZuruSasa is written by travelers who completed their booking. We strictly prohibit fake reviews, incentives, and unverified claims.
+                </Text>
+              </View>
+            </View>
+
             {/* 2. Sort Dropdown / Filter Chips */}
             <View style={styles.sortSection}>
               <Text style={styles.sortSectionTitle}>All Guest Reviews</Text>
@@ -161,11 +202,11 @@ export default function ReviewsScreen() {
       />
 
       {/* Leave Review Modal */}
-      {bookingId && hostId ? (
+      {bookingId ? (
         <LeaveReviewModal
           visible={leaveModalOpen}
           bookingId={bookingId}
-          hostId={hostId}
+          hostId={resolvedHostId || ''}
           listingId={activeListingId}
           listingTitle={title || 'Stay'}
           onClose={() => setLeaveModalOpen(false)}
@@ -221,8 +262,35 @@ const styles = StyleSheet.create({
     color: '#F26522',
   },
   listHeaderStack: {
-    gap: 20,
+    gap: 16,
     paddingVertical: 12,
+  },
+  trustBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  trustBannerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#DEF7EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  trustBannerTitle: {
+    fontSize: 13,
+    fontFamily: 'DMSans_700Bold',
+    marginBottom: 2,
+  },
+  trustBannerBody: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: 'DMSans_400Regular',
   },
   sortSection: {
     gap: 10,

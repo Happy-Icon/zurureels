@@ -28,7 +28,7 @@ import { useNetworkStatus } from '@/lib/networkManager';
 import { JourneyCompanionSheet } from '@/components/journey/JourneyCompanionSheet';
 import { HostReservationsView } from '@/components/host/HostReservationsView';
 import { LeaveReviewModal } from '@/components/reviews/LeaveReviewModal';
-import type { BookingRow } from '@/lib/supabase';
+import { supabase, type BookingRow } from '@/lib/supabase';
 
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -307,20 +307,54 @@ function GuestTripsView() {
   }, [selectedFilter, featuredUpcoming, upcomingList, pastList, cancelledList]);
 
   // Handlers
-  const handleMessageHost = async (hostId?: string | null) => {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const handleMessageHost = async (
+    hostId?: string | null,
+    experienceId?: string | null,
+    hostName?: string | null,
+    hostAvatar?: string | null,
+  ) => {
     if (!user) {
       router.push('/auth');
       return;
     }
-    if (!hostId) {
+
+    let targetHostId = hostId;
+    let targetHostName = hostName;
+    let targetHostAvatar = hostAvatar;
+
+    if ((!targetHostId || !UUID_REGEX.test(targetHostId)) && experienceId) {
+      try {
+        const { data: exp } = await supabase
+          .from('experiences')
+          .select('user_id, entity_name, image_url')
+          .eq('id', experienceId)
+          .maybeSingle();
+        if (exp?.user_id && UUID_REGEX.test(exp.user_id)) {
+          targetHostId = exp.user_id;
+          if (!targetHostName && exp.entity_name) targetHostName = exp.entity_name;
+          if (!targetHostAvatar && exp.image_url) targetHostAvatar = exp.image_url;
+        }
+      } catch (e) {
+        console.warn('Fallback hostId resolution failed:', e);
+      }
+    }
+
+    if (!targetHostId || !UUID_REGEX.test(targetHostId)) {
       Alert.alert('Host Unavailable', 'This booking has no direct host contact details.');
       return;
     }
+
     try {
-      const convId = await enquire.mutateAsync({ userId: user.id, hostId });
+      const convId = await enquire.mutateAsync({ userId: user.id, hostId: targetHostId });
       router.push({
-        pathname: `/chat/${convId}` as any,
-        params: { id: convId, otherId: hostId },
+        pathname: '/chat/[id]',
+        params: {
+          id: convId,
+          otherId: targetHostId,
+          name: targetHostName || 'Host',
+          avatar: targetHostAvatar || '',
+        },
       });
     } catch (err) {
       Alert.alert('Chat Error', err instanceof Error ? err.message : 'Could not open chat');
@@ -564,7 +598,14 @@ function GuestTripsView() {
                 <FeaturedNextTripCard
                   booking={filteredData.featured}
                   onViewBooking={() => setSelectedBooking(filteredData.featured)}
-                  onMessageHost={() => handleMessageHost(filteredData.featured?.experience?.entity_name)}
+                  onMessageHost={() =>
+                    handleMessageHost(
+                      filteredData.featured?.experience?.user_id,
+                      filteredData.featured?.experience_id,
+                      filteredData.featured?.experience?.entity_name || filteredData.featured?.experience?.title,
+                      filteredData.featured?.experience?.image_url,
+                    )
+                  }
                   onDirections={() => setJourneyBooking(filteredData.featured)}
                 />
               </View>
@@ -584,7 +625,14 @@ function GuestTripsView() {
                       booking={b}
                       type="upcoming"
                       onViewBooking={() => setSelectedBooking(b)}
-                      onMessageHost={() => handleMessageHost(b.experience?.entity_name)}
+                      onMessageHost={() =>
+                        handleMessageHost(
+                          b.experience?.user_id,
+                          b.experience_id,
+                          b.experience?.entity_name || b.experience?.title,
+                          b.experience?.image_url,
+                        )
+                      }
                       onDirections={() => setJourneyBooking(b)}
                     />
                   ))}
@@ -606,16 +654,7 @@ function GuestTripsView() {
                       booking={b}
                       type="past"
                       onViewBooking={() => setSelectedBooking(b)}
-                      onWriteReview={() =>
-                        router.push({
-                          pathname: '/reviews',
-                          params: {
-                            bookingId: b.id,
-                            listingId: b.experience_id,
-                            title: b.experience?.title || 'Stay',
-                          },
-                        } as any)
-                      }
+                      onWriteReview={() => setReviewModalBooking(b)}
                       onBookAgain={() => router.push('/discover')}
                     />
                   ))}
@@ -653,9 +692,12 @@ function GuestTripsView() {
           booking={selectedBooking}
           onClose={() => setSelectedBooking(null)}
           onMessageHost={() => {
-            const hostId = selectedBooking.experience?.entity_name;
+            const hostId = selectedBooking.experience?.user_id;
+            const expId = selectedBooking.experience_id;
+            const hostName = selectedBooking.experience?.entity_name || selectedBooking.experience?.title;
+            const hostAvatar = selectedBooking.experience?.image_url;
             setSelectedBooking(null);
-            handleMessageHost(hostId);
+            handleMessageHost(hostId, expId, hostName, hostAvatar);
           }}
           onDirections={() => {
             const current = selectedBooking;
@@ -677,7 +719,7 @@ function GuestTripsView() {
         <LeaveReviewModal
           visible={Boolean(reviewModalBooking)}
           bookingId={reviewModalBooking.id}
-          hostId={reviewModalBooking.experience?.entity_name || (reviewModalBooking.experience as any)?.user_id || ''}
+          hostId={reviewModalBooking.experience?.user_id || ''}
           listingId={reviewModalBooking.experience_id}
           listingTitle={reviewModalBooking.experience?.title || 'Coastal Stay'}
           onClose={() => setReviewModalBooking(null)}
@@ -700,9 +742,10 @@ function GuestTripsView() {
           booking={journeyBooking}
           onClose={() => setJourneyBooking(null)}
           onMessageHost={() => {
-            const hostId = journeyBooking.experience?.entity_name;
+            const hostId = journeyBooking.experience?.user_id;
+            const expId = journeyBooking.experience_id;
             setJourneyBooking(null);
-            handleMessageHost(hostId);
+            handleMessageHost(hostId, expId);
           }}
         />
       ) : null}

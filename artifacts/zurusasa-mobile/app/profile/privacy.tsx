@@ -333,6 +333,20 @@ export default function PrivacySettingsScreen() {
                 )}
               </Pressable>
 
+              {/* View Full Legal & Policies */}
+              <Pressable
+                testID="view-privacy-policy-btn"
+                onPress={() => router.push('/profile/legal?doc=privacy')}
+                style={({ pressed }) => [
+                  styles.roundedCardBtn,
+                  { borderColor: colors.border, backgroundColor: colors.card, marginTop: 12 },
+                  pressed && styles.cardBtnPressed,
+                ]}
+              >
+                <Text style={[styles.cardBtnText, { color: colors.text }]}>Privacy Policy</Text>
+                <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+              </Pressable>
+
               {/* AI Improvement Toggle */}
               <View style={[styles.toggleRow, { marginTop: 24 }]}>
                 <View style={styles.textContainer}>
