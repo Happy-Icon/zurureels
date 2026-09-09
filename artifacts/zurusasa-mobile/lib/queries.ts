@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchServerCachedQuery } from '@/lib/redis';
+import { fetchServerCachedQuery, invalidateServerCache } from '@/lib/redis';
 import { notificationService } from '@/services/notificationService';
 import { emailService } from '@/services/emailService';
+import { resolveAvatarUrl } from '@/lib/avatar';
 import {
   supabase,
   type BookingRow,
@@ -19,13 +20,13 @@ export function useReels() {
   return useQuery<ReelRow[]>({
     queryKey: ['reels'],
     queryFn: async () => {
-      return fetchServerCachedQuery('get_reels_feed', async () => {
+      const rawReels = await fetchServerCachedQuery('get_reels_feed', async () => {
         const { data, error } = await supabase
           .from('reels')
           .select(
             `*,
             experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
-            host:profiles!reels_user_id_profiles_fkey(id, full_name, verification_status, is_verified, metadata, created_at, role)`,
+            host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)`,
           )
           .in('status', ['active', 'published'])
           .order('created_at', { ascending: false })
@@ -33,8 +34,144 @@ export function useReels() {
         if (error) throw new Error(error.message);
         return (data as unknown as ReelRow[]) ?? [];
       });
+
+      const reels = (rawReels as unknown as ReelRow[]) ?? [];
+      if (reels.length === 0) return [];
+
+      // Collect host IDs to enrich with complete profile data (guaranteeing email, metadata, avatar)
+      const hostIds = Array.from(
+        new Set(
+          reels
+            .map((r) => r.user_id || r.host?.id)
+            .filter(Boolean) as string[]
+        )
+      );
+
+      if (hostIds.length > 0) {
+        try {
+          const { data: profiles, error: pErr } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, verification_status, is_verified, metadata, created_at, role')
+            .in('id', hostIds);
+
+          if (!pErr && profiles) {
+            const profileMap = new Map<string, ProfileRow>();
+            for (const p of profiles) {
+              profileMap.set(p.id, p as ProfileRow);
+            }
+
+            for (const reel of reels) {
+              const hid = reel.user_id || reel.host?.id;
+              const fullProfile = hid ? profileMap.get(hid) : null;
+              const mergedHost = {
+                ...(reel.host || {}),
+                ...(fullProfile || {}),
+                id: hid || (reel.host?.id ?? ''),
+              };
+              const resolvedAvatar = resolveAvatarUrl(mergedHost);
+              reel.host = {
+                ...mergedHost,
+                avatar_url: resolvedAvatar || (mergedHost as any).avatar_url || null,
+              } as ReelRow['host'];
+            }
+          }
+        } catch (err) {
+          console.warn('[useReels] Error enriching host profiles:', err);
+        }
+      }
+
+      return reels;
     },
   });
+}
+
+export function useRefreshReels() {
+  const queryClient = useQueryClient();
+
+  return useCallback(async (currentActiveId?: string) => {
+    // 1. Invalidate Redis server cache
+    invalidateServerCache('invalidate_reels_feed').catch(() => {});
+
+    // 2. Query fresh reels directly from PostgreSQL database to guarantee absolute latest data
+    const { data, error } = await supabase
+      .from('reels')
+      .select(
+        `*,
+        experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
+        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)`,
+      )
+      .in('status', ['active', 'published'])
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    if (error) throw new Error(error.message);
+
+    let reels = (data as unknown as ReelRow[]) ?? [];
+    if (reels.length > 0) {
+      const hostIds = Array.from(
+        new Set(
+          reels
+            .map((r) => r.user_id || r.host?.id)
+            .filter(Boolean) as string[]
+        )
+      );
+
+      if (hostIds.length > 0) {
+        try {
+          const { data: profiles, error: pErr } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, verification_status, is_verified, metadata, created_at, role')
+            .in('id', hostIds);
+
+          if (!pErr && profiles) {
+            const profileMap = new Map<string, ProfileRow>();
+            for (const p of profiles) {
+              profileMap.set(p.id, p as ProfileRow);
+            }
+
+            for (const reel of reels) {
+              const hid = reel.user_id || reel.host?.id;
+              const fullProfile = hid ? profileMap.get(hid) : null;
+              const mergedHost = {
+                ...(reel.host || {}),
+                ...(fullProfile || {}),
+                id: hid || (reel.host?.id ?? ''),
+              };
+              const resolvedAvatar = resolveAvatarUrl(mergedHost);
+              reel.host = {
+                ...mergedHost,
+                avatar_url: resolvedAvatar || (mergedHost as any).avatar_url || null,
+              } as ReelRow['host'];
+            }
+          }
+        } catch (err) {
+          console.warn('[useRefreshReels] Error enriching host profiles:', err);
+        }
+      }
+
+      // Dynamic Feed Rotation (TikTok-style):
+      // When refreshed, guarantee that the new active feed displays a DIFFERENT reel at index 0
+      if (reels.length > 1) {
+        const candidateIndices: number[] = [];
+        for (let i = 0; i < reels.length; i++) {
+          if (!currentActiveId || reels[i].id !== currentActiveId) {
+            candidateIndices.push(i);
+          }
+        }
+        if (candidateIndices.length > 0) {
+          const chosenIndex =
+            candidateIndices[Math.floor(Math.random() * candidateIndices.length)];
+          if (chosenIndex > 0) {
+            reels = [...reels.slice(chosenIndex), ...reels.slice(0, chosenIndex)];
+          }
+        }
+      }
+    }
+
+    // 3. Update React Query cache immediately with fresh rotated reels
+    queryClient.setQueryData(['reels'], reels);
+    return reels;
+  }, [queryClient]);
 }
 
 export function useExperiences(category?: string | null) {
@@ -252,13 +389,29 @@ export function useToggleLike() {
     onMutate: async ({ reelId, userId, liked }) => {
       const key = interactionsKey(reelId, userId);
       const prev = queryClient.getQueryData<ReelInteractions>(key);
+      const nextLiked = !liked;
       if (prev) {
         queryClient.setQueryData<ReelInteractions>(key, {
           ...prev,
-          liked: !liked,
-          likeCount: Math.max(0, prev.likeCount + (liked ? -1 : 1)),
+          liked: nextLiked,
+          likeCount: Math.max(0, prev.likeCount + (nextLiked ? 1 : -1)),
         });
       }
+      queryClient.setQueriesData<Record<string, ReelInteractions>>(
+        { queryKey: ['batch-reel-interactions'] },
+        (old) => {
+          if (!old) return old;
+          const current = old[reelId] ?? { likeCount: 0, liked: false, saved: false, following: false };
+          return {
+            ...old,
+            [reelId]: {
+              ...current,
+              liked: nextLiked,
+              likeCount: Math.max(0, current.likeCount + (nextLiked ? 1 : -1)),
+            },
+          };
+        }
+      );
       return { key, prev };
     },
     onError: (_err, _vars, ctx) => {
@@ -267,6 +420,9 @@ export function useToggleLike() {
     onSettled: (_data, _err, vars) => {
       queryClient.invalidateQueries({
         queryKey: ['reel-interactions', vars.reelId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['batch-reel-interactions'],
       });
     },
   });
@@ -290,16 +446,31 @@ export function useToggleSave() {
       } else {
         const { error } = await supabase
           .from('reel_saves')
-          .insert({ reel_id: reelId, user_id: userId });
-        if (error) throw new Error(error.message);
+          .upsert({ reel_id: reelId, user_id: userId }, { onConflict: 'user_id,reel_id' });
+        if (error && error.code !== '23505') throw new Error(error.message);
       }
     },
     onMutate: async ({ reelId, userId, saved }) => {
       const key = interactionsKey(reelId, userId);
       const prev = queryClient.getQueryData<ReelInteractions>(key);
+      const nextSaved = !saved;
       if (prev) {
-        queryClient.setQueryData<ReelInteractions>(key, { ...prev, saved: !saved });
+        queryClient.setQueryData<ReelInteractions>(key, { ...prev, saved: nextSaved });
       }
+      queryClient.setQueriesData<Record<string, ReelInteractions>>(
+        { queryKey: ['batch-reel-interactions'] },
+        (old) => {
+          if (!old) return old;
+          const current = old[reelId] ?? { likeCount: 0, liked: false, saved: false, following: false };
+          return {
+            ...old,
+            [reelId]: {
+              ...current,
+              saved: nextSaved,
+            },
+          };
+        }
+      );
       return { key, prev };
     },
     onError: (_err, _vars, ctx) => {
@@ -308,6 +479,9 @@ export function useToggleSave() {
     onSettled: (_data, _err, vars) => {
       queryClient.invalidateQueries({
         queryKey: ['reel-interactions', vars.reelId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['batch-reel-interactions'],
       });
       // Keep the Saved tab in sync with save/unsave from anywhere in the app.
       queryClient.invalidateQueries({ queryKey: ['saved-reels'] });
@@ -338,19 +512,33 @@ export function useToggleFollow() {
       } else {
         const { error } = await supabase
           .from('user_follows')
-          .insert({ follower_id: userId, following_id: hostId });
-        if (error) throw new Error(error.message);
+          .upsert({ follower_id: userId, following_id: hostId }, { onConflict: 'follower_id,following_id' });
+        if (error && error.code !== '23505') throw new Error(error.message);
       }
     },
     onMutate: async ({ reelId, userId, following }) => {
       const key = interactionsKey(reelId, userId);
       const prev = queryClient.getQueryData<ReelInteractions>(key);
+      const nextFollowing = !following;
       if (prev) {
         queryClient.setQueryData<ReelInteractions>(key, {
           ...prev,
-          following: !following,
+          following: nextFollowing,
         });
       }
+      queryClient.setQueriesData<Record<string, ReelInteractions>>(
+        { queryKey: ['batch-reel-interactions'] },
+        (old) => {
+          if (!old) return old;
+          const updated = { ...old };
+          for (const rid of Object.keys(updated)) {
+            if (rid === reelId) {
+              updated[rid] = { ...updated[rid], following: nextFollowing };
+            }
+          }
+          return updated;
+        }
+      );
       return { key, prev };
     },
     onError: (_err, _vars, ctx) => {
@@ -359,6 +547,9 @@ export function useToggleFollow() {
     onSettled: (_data, _err, vars) => {
       queryClient.invalidateQueries({
         queryKey: ['reel-interactions', vars.reelId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['batch-reel-interactions'],
       });
     },
   });
@@ -521,7 +712,7 @@ export function useConversations(userId: string | undefined) {
             full_name: (p?.full_name as string) || 'Zuru User',
             username: (p?.username as string) || 'user',
             role: (p?.role as string) || 'guest',
-            avatar_url: metadata?.avatar_url ?? null,
+            avatar_url: resolveAvatarUrl(p as any) ?? metadata?.avatar_url ?? null,
           },
         };
       });

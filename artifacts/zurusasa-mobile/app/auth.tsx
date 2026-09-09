@@ -37,6 +37,9 @@ import { supabase } from '@/lib/supabase';
 import { passkeyService } from '@/services/passkeyService';
 import { KeyboardScreen, KeyboardModal } from '@/components/keyboard';
 import { PremiumLoader } from '@/components/PremiumLoader';
+import { queryClient } from '@/lib/queryClient';
+import { invalidateServerCache } from '@/lib/redis';
+import { extractAvatarFromUser } from '@/lib/avatar';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
@@ -392,7 +395,68 @@ export default function AuthScreen() {
     setNotice(null);
   };
 
+  const syncUserGoogleAvatar = async (authUser: any) => {
+    try {
+      const gAvatar = extractAvatarFromUser(authUser);
+      if (gAvatar) {
+        const { data: pRow } = await supabase
+          .from('profiles')
+          .select('metadata')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        if (pRow) {
+          const pMeta = ((pRow as any)?.metadata ?? {}) as Record<string, any>;
+          if (!pMeta.avatar_url || pMeta.avatar_url !== gAvatar || !pMeta.picture) {
+            await (supabase.from('profiles').update as any)({
+              metadata: {
+                ...pMeta,
+                avatar_url: gAvatar,
+                picture: gAvatar,
+              },
+            }).eq('id', authUser.id);
+            queryClient.invalidateQueries({ queryKey: ['reels'] });
+            queryClient.invalidateQueries({ queryKey: ['host-profile', authUser.id] });
+            invalidateServerCache('invalidate_reels_feed').catch(() => {});
+          }
+        } else {
+          // If profile row doesn't exist yet, insert it with the Google avatar
+          const uMeta = (authUser.user_metadata ?? {}) as Record<string, any>;
+          const fullName =
+            uMeta.full_name ||
+            uMeta.name ||
+            authUser.email?.split('@')[0] ||
+            'Traveler';
+          await (supabase.from('profiles').insert as any)([
+            {
+              id: authUser.id,
+              full_name: fullName,
+              email: authUser.email || null,
+              role: 'guest',
+              metadata: {
+                avatar_url: gAvatar,
+                picture: gAvatar,
+              },
+            },
+          ]);
+          queryClient.invalidateQueries({ queryKey: ['reels'] });
+          queryClient.invalidateQueries({ queryKey: ['host-profile', authUser.id] });
+          invalidateServerCache('invalidate_reels_feed').catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.warn('Sync avatar note:', e);
+    }
+  };
+
   const routeAfterLogin = async (userId: string) => {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (authData?.user) {
+        await syncUserGoogleAvatar(authData.user);
+      }
+    } catch {}
+
     const { data } = await supabase
       .from('profiles')
       .select('full_name')
@@ -575,7 +639,10 @@ export default function AuthScreen() {
             token: native.idToken,
           });
           if (err) throw err;
-          if (data.user) await routeAfterLogin(data.user.id);
+          if (data.user) {
+            await syncUserGoogleAvatar(data.user);
+            await routeAfterLogin(data.user.id);
+          }
           return;
         }
         if (native.status === 'cancelled') return;
@@ -601,15 +668,23 @@ export default function AuthScreen() {
         const refreshToken = hashParams.get('refresh_token');
         const code = queryParams.get('code');
         if (accessToken && refreshToken) {
-          const { error: sessionErr } = await supabase.auth.setSession({
+          const { data: sData, error: sessionErr } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
           if (sessionErr) throw sessionErr;
+          if (sData?.user) {
+            await syncUserGoogleAvatar(sData.user);
+            await routeAfterLogin(sData.user.id);
+          }
         } else if (code) {
-          const { error: exchangeErr } =
+          const { data: exData, error: exchangeErr } =
             await supabase.auth.exchangeCodeForSession(code);
           if (exchangeErr) throw exchangeErr;
+          if (exData?.user) {
+            await syncUserGoogleAvatar(exData.user);
+            await routeAfterLogin(exData.user.id);
+          }
         } else {
           throw new Error('Sign-in was not completed.');
         }

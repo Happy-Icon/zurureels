@@ -18,6 +18,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
+import { notificationService } from '@/services/notificationService';
 
 interface ChannelPrefs {
   email: boolean;
@@ -79,6 +80,19 @@ export default function NotificationPreferencesScreen() {
   const [activeTab, setActiveTab] = useState<'offers' | 'account'>('offers');
   const [loading, setLoading] = useState(true);
   const [activeItem, setActiveItem] = useState<NotificationItemConfig | null>(null);
+  const [testingPush, setTestingPush] = useState(false);
+
+  const handleTestPush = async () => {
+    if (!user) return;
+    setTestingPush(true);
+    try {
+      await notificationService.triggerTestPush(user.id);
+    } catch (e) {
+      console.warn('Test push note:', e);
+    } finally {
+      setTestingPush(false);
+    }
+  };
 
   // Preference map keyed by item id
   const [prefsMap, setPrefsMap] = useState<Record<string, ChannelPrefs>>({
@@ -178,6 +192,29 @@ export default function NotificationPreferencesScreen() {
       >
         {/* Title */}
         <Text style={[styles.pageTitle, { color: colors.text }]}>Notifications</Text>
+
+        {/* Device Push Notification Test Banner */}
+        <View style={[styles.testPushCard, { backgroundColor: isDark ? '#1F1F23' : '#FFF7F2', borderColor: isDark ? '#333338' : '#FCE5D8' }]}>
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <Feather name="bell" size={16} color="#F26522" style={{ marginRight: 6 }} />
+              <Text style={[styles.testPushTitle, { color: colors.text }]}>Test Push Banner</Text>
+            </View>
+            <Text style={[styles.testPushSub, { color: colors.mutedForeground }]}>
+              Send a test notification to verify that heads-up banners, sound, and vibration are active on this APK.
+            </Text>
+          </View>
+          <Pressable
+            testID="test-push-btn"
+            onPress={handleTestPush}
+            disabled={testingPush}
+            style={({ pressed }) => [styles.testPushActionBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.testPushActionBtnText}>
+              {testingPush ? 'Testing…' : 'Test Now'}
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Tab Bar */}
         <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
@@ -799,5 +836,37 @@ const styles = StyleSheet.create({
       android: 'DMSans_500Medium',
       default: 'sans-serif',
     }),
+  },
+  testPushCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  testPushTitle: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    marginBottom: 2,
+  },
+  testPushSub: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'DMSans_400Regular',
+  },
+  testPushActionBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#F26522',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  testPushActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'DMSans_700Bold',
   },
 });

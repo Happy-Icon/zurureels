@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useColors, useTheme } from '@/hooks/useColors';
 import type { HostProfileData } from '@/lib/supabase';
 
 interface HostTrustBadgesProps {
@@ -8,6 +9,9 @@ interface HostTrustBadgesProps {
 }
 
 export function HostTrustBadges({ host }: HostTrustBadgesProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
+
   const isVerified = Boolean(host?.is_verified || host?.verification_status === 'verified');
   const hasPhone = Boolean(host?.phone);
   const hasEmail = Boolean(host?.email);
@@ -22,21 +26,29 @@ export function HostTrustBadges({ host }: HostTrustBadgesProps) {
     ...(hasPhone ? [{ icon: 'phone', label: 'Phone Confirmed' }] : []),
     ...(hasEmail ? [{ icon: 'mail', label: 'Email Confirmed' }] : []),
     ...(host?.is_super_host ? [{ icon: 'award', label: 'Super Host' }] : []),
-    { icon: 'zap', label: 'Fast Responder' },
+    ...(host?.response_rate && parseInt(host.response_rate, 10) >= 90
+      ? [{ icon: 'zap', label: 'Fast Responder' }]
+      : []),
   ];
 
   if (trustItems.length === 0) return null;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionHeading}>Verified Information</Text>
+      <Text style={[styles.sectionHeading, { color: colors.text }]}>Verified Information</Text>
       <View style={styles.badgeGrid}>
         {trustItems.map((item, idx) => (
-          <View key={idx} style={styles.badgeChip}>
+          <View
+            key={idx}
+            style={[
+              styles.badgeChip,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <View style={styles.iconCircle}>
               <Feather name={item.icon as any} size={14} color="#F26522" />
             </View>
-            <Text style={styles.badgeLabel}>{item.label}</Text>
+            <Text style={[styles.badgeLabel, { color: colors.text }]}>{item.label}</Text>
           </View>
         ))}
       </View>

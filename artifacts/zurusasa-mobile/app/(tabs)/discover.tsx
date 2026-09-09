@@ -58,7 +58,7 @@ const DISCOVERY_CATEGORIES = [
   { id: 'accommodation', label: 'Stays', icon: 'home', categories: ['hotel', 'villa', 'apartment', 'stay', 'parks_camps'] },
   { id: 'events', label: 'Events', icon: 'calendar', categories: ['events', 'food', 'drinks'] },
   { id: 'experiences', label: 'Experiences', icon: 'compass', categories: ['land_adventure', 'air_adventure', 'water_adventure', 'tours', 'boat'] },
-  { id: 'ai', label: 'Zuru AI', icon: 'zap', categories: [] },
+  { id: 'ai', label: 'Zuru Agent', icon: 'zap', categories: [] },
 ] as const;
 
 type CategoryId = (typeof DISCOVERY_CATEGORIES)[number]['id'];

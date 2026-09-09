@@ -18,12 +18,15 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
+import { invalidateServerCache } from '@/lib/redis';
 import { supabase } from '@/lib/supabase';
+import { resolveAvatarUrl } from '@/lib/avatar';
 
 interface ProfileFieldConfig {
   id: string;
@@ -101,6 +104,7 @@ export default function ViewProfileScreen() {
   const router = useRouter();
   const { user, profile, refreshProfile, viewMode } = useAuth();
   const { showAlert } = useCustomAlert();
+  const queryClient = useQueryClient();
 
   const modalScrollRef = useRef<ScrollView>(null);
 
@@ -168,11 +172,7 @@ export default function ViewProfileScreen() {
   // Direct avatar URL resolution from local selection, Supabase profile metadata, and auth user_metadata
   const currentAvatarUrl =
     selectedAvatarUri ||
-    (profile?.metadata as { avatar_url?: string } | null)?.avatar_url ||
-    meta.avatar_url ||
-    meta.picture ||
-    meta.avatar ||
-    null;
+    resolveAvatarUrl(profile, user, profile);
 
   const initial = displayName.charAt(0).toUpperCase();
   const isHost = viewMode === 'host';
@@ -252,6 +252,7 @@ export default function ViewProfileScreen() {
             metadata: {
               ...existingMeta,
               avatar_url: finalAvatarUrl,
+              picture: finalAvatarUrl,
             },
           })
           .eq('id', user.id);
@@ -268,6 +269,11 @@ export default function ViewProfileScreen() {
         if (refreshProfile) {
           await refreshProfile();
         }
+
+        queryClient.invalidateQueries({ queryKey: ['reels'] });
+        queryClient.invalidateQueries({ queryKey: ['host-profile', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['profile'] });
+        invalidateServerCache('invalidate_reels_feed').catch(() => {});
       }
 
       showAlert({
@@ -304,13 +310,14 @@ export default function ViewProfileScreen() {
 
       if (user?.id) {
         const existingMeta = (profile?.metadata ?? {}) as Record<string, any>;
+        const avatarToPersist = selectedAvatarUri || currentAvatarUrl || existingMeta.avatar_url;
         await supabase
           .from('profiles')
           .update({
             metadata: {
               ...existingMeta,
               ...trimmedValues,
-              ...(selectedAvatarUri ? { avatar_url: selectedAvatarUri } : {}),
+              ...(avatarToPersist ? { avatar_url: avatarToPersist, picture: avatarToPersist } : {}),
             },
           })
           .eq('id', user.id);
@@ -319,7 +326,7 @@ export default function ViewProfileScreen() {
           data: {
             ...(user?.user_metadata ?? {}),
             ...trimmedValues,
-            ...(selectedAvatarUri ? { avatar_url: selectedAvatarUri, picture: selectedAvatarUri } : {}),
+            ...(avatarToPersist ? { avatar_url: avatarToPersist, picture: avatarToPersist } : {}),
           },
         });
 
@@ -328,6 +335,11 @@ export default function ViewProfileScreen() {
         if (refreshProfile) {
           await refreshProfile();
         }
+
+        queryClient.invalidateQueries({ queryKey: ['reels'] });
+        queryClient.invalidateQueries({ queryKey: ['host-profile', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['profile'] });
+        invalidateServerCache('invalidate_reels_feed').catch(() => {});
       }
 
       setEditModalVisible(false);

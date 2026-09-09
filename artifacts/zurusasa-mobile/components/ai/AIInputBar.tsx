@@ -27,7 +27,7 @@ export function AIInputBar({
   onSend,
   onVoice,
   onImage,
-  placeholder = 'Ask Zuru AI anything…',
+  placeholder = 'Ask Zuru Agent anything…',
   disabled = false,
 }: AIInputBarProps) {
   const insets = useSafeAreaInsets();
@@ -115,7 +115,7 @@ export function AIInputBar({
 
       {/* Footer note */}
       <Text style={styles.footer}>
-        Zuru AI · Powered by ZuruSasa Intelligence
+        Zuru Agent · Powered by ZuruSasa Intelligence
       </Text>
     </View>
   );

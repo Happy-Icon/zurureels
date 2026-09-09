@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   PanResponder,
   Pressable,
   Share,
@@ -17,6 +18,7 @@ import { useRouter, useIsFocused } from 'expo-router';
 import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useAuth } from '@/context/AuthContext';
+import { resolveAvatarUrl } from '@/lib/avatar';
 import {
   useReelInteractions,
   useToggleFollow,
@@ -26,7 +28,7 @@ import {
 } from '@/lib/queries';
 import { BookingSheet } from '@/components/BookingSheet';
 import { EnquireModal } from '@/components/EnquireModal';
-import type { ReelRow } from '@/lib/supabase';
+import { supabase, type ReelRow } from '@/lib/supabase';
 
 export const ZURU_ORANGE = '#EE7D30';
 
@@ -64,7 +66,7 @@ function getOptimizedCloudinaryImageUrl(url: string | null | undefined): string 
 export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelCardProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, viewMode } = useAuth();
+  const { user, profile, viewMode } = useAuth();
   const isScreenFocused = useIsFocused();
   const toggleLike = useToggleLike();
   const toggleSave = useToggleSave();
@@ -74,7 +76,7 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
   const [enquireOpen, setEnquireOpen] = useState<boolean>(false);
   const [bookingOpen, setBookingOpen] = useState<boolean>(false);
 
-  const hostId = reel.user_id ?? null;
+  const hostId = reel.user_id ?? reel.host?.id ?? null;
   const { data: interFallback } = useReelInteractions(
     reel.id,
     hostId,
@@ -116,18 +118,127 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
     setMuted(next);
   };
 
-  const onVideoTap = () => {
+  // Instant local optimistic state for 0ms response latency
+  const [localLiked, setLocalLiked] = useState<boolean | null>(null);
+  const [localSaved, setLocalSaved] = useState<boolean | null>(null);
+  const [localLikeCount, setLocalLikeCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (inter) {
+      setLocalLiked(inter.liked);
+      setLocalSaved(inter.saved);
+      setLocalLikeCount(inter.likeCount);
+    }
+  }, [inter?.liked, inter?.saved, inter?.likeCount]);
+
+  const liked = localLiked !== null ? localLiked : (inter?.liked ?? false);
+  const saved = localSaved !== null ? localSaved : (inter?.saved ?? false);
+  const likeCount = localLikeCount !== null ? localLikeCount : (inter?.likeCount ?? 0);
+  const following = inter?.following ?? false;
+
+  // Double-tap and button spring animations
+  const lastTapTimeRef = useRef<number>(0);
+  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showBurstHeart, setShowBurstHeart] = useState(false);
+  const burstAnimScale = useRef(new Animated.Value(0)).current;
+  const burstAnimOpacity = useRef(new Animated.Value(0)).current;
+  const burstAnimY = useRef(new Animated.Value(0)).current;
+
+  const likeScale = useRef(new Animated.Value(1)).current;
+  const saveScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    return () => {
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+      }
+    };
+  }, []);
+
+  const triggerBurstHeart = () => {
+    setShowBurstHeart(true);
+    burstAnimScale.setValue(0);
+    burstAnimOpacity.setValue(1);
+    burstAnimY.setValue(0);
+
+    Animated.parallel([
+      Animated.spring(burstAnimScale, {
+        toValue: 1.25,
+        friction: 4,
+        tension: 110,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(400),
+        Animated.parallel([
+          Animated.timing(burstAnimOpacity, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(burstAnimY, {
+            toValue: -35,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]),
+    ]).start(() => {
+      setShowBurstHeart(false);
+    });
+  };
+
+  const onVideoPress = () => {
     if (!videoUrl) return;
-    if (muted) {
-      toggleMute();
-      if (!isPlaying) player.play();
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 280;
+
+    if (now - lastTapTimeRef.current < DOUBLE_TAP_DELAY) {
+      // TikTok double tap detected!
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
+      lastTapTimeRef.current = 0;
+
+      // 1. Trigger bursting heart animation
+      triggerBurstHeart();
+
+      // 2. Only like if not already liked (never unlike on double-tap)
+      if (!liked) {
+        if (!requireAuth() || !user) return;
+        Animated.sequence([
+          Animated.timing(likeScale, { toValue: 1.35, duration: 100, useNativeDriver: true }),
+          Animated.spring(likeScale, { toValue: 1, friction: 3, useNativeDriver: true }),
+        ]).start();
+
+        setLocalLiked(true);
+        setLocalLikeCount((prev) => (prev ?? likeCount) + 1);
+
+        toggleLike.mutate({
+          reelId: reel.id,
+          userId: user.id,
+          liked: false,
+        });
+      }
       return;
     }
-    if (isPlaying) {
-      player.pause();
-    } else {
-      player.play();
-    }
+
+    // First tap: start timer for single-tap pause/play/mute action
+    lastTapTimeRef.current = now;
+    singleTapTimerRef.current = setTimeout(() => {
+      if (muted) {
+        toggleMute();
+        if (!isPlaying) player.play();
+      } else {
+        if (isPlaying) {
+          player.pause();
+        } else {
+          player.play();
+        }
+      }
+      singleTapTimerRef.current = null;
+    }, DOUBLE_TAP_DELAY);
   };
 
   const exp = reel.experience;
@@ -135,8 +246,59 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
   const rawRating = (meta.rating as number | string | undefined);
   const rating = rawRating != null && Number(rawRating) > 0 ? Number(rawRating) : null;
   const hostName = reel.host?.full_name ?? 'Zuru Host';
-  const avatarUrl =
-    (reel.host?.metadata as { avatar_url?: string } | null)?.avatar_url ?? null;
+  const initialAvatar =
+    reel.host?.avatar_url ||
+    resolveAvatarUrl(
+      reel.host
+        ? {
+            ...reel.host,
+            id: hostId ?? undefined,
+            email: reel.host.email,
+            avatar_url: reel.host.avatar_url,
+          }
+        : (hostId ? { id: hostId } : null),
+      user,
+      profile
+    );
+
+  const [lazyAvatar, setLazyAvatar] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!initialAvatar && !lazyAvatar && hostId) {
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, metadata')
+            .eq('id', hostId)
+            .maybeSingle();
+          if (active && data) {
+            const resolved = resolveAvatarUrl(
+              { ...reel.host, ...data, id: hostId },
+              user,
+              profile
+            );
+            if (resolved) {
+              setLazyAvatar(resolved);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      })();
+    }
+    return () => {
+      active = false;
+    };
+  }, [initialAvatar, lazyAvatar, hostId, reel.host, user, profile]);
+
+  const finalAvatarUrl = initialAvatar || lazyAvatar;
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [finalAvatarUrl]);
 
   const priceAmount = exp?.current_price;
   const priceUnit = exp?.price_unit ?? 'person';
@@ -155,19 +317,38 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
 
   const onLike = () => {
     if (!requireAuth() || !user) return;
+
+    Animated.sequence([
+      Animated.timing(likeScale, { toValue: 1.35, duration: 100, useNativeDriver: true }),
+      Animated.spring(likeScale, { toValue: 1, friction: 3, useNativeDriver: true }),
+    ]).start();
+
+    const nextLiked = !liked;
+    setLocalLiked(nextLiked);
+    setLocalLikeCount(Math.max(0, likeCount + (nextLiked ? 1 : -1)));
+
     toggleLike.mutate({
       reelId: reel.id,
       userId: user.id,
-      liked: inter?.liked ?? false,
+      liked: liked,
     });
   };
 
   const onSave = () => {
     if (!requireAuth() || !user) return;
+
+    Animated.sequence([
+      Animated.timing(saveScale, { toValue: 1.35, duration: 100, useNativeDriver: true }),
+      Animated.spring(saveScale, { toValue: 1, friction: 3, useNativeDriver: true }),
+    ]).start();
+
+    const nextSaved = !saved;
+    setLocalSaved(nextSaved);
+
     toggleSave.mutate({
       reelId: reel.id,
       userId: user.id,
-      saved: inter?.saved ?? false,
+      saved: saved,
     });
   };
 
@@ -216,32 +397,6 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
     setBookingOpen(true);
   };
 
-  const liked = inter?.liked ?? false;
-  const saved = inter?.saved ?? false;
-  const following = inter?.following ?? false;
-  const likeCount = inter?.likeCount ?? 0;
-
-  const touchStartX = useRef<number>(0);
-  const touchStartY = useRef<number>(0);
-
-  const handleTouchStart = (e: any) => {
-    touchStartX.current = e.nativeEvent.pageX ?? e.nativeEvent.locationX ?? 0;
-    touchStartY.current = e.nativeEvent.pageY ?? e.nativeEvent.locationY ?? 0;
-  };
-
-  const handleTouchEnd = (e: any) => {
-    const endX = e.nativeEvent.pageX ?? e.nativeEvent.locationX ?? 0;
-    const endY = e.nativeEvent.pageY ?? e.nativeEvent.locationY ?? 0;
-    const deltaX = endX - touchStartX.current;
-    const deltaY = endY - touchStartY.current;
-
-    if (deltaX >= 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
-      if (hostId) {
-        router.push(`/profile/${hostId}` as any);
-      }
-    }
-  };
-
   return (
     <View style={[styles.page, { height }]}>
       {/* Full-bleed video / thumbnail */}
@@ -272,12 +427,10 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         pointerEvents="none"
       />
 
-      {/* Tap to unmute / play-pause overlay & Swipe Right gesture listener */}
+      {/* Tap to unmute / play-pause overlay */}
       <Pressable
         testID={`video-tap-${reel.id}`}
-        onPress={onVideoTap}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        onPress={onVideoPress}
         style={StyleSheet.absoluteFill}
       >
         {videoUrl && !isPlaying ? (
@@ -288,6 +441,27 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
           </View>
         ) : null}
       </Pressable>
+
+      {/* TikTok-style Center Bursting Heart on Double-Tap */}
+      {showBurstHeart ? (
+        <View pointerEvents="none" style={styles.centerBurstWrap}>
+          <Animated.View
+            style={[
+              styles.burstHeartContainer,
+              {
+                transform: [
+                  { scale: burstAnimScale },
+                  { translateY: burstAnimY },
+                  { rotate: '-12deg' },
+                ],
+                opacity: burstAnimOpacity,
+              },
+            ]}
+          >
+            <Ionicons name="heart" size={105} color="#EF4444" style={styles.burstHeartShadow} />
+          </Animated.View>
+        </View>
+      ) : null}
 
       {/* 3. Streamlined Right Action Rail (Vertical Column) */}
       <View style={[styles.rail, { bottom: railBottom }]}>
@@ -301,8 +475,13 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
           }}
           style={styles.avatarWrap}
         >
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} contentFit="cover" />
+          {finalAvatarUrl && !avatarError ? (
+            <Image
+              source={{ uri: finalAvatarUrl }}
+              style={styles.avatar}
+              contentFit="cover"
+              onError={() => setAvatarError(true)}
+            />
           ) : (
             <View style={styles.avatarFallback}>
               <Text style={styles.avatarText}>
@@ -310,32 +489,22 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
               </Text>
             </View>
           )}
-          <View style={styles.onlineDot} />
-          {!following && hostId && hostId !== user?.id ? (
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                onFollow();
-              }}
-              style={styles.plusBadge}
-            >
-              <Feather name="plus" size={10} color="#FFFFFF" />
-            </Pressable>
-          ) : null}
         </Pressable>
 
         {/* Heart / Like Count */}
         <Pressable
           testID={`like-button-${reel.id}`}
           onPress={onLike}
-          hitSlop={6}
+          hitSlop={8}
           style={styles.railItem}
         >
-          <Ionicons
-            name={liked ? 'heart' : 'heart-outline'}
-            size={28}
-            color={liked ? '#EF4444' : '#FFFFFF'}
-          />
+          <Animated.View style={{ transform: [{ scale: likeScale }], alignItems: 'center' }}>
+            <Ionicons
+              name={liked ? 'heart' : 'heart-outline'}
+              size={28}
+              color={liked ? '#EF4444' : '#FFFFFF'}
+            />
+          </Animated.View>
           {likeCount > 0 ? (
             <Text style={styles.railCountText}>{formatCount(likeCount)}</Text>
           ) : null}
@@ -345,14 +514,16 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         <Pressable
           testID={`save-button-${reel.id}`}
           onPress={onSave}
-          hitSlop={6}
+          hitSlop={8}
           style={styles.railItem}
         >
-          <Ionicons
-            name={saved ? 'bookmark' : 'bookmark-outline'}
-            size={26}
-            color={saved ? '#EE7D30' : '#FFFFFF'}
-          />
+          <Animated.View style={{ transform: [{ scale: saveScale }] }}>
+            <Ionicons
+              name={saved ? 'bookmark' : 'bookmark-outline'}
+              size={26}
+              color={saved ? '#EE7D30' : '#FFFFFF'}
+            />
+          </Animated.View>
         </Pressable>
 
         {/* Share Button */}
@@ -439,7 +610,7 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
           ) : null}
         </Pressable>
 
-        {/* Zuru AI Concierge Prompt Badge → opens new Zuru AI chat */}
+        {/* Zuru Agent Concierge Prompt Badge → opens new Zuru Agent chat */}
         <Pressable
           testID={`zuru-agent-${reel.id}`}
           onPress={() => {
@@ -456,7 +627,7 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
           ]}
         >
           <MaterialCommunityIcons name="creation" size={15} color="#FFFFFF" />
-          <Text style={styles.aiPromptText}>✨ Ask Zuru AI Assistant</Text>
+          <Text style={styles.aiPromptText}>✨ Ask Zuru Agent</Text>
         </Pressable>
 
         {/* 5. Bottom Action Dock (Primary Dual Buttons) */}
@@ -515,7 +686,7 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         onClose={() => setEnquireOpen(false)}
         hostId={hostId ?? ''}
         hostName={hostName}
-        hostAvatarUrl={avatarUrl}
+        hostAvatarUrl={finalAvatarUrl}
         experienceTitle={exp?.title ?? null}
         experienceLocation={exp?.location ?? null}
         experiencePrice={priceAmount != null ? Number(priceAmount) : null}
@@ -596,28 +767,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontFamily: 'DMSans_700Bold',
-  },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#008A05',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-  },
-  plusBadge: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#EE7D30',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   soundCircle: {
     width: 38,
@@ -740,5 +889,26 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontFamily: 'DMSans_700Bold',
+  },
+  centerBurstWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 25,
+  },
+  burstHeartContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  burstHeartShadow: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 10,
   },
 });

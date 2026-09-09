@@ -82,7 +82,7 @@ Deno.serve(async (request) => {
       .select(
         `*,
         experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
-        host:profiles!reels_user_id_profiles_fkey(full_name, verification_status, metadata)`
+        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)`
       )
       .in('status', ['active', 'published'])
       .order('created_at', { ascending: false })

@@ -87,7 +87,7 @@ export function ZuruAgentChat({
               <MaterialCommunityIcons name="creation" size={18} color="#ffffff" />
             </View>
             <View>
-              <Text style={styles.headerTitle}>Zuru AI Concierge</Text>
+              <Text style={styles.headerTitle}>Zuru Agent Concierge</Text>
               <Text style={styles.headerSub}>Ask about stays, events & experiences</Text>
             </View>
           </View>
@@ -142,7 +142,7 @@ export function ZuruAgentChat({
           {waiting ? (
             <View style={[styles.bubble, styles.aiBubble, styles.thinkingRow]}>
               <ActivityIndicator size="small" color={ORANGE} />
-              <Text style={styles.thinkingText}>Zuru AI is thinking…</Text>
+              <Text style={styles.thinkingText}>Zuru Agent is thinking…</Text>
             </View>
           ) : null}
         </ScrollView>
@@ -155,7 +155,7 @@ export function ZuruAgentChat({
             onFocus={() => {
               setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
             }}
-            placeholder={placeholder ?? `Ask Zuru AI about ${city}...`}
+            placeholder={placeholder ?? `Ask Zuru Agent about ${city}...`}
             placeholderTextColor="rgba(255,255,255,0.45)"
             minHeight={40}
             maxHeight={100}

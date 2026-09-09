@@ -17,7 +17,7 @@ interface AIFloatingButtonProps {
 
 export function AIFloatingButton({
   onPress,
-  label = 'Ask Zuru AI',
+  label = 'Ask Zuru Agent',
   visible = true,
 }: AIFloatingButtonProps) {
   const scale = useRef(new Animated.Value(0)).current;

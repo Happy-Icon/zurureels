@@ -78,7 +78,7 @@ export default function AIHomeScreen() {
           </View>
           <View>
             <View style={styles.titleRow}>
-              <Text style={styles.brandName}>Zuru AI</Text>
+              <Text style={styles.brandName}>Zuru Agent</Text>
               <View style={styles.betaBadge}>
                 <Text style={styles.betaText}>BETA</Text>
               </View>
@@ -174,7 +174,7 @@ export default function AIHomeScreen() {
           value={inputText}
           onChangeText={setInputText}
           onSend={handleSend}
-          placeholder="Ask Zuru AI anything…"
+          placeholder="Ask Zuru Agent anything…"
         />
       </View>
     </View>

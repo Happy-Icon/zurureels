@@ -8,6 +8,7 @@ import { Tabs, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useUnreadMessageCount } from '@/lib/queries';
+import { resolveAvatarUrl } from '@/lib/avatar';
 
 const ACTIVE_COLOR = '#F26522';
 const INACTIVE_COLOR = '#94A3B8';
@@ -128,9 +129,9 @@ function CustomBottomTabBar({ state, descriptors, navigation }: TabsTabBarProps)
 export default function TabLayout() {
   const colors = useColors();
   const router = useRouter();
-  const { user, viewMode } = useAuth();
+  const { user, profile, viewMode } = useAuth();
   const isHostMode = viewMode === 'host';
-  const userAvatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
+  const userAvatarUrl = resolveAvatarUrl(profile, user, profile);
 
   return (
     <Tabs

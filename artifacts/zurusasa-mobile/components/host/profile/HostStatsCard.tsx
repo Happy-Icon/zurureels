@@ -12,19 +12,32 @@ export function HostStatsCard({ host }: HostStatsCardProps) {
   const colors = useColors();
   const { isDark } = useTheme();
 
+  const hasReviews = Boolean(host.reviews_count && host.reviews_count > 0);
+  const ratingText = hasReviews && host.average_rating ? host.average_rating.toFixed(1) : 'New';
+  const reviewsLabel = hasReviews
+    ? `${host.reviews_count} ${host.reviews_count === 1 ? 'Review' : 'Reviews'}`
+    : 'No reviews yet';
+
+  const yearsHostingText =
+    host.years_hosting && host.years_hosting > 0
+      ? `${host.years_hosting} ${host.years_hosting === 1 ? 'yr' : 'yrs'}`
+      : '< 1 yr';
+
   return (
     <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.grid}>
         {/* Rating & Reviews */}
         <View style={styles.statCell}>
           <View style={styles.statHeaderRow}>
-            <Ionicons name="star" size={16} color="#F26522" />
-            <Text style={[styles.statValue, { color: colors.text }]}>
-              {host.average_rating ? host.average_rating.toFixed(2) : '4.95'}
-            </Text>
+            <Ionicons
+              name={hasReviews ? 'star' : 'star-outline'}
+              size={15}
+              color={hasReviews ? '#F26522' : colors.mutedForeground}
+            />
+            <Text style={[styles.statValue, { color: colors.text }]}>{ratingText}</Text>
           </View>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-            {host.reviews_count ?? 112} {host.reviews_count === 1 ? 'Review' : 'Reviews'}
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {reviewsLabel}
           </Text>
         </View>
 
@@ -32,7 +45,7 @@ export function HostStatsCard({ host }: HostStatsCardProps) {
 
         {/* Trips Hosted */}
         <View style={styles.statCell}>
-          <Text style={[styles.statValue, { color: colors.text }]}>{host.trips_hosted ?? 148}</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>{host.trips_hosted ?? 0}</Text>
           <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Trips Hosted</Text>
         </View>
 
@@ -40,8 +53,8 @@ export function HostStatsCard({ host }: HostStatsCardProps) {
 
         {/* Years Hosting */}
         <View style={styles.statCell}>
-          <Text style={[styles.statValue, { color: colors.text }]}>{host.years_hosting ?? 3}</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Years Hosting</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>{yearsHostingText}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Hosting</Text>
         </View>
       </View>
 
@@ -50,15 +63,19 @@ export function HostStatsCard({ host }: HostStatsCardProps) {
       <View style={styles.grid}>
         {/* Properties / Listings */}
         <View style={styles.statCell}>
-          <Text style={[styles.statValue, { color: colors.text }]}>{host.properties_count ?? 4}</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Properties</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>{host.properties_count ?? 0}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+            {host.properties_count === 1 ? 'Property' : 'Properties'}
+          </Text>
         </View>
 
         <View style={[styles.dividerVertical, { backgroundColor: colors.border }]} />
 
         {/* Repeat Guests */}
         <View style={styles.statCell}>
-          <Text style={[styles.statValue, { color: colors.text }]}>{host.repeat_guest_rate ?? '42%'}</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {host.repeat_guest_rate ?? '—'}
+          </Text>
           <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Repeat Guests</Text>
         </View>
 
@@ -66,7 +83,9 @@ export function HostStatsCard({ host }: HostStatsCardProps) {
 
         {/* Response Rate */}
         <View style={styles.statCell}>
-          <Text style={[styles.statValue, { color: colors.text }]}>{host.response_rate ?? '98%'}</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {host.response_rate ?? '—'}
+          </Text>
           <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Response Rate</Text>
         </View>
       </View>
@@ -98,7 +117,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
-    gap: 2,
+    gap: 3,
   },
   statHeaderRow: {
     flexDirection: 'row',
@@ -106,23 +125,24 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontFamily: 'DMSans_700Bold',
     color: '#222222',
   },
   statLabel: {
     fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
+    fontFamily: 'DMSans_500Medium',
     color: '#717171',
+    textAlign: 'center',
   },
   dividerVertical: {
     width: 1,
-    height: 36,
+    height: 32,
     backgroundColor: '#EBEBEB',
   },
   dividerHorizontal: {
     height: 1,
     backgroundColor: '#EBEBEB',
-    marginVertical: 12,
+    marginVertical: 10,
   },
 });

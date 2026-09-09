@@ -7,6 +7,7 @@ import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { RatingStars } from '@/components/reviews/RatingStars';
 import { ReviewPhotoViewer } from '@/components/reviews/ReviewPhotoViewer';
+import { resolveAvatarUrl } from '@/lib/avatar';
 
 interface ReviewCardProps {
   review: FullReviewRow;
@@ -25,7 +26,7 @@ export function ReviewCard({ review, onHelpful }: ReviewCardProps) {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   const reviewerName = review.reviewer?.full_name || 'Verified Traveler';
-  const reviewerAvatar = review.reviewer?.avatar_url;
+  const reviewerAvatar = resolveAvatarUrl(review.reviewer as any) || review.reviewer?.avatar_url;
   const initials = reviewerName
     .split(' ')
     .map((n) => n[0])

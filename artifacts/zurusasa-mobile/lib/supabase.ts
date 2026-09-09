@@ -254,7 +254,7 @@ export interface ReelRow {
   > | null;
   host?: Pick<
     ProfileRow,
-    'id' | 'full_name' | 'verification_status' | 'is_verified' | 'metadata' | 'created_at' | 'bio' | 'role'
+    'id' | 'full_name' | 'email' | 'avatar_url' | 'verification_status' | 'is_verified' | 'metadata' | 'created_at' | 'bio' | 'role'
   > | null;
 }
 
@@ -401,3 +401,6 @@ export interface UserDeviceRow {
   created_at?: string;
   updated_at?: string;
 }
+
+export { resolveAvatarUrl } from '@/lib/avatar';
+

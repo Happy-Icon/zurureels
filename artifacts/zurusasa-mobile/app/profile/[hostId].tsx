@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { resolveAvatarUrl } from '@/lib/avatar';
 import { useHostProfile } from '@/hooks/useHostProfile';
 import { useEnquire } from '@/lib/queries';
 import { HostHeader } from '@/components/host/profile/HostHeader';
@@ -35,7 +36,7 @@ export default function PublicHostProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { hostId } = useLocalSearchParams<{ hostId: string }>();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const enquire = useEnquire();
 
   const {
@@ -48,6 +49,15 @@ export default function PublicHostProfileScreen() {
     toggleFollow,
     toggleSaveHost,
   } = useHostProfile(hostId || '');
+
+  const activeHost = React.useMemo(() => {
+    if (!host) return null;
+    const resolvedAvatar = resolveAvatarUrl(host, user, user?.id === host.id ? profile : null);
+    return {
+      ...host,
+      avatar_url: resolvedAvatar || host.avatar_url,
+    };
+  }, [host, user, profile]);
 
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [reportModalVisible, setReportModalVisible] = useState(false);
@@ -150,8 +160,13 @@ export default function PublicHostProfileScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Host Header */}
-        <HostHeader host={host} />
+        {/* 1. Host Header with Follow Button */}
+        <HostHeader
+          host={activeHost || host}
+          isFollowing={isFollowing}
+          onToggleFollow={toggleFollow}
+          isOwnProfile={Boolean(user && host && user.id === host.id)}
+        />
 
         {/* 2. Key Host Statistics Card */}
         <HostStatsCard host={host} />
@@ -167,8 +182,8 @@ export default function PublicHostProfileScreen() {
 
         {/* 6. Reviews Preview */}
         <HostReviewsPreview
-          averageRating={host.average_rating || 4.95}
-          reviewsCount={host.reviews_count || 112}
+          averageRating={host.average_rating}
+          reviewsCount={host.reviews_count ?? 0}
           reviews={reviews}
         />
 

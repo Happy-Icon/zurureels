@@ -178,7 +178,7 @@ export default function AIChatScreen() {
             <Text style={styles.logoMiniEmoji}>✦</Text>
           </View>
           <View>
-            <Text style={styles.headerTitle}>Zuru AI</Text>
+            <Text style={styles.headerTitle}>Zuru Agent</Text>
             <View style={styles.onlineRow}>
               <View style={styles.onlineDot} />
               <Text style={styles.onlineText}>Ready to explore</Text>
@@ -230,7 +230,7 @@ export default function AIChatScreen() {
         onChangeText={setInputText}
         onSend={handleSend}
         disabled={isTyping}
-        placeholder={isTyping ? 'Zuru AI is thinking…' : 'Ask Zuru AI anything…'}
+        placeholder={isTyping ? 'Zuru Agent is thinking…' : 'Ask Zuru Agent anything…'}
       />
     </KeyboardAvoidingView>
   );

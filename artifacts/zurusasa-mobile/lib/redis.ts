@@ -22,7 +22,7 @@ export async function fetchServerCachedQuery<T>(
     });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Redis cache timeout')), 3500)
+      setTimeout(() => reject(new Error('Redis cache timeout')), 5000)
     );
 
     const { data: res, error } = (await Promise.race([
@@ -33,8 +33,8 @@ export async function fetchServerCachedQuery<T>(
     if (!error && res?.data) {
       return res.data as T;
     }
-  } catch (err) {
-    console.warn(`[Server Redis Cache] Fast fallback for ${action}:`, err);
+  } catch {
+    // Seamless fallback to direct database query without noisy console warnings
   }
 
   return await dbFallbackFn();

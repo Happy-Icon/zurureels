@@ -1,22 +1,35 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useColors, useTheme } from '@/hooks/useColors';
 
 interface HostLanguagesProps {
   languages?: string[];
 }
 
 export function HostLanguages({ languages }: HostLanguagesProps) {
-  const list = languages && languages.length > 0 ? languages : ['English', 'Kiswahili'];
+  const colors = useColors();
+  const { isDark } = useTheme();
+
+  // If host has not configured any spoken languages, do NOT render mock languages
+  if (!languages || languages.length === 0) {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionHeading}>Spoken Languages</Text>
+      <Text style={[styles.sectionHeading, { color: colors.text }]}>Spoken Languages</Text>
       <View style={styles.pillContainer}>
-        {list.map((lang, idx) => (
-          <View key={idx} style={styles.langPill}>
+        {languages.map((lang, idx) => (
+          <View
+            key={idx}
+            style={[
+              styles.langPill,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="globe" size={13} color="#F26522" />
-            <Text style={styles.langText}>{lang}</Text>
+            <Text style={[styles.langText, { color: colors.text }]}>{lang}</Text>
           </View>
         ))}
       </View>

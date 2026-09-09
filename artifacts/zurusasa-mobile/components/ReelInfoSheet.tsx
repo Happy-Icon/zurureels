@@ -14,10 +14,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import type { ReelRow } from '@/lib/supabase';
+import { supabase, type ReelRow } from '@/lib/supabase';
+import { resolveAvatarUrl } from '@/lib/avatar';
 import { reviewService, type ReviewSummaryData } from '@/services/reviewService';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 
 const BRAND_ORANGE = '#F26522';
 
@@ -43,9 +45,58 @@ export function ReelInfoSheet({ reel, visible, onClose, onBookNow }: ReelInfoShe
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [showAllAmenities, setShowAllAmenities] = useState(false);
 
+  const { user, profile } = useAuth();
   const hostName = reel.host?.full_name ?? 'Zuru Host';
   const verified = Boolean(reel.host?.is_verified || reel.host?.verification_status === 'verified');
-  const hostAvatar = (hostMeta.avatar_url as string) || null;
+  const hostId = reel.user_id ?? reel.host?.id;
+  const initialHostAvatar =
+    reel.host?.avatar_url ||
+    resolveAvatarUrl(
+      reel.host
+        ? {
+            ...reel.host,
+            id: hostId ?? undefined,
+            email: reel.host.email,
+            avatar_url: reel.host.avatar_url,
+          }
+        : (hostId ? { id: hostId } : null),
+      user,
+      profile
+    );
+
+  const [lazyHostAvatar, setLazyHostAvatar] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!initialHostAvatar && !lazyHostAvatar && hostId) {
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, metadata')
+            .eq('id', hostId)
+            .maybeSingle();
+          if (active && data) {
+            const resolved = resolveAvatarUrl(
+              { ...reel.host, ...data, id: hostId },
+              user,
+              profile
+            );
+            if (resolved) {
+              setLazyHostAvatar(resolved);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      })();
+    }
+    return () => {
+      active = false;
+    };
+  }, [initialHostAvatar, lazyHostAvatar, hostId, reel.host, user, profile]);
+
+  const hostAvatar = initialHostAvatar || lazyHostAvatar;
 
   const maxGuests = exp?.max_guests || (meta.max_guests as number) || 2;
   const bedrooms = (meta.bedrooms as number) || 1;

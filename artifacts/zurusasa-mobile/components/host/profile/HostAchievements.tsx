@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useColors, useTheme } from '@/hooks/useColors';
 
 interface HostAchievementsProps {
@@ -10,24 +10,25 @@ interface HostAchievementsProps {
 export function HostAchievements({ badges }: HostAchievementsProps) {
   const colors = useColors();
   const { isDark } = useTheme();
-  const badgeList = badges && badges.length > 0 ? badges : [
-    'Super Host',
-    'Top Rated',
-    '100+ Trips',
-    'Fast Response',
-    'Community Favorite',
-  ];
+
+  // If host has no real achievements computed or awarded, do NOT render mock achievements
+  if (!badges || badges.length === 0) {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
       <Text style={[styles.sectionHeading, { color: colors.text }]}>Host Achievements</Text>
       <View style={styles.badgeList}>
-        {badgeList.map((badge, idx) => (
+        {badges.map((badge, idx) => (
           <View
             key={idx}
             style={[
               styles.badgeRow,
-              { backgroundColor: isDark ? '#2A1810' : '#FFFBF8', borderColor: isDark ? '#5C2D16' : '#FCE3D6' },
+              {
+                backgroundColor: isDark ? '#2A1810' : '#FFFBF8',
+                borderColor: isDark ? '#5C2D16' : '#FCE3D6',
+              },
             ]}
           >
             <View style={styles.badgeIconWrap}>
@@ -57,24 +58,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#FFFBF8',
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#FCE3D6',
   },
   badgeIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(242, 101, 34, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeTitle: {
     fontSize: 14,
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
+    fontFamily: 'DMSans_600SemiBold',
   },
 });

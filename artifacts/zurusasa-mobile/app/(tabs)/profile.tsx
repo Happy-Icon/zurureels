@@ -18,12 +18,15 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter, type Href } from 'expo-router';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useColors } from '@/hooks/useColors';
 import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
+import { invalidateServerCache } from '@/lib/redis';
 import { supabase } from '@/lib/supabase';
+import { resolveAvatarUrl } from '@/lib/avatar';
 import { useSavedEvents, useSavedReels } from '@/lib/queries';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationBadge } from '@/components/NotificationBadge';
@@ -43,6 +46,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const colors = useColors();
+  const queryClient = useQueryClient();
   const { isDark } = useTheme();
   const { user, profile, signOut, loading, viewMode, switchViewMode, role, refreshProfile } = useAuth();
   const { showAlert } = useCustomAlert();
@@ -137,17 +141,11 @@ export default function ProfileScreen() {
     user.phone ||
     'Traveler';
 
-  const rawAvatarUrl =
-    (profile as any)?.avatar_url ||
-    profMeta?.avatar_url ||
-    (meta.avatar_url as string) ||
-    (meta.picture as string) ||
-    (meta.avatar as string) ||
-    null;
+  const avatarUrl = resolveAvatarUrl(profile, user, profile);
 
-  const avatarUrl = typeof rawAvatarUrl === 'string' && rawAvatarUrl.trim().length > 0
-    ? rawAvatarUrl
-    : null;
+  useEffect(() => {
+    setImageError(false);
+  }, [avatarUrl]);
 
   const initial = displayName.charAt(0).toUpperCase();
   const isHostMode = viewMode === 'host';
@@ -205,6 +203,7 @@ export default function ProfileScreen() {
             metadata: {
               ...existingMeta,
               avatar_url: finalAvatarUrl,
+              picture: finalAvatarUrl,
             },
           })
           .eq('id', user.id);
@@ -218,6 +217,11 @@ export default function ProfileScreen() {
 
         setImageError(false);
         if (refreshProfile) await refreshProfile();
+
+        queryClient.invalidateQueries({ queryKey: ['reels'] });
+        queryClient.invalidateQueries({ queryKey: ['host-profile', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['profile'] });
+        invalidateServerCache('invalidate_reels_feed').catch(() => {});
       }
 
       showAlert({

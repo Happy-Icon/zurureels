@@ -21,7 +21,7 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { useAuth } from '@/context/AuthContext';
 import { useExperienceBlockedDates } from '@/lib/queries';
-import { supabase, type ReelRow } from '@/lib/supabase';
+import { supabase, resolveAvatarUrl, type ReelRow } from '@/lib/supabase';
 import { reviewService, type ReviewSummaryData } from '@/services/reviewService';
 import { CardPaymentModal, type CardDetails } from '@/components/CardPaymentModal';
 import { PremiumLoader } from '@/components/PremiumLoader';
@@ -155,7 +155,7 @@ export function BookingSheet({
 
   const hostName = reel.host?.full_name ?? 'Zuru Host';
   const verified = Boolean(reel.host?.is_verified || reel.host?.verification_status === 'verified');
-  const hostAvatar = (hostMeta.avatar_url as string) || null;
+  const hostAvatar = resolveAvatarUrl(reel.host, user);
 
   const maxGuests = exp?.max_guests || (meta.max_guests as number) || 2;
   const bedrooms = (meta.bedrooms as number) || 1;

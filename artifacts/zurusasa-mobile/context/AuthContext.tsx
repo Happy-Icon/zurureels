@@ -9,7 +9,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, type ProfileRow } from '@/lib/supabase';
 
+import { queryClient } from '@/lib/queryClient';
+import { invalidateServerCache } from '@/lib/redis';
 import { notificationService } from '@/services/notificationService';
+import { extractAvatarFromUser } from '@/lib/avatar';
 
 interface AuthContextValue {
   session: Session | null;
@@ -26,7 +29,7 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -44,15 +47,93 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const [hasListings, setHasListings] = useState<boolean>(false);
 
-  const loadProfile = useCallback(async (userId: string) => {
+  const loadProfile = useCallback(async (userId: string, authUser?: User | null) => {
     try {
+      let resolvedUser = authUser;
+      if (!resolvedUser) {
+        const { data: authData } = await supabase.auth.getUser();
+        resolvedUser = authData?.user ?? null;
+      }
+
       const { data } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
+
+      const userAvatar = extractAvatarFromUser(resolvedUser);
+
       if (data) {
-        setProfile(data as ProfileRow);
+        // Auto-sync Google / Auth user avatar to profiles.metadata if not yet saved in DB
+        const meta = ((data as any).metadata ?? {}) as Record<string, any>;
+        let activeProfile = data as ProfileRow;
+
+        if (
+          userAvatar &&
+          (!meta.avatar_url || meta.avatar_url !== userAvatar || !meta.picture)
+        ) {
+          const updatedMeta = {
+            ...meta,
+            avatar_url: userAvatar,
+            picture: userAvatar,
+          };
+
+          activeProfile = {
+            ...data,
+            metadata: updatedMeta,
+          } as ProfileRow;
+
+          (supabase.from('profiles').update as any)({
+            metadata: updatedMeta,
+          })
+            .eq('id', userId)
+            .then(
+              ({ error: updateErr }: any) => {
+                if (!updateErr) {
+                  queryClient.invalidateQueries({ queryKey: ['reels'] });
+                  queryClient.invalidateQueries({ queryKey: ['host-profile', userId] });
+                  invalidateServerCache('invalidate_reels_feed').catch(() => {});
+                }
+              },
+              (e: unknown) => console.warn('Avatar auto-sync note:', e)
+            );
+        }
+
+        setProfile(activeProfile);
+      } else if (resolvedUser) {
+        // Create initial profile if missing in profiles table for any newly signed-in user
+        const uMeta = (resolvedUser.user_metadata ?? {}) as Record<string, any>;
+        const fullName =
+          uMeta.full_name ||
+          uMeta.name ||
+          resolvedUser.email?.split('@')[0] ||
+          'Traveler';
+
+        const initialMeta: Record<string, any> = {};
+        if (userAvatar) {
+          initialMeta.avatar_url = userAvatar;
+          initialMeta.picture = userAvatar;
+        }
+
+        const newProfile: any = {
+          id: userId,
+          full_name: fullName,
+          email: resolvedUser.email || null,
+          role: 'guest',
+          metadata: initialMeta,
+        };
+
+        const { data: inserted, error: insertErr } = await (supabase
+          .from('profiles')
+          .insert as any)([newProfile])
+          .select()
+          .maybeSingle();
+
+        if (!insertErr && inserted) {
+          setProfile(inserted as ProfileRow);
+        } else {
+          setProfile(newProfile as ProfileRow);
+        }
       }
 
       // Register Expo push token into user_devices canonical store
@@ -87,7 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!isMounted) return;
         setSession(data?.session ?? null);
         if (data?.session?.user) {
-          loadProfile(data.session.user.id).catch(() => {});
+          loadProfile(data.session.user.id, data.session.user).catch(() => {});
         }
       })
       .catch((err) => {
@@ -104,7 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!isMounted) return;
       setSession(newSession);
       if (newSession?.user) {
-        loadProfile(newSession.user.id).catch(() => {});
+        loadProfile(newSession.user.id, newSession.user).catch(() => {});
       } else {
         setProfile(null);
         setHasListings(false);
@@ -176,7 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session]);
 
   const refreshProfile = useCallback(async () => {
-    if (session?.user) await loadProfile(session.user.id);
+    if (session?.user) await loadProfile(session.user.id, session.user);
   }, [session, loadProfile]);
 
   return (

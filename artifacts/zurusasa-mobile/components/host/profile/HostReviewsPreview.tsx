@@ -1,37 +1,73 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { useColors, useTheme } from '@/hooks/useColors';
 import type { HostReviewRow } from '@/lib/supabase';
 
 interface HostReviewsPreviewProps {
-  averageRating: number;
-  reviewsCount: number;
+  averageRating?: number;
+  reviewsCount?: number;
   reviews: HostReviewRow[];
 }
 
 export function HostReviewsPreview({
   averageRating,
-  reviewsCount,
+  reviewsCount = 0,
   reviews,
 }: HostReviewsPreviewProps) {
+  const colors = useColors();
+  const { isDark } = useTheme();
+
+  const hasReviews = reviewsCount > 0 && reviews.length > 0;
+
+  if (!hasReviews) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <Text style={[styles.sectionHeading, { color: colors.text }]}>Reviews</Text>
+        </View>
+
+        <View
+          style={[
+            styles.emptyCard,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.emptyIconCircle,
+              { backgroundColor: isDark ? '#2A1810' : '#FFF3EB' },
+            ]}
+          >
+            <Feather name="message-square" size={22} color="#F26522" />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No reviews yet</Text>
+          <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+            Reviews from guests who complete a booking with this host will appear here.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.headerRow}>
         <View style={styles.ratingGroup}>
           <Ionicons name="star" size={20} color="#F26522" />
-          <Text style={styles.ratingNumber}>
-            {averageRating ? averageRating.toFixed(2) : '4.95'}
+          <Text style={[styles.ratingNumber, { color: colors.text }]}>
+            {averageRating ? averageRating.toFixed(1) : '—'}
           </Text>
-          <Text style={styles.dotSeparator}>·</Text>
-          <Text style={styles.reviewCountText}>
+          <Text style={[styles.dotSeparator, { color: colors.mutedForeground }]}>·</Text>
+          <Text style={[styles.reviewCountText, { color: colors.text }]}>
             {reviewsCount} {reviewsCount === 1 ? 'Review' : 'Reviews'}
           </Text>
         </View>
       </View>
 
-      {/* Review Cards */}
+      {/* Real Review Cards */}
       <View style={styles.reviewsList}>
         {reviews.map((rev) => {
           const initials = rev.reviewer_name
@@ -39,10 +75,23 @@ export function HostReviewsPreview({
             .map((n) => n[0])
             .join('')
             .substring(0, 2)
-            .toUpperCase();
+            .toUpperCase() || 'G';
+
+          const reviewDate = rev.created_at
+            ? new Date(rev.created_at).toLocaleDateString('en-US', {
+                month: 'short',
+                year: 'numeric',
+              })
+            : null;
 
           return (
-            <View key={rev.id} style={styles.reviewCard}>
+            <View
+              key={rev.id}
+              style={[
+                styles.reviewCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <View style={styles.reviewerHeader}>
                 {rev.reviewer_avatar ? (
                   <Image
@@ -57,21 +106,28 @@ export function HostReviewsPreview({
                 )}
 
                 <View style={styles.reviewerMeta}>
-                  <Text style={styles.reviewerName}>{rev.reviewer_name}</Text>
+                  <Text style={[styles.reviewerName, { color: colors.text }]}>
+                    {rev.reviewer_name}
+                  </Text>
                   <View style={styles.starRow}>
                     {[1, 2, 3, 4, 5].map((s) => (
                       <Ionicons
                         key={s}
                         name="star"
                         size={12}
-                        color={s <= rev.rating ? '#F26522' : '#EBEBEB'}
+                        color={s <= rev.rating ? '#F26522' : isDark ? '#333' : '#EBEBEB'}
                       />
                     ))}
+                    {reviewDate ? (
+                      <Text style={[styles.reviewDate, { color: colors.mutedForeground }]}>
+                        · {reviewDate}
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
               </View>
 
-              <Text style={styles.commentText}>{rev.comment}</Text>
+              <Text style={[styles.commentText, { color: colors.text }]}>{rev.comment}</Text>
             </View>
           );
         })}
@@ -88,6 +144,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
   },
   ratingGroup: {
     flexDirection: 'row',
@@ -156,10 +217,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
   },
+  reviewDate: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    marginLeft: 4,
+  },
   commentText: {
     fontSize: 14,
     fontFamily: 'DMSans_400Regular',
-    color: '#484848',
     lineHeight: 20,
+  },
+  emptyCard: {
+    padding: 24,
+    borderRadius: 16,
+    backgroundColor: '#F9F9F9',
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    marginTop: 2,
+  },
+  emptySub: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 12,
   },
 });
