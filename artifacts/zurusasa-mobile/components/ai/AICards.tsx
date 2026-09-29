@@ -13,22 +13,24 @@ import { AI_COLORS, AI_FONTS, AI_RADIUS, AI_SHADOW, type AICard } from './tokens
 // ── AI Listing Card ─────────────────────────────────────────────────────────
 interface AIListingCardProps {
   card: AICard;
-  onSave?: (id: string) => void;
-  onOpen?: (id: string) => void;
-  onBook?: (id: string) => void;
+  onSave?: (id: string, card: AICard) => void;
+  onOpen?: (id: string, card: AICard) => void;
+  onBook?: (id: string, card: AICard) => void;
 }
 
 export function AIListingCard({ card, onSave, onOpen, onBook }: AIListingCardProps) {
+  const imageUri = card.thumbnailUrl || card.imageUrl;
+
   return (
     <Pressable
-      onPress={() => onOpen?.(card.id)}
+      onPress={() => onOpen?.(card.id, card)}
       style={({ pressed }) => [styles.card, pressed && { opacity: 0.95 }]}
     >
-      {/* Hero image */}
+      {/* Hero image / Reel Thumbnail */}
       <View style={styles.imageWrap}>
-        {card.imageUrl ? (
+        {imageUri ? (
           <Image
-            source={{ uri: card.imageUrl }}
+            source={{ uri: imageUri }}
             style={styles.image}
             contentFit="cover"
           />
@@ -38,9 +40,17 @@ export function AIListingCard({ card, onSave, onOpen, onBook }: AIListingCardPro
           </View>
         )}
 
+        {/* Video Reel indicator badge */}
+        {card.videoUrl ? (
+          <View style={styles.reelBadge}>
+            <Ionicons name="play" size={10} color="#FFFFFF" />
+            <Text style={styles.reelBadgeText}>Reel</Text>
+          </View>
+        ) : null}
+
         {/* Save button */}
         <Pressable
-          onPress={(e) => { e.stopPropagation(); onSave?.(card.id); }}
+          onPress={(e) => { e.stopPropagation(); onSave?.(card.id, card); }}
           style={styles.saveBtn}
           hitSlop={6}
         >
@@ -88,13 +98,13 @@ export function AIListingCard({ card, onSave, onOpen, onBook }: AIListingCardPro
         {/* Action buttons */}
         <View style={styles.actions}>
           <Pressable
-            onPress={() => onOpen?.(card.id)}
+            onPress={() => onOpen?.(card.id, card)}
             style={styles.openBtn}
           >
             <Text style={styles.openBtnText}>View</Text>
           </Pressable>
           <Pressable
-            onPress={() => onBook?.(card.id)}
+            onPress={() => onBook?.(card.id, card)}
             style={styles.bookBtn}
           >
             <Text style={styles.bookBtnText}>Book</Text>
@@ -108,13 +118,13 @@ export function AIListingCard({ card, onSave, onOpen, onBook }: AIListingCardPro
 // ── AI Recommendation Card ──────────────────────────────────────────────────
 interface AIRecommendationCardProps {
   card: AICard;
-  onPress?: (id: string) => void;
+  onPress?: (id: string, card: AICard) => void;
 }
 
 export function AIRecommendationCard({ card, onPress }: AIRecommendationCardProps) {
   return (
     <Pressable
-      onPress={() => onPress?.(card.id)}
+      onPress={() => onPress?.(card.id, card)}
       style={({ pressed }) => [styles.recCard, pressed && { opacity: 0.92 }]}
     >
       {/* Left image */}
@@ -166,15 +176,28 @@ export function AIRecommendationCard({ card, onPress }: AIRecommendationCardProp
 }
 
 // ── Card row (horizontal scroll) ────────────────────────────────────────────
-export function AICardRow({ cards, type = 'listing' }: {
+export function AICardRow({
+  cards,
+  type = 'listing',
+  onSave,
+  onOpen,
+  onBook,
+}: {
   cards: AICard[];
   type?: 'listing' | 'recommendation';
+  onSave?: (id: string, card: AICard) => void;
+  onOpen?: (id: string, card: AICard) => void;
+  onBook?: (id: string, card: AICard) => void;
 }) {
   if (type === 'recommendation') {
     return (
       <View style={styles.recList}>
         {cards.map((card) => (
-          <AIRecommendationCard key={card.id} card={card} />
+          <AIRecommendationCard
+            key={card.id}
+            card={card}
+            onPress={(id, c) => onOpen?.(id, c)}
+          />
         ))}
       </View>
     );
@@ -187,11 +210,18 @@ export function AICardRow({ cards, type = 'listing' }: {
       contentContainerStyle={styles.cardRow}
     >
       {cards.map((card) => (
-        <AIListingCard key={card.id} card={card} />
+        <AIListingCard
+          key={card.id}
+          card={card}
+          onSave={onSave}
+          onOpen={onOpen}
+          onBook={onBook}
+        />
       ))}
     </ScrollView>
   );
 }
+
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -243,6 +273,25 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontFamily: AI_FONTS.bold,
     textTransform: 'capitalize',
+  },
+  reelBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  reelBadgeText: {
+    fontSize: 9.5,
+    fontFamily: AI_FONTS.bold,
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   content: {
     padding: 10,

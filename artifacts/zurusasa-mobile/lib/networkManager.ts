@@ -60,6 +60,11 @@ export interface NetworkStatus {
   isInternetReachable: boolean | null;
 }
 
+export const networkManager = {
+  isOnline: (): boolean => onlineManager.isOnline(),
+};
+
+
 /**
  * Hook to inspect the real-time network connectivity of the device.
  */

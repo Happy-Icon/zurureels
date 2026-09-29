@@ -12,9 +12,18 @@ import { AICardRow } from './AICards';
 interface AIMessageBubbleProps {
   message: AIMessage;
   isLatest?: boolean;
+  onSave?: (id: string, card: any) => void;
+  onOpen?: (id: string, card: any) => void;
+  onBook?: (id: string, card: any) => void;
 }
 
-export function AIMessageBubble({ message, isLatest }: AIMessageBubbleProps) {
+export function AIMessageBubble({
+  message,
+  isLatest,
+  onSave,
+  onOpen,
+  onBook,
+}: AIMessageBubbleProps) {
   const isUser = message.role === 'user';
   const scale = useRef(new Animated.Value(0.88)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -64,9 +73,13 @@ export function AIMessageBubble({ message, isLatest }: AIMessageBubbleProps) {
             <AICardRow
               cards={message.cards}
               type={message.cards[0].type}
+              onSave={onSave}
+              onOpen={onOpen}
+              onBook={onBook}
             />
           </View>
         ) : null}
+
 
         {/* Timestamp */}
         <Text style={[styles.timestamp, isUser && { textAlign: 'right' }]}>

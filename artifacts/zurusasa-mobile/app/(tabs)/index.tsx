@@ -25,6 +25,7 @@ import { PremiumLoader } from '@/components/PremiumLoader';
 import { OfflineState } from '@/components/OfflineState';
 import { useNetworkStatus } from '@/lib/networkManager';
 import { useReels, useRefreshReels, useBatchReelInteractions } from '@/lib/queries';
+import { usePersonalizedReels } from '@/hooks/usePersonalizedFeed';
 import type { ReelRow } from '@/lib/supabase';
 import { useObserve } from '@/lib/observe';
 
@@ -52,7 +53,7 @@ function ZuruFlowFeed() {
   const { width, height } = useWindowDimensions();
   const isFocused = useIsFocused();
   const { isOnline } = useNetworkStatus();
-  const { data: reels, isLoading, isError, refetch } = useReels();
+  const { reels, isLoading, isError, refetch } = usePersonalizedReels(user?.id);
   const refreshReels = useRefreshReels();
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
@@ -85,7 +86,7 @@ function ZuruFlowFeed() {
   const scrollOffsetAroundRef = useRef<number>(0);
   const gestureMode = useRef<'none' | 'horizontal' | 'pulldown'>('none');
 
-  // Curate streams: ZuruFlow has all trending reels; Around You highlights coastal/localized stays & activities
+  // Curate streams: ZuruFlow has AI-personalized candidate reels; Around You highlights localized stays & activities
   const zuruReels = useMemo(() => reels ?? [], [reels]);
   const aroundReels = useMemo(() => {
     if (!reels || reels.length === 0) return [];
@@ -93,6 +94,8 @@ function ZuruFlowFeed() {
     const withoutLocation = reels.filter((r) => !r.experience?.location);
     return [...localized.slice().reverse(), ...withoutLocation];
   }, [reels]);
+
+
 
   // Clean, Wordless Premium Refresh: Shows ONLY the bouncing wave dots, rotates feed, scrolls to top
   const handleRefresh = useCallback(async () => {

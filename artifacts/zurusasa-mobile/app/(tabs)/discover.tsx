@@ -90,6 +90,7 @@ export default function AirbnbDiscoverScreen() {
     addSearch,
     clearHistory,
     parseAiQuery,
+    parseAiQueryAsync,
   } = useSearch();
 
   const { filters, updateFilters, resetFilters, activeFilterCount } = useFilters();
@@ -105,15 +106,27 @@ export default function AirbnbDiscoverScreen() {
   const { unreadCount } = useNotifications();
 
   // Handle AI Natural Language Query submission
-  const handleSearchSubmit = (text: string) => {
+  const handleSearchSubmit = async (text: string) => {
     if (!text.trim()) return;
     addSearch(text);
-    const aiParsed = parseAiQuery(text);
-    if (Object.keys(aiParsed).length > 0) {
-      updateFilters(aiParsed);
+    // 1. Apply instant synchronous filters
+    const syncParsed = parseAiQuery(text);
+    if (Object.keys(syncParsed).length > 0) {
+      updateFilters(syncParsed);
     }
     setIsSearchFocused(false);
+
+    // 2. Refine with Fable 5.1 server-side structured extraction
+    try {
+      const aiParsed = await parseAiQueryAsync(text);
+      if (Object.keys(aiParsed).length > 0) {
+        updateFilters(aiParsed);
+      }
+    } catch {
+      // Offline or fallback already applied
+    }
   };
+
 
   const applyMyLocation = useCallback(async (interactive: boolean) => {
     try {
@@ -373,7 +386,17 @@ export default function AirbnbDiscoverScreen() {
         />
       )}
 
+      {/* Zuru Agent AI Floating Button */}
+      {!isSearchFocused && activeCategory !== 'ai' ? (
+        <AIFloatingButton
+          onPress={() => router.push('/ai' as any)}
+          label="Ask Zuru Agent"
+          visible={true}
+        />
+      ) : null}
+
       {/* Journey Companion Sheet for Map Directions */}
+
       {journeyBooking ? (
         <JourneyCompanionSheet
           visible={Boolean(journeyBooking)}

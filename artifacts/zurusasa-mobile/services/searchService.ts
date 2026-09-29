@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type SearchFilters } from '@/services/filterService';
+import { zuruAIService } from '@/services/zuruAIService';
 
 const RECENT_SEARCHES_KEY = 'zurusasa_recent_searches_v1';
 
@@ -31,9 +32,33 @@ export const TRENDING_TAGS = [
 export const searchService = {
   /**
    * Intelligently convert AI natural language prompt into structured SearchFilters
-   * Example: "beachfront villa in Diani for 4 people under 15k"
+   * via Fable 5.1 server-side service with offline fallback.
+   */
+  async parseNaturalLanguageQueryAsync(query: string): Promise<Partial<SearchFilters>> {
+    try {
+      const res = await zuruAIService.discover(query, { stream: false });
+      const c = res.criteria;
+      if (c) {
+        const filters: Partial<SearchFilters> = {};
+        if (c.location) filters.cities = [c.location];
+        if (c.budget_max) filters.maxPrice = c.budget_max;
+        if (c.budget_min) filters.minPrice = c.budget_min;
+        if (c.category) filters.category = c.category;
+        if (c.guests) filters.guests = c.guests;
+        if (c.amenities && c.amenities.length > 0) filters.amenities = c.amenities;
+        return filters;
+      }
+    } catch {
+      // Graceful offline fallback
+    }
+    return this.parseNaturalLanguageQuery(query);
+  },
+
+  /**
+   * Local rule-based natural language parser (used for instant offline extraction)
    */
   parseNaturalLanguageQuery(query: string): Partial<SearchFilters> {
+
     const q = query.toLowerCase();
     const parsed: Partial<SearchFilters> = {};
 

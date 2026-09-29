@@ -47,12 +47,11 @@ export function ZuruAgentChat({
   isEmbedded = false,
 }: ZuruAgentChatProps) {
   const insets = useSafeAreaInsets();
-  const { messages, isLoading, sendMessage, clearMessages } = useZuruAI();
+  const { messages, isLoading, stageStatus, sendMessage, clearMessages } = useZuruAI();
   const [input, setInput] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
   const city = cityOverride ?? (reelSummary?.location?.trim() || 'Mombasa');
-  const contextReels = reels ?? (reelSummary ? [reelSummary] : []);
 
   const handleClose = () => {
     clearMessages();
@@ -63,11 +62,14 @@ export function ZuruAgentChat({
     const text = input.trim();
     if (!text || isLoading) return;
     setInput('');
-    sendMessage(text, city, { reels: contextReels });
+    const fullPrompt = city && city !== 'Mombasa' && city !== 'Discover'
+      ? `${text} (Location context: ${city})`
+      : text;
+    sendMessage(fullPrompt, { userLocation: { city } });
   };
 
-  const waiting =
-    isLoading && messages[messages.length - 1]?.role !== 'assistant';
+  const waiting = isLoading;
+
 
   const contentUI = (
     <KeyboardAvoidingView
@@ -135,16 +137,19 @@ export function ZuruAgentChat({
                   m.role === 'user' ? styles.userText : styles.aiText,
                 ]}
               >
-                {m.content}
+                {m.text || (m as any).content}
               </Text>
             </View>
           ))}
           {waiting ? (
             <View style={[styles.bubble, styles.aiBubble, styles.thinkingRow]}>
               <ActivityIndicator size="small" color={ORANGE} />
-              <Text style={styles.thinkingText}>Zuru Agent is thinking…</Text>
+              <Text style={styles.thinkingText}>
+                {stageStatus.text || 'Zuru Agent is thinking…'}
+              </Text>
             </View>
           ) : null}
+
         </ScrollView>
 
         <View style={styles.inputRow}>

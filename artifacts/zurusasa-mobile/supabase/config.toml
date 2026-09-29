@@ -28,3 +28,7 @@ verify_jwt = true
 [functions.persona-webhook]
 verify_jwt = false
 
+[functions.zuru-ai]
+verify_jwt = false
+
+

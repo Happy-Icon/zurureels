@@ -33,6 +33,10 @@ export function useSearch() {
     return searchService.parseNaturalLanguageQuery(text);
   }, []);
 
+  const parseAiQueryAsync = useCallback(async (text: string): Promise<Partial<SearchFilters>> => {
+    return await searchService.parseNaturalLanguageQueryAsync(text);
+  }, []);
+
   return {
     query,
     setQuery,
@@ -43,5 +47,7 @@ export function useSearch() {
     addSearch,
     clearHistory,
     parseAiQuery,
+    parseAiQueryAsync,
   };
 }
+

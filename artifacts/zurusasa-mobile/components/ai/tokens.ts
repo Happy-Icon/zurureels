@@ -100,20 +100,26 @@ export const QUICK_ACTIONS: QuickAction[] = [
 ];
 
 export const SUGGESTION_CHIPS = [
-  'Weekend in Diani',
-  'Best seafood',
-  'Luxury villas',
-  'Hidden beaches',
-  'Things to do tonight',
-  'Family friendly',
-  'Budget stays',
-  'Trending places',
-  'Romantic spots',
-  'Adventure tours',
+  'Find me a beach stay in Mombasa for 2 people',
+  'Show me affordable places near Nairobi for this weekend',
+  'I want something with a pool under KSh 10,000',
+  'Luxury villa with pool in Diani',
+  'Sunset boat cruise in Mombasa',
+  'Best seafood dining near Watamu',
+  'Things to do in Lamu Island',
+  'Weekend getaway under KES 15,000',
 ];
+
 
 // AI Message types
 export type MessageRole = 'user' | 'ai';
+
+export type AIStage = 'idle' | 'understanding' | 'searching' | 'answering' | 'done' | 'error';
+
+export interface AIStageStatus {
+  stage: AIStage;
+  text: string;
+}
 
 export interface AIMessage {
   id: string;
@@ -121,6 +127,9 @@ export interface AIMessage {
   text: string;
   timestamp: Date;
   cards?: AICard[];
+  followUps?: string[];
+  criteria?: Record<string, any>;
+  isStreaming?: boolean;
 }
 
 export interface AICard {
@@ -136,4 +145,11 @@ export interface AICard {
   imageUrl?: string;
   category?: string;
   tags?: string[];
+  reelId?: string;
+  experienceId?: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  experience?: any;
+  host?: any;
 }
+
