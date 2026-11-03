@@ -23,7 +23,7 @@ Deno.serve(async (request) => {
 
   const url = Deno.env.get('SUPABASE_URL')!;
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || anonKey;
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
   const userClient = createClient(url, anonKey, {
     global: { headers: { Authorization: authorization } },
@@ -31,19 +31,16 @@ Deno.serve(async (request) => {
   const { data: { user }, error: userError } = await userClient.auth.getUser();
   if (userError || !user) return json({ error: 'Authentication is required' }, 401);
 
-  const adminClient = createClient(url, serviceRoleKey);
-
-  // Retrieve user profile
-  const { data: profile } = await adminClient
-    .from('profiles')
-    .select('id, full_name, email, phone, persona_inquiry_id, verification_status')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  const templateId =
+  const templateId = (
     Deno.env.get('PERSONA_TEMPLATE_ID') ||
     Deno.env.get('EXPO_PUBLIC_PERSONA_TEMPLATE_ID') ||
-    'itmpl_AJxvLiJ8gyboBkPzg2AWNLZrUAik5z';
+    ''
+  ).trim();
+
+  if (!templateId) {
+    console.error('[CreatePersonaInquiry] PERSONA_TEMPLATE_ID is not configured in Supabase secrets');
+    return json({ error: 'Identity verification template is not configured' }, 503);
+  }
 
   const rawEnv =
     Deno.env.get('PERSONA_ENVIRONMENT') ||
@@ -52,11 +49,17 @@ Deno.serve(async (request) => {
   const environment = rawEnv.toLowerCase().trim() === 'production' ? 'production' : 'sandbox';
 
   const personaApiKey = Deno.env.get('PERSONA_API_KEY');
+  const adminClient = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
+
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('id, full_name, email, phone, persona_inquiry_id, verification_status')
+    .eq('id', user.id)
+    .maybeSingle();
 
   let inquiryId: string | null = null;
   let sessionToken: string | null = null;
 
-  // If server-side Persona API key is configured, create or resume inquiry via Persona REST API
   if (personaApiKey) {
     try {
       const fullName = (profile?.full_name || user.user_metadata?.full_name || '').trim();
@@ -89,7 +92,7 @@ Deno.serve(async (request) => {
       const res = await fetch(personaEndpoint, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${personaApiKey}`,
+          Authorization: `Bearer ${personaApiKey}`,
           'Persona-Version': '2023-01-05',
           'Content-Type': 'application/json',
           'Key-Inflection': 'camel',
@@ -110,7 +113,6 @@ Deno.serve(async (request) => {
     }
   }
 
-  // Update profile with pending status
   await adminClient
     .from('profiles')
     .update({

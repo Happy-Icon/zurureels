@@ -23,7 +23,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase, type BookingRow } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
-import { useHostConfirmBooking, useHostDeclineBooking } from '@/lib/queries';
+import { useHostConfirmBooking, useHostDeclineBooking, useHostBookings, useHostKPIs } from '@/lib/queries';
 
 interface HostKPIs {
   views: number;
@@ -59,9 +59,31 @@ export function HostDashboard() {
 
   const confirmBookingMutation = useHostConfirmBooking();
   const declineBookingMutation = useHostDeclineBooking();
+  const { data: queryBookings, isLoading: bookingsLoading, refetch: refetchBookings } = useHostBookings(user?.id);
+  const { data: queryKPIs, isLoading: kpisLoading, refetch: refetchKPIs } = useHostKPIs(user?.id);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  useEffect(() => {
+    if (queryBookings) {
+      setBookings(queryBookings);
+      const realActivities: ActivityItem[] = queryBookings.slice(0, 5).map((b) => ({
+        id: b.id,
+        time: b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+        text: `Reservation ${b.status}: ${b.trip_title || 'Experience'} (${b.guests || 1} guests)`,
+        type: b.status === 'confirmed' ? 'accept' : b.status === 'declined' ? 'decline' : 'booking',
+      }));
+      setActivities(realActivities);
+    }
+  }, [queryBookings]);
+
+  useEffect(() => {
+    if (queryKPIs) {
+      setKpis(queryKPIs);
+      setLoading(false);
+    }
+  }, [queryKPIs]);
+
   const [kpis, setKpis] = useState<HostKPIs>({
     views: 0,
     likes: 0,
@@ -82,11 +104,7 @@ export function HostDashboard() {
   const [processingAction, setProcessingAction] = useState(false);
 
   // Live Activity Timeline Feed
-  const [activities, setActivities] = useState<ActivityItem[]>([
-    { id: '1', time: '09:45 AM', text: 'Guest inquiry for Diani Villa Stay', type: 'booking' },
-    { id: '2', time: '09:46 AM', text: 'KES 15,000 Payment secured in escrow', type: 'payment' },
-    { id: '3', time: '09:47 AM', text: 'Reservation accepted & SMS dispatched', type: 'sms' },
-  ]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
 
   const topPad = Platform.OS === 'web' ? 60 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 100 : 90;
@@ -167,6 +185,13 @@ export function HostDashboard() {
       }
 
       setBookings(hostBookings);
+        const realActivities: ActivityItem[] = hostBookings.slice(0, 5).map((b) => ({
+          id: b.id,
+          time: b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+          text: `Reservation ${b.status}: ${b.trip_title || 'Experience'} (${b.guests || 1} guests)`,
+          type: b.status === 'confirmed' ? 'accept' : b.status === 'declined' ? 'decline' : 'booking',
+        }));
+        setActivities(realActivities);
       setKpis({
         views: reelIds.length * 142 + hostBookings.length * 18,
         likes: likesCount,

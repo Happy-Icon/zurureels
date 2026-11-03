@@ -3,12 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
-const supabaseUrl =
-  process.env.EXPO_PUBLIC_SUPABASE_URL ||
-  'https://rjzgzxxdrltlteeshtuw.supabase.co';
-const supabaseKey =
-  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqemd6eHhkcmx0bHRlZXNodHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNDc4MjUsImV4cCI6MjA4MzkyMzgyNX0.rRudHu14sWNALKESz2Wwsjn_40xYaStRUlfdXZFVikA';
+const rawSupabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
+const rawSupabaseKey = (process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '').trim();
+
+if (!rawSupabaseUrl || !rawSupabaseKey) {
+  console.error(
+    '[Supabase] Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Copy .env.example to .env and configure your project credentials.',
+  );
+}
+
+const supabaseUrl = rawSupabaseUrl || 'https://unconfigured.invalid';
+const supabaseKey = rawSupabaseKey || 'unconfigured';
 
 const DEFAULT_FETCH_TIMEOUT_MS = 15_000; // 15s timeout on mobile requests
 

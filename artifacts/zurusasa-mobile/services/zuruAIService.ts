@@ -13,8 +13,8 @@ import type { AICard, AIStageStatus } from '@/components/ai/tokens';
 // which can cause Metro module resolution failures in some build configs.
 const expoFetch = fetch;
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://rjzgzxxdrltlteeshtuw.supabase.co';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
+const SUPABASE_URL = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
+const SUPABASE_ANON_KEY = (process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '').trim();
 const ZURU_AI_ENDPOINT = `${SUPABASE_URL}/functions/v1/zuru-ai`;
 
 export interface ZuruAIDiscoverResponse {

@@ -45,10 +45,10 @@ export async function checkRateLimit(
   action: string,
   maxRequests: number,
   windowSeconds: number,
-  userId?: string
+  userId?: string,
 ): Promise<RateLimitResult> {
-  const redisUrl = Deno.env.get('UPSTASH_REDIS_REST_URL') || 'https://boss-arachnid-175826.upstash.io';
-  const redisToken = Deno.env.get('UPSTASH_REDIS_REST_TOKEN') || '';
+  const redisUrl = (Deno.env.get('UPSTASH_REDIS_REST_URL') ?? '').trim();
+  const redisToken = (Deno.env.get('UPSTASH_REDIS_REST_TOKEN') ?? '').trim();
 
   // If Redis is not configured, fail-open for service availability
   if (!redisUrl || !redisToken) {

@@ -2,6 +2,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
 
+const REEL_VALIDITY_DAYS = 90;
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
@@ -15,7 +17,10 @@ function json(body: unknown, status = 200) {
   });
 }
 
-// Redis REST Command Helper
+function getReelExpiryCutoffIso(days = REEL_VALIDITY_DAYS): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString();
+}
+
 async function redisRestCommand(url: string, token: string, command: (string | number)[]) {
   try {
     const res = await fetch(url, {
@@ -39,14 +44,18 @@ Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://rjzgzxxdrltlteeshtuw.supabase.co';
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
-  const redisUrl = Deno.env.get('UPSTASH_REDIS_REST_URL') || 'https://boss-arachnid-175826.upstash.io';
-  const redisToken = Deno.env.get('UPSTASH_REDIS_REST_TOKEN') || '';
+  const supabaseUrl = (Deno.env.get('SUPABASE_URL') ?? '').trim();
+  const anonKey = (Deno.env.get('SUPABASE_ANON_KEY') ?? '').trim();
+  if (!supabaseUrl || !anonKey) {
+    return json({ error: 'Supabase environment is not configured' }, 503);
+  }
+
+  const redisUrl = (Deno.env.get('UPSTASH_REDIS_REST_URL') ?? '').trim();
+  const redisToken = (Deno.env.get('UPSTASH_REDIS_REST_TOKEN') ?? '').trim();
 
   const supabase = createClient(supabaseUrl, anonKey);
 
-  let body: { action?: string; category?: string };
+  let body: { action?: string; category?: string; excludeExpired?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -55,7 +64,6 @@ Deno.serve(async (request) => {
 
   const action = body.action || 'get_reels_feed';
 
-  // Enforce Rate Limiting per IP/Action (60 req/min for feed, 10 req/min for invalidation)
   const maxReq = action === 'invalidate_reels_feed' ? 10 : 60;
   const rl = await checkRateLimit(request, `redis_${action}`, maxReq, 60);
   if (!rl.allowed) {
@@ -64,7 +72,8 @@ Deno.serve(async (request) => {
 
   // 1. Get Reels Feed (sub-10ms Redis Cache with DB Fallback)
   if (action === 'get_reels_feed') {
-    const cacheKey = 'reels_feed_active_v1';
+    const excludeExpired = body.excludeExpired === true;
+    const cacheKey = excludeExpired ? 'reels_feed_active_v2_fresh' : 'reels_feed_active_v2';
     if (redisUrl && redisToken) {
       const cached = await redisRestCommand(redisUrl, redisToken, ['GET', cacheKey]);
       if (cached) {
@@ -76,21 +85,25 @@ Deno.serve(async (request) => {
       }
     }
 
-    // Cache Miss or Redis error -> Query Supabase PostgreSQL
-    const { data, error } = await supabase
+    let query = supabase
       .from('reels')
       .select(
         `*,
         experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
-        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)`
+        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)`,
       )
-      .in('status', ['active', 'published'])
+      .in('status', ['active', 'published']);
+
+    if (excludeExpired) {
+      query = query.gte('created_at', getReelExpiryCutoffIso());
+    }
+
+    const { data, error } = await query
       .order('created_at', { ascending: false })
       .limit(30);
 
     if (error) return json({ error: error.message }, 500);
 
-    // Save to Redis (300s TTL)
     if (redisUrl && redisToken && data) {
       redisRestCommand(redisUrl, redisToken, ['SETEX', cacheKey, 300, JSON.stringify(data)]).catch(() => null);
     }
@@ -101,7 +114,12 @@ Deno.serve(async (request) => {
   // 2. Invalidate Reels Feed Cache
   if (action === 'invalidate_reels_feed') {
     if (redisUrl && redisToken) {
-      await redisRestCommand(redisUrl, redisToken, ['DEL', 'reels_feed_active_v1']);
+      await redisRestCommand(redisUrl, redisToken, [
+        'DEL',
+        'reels_feed_active_v1',
+        'reels_feed_active_v2',
+        'reels_feed_active_v2_fresh',
+      ]);
     }
     return json({ success: true });
   }
@@ -125,7 +143,7 @@ Deno.serve(async (request) => {
     let query = supabase
       .from('experiences')
       .select(
-        'id, title, description, location, current_price, price_unit, entity_name, category, availability_status, metadata'
+        'id, title, description, location, current_price, price_unit, entity_name, category, availability_status, metadata',
       )
       .limit(50);
 

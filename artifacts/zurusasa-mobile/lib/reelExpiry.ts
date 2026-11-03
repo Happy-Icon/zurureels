@@ -9,6 +9,25 @@ export interface ReelExpiryDisplay {
   urgent: boolean;
 }
 
+/**
+ * Returns the ISO-8601 timestamp cutoff for active (non-expired) reels.
+ * Used as an opt-in `.gte('created_at', getReelExpiryCutoffIso())` SQL filter;
+ * default feeds keep displaying older reels with the `'Expired'` badge until hosts re-post.
+ */
+export function getReelExpiryCutoffIso(days: number = REEL_VALIDITY_DAYS): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString();
+}
+
+export function isReelExpired(
+  createdAt: string | null | undefined,
+  days: number = REEL_VALIDITY_DAYS,
+): boolean {
+  if (!createdAt) return false;
+  const posted = new Date(createdAt).getTime();
+  if (Number.isNaN(posted)) return false;
+  return Math.floor((Date.now() - posted) / 86_400_000) > days;
+}
+
 export function getReelExpiry(
   createdAt: string | null | undefined,
 ): ReelExpiryDisplay | null {

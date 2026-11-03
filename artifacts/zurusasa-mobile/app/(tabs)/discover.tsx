@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
+import { useQuery } from '@tanstack/react-query';
 import { useReels } from '@/lib/queries';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationBadge } from '@/components/NotificationBadge';
@@ -39,7 +40,7 @@ import type { BookingRow, ReelRow } from '@/lib/supabase';
 // Advanced Search & Smart Filters Imports
 import { useSearch } from '@/hooks/useSearch';
 import { useFilters } from '@/hooks/useFilters';
-import { filterService } from '@/services/filterService';
+import { expandCategoryAliases, filterService } from '@/services/filterService';
 import { SearchBar } from '@/components/search/SearchBar';
 import { FilterChip } from '@/components/search/FilterChip';
 import { FilterSheet } from '@/components/search/FilterSheet';
@@ -55,9 +56,9 @@ import { useTheme } from '@/context/ThemeContext';
 
 const DISCOVERY_CATEGORIES = [
   { id: 'all', label: 'All', icon: 'grid', categories: ['all'] },
-  { id: 'accommodation', label: 'Stays', icon: 'home', categories: ['hotel', 'villa', 'apartment', 'stay', 'parks_camps'] },
-  { id: 'events', label: 'Events', icon: 'calendar', categories: ['events', 'food', 'drinks'] },
-  { id: 'experiences', label: 'Experiences', icon: 'compass', categories: ['land_adventure', 'air_adventure', 'water_adventure', 'tours', 'boat'] },
+  { id: 'accommodation', label: 'Stays', icon: 'home', categories: ['hotel', 'villa', 'apartment', 'stay', 'stays', 'parks_camps'] },
+  { id: 'events', label: 'Events', icon: 'calendar', categories: ['event', 'events', 'food', 'drinks'] },
+  { id: 'experiences', label: 'Experiences', icon: 'compass', categories: ['land_adventure', 'air_adventure', 'water_adventure', 'tour', 'tours', 'boat', 'boats'] },
   { id: 'ai', label: 'Zuru Agent', icon: 'zap', categories: [] },
 ] as const;
 
@@ -162,9 +163,38 @@ export default function AirbnbDiscoverScreen() {
 
   const categoryObj = DISCOVERY_CATEGORIES.find((c) => c.id === activeCategory)!;
 
-  // Filter & Search Execution Pipeline
+  const hasServerFilters = useMemo(
+    () =>
+      filterService.hasServerPushablePredicates(filters, {
+        categories: activeCategory !== 'all' ? categoryObj.categories : undefined,
+      }),
+    [filters, activeCategory, categoryObj],
+  );
+
+  const serverFilteredQuery = useQuery<ReelRow[]>({
+    queryKey: [
+      'discover-filtered-reels',
+      activeCategory,
+      filters.category ?? null,
+      filters.minPrice ?? 0,
+      filters.maxPrice ?? 150000,
+      (filters.cities ?? []).join('|'),
+    ],
+    enabled: hasServerFilters && isOnline,
+    staleTime: 30_000,
+    queryFn: () =>
+      filterService.fetchServerFilteredReels(filters, {
+        categories: activeCategory !== 'all' ? categoryObj.categories : undefined,
+        limit: 80,
+      }),
+  });
+
+  // Filter & Search Execution Pipeline (Server-side PostgREST pushdown + instant local fallback)
   const filteredReels = useMemo(() => {
-    const rawReels = reelsQuery.data ?? [];
+    const rawReels =
+      hasServerFilters && serverFilteredQuery.data
+        ? serverFilteredQuery.data
+        : (reelsQuery.data ?? []);
 
     // 1. Text Search Filter (title, description, location, category)
     const q = query.trim().toLowerCase();
@@ -181,7 +211,7 @@ export default function AirbnbDiscoverScreen() {
 
     // 2. Category Tab Filter
     if (activeCategory !== 'all') {
-      const catSubList = categoryObj.categories as readonly string[];
+      const catSubList = expandCategoryAliases(categoryObj.categories as readonly string[]);
       searchFiltered = searchFiltered.filter((r) => {
         const cat = (r.category ?? '').toLowerCase();
         return catSubList.includes(cat);
@@ -190,7 +220,7 @@ export default function AirbnbDiscoverScreen() {
 
     // 3. Multi-faceted Smart Filters (Price, Rating, Amenities, Host Type, Sorting)
     return filterService.applyFilters(searchFiltered, filters);
-  }, [reelsQuery.data, query, activeCategory, categoryObj, filters]);
+  }, [hasServerFilters, serverFilteredQuery.data, reelsQuery.data, query, activeCategory, categoryObj, filters]);
 
   const chatReels: ReelSummary[] = useMemo(
     () =>

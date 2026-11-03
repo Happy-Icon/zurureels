@@ -1,6 +1,11 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { supabase, type NotificationRow, type NotificationType, type NotificationActionType } from '@/lib/supabase';
+import {
+  supabase,
+  type NotificationRow,
+  type NotificationType,
+  type NotificationActionType,
+} from '@/lib/supabase';
 
 const EAS_PROJECT_ID = '7288bdeb-4a70-4035-9563-587a72f32534';
 
@@ -140,13 +145,11 @@ export const notificationService = {
   },
 
   /**
-   * Create a new in-app notification entry and trigger native push
+   * Create a new in-app notification entry and trigger server-side Expo Push dispatch
+   * via the authenticated 'dispatch-notification' Edge Function.
    */
   async createNotification(params: CreateNotificationParams): Promise<NotificationRow | null> {
     try {
-      console.log(`[Push] Event: ${params.type}`);
-      console.log(`[Push] Recipient: ${params.userId ? `${params.userId.slice(0, 8)}...` : 'none'}`);
-
       const metadataPayload: Record<string, unknown> = {
         ...(params.metadata ?? {}),
         ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
@@ -154,83 +157,60 @@ export const notificationService = {
         ...(params.actionId ? { action_id: params.actionId } : {}),
       };
 
-      let insertedId: string | null = null;
-
-      // 1. Create In-App Notification via Security Definer RPC first
-      try {
-        const { data: rpcRes, error: rpcErr } = await supabase.rpc('send_notification', {
-          p_user_id: params.userId,
-          p_type: params.type,
-          p_title: params.title,
-          p_message: params.message,
-          p_metadata: metadataPayload,
-        });
-
-        console.log('[Push] send_notification RPC response:', JSON.stringify(rpcRes));
-
-        if (!rpcErr && rpcRes && (rpcRes as any).success) {
-          insertedId = (rpcRes as any).id ?? null;
-          console.log(`[Push] In-app notification: SUCCESS (id: ${insertedId})`);
-        } else if (rpcErr || (rpcRes && !(rpcRes as any).success)) {
-          console.warn('[Push] send_notification RPC issue:', rpcErr?.message || (rpcRes as any)?.error);
-        }
-      } catch (rpcCatch) {
-        console.warn('[Push] send_notification RPC call exception:', rpcCatch);
-      }
-
-      // 2. Direct table insert fallback only if RPC failed
-      if (!insertedId) {
-        try {
-          const { data, error } = await supabase
-            .from('notifications')
-            .insert({
-              user_id: params.userId,
-              type: params.type,
-              title: params.title,
-              message: params.message,
-              metadata: metadataPayload,
-              is_read: false,
-            })
-            .select()
-            .maybeSingle();
-
-          if (error) {
-            console.warn('[Push] Direct notification insert note:', error.message || error);
-          } else if (data) {
-            insertedId = (data as NotificationRow).id;
-            console.log(`[Push] In-app notification: SUCCESS (id: ${insertedId})`);
-          }
-        } catch (insertEx) {
-          console.warn('[Push] Direct notification insert exception:', insertEx);
-        }
-      }
-
-      // 3. Trigger native push notification to recipient's registered devices (non-blocking)
-      this.sendPushNotificationForUser(
-        params.userId,
-        params.title,
-        params.message,
+      const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
+        'dispatch-notification',
         {
-          type: params.type,
-          actionType: params.actionType,
-          actionId: params.actionId,
-          conversationId: params.actionId,
-        },
-      ).catch((pushErr) => {
-        console.warn('[Push] Push delivery warning:', pushErr);
-      });
-
-      return insertedId
-        ? ({
-            id: insertedId,
-            user_id: params.userId,
+          body: {
+            recipientId: params.userId,
             type: params.type,
             title: params.title,
             message: params.message,
-            is_read: false,
-            created_at: new Date().toISOString(),
-          } as NotificationRow)
-        : null;
+            imageUrl: params.imageUrl ?? null,
+            actionType: params.actionType ?? null,
+            actionId: params.actionId ?? null,
+            metadata: metadataPayload,
+            data: {
+              type: params.type,
+              actionType: params.actionType,
+              actionId: params.actionId,
+              conversationId: params.actionId,
+            },
+            createInApp: true,
+            sendPush: true,
+          },
+        },
+      );
+
+      if (!edgeErr && edgeData?.notification) {
+        return edgeData.notification as NotificationRow;
+      }
+
+      if (edgeErr) {
+        console.warn('[Push] dispatch-notification invoke note:', edgeErr.message || edgeErr);
+      }
+
+      // Fallback for in-app record persistence via relationship-checked Security Definer RPC
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('send_notification', {
+        p_user_id: params.userId,
+        p_type: params.type,
+        p_title: params.title,
+        p_message: params.message,
+        p_metadata: metadataPayload,
+      });
+
+      if (!rpcErr && rpcRes && (rpcRes as any).success && (rpcRes as any).id) {
+        return {
+          id: String((rpcRes as any).id),
+          user_id: params.userId,
+          type: params.type,
+          title: params.title,
+          message: params.message,
+          is_read: false,
+          created_at: new Date().toISOString(),
+        } as NotificationRow;
+      }
+
+      return null;
     } catch (err) {
       console.warn('[Push] Error creating notification:', err);
       return null;
@@ -238,86 +218,43 @@ export const notificationService = {
   },
 
   /**
-   * Internal helper: Send push notification to all registered active devices for a recipient.
-   * Consumer screens and mutation hooks must use createNotification() instead.
+   * Dispatch push notification to all registered active devices for a recipient via
+   * the server-side 'dispatch-notification' Edge Function (respects user_devices RLS
+   * without exposing recipient device tokens to the client).
    */
   async sendPushNotificationForUser(
     recipientId: string,
     title: string,
     body: string,
     data?: Record<string, unknown>,
-  ) {
+  ): Promise<void> {
     try {
-      // 1. Check user notification settings (supports both notification_settings map and legacy metadata)
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('metadata, notification_settings')
-        .eq('id', recipientId)
-        .maybeSingle();
+      const notifType = typeof data?.type === 'string' ? data.type : 'notification';
+      const actionType = typeof data?.actionType === 'string' ? data.actionType : null;
+      const actionId =
+        typeof data?.actionId === 'string'
+          ? data.actionId
+          : typeof data?.bookingId === 'string'
+            ? data.bookingId
+            : null;
 
-      const notifMeta = (profile?.metadata ?? {}) as Record<string, unknown>;
-      if (notifMeta?.notifications_enabled === false) {
-        console.log(`[Push] Push disabled: Recipient ${recipientId} has master notifications disabled.`);
-        return;
+      const { error } = await supabase.functions.invoke('dispatch-notification', {
+        body: {
+          recipientId,
+          type: notifType,
+          title,
+          message: body,
+          actionType,
+          actionId,
+          data: data ?? {},
+          createInApp: false,
+          sendPush: true,
+        },
+      });
+
+      if (error) {
+        console.warn('[Push] dispatch-notification push error:', error.message || error);
       }
-
-      // Check category preferences from Settings screen (profiles.notification_settings)
-      const settings = (profile?.notification_settings ?? {}) as Record<string, { push?: boolean; email?: boolean; sms?: boolean }>;
-      const notifType = data?.type as string | undefined;
-
-      let categoryKey: string | null = null;
-      if (notifType === 'message') {
-        categoryKey = 'messages';
-      } else if (notifType?.startsWith('booking_') || notifType?.startsWith('payment_') || notifType?.startsWith('payout_') || notifType?.startsWith('refund_')) {
-        categoryKey = 'account_activity';
-      } else if (notifType?.startsWith('listing_') || notifType === 'verification') {
-        categoryKey = 'listing_activity';
-      } else if (notifType === 'review_reminder') {
-        categoryKey = 'reminders';
-      } else if (notifType === 'promotion' || notifType === 'wishlist_available') {
-        categoryKey = 'all_offers';
-      }
-
-      if (categoryKey && settings[categoryKey] && settings[categoryKey].push === false) {
-        console.log(`[Push] Push disabled for category "${categoryKey}" by user ${recipientId}`);
-        return;
-      }
-
-      // 2. Query active device tokens from user_devices (supports both push_token and legacy device_token)
-      const { data: devices, error: devErr } = await supabase
-        .from('user_devices')
-        .select('push_token, device_token')
-        .eq('user_id', recipientId)
-        .eq('is_active', true);
-
-      if (devErr) {
-        console.warn('[Push] user_devices query error:', devErr.message);
-      }
-
-      const tokens = new Set<string>();
-      if (devices && devices.length > 0) {
-        for (const d of devices as any[]) {
-          const t = d.push_token || d.device_token;
-          if (t && typeof t === 'string' && t.trim().length > 0) {
-            tokens.add(t.trim());
-          }
-        }
-      }
-
-      console.log(`[Push] Active devices found: ${tokens.size}`);
-      if (tokens.size === 0) {
-        console.log(`[Push] No registered devices for recipient ${recipientId ? `${recipientId.slice(0, 8)}...` : 'unknown'} (In-app notification preserved)`);
-        return;
-      }
-
-      // 3. Dispatch push notification to all registered active devices
-      let validTokensCount = 0;
-      for (const token of tokens) {
-        if (!token || typeof token !== 'string') continue;
-        validTokensCount++;
-        await this.sendPushNotification(token, title, body, data);
-      }
-      console.log(`[Push] Valid Expo tokens dispatched: ${validTokensCount}`);
     } catch (err) {
       console.warn('[Push] Error sending push notification for user:', err);
     }
@@ -422,7 +359,7 @@ export const notificationService = {
       }
 
       if (!saved) {
-        // Fallback: Direct select & insert/update setting BOTH push_token and device_token
+        // Fallback: Direct select & insert/update on own user_devices row
         try {
           const { data: existingDevice } = await supabase
             .from('user_devices')
@@ -504,81 +441,10 @@ export const notificationService = {
   },
 
   /**
-   * Send push notification via Expo Push API and handle tickets/receipts
-   */
-  async sendPushNotification(
-    pushToken: string,
-    title: string,
-    body: string,
-    data?: Record<string, unknown>,
-  ): Promise<{ status: 'ok' | 'error'; ticketId?: string; error?: string }> {
-    try {
-      console.log('[Push] Sending Expo request');
-      const response = await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Accept-encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: pushToken,
-          sound: 'default',
-          title,
-          body,
-          data: data ?? {},
-          channelId: 'default',
-          priority: 'high',
-          badge: 1,
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.warn(`[Push] Expo HTTP error (${response.status}):`, errText);
-        return { status: 'error', error: `HTTP ${response.status}: ${errText}` };
-      }
-
-      const resJson = await response.json();
-      console.log('[Push] Expo ticket received');
-
-      const ticket = Array.isArray(resJson?.data) ? resJson.data[0] : resJson?.data;
-
-      if (ticket?.status === 'ok') {
-        console.log(`[Push] Ticket status: ok (ticketId: ${ticket.id || 'ok'})`);
-        console.log('[Push] Receipt status: ok');
-        return { status: 'ok', ticketId: ticket.id };
-      } else if (ticket?.status === 'error') {
-        const errorDetail = ticket.message || ticket.details?.error || 'Unknown Expo push error';
-        console.warn(`[Push] Expo ticket error: ${errorDetail}`);
-
-        // Deactivate unregistered or invalid device tokens
-        if (
-          ticket.details?.error === 'DeviceNotRegistered' ||
-          ticket.details?.error === 'InvalidCredentials'
-        ) {
-          console.log('[Push] Invalid Expo token — deactivating device token in user_devices');
-          await supabase
-            .from('user_devices')
-            .update({ is_active: false })
-            .or(`push_token.eq.${pushToken},device_token.eq.${pushToken}`);
-        }
-        return { status: 'error', error: errorDetail };
-      }
-
-      return { status: 'ok' };
-    } catch (err: any) {
-      console.warn('[Push] Error sending push notification via Expo:', err?.message || err);
-      return { status: 'error', error: err?.message || 'Network error' };
-    }
-  },
-
-  /**
-   * Triggers a test push notification locally & creates in-app notification
+   * Triggers a test push notification locally & creates server-dispatched notification
    */
   async triggerTestPush(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      // Trigger local push banner on device if Notifications is available
       if (Notifications?.scheduleNotificationAsync) {
         try {
           const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -606,7 +472,6 @@ export const notificationService = {
         }
       }
 
-      // Create an entry in Supabase notifications table
       if (userId) {
         await this.createNotification({
           userId,

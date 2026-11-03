@@ -28,6 +28,8 @@ import {
   useRouter,
 } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 import { StatusBar } from 'expo-status-bar';
 import { initSentry, Sentry } from '@/lib/sentry';
 import { Observe, ObserveRoot, useObserve } from '@/lib/observe';
@@ -230,7 +232,7 @@ function RootLayout() {
   }, [fontsLoaded, fontError, markInteractive]);
 
   if (!fontsLoaded && !fontError) {
-    return <View style={{ flex: 1, backgroundColor: '#000000' }} />;
+    return null;
   }
 
   return (

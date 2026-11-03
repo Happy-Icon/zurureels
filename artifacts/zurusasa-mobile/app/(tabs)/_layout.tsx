@@ -7,8 +7,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
+import { useTheme } from '@/context/ThemeContext';
 import { useUnreadMessageCount } from '@/lib/queries';
 import { resolveAvatarUrl } from '@/lib/avatar';
+import * as Haptics from 'expo-haptics';
 
 const ACTIVE_COLOR = '#F26522';
 const INACTIVE_COLOR = '#94A3B8';
@@ -39,8 +41,13 @@ function CustomBottomTabBar({ state, descriptors, navigation }: TabsTabBarProps)
     ? ['index', 'listings', 'reservations', 'inbox', 'profile']
     : ['index', 'discover', 'saved', 'inbox', 'profile'];
 
-  const inactiveColor = '#FFFFFF';
-  const barBg = isOverVideo ? 'rgba(0,0,0,0.95)' : '#0F172A';
+  const colors = useColors();
+  const { isDark } = useTheme();
+
+  const barBg = isOverVideo ? 'rgba(0,0,0,0.88)' : isDark ? '#18181B' : '#FFFFFF';
+  const borderTopColor = isOverVideo ? 'transparent' : colors.border;
+  const inactiveColor = isOverVideo ? 'rgba(255, 255, 255, 0.7)' : colors.textSecondary;
+  const labelInactiveColor = isOverVideo ? 'rgba(255, 255, 255, 0.7)' : colors.textSecondary;
 
   return (
     <View
@@ -50,6 +57,8 @@ function CustomBottomTabBar({ state, descriptors, navigation }: TabsTabBarProps)
           paddingBottom: bottomPad,
           height: 56 + bottomPad,
           backgroundColor: barBg,
+          borderTopWidth: isOverVideo ? 0 : 1,
+          borderTopColor,
         },
       ]}
     >
@@ -66,6 +75,7 @@ function CustomBottomTabBar({ state, descriptors, navigation }: TabsTabBarProps)
           const label = options.title !== undefined ? options.title : route.name;
 
           const onPress = () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
             const event = navigation.emit({
               type: 'tabPress',
               target: route.key,
@@ -81,7 +91,9 @@ function CustomBottomTabBar({ state, descriptors, navigation }: TabsTabBarProps)
             <Pressable
               key={route.key}
               onPress={onPress}
+              accessibilityRole="tab"
               accessibilityLabel={label}
+              accessibilityState={{ selected: isFocused }}
               style={({ pressed }) => [
                 styles.tabItem,
                 { transform: [{ scale: pressed ? 0.90 : 1 }] },
@@ -111,7 +123,7 @@ function CustomBottomTabBar({ state, descriptors, navigation }: TabsTabBarProps)
                 style={[
                   styles.tabLabel,
                   {
-                    color: isFocused ? ACTIVE_COLOR : 'rgba(255, 255, 255, 0.65)',
+                    color: isFocused ? ACTIVE_COLOR : labelInactiveColor,
                     fontFamily: isFocused ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
                   },
                 ]}

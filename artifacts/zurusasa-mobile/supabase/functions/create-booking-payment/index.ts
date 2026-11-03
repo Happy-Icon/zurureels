@@ -8,6 +8,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+type PaymentChannel = 'mobile_money' | 'card';
+
 type PaymentAttempt = {
   id: string;
   provider_reference: string;
@@ -15,7 +17,13 @@ type PaymentAttempt = {
   currency: 'KES';
   status: 'created' | 'pending' | 'succeeded' | 'failed' | 'expired' | 'cancelled';
   display_text: string | null;
+  provider_response?: Record<string, unknown> | null;
 };
+
+const ALLOWED_APP_REDIRECT_RE =
+  /^(zurusasa-mobile|zurusasa|exp):\/\/[a-zA-Z0-9._~:/?#[\]@!$&'()*+,;=%-]+$/;
+
+const PROHIBITED_RAW_PCI_KEY_RE = /^(card|pan|expir|csc|cv[vc])/i;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -63,51 +71,188 @@ Deno.serve(async (request) => {
     return json({ error: 'Too many payment requests. Please wait a moment before trying again.' }, 429);
   }
 
-  let input: { quoteId?: string; phone?: string; idempotencyKey?: string };
+  let input: Record<string, unknown>;
   try {
-    input = await request.json();
+    const parsed = await request.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return json({ error: 'Invalid request body' }, 400);
+    }
+    input = parsed as Record<string, unknown>;
   } catch {
     return json({ error: 'Invalid request body' }, 400);
   }
 
-  const rawPhone = input.phone || user.phone || (user.user_metadata?.phone as string | undefined);
-  if (!input.quoteId || !rawPhone || !input.idempotencyKey) {
-    return json({ error: 'quoteId, phone, and idempotencyKey are required' }, 400);
+  // PCI-DSS SAQ-A enforcement: never accept raw card numbers, expiries, or security codes
+  const hasProhibitedPciField = Object.entries(input).some(
+    ([key, value]) => PROHIBITED_RAW_PCI_KEY_RE.test(key) && value != null,
+  );
+  if (hasProhibitedPciField) {
+    return json(
+      {
+        error:
+          'Raw card details are prohibited on this endpoint. Use channel="card" for Paystack Hosted Checkout.',
+      },
+      400,
+    );
   }
 
-  let phone: string;
-  try {
-    phone = normalizeKenyanPhone(rawPhone);
-  } catch (error) {
-    return json({ error: error instanceof Error ? error.message : 'Invalid phone number' }, 400);
+  const quoteId = typeof input.quoteId === 'string' ? input.quoteId.trim() : '';
+  const idempotencyKey = typeof input.idempotencyKey === 'string' ? input.idempotencyKey.trim() : '';
+  const rawChannel = typeof input.channel === 'string' ? input.channel.trim() : 'mobile_money';
+
+  if (rawChannel !== 'mobile_money' && rawChannel !== 'card') {
+    return json({ error: 'Unsupported payment channel. Must be "mobile_money" or "card".' }, 400);
+  }
+  const channel: PaymentChannel = rawChannel;
+
+  if (!quoteId || !idempotencyKey) {
+    return json({ error: 'quoteId and idempotencyKey are required' }, 400);
+  }
+
+  let phone: string | null = null;
+  if (channel === 'mobile_money') {
+    const rawPhone =
+      (typeof input.phone === 'string' ? input.phone : '') ||
+      user.phone ||
+      (user.user_metadata?.phone as string | undefined) ||
+      '';
+    if (!rawPhone) {
+      return json({ error: 'phone is required for mobile_money payments' }, 400);
+    }
+    try {
+      phone = normalizeKenyanPhone(rawPhone);
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Invalid phone number' }, 400);
+    }
   }
 
   const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 
-  const { data: attempt, error: attemptError } = await userClient.rpc('begin_payment_attempt', {
-    p_quote_id: input.quoteId,
-    p_idempotency_key: input.idempotencyKey,
-  }).single<PaymentAttempt>();
+  const { data: attempt, error: attemptError } = await userClient
+    .rpc('begin_payment_attempt', {
+      p_quote_id: quoteId,
+      p_idempotency_key: idempotencyKey,
+    })
+    .single<PaymentAttempt>();
 
   if (attemptError || !attempt) {
     console.error('begin_payment_attempt RPC error:', attemptError);
     return json({ error: attemptError?.message ?? 'Could not prepare payment' }, 409);
   }
 
-  // The same idempotency key always returns the original in-flight attempt.
+  // The same idempotency key always returns the original in-flight or settled attempt.
   if (attempt.status === 'pending' || attempt.status === 'succeeded') {
+    const existingProviderData =
+      attempt.provider_response && typeof attempt.provider_response === 'object'
+        ? ((attempt.provider_response as Record<string, any>).data ?? {})
+        : {};
     return json({
       attemptId: attempt.id,
       reference: attempt.provider_reference,
       status: attempt.status,
+      channel,
+      authorization_url: existingProviderData.authorization_url
+        ? String(existingProviderData.authorization_url)
+        : null,
+      access_code: existingProviderData.access_code
+        ? String(existingProviderData.access_code)
+        : null,
       displayText: attempt.display_text,
     });
   }
 
-  const customerEmail = user.email && user.email.includes('@')
-    ? user.email
-    : `${user.phone ? user.phone.replace(/[^0-9]/g, '') : user.id}@guest.zuru.app`;
+  const customerEmail =
+    user.email && user.email.includes('@')
+      ? user.email
+      : `${user.phone ? user.phone.replace(/[^0-9]/g, '') : user.id}@guest.zuru.app`;
 
+  if (channel === 'card') {
+    const requestedCallback =
+      typeof input.callbackUrl === 'string' ? input.callbackUrl.trim() : '';
+    const safeAppRedirect = ALLOWED_APP_REDIRECT_RE.test(requestedCallback)
+      ? requestedCallback
+      : 'zurusasa-mobile://payment-callback';
+
+    const paystackCallbackUrl = `${url}/functions/v1/paystack-webhook?callback=1&redirect=${encodeURIComponent(
+      safeAppRedirect,
+    )}`;
+
+    const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${paystackSecret}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: customerEmail,
+        amount: attempt.amount,
+        currency: attempt.currency,
+        reference: attempt.provider_reference,
+        channels: ['card'],
+        callback_url: paystackCallbackUrl,
+        metadata: {
+          booking_quote_id: quoteId,
+          payment_attempt_id: attempt.id,
+          guest_id: user.id,
+          channel: 'card',
+        },
+      }),
+    });
+
+    const providerResponse = await paystackResponse.json().catch(() => ({}));
+    const initData = providerResponse?.data ?? {};
+
+    if (!paystackResponse.ok || providerResponse.status !== true || !initData.authorization_url) {
+      console.error(
+        'Paystack hosted card checkout initialization failed:',
+        paystackResponse.status,
+        JSON.stringify(providerResponse),
+      );
+
+      const failureMessage = String(
+        initData?.message ||
+          providerResponse?.message ||
+          'Paystack could not initialize secure card checkout',
+      );
+
+      await admin.rpc('settle_paystack_failure', {
+        p_provider_reference: attempt.provider_reference,
+        p_failure_code: String(providerResponse?.code ?? paystackResponse.status),
+        p_failure_message: failureMessage,
+        p_paystack_response: providerResponse,
+      });
+
+      return json({ error: failureMessage }, 400);
+    }
+
+    const displayText = 'Complete card payment in the secure Paystack browser window.';
+    const { error: updateError } = await admin
+      .from('payment_attempts')
+      .update({
+        status: 'pending',
+        provider_status: 'hosted_checkout',
+        display_text: displayText,
+        provider_response: providerResponse,
+      })
+      .eq('id', attempt.id);
+
+    if (updateError) {
+      console.error('Failed to update card payment_attempts to pending:', updateError);
+      return json({ error: 'Payment started but could not be recorded safely' }, 500);
+    }
+
+    return json({
+      attemptId: attempt.id,
+      reference: attempt.provider_reference,
+      status: 'pending',
+      channel: 'card',
+      authorization_url: String(initData.authorization_url),
+      access_code: initData.access_code ? String(initData.access_code) : null,
+      displayText,
+    });
+  }
+
+  // Default: mobile_money (M-Pesa STK Push)
   const paystackResponse = await fetch('https://api.paystack.co/charge', {
     method: 'POST',
     headers: {
@@ -120,7 +265,12 @@ Deno.serve(async (request) => {
       currency: attempt.currency,
       reference: attempt.provider_reference,
       mobile_money: { phone, provider: 'mpesa' },
-      metadata: { booking_quote_id: input.quoteId, payment_attempt_id: attempt.id },
+      metadata: {
+        booking_quote_id: quoteId,
+        payment_attempt_id: attempt.id,
+        guest_id: user.id,
+        channel: 'mobile_money',
+      },
     }),
   });
 
@@ -129,7 +279,7 @@ Deno.serve(async (request) => {
     console.error('Paystack charge failed:', paystackResponse.status, JSON.stringify(providerResponse));
 
     const failureMessage = String(
-      providerResponse.data?.message || providerResponse.message || 'Paystack could not start the charge'
+      providerResponse.data?.message || providerResponse.message || 'Paystack could not start the charge',
     );
 
     await admin.rpc('settle_paystack_failure', {
@@ -143,12 +293,15 @@ Deno.serve(async (request) => {
   }
 
   const data = providerResponse.data ?? {};
-  const { error: updateError } = await admin.from('payment_attempts').update({
-    status: 'pending',
-    provider_status: String(data.status ?? 'pay_offline'),
-    display_text: data.display_text ? String(data.display_text) : null,
-    provider_response: providerResponse,
-  }).eq('id', attempt.id);
+  const { error: updateError } = await admin
+    .from('payment_attempts')
+    .update({
+      status: 'pending',
+      provider_status: String(data.status ?? 'pay_offline'),
+      display_text: data.display_text ? String(data.display_text) : null,
+      provider_response: providerResponse,
+    })
+    .eq('id', attempt.id);
 
   if (updateError) {
     console.error('Failed to update payment_attempts to pending:', updateError);
@@ -159,6 +312,7 @@ Deno.serve(async (request) => {
     attemptId: attempt.id,
     reference: attempt.provider_reference,
     status: 'pending',
+    channel: 'mobile_money',
     displayText: data.display_text ?? 'Approve the M-Pesa prompt on your phone.',
   });
 });

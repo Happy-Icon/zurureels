@@ -58,7 +58,6 @@ export const personaVerificationService = {
       return;
     }
 
-    // Check native availability
     const isAvailable = this.isPersonaAvailable();
     if (!isAvailable || !PersonaSDK?.Inquiry) {
       const err =
@@ -74,14 +73,11 @@ export const personaVerificationService = {
       // 1. Initiate verification session via Supabase Edge Function
       let serverInquiryId: string | null = null;
       let sessionToken: string | null = null;
-      const defaultTemplateId = 'itmpl_AJxvLiJ8gyboBkPzg2AWNLZrUAik5z';
-      let templateId =
+      let templateId = (
         customTemplateId ||
         process.env.EXPO_PUBLIC_PERSONA_TEMPLATE_ID ||
-        defaultTemplateId;
-      if (!templateId.startsWith('itmpl_')) {
-        templateId = defaultTemplateId;
-      }
+        ''
+      ).trim();
 
       const envString = (process.env.EXPO_PUBLIC_PERSONA_ENVIRONMENT || 'sandbox').toLowerCase().trim();
       let environment =
@@ -110,52 +106,66 @@ export const personaVerificationService = {
       let inquiryBuilder: any = null;
 
       if (serverInquiryId && sessionToken && serverInquiryId.startsWith('inq_')) {
-        // Resume server-created inquiry with session token
         inquiryBuilder = PersonaSDK.Inquiry.fromInquiry(serverInquiryId)
           .sessionToken(sessionToken);
       } else {
-        // Launch from configured Template ID with Supabase user ID as reference
+        if (!templateId || !templateId.startsWith('itmpl_')) {
+          const cfgErr = 'Identity verification template is not configured.';
+          console.error('[Persona]', cfgErr);
+          onError?.(cfgErr);
+          return;
+        }
         inquiryBuilder = PersonaSDK.Inquiry.fromTemplate(templateId)
           .environment(environment)
           .referenceId(userId);
       }
 
-      // 3. Attach Persona callbacks
+      // 3. Attach Persona callbacks (fail-closed server verification)
       inquiryBuilder
         .onComplete(async (inquiryId: string, status: string, fields: any) => {
           try {
-            const normalized = (status || '').toLowerCase().trim();
-            const isApproved =
-              normalized === 'approved' ||
-              normalized === 'completed' ||
-              normalized === 'verified';
-
-            // Server-side verification confirmation
+            // Record pending state immediately while server verifies against Persona REST API
             try {
-              await supabase.functions.invoke('verify-persona-inquiry', {
-                body: { inquiryId, status, fields },
+              await supabase.rpc('submit_persona_inquiry_result', {
+                p_inquiry_id: inquiryId,
+                p_status: 'pending',
+                p_fields: fields || {},
               });
-            } catch (syncErr) {
-              console.warn('Notice from verify-persona-inquiry function:', syncErr);
+            } catch {
+              // Non-fatal: verify-persona-inquiry updates profile directly via service_role
             }
 
-            // Execute RPC to ensure database update
-            await supabase.rpc('submit_persona_inquiry_result', {
-              p_inquiry_id: inquiryId,
-              p_status: status,
-              p_fields: fields || {},
-            });
+            const { data: verifyData, error: verifyErr } = await supabase.functions.invoke(
+              'verify-persona-inquiry',
+              {
+                body: { inquiryId, status, fields },
+              },
+            );
 
-            if (isApproved) {
+            if (verifyErr || !verifyData?.success) {
+              const errMsg =
+                verifyData?.error ||
+                verifyErr?.message ||
+                'Could not confirm identity verification with server. Your submission is queued for webhook review.';
+              onError?.(errMsg);
+              return;
+            }
+
+            const serverStatus = String(verifyData.verificationStatus || 'pending').toLowerCase();
+            const serverVerified = Boolean(verifyData.isVerified);
+
+            if (serverVerified) {
               onSuccess({
                 inquiryId,
-                status,
+                status: serverStatus,
                 isVerified: true,
               });
-            } else if (normalized === 'declined' || normalized === 'failed') {
-              onError?.(`Identity verification was not approved (Status: ${status}). Please try again.`);
+            } else if (serverStatus === 'failed' || serverStatus === 'declined') {
+              onError?.(
+                `Identity verification was not approved (Status: ${serverStatus}). Please try again.`,
+              );
             } else {
-              onError?.(`Identity verification is under review (Status: ${status}).`);
+              onError?.(`Identity verification is under review (Status: ${serverStatus}).`);
             }
           } catch (err: any) {
             console.error('Error processing Persona completion:', err);

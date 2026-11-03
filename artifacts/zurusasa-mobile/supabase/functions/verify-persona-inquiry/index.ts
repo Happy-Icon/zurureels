@@ -21,63 +21,76 @@ Deno.serve(async (request) => {
   const authorization = request.headers.get('Authorization');
   if (!authorization) return json({ error: 'Authentication is required' }, 401);
 
-  const url = Deno.env.get('SUPABASE_URL')!;
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || anonKey;
+  const url = Deno.env.get('SUPABASE_URL') || '';
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  const personaApiKey = Deno.env.get('PERSONA_API_KEY')?.trim() || '';
+
+  if (!url || !anonKey || !serviceRoleKey) {
+    return json({ error: 'Verification database service is not configured' }, 503);
+  }
+
+  // Fail closed: require server-side Persona API key
+  if (!personaApiKey) {
+    console.error('[verify-persona-inquiry] PERSONA_API_KEY is not configured');
+    return json({ error: 'Identity verification service is not configured' }, 503);
+  }
 
   const userClient = createClient(url, anonKey, {
     global: { headers: { Authorization: authorization } },
+    auth: { persistSession: false },
   });
-  const { data: { user }, error: userError } = await userClient.auth.getUser();
+  const {
+    data: { user },
+    error: userError,
+  } = await userClient.auth.getUser();
   if (userError || !user) return json({ error: 'Authentication is required' }, 401);
 
-  let body: any = {};
+  let body: { inquiryId?: unknown; status?: unknown; fields?: Record<string, unknown> } = {};
   try {
     body = await request.json();
   } catch {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { inquiryId, status: reportedStatus, fields } = body;
-  if (!inquiryId) return json({ error: 'inquiryId is required' }, 400);
-
-  const personaApiKey = Deno.env.get('PERSONA_API_KEY');
-  let verifiedStatus = reportedStatus || 'pending';
-
-  // If server API key exists, double-check directly with Persona API for maximum security
-  if (personaApiKey && inquiryId.startsWith('inq_')) {
-    try {
-      const res = await fetch(`https://withpersona.com/api/v1/inquiries/${inquiryId}`, {
-        headers: {
-          'Authorization': `Bearer ${personaApiKey}`,
-          'Persona-Version': '2023-01-05',
-          'Key-Inflection': 'camel',
-        },
-      });
-
-      if (res.ok) {
-        const jsonRes = await res.json();
-        const serverInquiryStatus = jsonRes?.data?.attributes?.status;
-        const serverRefId = jsonRes?.data?.attributes?.referenceId;
-
-        // Ensure inquiry was created for this exact user
-        if (serverRefId && serverRefId !== user.id) {
-          return json({ error: 'Inquiry does not belong to the current authenticated user' }, 403);
-        }
-
-        if (serverInquiryStatus) {
-          verifiedStatus = serverInquiryStatus;
-        }
-      }
-    } catch (err) {
-      console.warn('Error verifying inquiry with Persona API:', err);
-    }
+  const inquiryId = typeof body.inquiryId === 'string' ? body.inquiryId.trim() : '';
+  if (!/^inq_[A-Za-z0-9_-]+$/.test(inquiryId)) {
+    return json({ error: 'A valid Persona inquiryId (inq_...) is required' }, 400);
   }
 
-  const adminClient = createClient(url, serviceRoleKey);
+  // Authoritative lookup against Persona REST API (never trust client-reported status)
+  let serverInquiryStatus = '';
+  let serverRefId = '';
+  try {
+    const res = await fetch(`https://withpersona.com/api/v1/inquiries/${encodeURIComponent(inquiryId)}`, {
+      headers: {
+        Authorization: `Bearer ${personaApiKey}`,
+        'Persona-Version': '2023-01-05',
+        'Key-Inflection': 'camel',
+      },
+    });
 
-  // Map Persona status
-  const normalized = (verifiedStatus || '').toLowerCase().trim();
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      console.error('[verify-persona-inquiry] Persona API lookup failed:', res.status, errBody);
+      return json({ error: 'Could not verify inquiry with Persona API' }, res.status === 404 ? 404 : 502);
+    }
+
+    const jsonRes = await res.json();
+    const attrs = jsonRes?.data?.attributes ?? {};
+    serverInquiryStatus = String(attrs.status ?? '');
+    serverRefId = String(attrs.referenceId ?? attrs['reference-id'] ?? attrs.reference_id ?? '');
+  } catch (err) {
+    console.error('[verify-persona-inquiry] Persona network failure:', err);
+    return json({ error: 'Identity verification provider could not be reached' }, 502);
+  }
+
+  // Enforce strict inquiry ownership
+  if (!serverRefId || serverRefId !== user.id) {
+    return json({ error: 'Inquiry does not belong to the authenticated user' }, 403);
+  }
+
+  const normalized = serverInquiryStatus.toLowerCase().trim();
   let finalStatus: 'verified' | 'failed' | 'pending' | 'canceled' = 'pending';
   let isVerified = false;
 
@@ -87,7 +100,7 @@ Deno.serve(async (request) => {
   } else if (normalized === 'declined' || normalized === 'failed' || normalized === 'rejected') {
     finalStatus = 'failed';
     isVerified = false;
-  } else if (normalized === 'canceled' || normalized === 'cancelled') {
+  } else if (normalized === 'canceled' || normalized === 'cancelled' || normalized === 'expired') {
     finalStatus = 'canceled';
     isVerified = false;
   } else {
@@ -96,30 +109,32 @@ Deno.serve(async (request) => {
   }
 
   const now = new Date().toISOString();
+  const adminClient = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 
-  // Update profile
   const { error: updateErr } = await adminClient
     .from('profiles')
     .update({
       persona_inquiry_id: inquiryId,
       verification_status: finalStatus,
-      identity_verification_status: isVerified ? 'Verified' : finalStatus.charAt(0).toUpperCase() + finalStatus.slice(1),
+      identity_verification_status: isVerified
+        ? 'Verified'
+        : finalStatus.charAt(0).toUpperCase() + finalStatus.slice(1),
       is_verified: isVerified,
-      verified_at: isVerified ? now : undefined,
+      ...(isVerified ? { verified_at: now } : {}),
       verification_updated_at: now,
       verification_details: {
         inquiry_id: inquiryId,
-        reported_status: reportedStatus,
-        verified_status: verifiedStatus,
+        verified_status: serverInquiryStatus,
         final_status: finalStatus,
-        fields: fields || {},
+        verified_by: 'persona_api',
         updated_at: now,
       },
     })
     .eq('id', user.id);
 
   if (updateErr) {
-    console.error('Error updating profile with verification result:', updateErr);
+    console.error('[verify-persona-inquiry] Error updating profile:', updateErr);
+    return json({ error: 'Failed to persist verification status' }, 500);
   }
 
   return json({

@@ -1,10 +1,11 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { authorizeWorkerOrAdmin } from '../_shared/workerAuth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, x-cron-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 function json(body: unknown, status = 200) {
@@ -16,11 +17,22 @@ function json(body: unknown, status = 200) {
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-  const url = Deno.env.get('SUPABASE_URL')!;
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const url = Deno.env.get('SUPABASE_URL') || '';
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
   const paystackSecret = Deno.env.get('PAYSTACK_SECRET_KEY');
-  if (!paystackSecret) return json({ error: 'Payment service is not configured' }, 503);
+
+  if (!url || !serviceRoleKey || !paystackSecret) {
+    return json({ error: 'Payment or database service is not configured' }, 503);
+  }
+
+  // Enforce strict worker/cron/admin authorization
+  const auth = await authorizeWorkerOrAdmin(request, url, anonKey, serviceRoleKey);
+  if (!auth.authorized) {
+    return json({ error: auth.error || 'Unauthorized' }, auth.status);
+  }
 
   const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 
@@ -58,6 +70,7 @@ Deno.serve(async (request) => {
         .select('status')
         .eq('id', payout.booking_id)
         .maybeSingle();
+
       if (bookingError || booking?.status !== 'completed') {
         await admin
           .from('host_payouts')
@@ -70,6 +83,21 @@ Deno.serve(async (request) => {
         results.push({ payoutId: payout.id, status: 'cancelled', error: 'Booking is not completed' });
         continue;
       }
+
+      // Optimistic lock: atomically claim payout from 'scheduled' -> 'processing' to prevent concurrent double-transfers
+      const { data: claimedPayout } = await admin
+        .from('host_payouts')
+        .update({ status: 'processing', updated_at: new Date().toISOString() })
+        .eq('id', payout.id)
+        .eq('status', 'scheduled')
+        .select('id')
+        .maybeSingle();
+
+      if (!claimedPayout) {
+        results.push({ payoutId: payout.id, status: 'skipped_concurrent' });
+        continue;
+      }
+
       const reference = `payout_${payout.id.replace(/-/g, '')}`;
 
       const transferResponse = await fetch('https://api.paystack.co/transfer', {
@@ -95,13 +123,14 @@ Deno.serve(async (request) => {
         const maxRetries = Number(payout.max_retries || 3);
 
         if (currentRetries < maxRetries) {
-          // Exponential backoff retry: 1h, 2h, 4h
+          // Exponential backoff retry: 1h, 2h, 4h (restore status to 'scheduled')
           const backoffHours = Math.pow(2, currentRetries);
           const nextAttempt = new Date(Date.now() + backoffHours * 3600 * 1000).toISOString();
 
           await admin
             .from('host_payouts')
             .update({
+              status: 'scheduled',
               retry_count: currentRetries + 1,
               scheduled_for: nextAttempt,
               failure_reason: `Attempt ${currentRetries + 1} failed: ${failureReason}`,
@@ -129,7 +158,6 @@ Deno.serve(async (request) => {
       const data = providerResult.data ?? {};
       const transferCode = String(data.transfer_code || reference);
 
-      // Update payout status to success / processing
       await admin
         .from('host_payouts')
         .update({
@@ -140,7 +168,6 @@ Deno.serve(async (request) => {
         })
         .eq('id', payout.id);
 
-      // Record double-entry ledger entry for payout debit
       await admin.from('financial_ledger').insert({
         booking_id: payout.booking_id,
         entry_type: 'host_payout_debit',
@@ -151,7 +178,6 @@ Deno.serve(async (request) => {
         metadata: { payout_id: payout.id, transfer_code: transferCode, host_id: payout.host_id },
       });
 
-      // Notify Host of successful payout release
       try {
         const payoutAmountKES = (Number(payout.amount) / 100).toLocaleString();
         const refId = payout.booking_id ? payout.booking_id.slice(0, 8).toUpperCase() : payout.id.slice(0, 8).toUpperCase();

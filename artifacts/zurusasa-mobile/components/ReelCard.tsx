@@ -16,6 +16,8 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useIsFocused } from 'expo-router';
 import { useEvent } from 'expo';
+import * as Haptics from 'expo-haptics';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useAuth } from '@/context/AuthContext';
 import { resolveAvatarUrl } from '@/lib/avatar';
@@ -33,6 +35,55 @@ import { supabase, type ReelRow } from '@/lib/supabase';
 export const ZURU_ORANGE = '#EE7D30';
 
 let globalMuted = true;
+
+interface ActiveReelPlayerProps {
+  videoUrl: string;
+  shouldPlay: boolean;
+  muted: boolean;
+  isPlaying: boolean;
+  setIsPlaying: (playing: boolean) => void;
+}
+
+function ActiveReelPlayer({
+  videoUrl,
+  shouldPlay,
+  muted,
+  isPlaying,
+  setIsPlaying,
+}: ActiveReelPlayerProps) {
+  const player = useVideoPlayer(videoUrl, (p) => {
+    p.loop = true;
+    p.muted = muted;
+  });
+
+  const eventState = useEvent(player, 'playingChange', {
+    isPlaying: player.playing,
+  });
+
+  useEffect(() => {
+    setIsPlaying(eventState.isPlaying);
+  }, [eventState.isPlaying, setIsPlaying]);
+
+  useEffect(() => {
+    if (!videoUrl) return;
+    player.muted = muted;
+    if (shouldPlay) {
+      player.play();
+    } else {
+      }
+  }, [shouldPlay, muted, player, videoUrl]);
+
+  return (
+    <VideoView
+      player={player}
+      style={StyleSheet.absoluteFill}
+      contentFit="cover"
+      nativeControls={false}
+      surfaceType="textureView"
+    />
+  );
+}
+
 
 function formatCount(n: number): string {
   if (n > 999) return `${(n / 1000).toFixed(1)}k`;
@@ -63,7 +114,7 @@ function getOptimizedCloudinaryImageUrl(url: string | null | undefined): string 
   return url;
 }
 
-export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelCardProps) {
+function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: ReelCardProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile, viewMode } = useAuth();
@@ -88,33 +139,20 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
   const videoUrl = useMemo(() => getOptimizedCloudinaryVideoUrl(reel.video_url), [reel.video_url]);
   const thumbnailUrl = useMemo(() => getOptimizedCloudinaryImageUrl(reel.thumbnail_url), [reel.thumbnail_url]);
 
-  const player = useVideoPlayer(videoUrl, (p) => {
-    p.loop = true;
-    p.muted = globalMuted;
-  });
-
-  const { isPlaying } = useEvent(player, 'playingChange', {
-    isPlaying: player.playing,
-  });
-
-  const isAnyModalOpen = enquireOpen || bookingOpen;
-  const shouldPlay = isActive && isScreenFocused && viewMode === 'guest' && !isAnyModalOpen;
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [userPaused, setUserPaused] = useState(false);
 
   useEffect(() => {
-    if (!videoUrl) return;
-    if (shouldPlay) {
-      setMuted(globalMuted);
-      player.muted = globalMuted;
-      player.play();
-    } else {
-      player.pause();
-    }
-  }, [shouldPlay, player, videoUrl]);
+    if (!isActive) setUserPaused(false);
+  }, [isActive]);
+
+  const isAnyModalOpen = enquireOpen || bookingOpen;
+  const shouldPlay = isActive && isScreenFocused && viewMode === 'guest' && !isAnyModalOpen && !userPaused;
 
   const toggleMute = () => {
+    Haptics.selectionAsync().catch(() => {});
     const next = !muted;
     globalMuted = next;
-    player.muted = next;
     setMuted(next);
   };
 
@@ -156,6 +194,7 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
   }, []);
 
   const triggerBurstHeart = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setShowBurstHeart(true);
     burstAnimScale.setValue(0);
     burstAnimOpacity.setValue(1);
@@ -188,58 +227,65 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
     });
   };
 
-  const onVideoPress = () => {
+  const handleDoubleTap = () => {
     if (!videoUrl) return;
-    const now = Date.now();
-    const DOUBLE_TAP_DELAY = 280;
+    triggerBurstHeart();
 
-    if (now - lastTapTimeRef.current < DOUBLE_TAP_DELAY) {
-      // TikTok double tap detected!
-      if (singleTapTimerRef.current) {
-        clearTimeout(singleTapTimerRef.current);
-        singleTapTimerRef.current = null;
-      }
-      lastTapTimeRef.current = 0;
+    if (!liked) {
+      if (!requireAuth() || !user) return;
+      Animated.sequence([
+        Animated.timing(likeScale, { toValue: 1.35, duration: 100, useNativeDriver: true }),
+        Animated.spring(likeScale, { toValue: 1, friction: 3, useNativeDriver: true }),
+      ]).start();
 
-      // 1. Trigger bursting heart animation
-      triggerBurstHeart();
+      setLocalLiked(true);
+      setLocalLikeCount((prev) => (prev ?? likeCount) + 1);
 
-      // 2. Only like if not already liked (never unlike on double-tap)
-      if (!liked) {
-        if (!requireAuth() || !user) return;
-        Animated.sequence([
-          Animated.timing(likeScale, { toValue: 1.35, duration: 100, useNativeDriver: true }),
-          Animated.spring(likeScale, { toValue: 1, friction: 3, useNativeDriver: true }),
-        ]).start();
-
-        setLocalLiked(true);
-        setLocalLikeCount((prev) => (prev ?? likeCount) + 1);
-
-        toggleLike.mutate({
-          reelId: reel.id,
-          userId: user.id,
-          liked: false,
-        });
-      }
-      return;
+      toggleLike.mutate({
+        reelId: reel.id,
+        userId: user.id,
+        liked: false,
+      });
     }
-
-    // First tap: start timer for single-tap pause/play/mute action
-    lastTapTimeRef.current = now;
-    singleTapTimerRef.current = setTimeout(() => {
-      if (muted) {
-        toggleMute();
-        if (!isPlaying) player.play();
-      } else {
-        if (isPlaying) {
-          player.pause();
-        } else {
-          player.play();
-        }
-      }
-      singleTapTimerRef.current = null;
-    }, DOUBLE_TAP_DELAY);
   };
+
+  const handleSingleTap = () => {
+    if (!videoUrl) return;
+    if (muted) {
+      toggleMute();
+      setUserPaused(false);
+    } else {
+      setUserPaused((prev) => !prev);
+    }
+  };
+
+  const doubleTapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .numberOfTaps(2)
+        .maxDuration(280)
+        .runOnJS(true)
+        .onEnd(() => {
+          handleDoubleTap();
+        }),
+    [videoUrl, liked, user, likeCount, reel.id]
+  );
+
+  const singleTapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .numberOfTaps(1)
+        .runOnJS(true)
+        .onEnd(() => {
+          handleSingleTap();
+        }),
+    [videoUrl, muted]
+  );
+
+  const tapGestures = useMemo(
+    () => Gesture.Exclusive(doubleTapGesture, singleTapGesture),
+    [doubleTapGesture, singleTapGesture]
+  );
 
   const exp = reel.experience;
   const meta = (exp?.metadata ?? {}) as Record<string, unknown>;
@@ -317,6 +363,7 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
 
   const onLike = () => {
     if (!requireAuth() || !user) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
     Animated.sequence([
       Animated.timing(likeScale, { toValue: 1.35, duration: 100, useNativeDriver: true }),
@@ -336,6 +383,7 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
 
   const onSave = () => {
     if (!requireAuth() || !user) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
     Animated.sequence([
       Animated.timing(saveScale, { toValue: 1.35, duration: 100, useNativeDriver: true }),
@@ -364,6 +412,7 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
   };
 
   const onShare = async () => {
+    Haptics.selectionAsync().catch(() => {});
     const title = exp?.title ?? 'a coastal experience';
     const location = exp?.location ? ` in ${exp.location}` : '';
     try {
@@ -387,13 +436,11 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
       Alert.alert('This is your reel', 'You cannot enquire on your own listing.');
       return;
     }
-    player.pause();
     setEnquireOpen(true);
   };
 
   const onBook = () => {
     if (bookedOut || !exp?.id) return;
-    player.pause();
     setBookingOpen(true);
   };
 
@@ -407,13 +454,13 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
           contentFit="cover"
         />
       ) : null}
-      {videoUrl ? (
-        <VideoView
-          player={player}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          nativeControls={false}
-          surfaceType="textureView"
+      {isActive && videoUrl ? (
+        <ActiveReelPlayer
+          videoUrl={videoUrl}
+          shouldPlay={shouldPlay}
+          muted={muted}
+          isPlaying={isPlaying}
+          setIsPlaying={setIsPlaying}
         />
       ) : !reel.thumbnail_url ? (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: '#14110e' }]} />
@@ -427,20 +474,24 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         pointerEvents="none"
       />
 
-      {/* Tap to unmute / play-pause overlay */}
-      <Pressable
-        testID={`video-tap-${reel.id}`}
-        onPress={onVideoPress}
-        style={StyleSheet.absoluteFill}
-      >
-        {videoUrl && !isPlaying ? (
-          <View pointerEvents="none" style={styles.playOverlay}>
-            <View style={styles.playCircle}>
-              <MaterialCommunityIcons name="play" size={46} color="#FFFFFF" />
+      {/* Tap to unmute / play-pause overlay with native gesture handler */}
+      <GestureDetector gesture={tapGestures}>
+        <View
+          testID={`video-tap-${reel.id}`}
+          style={StyleSheet.absoluteFill}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={isPlaying ? 'Double tap to like reel, single tap to pause' : 'Tap to play video'}
+        >
+          {videoUrl && !isPlaying ? (
+            <View pointerEvents="none" style={styles.playOverlay}>
+              <View style={styles.playCircle}>
+                <MaterialCommunityIcons name="play" size={46} color="#FFFFFF" />
+              </View>
             </View>
-          </View>
-        ) : null}
-      </Pressable>
+          ) : null}
+        </View>
+      </GestureDetector>
 
       {/* TikTok-style Center Bursting Heart on Double-Tap */}
       {showBurstHeart ? (
@@ -468,6 +519,8 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         {/* Host Avatar with Online Green Dot -> Opens Host Profile */}
         <Pressable
           testID={`host-avatar-${reel.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${hostName}'s host profile`}
           onPress={() => {
             if (hostId) {
               router.push(`/profile/${hostId}` as any);
@@ -494,6 +547,8 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         {/* Heart / Like Count */}
         <Pressable
           testID={`like-button-${reel.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={liked ? `Unlike, ${likeCount} likes` : `Like, ${likeCount} likes`}
           onPress={onLike}
           hitSlop={8}
           style={styles.railItem}
@@ -513,6 +568,8 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         {/* Wishlist / Bookmark */}
         <Pressable
           testID={`save-button-${reel.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={saved ? "Remove from saved experiences" : "Save experience"}
           onPress={onSave}
           hitSlop={8}
           style={styles.railItem}
@@ -527,15 +584,16 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         </Pressable>
 
         {/* Share Button */}
-        <Pressable onPress={onShare} hitSlop={6} style={styles.railItem}>
+        <Pressable onPress={onShare} hitSlop={6} style={styles.railItem} accessibilityRole="button" accessibilityLabel="Share experience">
           <Feather name="share-2" size={24} color="#FFFFFF" />
         </Pressable>
 
         {/* Info Button */}
         <Pressable
           testID={`info-button-${reel.id}`}
+          accessibilityRole="button"
+          accessibilityLabel="View experience details and booking"
           onPress={() => {
-            player.pause();
             setBookingOpen(true);
           }}
           hitSlop={6}
@@ -547,6 +605,8 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         {/* Mute/Audio Toggle */}
         <Pressable
           testID={`sound-button-${reel.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={muted ? "Unmute audio" : "Mute audio"}
           onPress={() => {
             toggleMute();
           }}
@@ -568,7 +628,6 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
         <Pressable
           testID={`listing-details-${reel.id}`}
           onPress={() => {
-            player.pause();
             setBookingOpen(true);
           }}
           style={{ gap: 4 }}
@@ -697,6 +756,19 @@ export function ReelCard({ reel, isActive, height, prefetchInteractions }: ReelC
     </View>
   );
 }
+
+
+export const ReelCard = React.memo(
+  ReelCardComponent,
+  (prev, next) =>
+    prev.isActive === next.isActive &&
+    prev.height === next.height &&
+    prev.reel.id === next.reel.id &&
+    prev.prefetchInteractions?.liked === next.prefetchInteractions?.liked &&
+    prev.prefetchInteractions?.saved === next.prefetchInteractions?.saved &&
+    prev.prefetchInteractions?.likeCount === next.prefetchInteractions?.likeCount &&
+    prev.prefetchInteractions?.following === next.prefetchInteractions?.following
+);
 
 const styles = StyleSheet.create({
   page: {

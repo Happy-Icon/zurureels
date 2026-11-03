@@ -1,11 +1,15 @@
 /// <reference path="../deno.d.ts" />
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit } from '../_shared/rateLimiter.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'x-paystack-signature, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
+
+const ALLOWED_APP_REDIRECT_RE =
+  /^(zurusasa-mobile|zurusasa|exp):\/\/[a-zA-Z0-9._~:/?#[\]@!$&'()*+,;=%-]+$/;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -44,15 +48,213 @@ async function computeSha256(content: string): Promise<string> {
     .join('');
 }
 
+async function dispatchPostSettlementNotifications(admin: SupabaseClient, bookingId: string) {
+  try {
+    // Deduplicate in case both browser callback verification and webhook run near-simultaneously
+    const { count: existingCount } = await admin
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('action_id', bookingId)
+      .eq('type', 'payment_success');
+
+    if (existingCount && existingCount > 0) {
+      return;
+    }
+
+    const { data: bData } = await admin
+      .from('bookings')
+      .select('id, user_id, experience_id, trip_title, amount, experience:experiences(user_id, title)')
+      .eq('id', bookingId)
+      .single();
+
+    if (!bData) return;
+
+    const exp = Array.isArray(bData.experience) ? bData.experience[0] : bData.experience;
+    const guestId = bData.user_id;
+    const hostId = (exp as any)?.user_id;
+    const tripTitle = bData.trip_title || (exp as any)?.title || 'Stay';
+    const amountStr = `KES ${Number(bData.amount || 0).toLocaleString()}`;
+
+    if (guestId) {
+      await admin.from('notifications').insert({
+        user_id: guestId,
+        type: 'payment_success',
+        title: 'Payment Confirmed! 💳',
+        message: `Your payment of ${amountStr} for "${tripTitle}" was received. The host will confirm your reservation shortly.`,
+        action_type: 'booking',
+        action_id: bookingId,
+        is_read: false,
+      });
+    }
+
+    if (hostId && hostId !== guestId) {
+      await admin.from('notifications').insert({
+        user_id: hostId,
+        type: 'booking_request',
+        title: 'Payment Received — Review Booking',
+        message: `A guest paid ${amountStr} for "${tripTitle}". Review and confirm the reservation in your Host Dashboard.`,
+        action_type: 'booking',
+        action_id: bookingId,
+        is_read: false,
+      });
+    }
+  } catch (notifErr) {
+    console.warn('Post-settlement notification error:', notifErr);
+  }
+}
+
+async function verifyAndSettlePaystackTransaction(
+  admin: SupabaseClient,
+  paystackSecret: string,
+  providerReference: string,
+  fallbackChargeId = '',
+): Promise<string> {
+  // Step 1: Query Paystack verification API for authoritative transaction state
+  const verifyResponse = await fetch(
+    `https://api.paystack.co/transaction/verify/${encodeURIComponent(providerReference)}`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${paystackSecret}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  const verifyResult = await verifyResponse.json().catch(() => ({}));
+  if (!verifyResponse.ok || verifyResult.status !== true) {
+    throw new Error(`Paystack verification API failed: ${verifyResult.message || verifyResponse.statusText}`);
+  }
+
+  const verifyData = verifyResult.data ?? {};
+  if (verifyData.status !== 'success') {
+    throw new Error(`Paystack verification status is not success: ${verifyData.status}`);
+  }
+
+  if (verifyData.currency !== 'KES') {
+    throw new Error(`Invalid transaction currency: expected KES, got ${verifyData.currency}`);
+  }
+
+  if (verifyData.reference !== providerReference) {
+    throw new Error(`Reference mismatch: expected ${providerReference}, got ${verifyData.reference}`);
+  }
+
+  // Step 2: Fetch corresponding payment attempt from database to verify amount
+  const { data: attempt, error: attemptError } = await admin
+    .from('payment_attempts')
+    .select('id, quote_id, amount, currency, status')
+    .eq('provider_reference', providerReference)
+    .single();
+
+  if (attemptError || !attempt) {
+    throw new Error(`Payment attempt not found for reference ${providerReference}`);
+  }
+
+  const verifiedAmount = Number(verifyData.amount);
+  if (verifiedAmount !== Number(attempt.amount)) {
+    throw new Error(`Amount mismatch: stored ${attempt.amount} minor units, verified ${verifiedAmount}`);
+  }
+
+  console.log('[SETTLEMENT_START]', {
+    quoteId: attempt.quote_id,
+    attemptId: attempt.id,
+    reference: providerReference,
+  });
+
+  // Step 3: Invoke atomic settlement RPC (idempotent via FOR UPDATE row locks)
+  const { data: bookingId, error: settleError } = await admin.rpc('settle_paystack_success', {
+    p_provider_reference: providerReference,
+    p_provider_charge_id: String(verifyData.id ?? fallbackChargeId ?? ''),
+    p_paystack_response: verifyResult,
+  });
+
+  if (settleError || !bookingId) {
+    console.error('[SETTLEMENT_FAILURE]', {
+      error: settleError?.message,
+      sqlState: settleError?.code,
+      quoteId: attempt.quote_id,
+      attemptId: attempt.id,
+      reference: providerReference,
+    });
+    throw new Error(`Settlement RPC failed: ${settleError?.message || 'No bookingId returned'}`);
+  }
+
+  console.log('[SETTLEMENT_SUCCESS]', {
+    bookingId,
+    bookingStatus: 'paid_or_confirmed',
+    paymentAttemptStatus: 'succeeded',
+    quoteStatus: 'consumed',
+  });
+
+  await dispatchPostSettlementNotifications(admin, String(bookingId));
+
+  return String(bookingId);
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   const paystackSecret = Deno.env.get('PAYSTACK_SECRET_KEY');
   if (!paystackSecret) {
     console.error('PAYSTACK_SECRET_KEY is not configured in Edge Function secrets');
     return json({ error: 'Webhook service misconfigured' }, 500);
   }
+
+  const url = Deno.env.get('SUPABASE_URL')!;
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  // Hosted Card Checkout Redirect Bridge (GET ?callback=1&redirect=...&reference=...)
+  if (request.method === 'GET') {
+    const reqUrl = new URL(request.url);
+    if (reqUrl.searchParams.get('callback') !== '1') {
+      return json({ error: 'Method not allowed' }, 405);
+    }
+
+    const rl = await checkRateLimit(request, 'paystack_callback', 20, 60);
+    const requestedRedirect = (reqUrl.searchParams.get('redirect') || '').trim();
+    const safeBaseRedirect = ALLOWED_APP_REDIRECT_RE.test(requestedRedirect)
+      ? requestedRedirect
+      : 'zurusasa-mobile://payment-callback';
+
+    const reference = (
+      reqUrl.searchParams.get('reference') ||
+      reqUrl.searchParams.get('trxref') ||
+      ''
+    ).trim();
+
+    if (rl.allowed && reference && /^[a-zA-Z0-9_-]{6,100}$/.test(reference)) {
+      try {
+        const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
+        const { data: attempt } = await admin
+          .from('payment_attempts')
+          .select('id, status')
+          .eq('provider_reference', reference)
+          .maybeSingle();
+
+        if (attempt && (attempt.status === 'pending' || attempt.status === 'created')) {
+          await verifyAndSettlePaystackTransaction(admin, paystackSecret, reference);
+        }
+      } catch (verifyErr) {
+        // Non-fatal on redirect: Paystack's signed POST webhook remains the primary retryable settler
+        console.warn('[CALLBACK_VERIFY_INFO]', verifyErr instanceof Error ? verifyErr.message : String(verifyErr));
+      }
+    }
+
+    const separator = safeBaseRedirect.includes('?') ? '&' : '?';
+    const redirectLocation = reference
+      ? `${safeBaseRedirect}${separator}reference=${encodeURIComponent(reference)}`
+      : safeBaseRedirect;
+
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: redirectLocation,
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    });
+  }
+
+  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   const signature = request.headers.get('x-paystack-signature');
   const rawBody = await request.text();
@@ -70,8 +272,6 @@ Deno.serve(async (request) => {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const url = Deno.env.get('SUPABASE_URL')!;
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 
   const payloadSha256 = await computeSha256(rawBody);
@@ -135,127 +335,12 @@ Deno.serve(async (request) => {
         amount: data.amount,
       });
 
-      // Step 1: Query Paystack verification API for authoritative transaction state
-      const verifyResponse = await fetch(
-        `https://api.paystack.co/transaction/verify/${encodeURIComponent(providerReference)}`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${paystackSecret}`,
-            'Content-Type': 'application/json',
-          },
-        }
+      const bookingId = await verifyAndSettlePaystackTransaction(
+        admin,
+        paystackSecret,
+        providerReference,
+        String(data.id ?? ''),
       );
-
-      const verifyResult = await verifyResponse.json().catch(() => ({}));
-      if (!verifyResponse.ok || verifyResult.status !== true) {
-        throw new Error(`Paystack verification API failed: ${verifyResult.message || verifyResponse.statusText}`);
-      }
-
-      const verifyData = verifyResult.data ?? {};
-      if (verifyData.status !== 'success') {
-        throw new Error(`Paystack verification status is not success: ${verifyData.status}`);
-      }
-
-      if (verifyData.currency !== 'KES') {
-        throw new Error(`Invalid transaction currency: expected KES, got ${verifyData.currency}`);
-      }
-
-      if (verifyData.reference !== providerReference) {
-        throw new Error(`Reference mismatch: expected ${providerReference}, got ${verifyData.reference}`);
-      }
-
-      // Step 2: Fetch corresponding payment attempt from database to verify amount
-      const { data: attempt, error: attemptError } = await admin
-        .from('payment_attempts')
-        .select('id, quote_id, amount, currency, status')
-        .eq('provider_reference', providerReference)
-        .single();
-
-      if (attemptError || !attempt) {
-        throw new Error(`Payment attempt not found for reference ${providerReference}`);
-      }
-
-      const verifiedAmount = Number(verifyData.amount);
-      if (verifiedAmount !== Number(attempt.amount)) {
-        throw new Error(`Amount mismatch: stored ${attempt.amount} minor units, verified ${verifiedAmount}`);
-      }
-
-      console.log('[SETTLEMENT_START]', {
-        quoteId: attempt.quote_id,
-        attemptId: attempt.id,
-        reference: providerReference,
-      });
-
-      // Step 3: Invoke atomic settlement RPC
-      const { data: bookingId, error: settleError } = await admin.rpc('settle_paystack_success', {
-        p_provider_reference: providerReference,
-        p_provider_charge_id: String(verifyData.id ?? data.id ?? ''),
-        p_paystack_response: verifyResult,
-      });
-
-      if (settleError) {
-        console.error('[SETTLEMENT_FAILURE]', {
-          error: settleError.message,
-          sqlState: settleError.code,
-          quoteId: attempt.quote_id,
-          attemptId: attempt.id,
-          reference: providerReference,
-        });
-        throw new Error(`Settlement RPC failed: ${settleError.message}`);
-      }
-
-      console.log('[SETTLEMENT_SUCCESS]', {
-        bookingId,
-        bookingStatus: 'paid_or_confirmed',
-        paymentAttemptStatus: 'succeeded',
-        quoteStatus: 'consumed',
-      });
-
-      // Step 4: Dispatch in-app notifications to Guest & Host
-      try {
-        const { data: bData } = await admin
-          .from('bookings')
-          .select('id, user_id, experience_id, trip_title, amount, experience:experiences(user_id, title)')
-          .eq('id', bookingId)
-          .single();
-
-        if (bData) {
-          const exp = Array.isArray(bData.experience) ? bData.experience[0] : bData.experience;
-          const guestId = bData.user_id;
-          const hostId = (exp as any)?.user_id;
-          const tripTitle = bData.trip_title || (exp as any)?.title || 'Stay';
-          const amountStr = `KES ${Number(bData.amount || 0).toLocaleString()}`;
-
-          // Notify Guest
-          if (guestId) {
-            await admin.from('notifications').insert({
-              user_id: guestId,
-              type: 'payment_success',
-              title: 'Payment Confirmed! 💳',
-              message: `Your payment of ${amountStr} for "${tripTitle}" was received. The host will confirm your reservation shortly.`,
-              action_type: 'booking',
-              action_id: bookingId,
-              is_read: false,
-            });
-          }
-
-          // Notify Host
-          if (hostId && hostId !== guestId) {
-            await admin.from('notifications').insert({
-              user_id: hostId,
-              type: 'booking_request',
-              title: 'Payment Received — Review Booking',
-              message: `A guest paid ${amountStr} for "${tripTitle}". Review and confirm the reservation in your Host Dashboard.`,
-              action_type: 'booking',
-              action_id: bookingId,
-              is_read: false,
-            });
-          }
-        }
-      } catch (notifErr) {
-        console.warn('Post-settlement notification error:', notifErr);
-      }
 
       await admin
         .from('payment_events')

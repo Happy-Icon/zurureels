@@ -478,9 +478,12 @@ Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://rjzgzxxdrltlteeshtuw.supabase.co';
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || anonKey;
+  const supabaseUrl = (Deno.env.get('SUPABASE_URL') ?? '').trim();
+  const anonKey = (Deno.env.get('SUPABASE_ANON_KEY') ?? '').trim();
+  const serviceRoleKey = (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '').trim() || anonKey;
+  if (!supabaseUrl || !anonKey) {
+    return json({ error: 'Supabase environment is not configured' }, 503);
+  }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -662,7 +665,8 @@ Rules:
   // ACTION 2: PERSONALIZE_FEED (ZuruFlow AI Content Personalization)
   // ──────────────────────────────────────────────────────────────────────────
   if (action === 'personalize_feed') {
-    const targetUserId = body.userId || authUserId;
+    if (body.userId && authUserId && String(body.userId) !== authUserId) return json({ error: 'Forbidden: cannot read another user personalization profile' }, 403);
+    const targetUserId = authUserId;
     if (!targetUserId) {
       // Guest user: return empty affinities (default chronologic/trending ranking)
       return json({

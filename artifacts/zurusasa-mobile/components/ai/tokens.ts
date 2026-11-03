@@ -1,14 +1,18 @@
 /**
  * Zuru AI – Design Tokens & Shared Types
- * Central source of truth for the AI feature design system.
+ * Harmonized with the centralized @/theme design system.
  */
+
+import { colors } from '@/theme/colors';
+import { typography } from '@/theme/typography';
+import { radius } from '@/theme/radius';
 
 export const AI_COLORS = {
   // Brand
-  orange: '#F26522',
-  orangeLight: '#FFF5EF',
+  orange: colors.brand.orange,
+  orangeLight: colors.brand.orangeLight,
   orangeMid: '#FDDFCB',
-  orangeSoft: 'rgba(242,101,34,0.10)',
+  orangeSoft: colors.brand.orangeSoft,
 
   // Backgrounds
   bg: '#FAFAFA',
@@ -45,12 +49,12 @@ export const AI_FONTS = {
 } as const;
 
 export const AI_RADIUS = {
-  xs: 8,
-  sm: 12,
-  md: 16,
-  lg: 20,
-  xl: 24,
-  full: 999,
+  xs: radius.sm,
+  sm: radius.md,
+  md: radius.lg,
+  lg: radius.xl,
+  xl: radius.xxl,
+  full: radius.full,
 } as const;
 
 export const AI_SHADOW = {
@@ -110,7 +114,6 @@ export const SUGGESTION_CHIPS = [
   'Weekend getaway under KES 15,000',
 ];
 
-
 // AI Message types
 export type MessageRole = 'user' | 'ai';
 
@@ -152,4 +155,3 @@ export interface AICard {
   experience?: any;
   host?: any;
 }
-

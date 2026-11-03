@@ -14,10 +14,15 @@ ios/
 android/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
+
+# Signing credentials & EAS keystore configuration (NEVER commit to Git)
+credentials/
+credentials.json
 
 # Metro
 .metro-health-check*
@@ -31,16 +36,18 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Supabase CLI temporary link metadata
+supabase/.temp/
 
 # typescript
 *.tsbuildinfo
 .vercel
 
-.env
-
-# EAS local signing credentials must ship with this (private) repo
-!credentials/
-!credentials/android/
-!credentials/android/release.keystore
+# Agent tooling
+.agents/
+skills-lock.json

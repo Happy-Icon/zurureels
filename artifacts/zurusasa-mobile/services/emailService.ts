@@ -11,12 +11,28 @@ export interface BookingEmailParams {
   reason?: string;
 }
 
+export interface DispatchEmailParams {
+  recipientUserId: string;
+  bookingId?: string;
+  subject: string;
+  html: string;
+}
+
 export interface SendEmailResult {
   success: boolean;
-  recipientEmail?: string;
   provider: string;
   messageId?: string;
+  skipped?: boolean;
   error?: string;
+}
+
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function getZuruSasaEmailTemplate({
@@ -38,12 +54,14 @@ function getZuruSasaEmailTemplate({
   dates?: string;
   buttonText?: string;
 }) {
+  const safeTripTitle = escapeHtml(tripTitle);
+  const safeDates = dates ? escapeHtml(dates) : undefined;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${headline}</title>
+  <title>${escapeHtml(headline)}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0B0F19; margin: 0; padding: 24px 0; color: #FFFFFF; }
     .container { max-width: 580px; margin: 0 auto; background-color: #111827; border-radius: 16px; border: 1px solid #1F2937; overflow: hidden; }
@@ -66,29 +84,29 @@ function getZuruSasaEmailTemplate({
   <div class="container">
     <div class="header">
       <div class="logo-badge">🌴 ZURUSASA COASTAL</div>
-      <h1 class="headline">${headline}</h1>
-      <p class="subhead">${subhead}</p>
+      <h1 class="headline">${escapeHtml(headline)}</h1>
+      <p class="subhead">${escapeHtml(subhead)}</p>
     </div>
     <div class="content">
       <p style="font-size: 15px; line-height: 1.6; color: #E5E7EB; margin-top: 0;">${bodyText}</p>
       
       <div class="card">
-        <div class="trip-title">${tripTitle}</div>
+        <div class="trip-title">${safeTripTitle}</div>
         <div class="meta-row">
           <span class="meta-label">Booking Reference:</span>
-          <span class="meta-val">${bookingId.slice(0, 8).toUpperCase()}</span>
+          <span class="meta-val">${escapeHtml(bookingId.slice(0, 8).toUpperCase())}</span>
         </div>
-        ${dates ? `<div class="meta-row"><span class="meta-label">Dates:</span><span class="meta-val">${dates}</span></div>` : ''}
+        ${safeDates ? `<div class="meta-row"><span class="meta-label">Dates:</span><span class="meta-val">${safeDates}</span></div>` : ''}
         ${amount ? `<div class="meta-row"><span class="meta-label">Amount Paid:</span><span class="meta-val" style="color: #F26522;">KES ${Number(amount).toLocaleString()}</span></div>` : ''}
       </div>
 
       <div class="btn-wrap">
-        <a href="https://zurusasa.com/reservations" class="btn">${buttonText}</a>
+        <a href="https://zurusasa.com/reservations" class="btn">${escapeHtml(buttonText)}</a>
       </div>
     </div>
     <div class="footer">
-      ZuruSasa Ltd • Kenyan Coastal Escapes, Diani, Watamu & Lamu<br>
-      © ${new Date().getFullYear()} ZuruSasa. All rights reserved.
+      ZuruSasa Ltd • Kenyan Coastal Escapes, Diani, Watamu &amp; Lamu<br>
+      &copy; ${new Date().getFullYear()} ZuruSasa. All rights reserved.
     </div>
   </div>
 </body>
@@ -97,91 +115,44 @@ function getZuruSasaEmailTemplate({
 
 export const emailService = {
   /**
-   * Helper to dispatch an email via Resend API or webhook
+   * Dispatch a transactional email strictly via the authenticated 'send-email'
+   * Supabase Edge Function (server resolves recipient email & owns RESEND_API_KEY).
    */
-  async dispatchEmail(to: string, subject: string, html: string): Promise<SendEmailResult> {
-    const resendApiKey = process.env.EXPO_PUBLIC_RESEND_API_KEY || process.env.RESEND_API_KEY;
-    const fromAddress = process.env.EXPO_PUBLIC_EMAIL_FROM || 'ZuruSasa <onboarding@resend.dev>';
-
-    console.log(`[Email] Dispatch requested: to="${to}" subject="${subject}"`);
-
-    // 1. First priority: Invoke Supabase Edge Function 'send-email' (uses RESEND_API_KEY stored securely in Supabase Secrets)
+  async dispatchEmail(params: DispatchEmailParams): Promise<SendEmailResult> {
     try {
       const { data: edgeData, error: edgeError } = await supabase.functions.invoke('send-email', {
-        body: { to, subject, html, from: fromAddress },
+        body: {
+          recipientUserId: params.recipientUserId,
+          bookingId: params.bookingId,
+          subject: params.subject,
+          html: params.html,
+        },
       });
 
-      if (!edgeError && edgeData?.success) {
-        console.log(`[Email] Supabase Edge Function 'send-email' dispatch SUCCESS: id=${edgeData?.id}`);
-        return {
-          success: true,
-          recipientEmail: to,
-          provider: 'Supabase_Resend_EdgeFunction',
-          messageId: edgeData?.id,
-        };
-      } else if (edgeError) {
-        console.log(`[Email] Supabase Edge Function note: ${edgeError.message || edgeError}`);
-      }
-    } catch (edgeCatch) {
-      console.log('[Email] Edge Function invoke exception:', edgeCatch);
-    }
-
-    // 2. Second priority: Direct Resend API if EXPO_PUBLIC_RESEND_API_KEY is defined in client .env
-    if (resendApiKey) {
-      try {
-        const response = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${resendApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: fromAddress,
-            to,
-            subject,
-            html,
-          }),
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-          console.warn('[Email] Direct Resend API error:', data);
-          return {
-            success: false,
-            recipientEmail: to,
-            provider: 'Resend_Direct',
-            error: data?.message || 'Failed to dispatch email via Resend',
-          };
-        }
-
-        console.log(`[Email] Direct Resend dispatch SUCCESS: id=${data?.id}`);
-        return {
-          success: true,
-          recipientEmail: to,
-          provider: 'Resend_Direct',
-          messageId: data?.id,
-        };
-      } catch (err: any) {
-        console.warn('[Email] Resend direct network error:', err);
+      if (edgeError || !edgeData?.success) {
+        const errMsg = edgeData?.error || edgeError?.message || 'Failed to dispatch email';
+        console.warn('[Email] send-email Edge Function error:', errMsg);
         return {
           success: false,
-          recipientEmail: to,
-          provider: 'Resend_Direct',
-          error: err?.message || 'Network error',
+          provider: 'Supabase_Resend_EdgeFunction',
+          error: errMsg,
         };
       }
-    }
 
-    // 3. Dev Fallback: If neither Edge Function nor client key responded
-    console.log(
-      `[Email_SIMULATED] Email to <${to}>: "${subject}". Note: You have RESEND_API_KEY in Supabase. Ensure 'send-email' function is deployed (supabase functions deploy send-email) to dispatch live emails.`,
-    );
-    return {
-      success: true,
-      recipientEmail: to,
-      provider: 'DevSimulator',
-      messageId: `sim_${Date.now()}`,
-    };
+      return {
+        success: true,
+        provider: 'Supabase_Resend_EdgeFunction',
+        messageId: edgeData?.id,
+        skipped: Boolean(edgeData?.skipped),
+      };
+    } catch (err: any) {
+      console.warn('[Email] Edge Function invoke exception:', err);
+      return {
+        success: false,
+        provider: 'Supabase_Resend_EdgeFunction',
+        error: err?.message || 'Network error invoking send-email',
+      };
+    }
   },
 
   /**
@@ -191,32 +162,32 @@ export const emailService = {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('full_name, email')
+        .select('full_name')
         .eq('id', params.userId)
         .maybeSingle();
 
-      const recipientEmail = profile?.email;
-      if (!recipientEmail) {
-        console.log(`[Email] Guest ${params.userId.slice(0, 8)} has no email address on profile.`);
-        return { success: false, provider: 'None', error: 'No email found for guest' };
-      }
-
-      const guestName = profile.full_name || 'Adventurer';
+      const guestName = escapeHtml(profile?.full_name || 'Adventurer');
+      const safeTripTitle = escapeHtml(params.tripTitle);
       const subject = `Reservation Confirmed: ${params.tripTitle} 🎉`;
       const html = getZuruSasaEmailTemplate({
-        headline: 'Reservation Confirmed! 🎉',
-        subhead: `Your stay has been accepted by the host.`,
-        bodyText: `Jambo ${guestName}! Your host has confirmed your booking for <strong>${params.tripTitle}</strong>. Your itinerary and host contact details are now unlocked in your ZuruSasa account.`,
+        headline: 'Reservation Confirmed!',
+        subhead: 'Your stay has been accepted by the host.',
+        bodyText: `Jambo ${guestName}! Your host has confirmed your booking for <strong>${safeTripTitle}</strong>. Your itinerary and host contact details are now unlocked in your ZuruSasa account.`,
         tripTitle: params.tripTitle,
         bookingId: params.bookingId,
         amount: params.amount ? String(params.amount) : undefined,
         dates: params.startDate && params.endDate ? `${params.startDate} to ${params.endDate}` : undefined,
       });
 
-      return await this.dispatchEmail(recipientEmail, subject, html);
+      return await this.dispatchEmail({
+        recipientUserId: params.userId,
+        bookingId: params.bookingId,
+        subject,
+        html,
+      });
     } catch (err: any) {
       console.warn('[Email] Error in sendBookingConfirmedEmail:', err);
-      return { success: false, provider: 'None', error: err?.message };
+      return { success: false, provider: 'Supabase_Resend_EdgeFunction', error: err?.message };
     }
   },
 
@@ -227,32 +198,35 @@ export const emailService = {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('full_name, email')
+        .select('full_name')
         .eq('id', params.userId)
         .maybeSingle();
 
-      const recipientEmail = profile?.email;
-      if (!recipientEmail) {
-        return { success: false, provider: 'None', error: 'No email found for recipient' };
-      }
-
-      const name = profile.full_name || 'Guest';
+      const name = escapeHtml(profile?.full_name || 'Guest');
+      const safeTripTitle = escapeHtml(params.tripTitle);
       const subject = `Reservation Update: ${params.tripTitle}`;
-      const reasonText = params.reason ? `<p><strong>Reason:</strong> ${params.reason}</p>` : '';
+      const reasonText = params.reason
+        ? `<p><strong>Reason:</strong> ${escapeHtml(params.reason)}</p>`
+        : '';
 
       const html = getZuruSasaEmailTemplate({
         headline: 'Reservation Declined / Cancelled',
         subhead: `Update on your reservation for ${params.tripTitle}`,
-        bodyText: `Hello ${name}. The reservation for <strong>${params.tripTitle}</strong> could not be accommodated. If payment was made, full refund processing has been initiated to your original payment method.${reasonText}`,
+        bodyText: `Hello ${name}. The reservation for <strong>${safeTripTitle}</strong> could not be accommodated. If payment was made, refund processing has been initiated to your original payment method.${reasonText}`,
         tripTitle: params.tripTitle,
         bookingId: params.bookingId,
         buttonText: 'Browse Alternative Stays',
       });
 
-      return await this.dispatchEmail(recipientEmail, subject, html);
+      return await this.dispatchEmail({
+        recipientUserId: params.userId,
+        bookingId: params.bookingId,
+        subject,
+        html,
+      });
     } catch (err: any) {
       console.warn('[Email] Error in sendBookingCancelledEmail:', err);
-      return { success: false, provider: 'None', error: err?.message };
+      return { success: false, provider: 'Supabase_Resend_EdgeFunction', error: err?.message };
     }
   },
 };

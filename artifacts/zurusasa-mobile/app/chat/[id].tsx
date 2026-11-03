@@ -47,6 +47,11 @@ export default function NativeChatScreen() {
     otherId?: string;
   }>();
 
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const [peerName, setPeerName] = useState<string>(name && name !== 'Support Team' ? name : '');
+  const [peerAvatar, setPeerAvatar] = useState<string>(avatar || '');
+  const [peerUserId, setPeerUserId] = useState<string>(otherId && UUID_REGEX.test(otherId) ? otherId : '');
+
   const { data: serverMessages, isLoading: loading } = useMessages(id);
   const sendMessageMutation = useSendMessage();
   const markReadMutation = useMarkMessagesRead();
@@ -57,6 +62,8 @@ export default function NativeChatScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<FlatList<MessageRow>>(null);
+
+  const reversedMessages = React.useMemo(() => [...messages].reverse(), [messages]);
 
   const topPad = Platform.OS === 'web' ? 12 : insets.top + 4;
   const bottomPad = Platform.OS === 'web' ? 14 : Math.max(insets.bottom, 12);
@@ -202,10 +209,7 @@ export default function NativeChatScreen() {
     }
   };
 
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const [peerName, setPeerName] = useState<string>(name && name !== 'Support Team' ? name : '');
-  const [peerAvatar, setPeerAvatar] = useState<string>(avatar || '');
-  const [peerUserId, setPeerUserId] = useState<string>(otherId && UUID_REGEX.test(otherId) ? otherId : '');
+
 
   // Keep state in sync if navigation params update
   useEffect(() => {
@@ -405,14 +409,13 @@ export default function NativeChatScreen() {
       >
         <FlatList
           ref={listRef}
-          data={messages}
+          inverted
+          data={reversedMessages}
           keyExtractor={(m) => m.id}
           renderItem={renderMessage}
           contentContainerStyle={styles.threadContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets={true}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           ListHeaderComponent={
             messages.length > 0 ? (
               <View style={[styles.contextBadgeCard, { backgroundColor: isDark ? '#27272A' : '#F7F7F7', borderColor: colors.border }]}>

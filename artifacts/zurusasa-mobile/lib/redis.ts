@@ -14,7 +14,7 @@ import { supabase } from '@/lib/supabase';
 export async function fetchServerCachedQuery<T>(
   action: 'get_reels_feed' | 'get_experiences',
   dbFallbackFn: () => Promise<T>,
-  params?: { category?: string }
+  params?: { category?: string; excludeExpired?: boolean }
 ): Promise<T> {
   try {
     const edgePromise = supabase.functions.invoke('redis-cache', {

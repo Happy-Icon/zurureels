@@ -1,49 +1,22 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-
-export interface CardDetails {
-  cardNumber: string;
-  expiry: string;
-  cvv: string;
-  streetAddress?: string;
-  aptSuite?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  country?: string;
-  cardholderName?: string;
-}
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 export interface CardPaymentModalProps {
   visible: boolean;
   onClose: () => void;
   amount?: number;
   experienceTitle?: string;
-  onConfirmPay: (cardDetails: {
-    cardNumber: string;
-    expiry: string;
-    cvv: string;
-    cardholderName: string;
-    streetAddress?: string;
-    aptSuite?: string;
-    city?: string;
-    state?: string;
-    zipCode?: string;
-    country?: string;
-  }) => Promise<void> | void;
+  onConfirmPay: () => Promise<void> | void;
 }
 
 export function CardPaymentModal({
@@ -55,72 +28,8 @@ export function CardPaymentModal({
 }: CardPaymentModalProps) {
   const insets = useSafeAreaInsets();
 
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
-
-  const [streetAddress, setStreetAddress] = useState('');
-  const [aptSuite, setAptSuite] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
-  const [zipCode, setZipCode] = useState('');
-  const [country, setCountry] = useState('Kenya');
-
-  // Format Card Number (groups of 4 digits)
-  const handleCardNumberChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 16);
-    const parts = cleaned.match(/.{1,4}/g) || [];
-    setCardNumber(parts.join(' '));
-  };
-
-  // Format Expiration MM/YY
-  const handleExpiryChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 4);
-    if (cleaned.length >= 3) {
-      setExpiry(`${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}`);
-    } else {
-      setExpiry(cleaned);
-    }
-  };
-
-  // Format CVV
-  const handleCvvChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 4);
-    setCvv(cleaned);
-  };
-
-  const handleNext = () => {
-    const rawNum = cardNumber.replace(/\s+/g, '');
-    if (rawNum.length < 15) {
-      Alert.alert('Card number required', 'Please enter a valid 16-digit credit or debit card number.');
-      return;
-    }
-    if (expiry.length < 5) {
-      Alert.alert('Expiration date required', 'Please enter your card expiration date (MM/YY).');
-      return;
-    }
-    const [month] = expiry.split('/').map((s) => parseInt(s, 10));
-    if (isNaN(month) || month < 1 || month > 12) {
-      Alert.alert('Invalid expiration month', 'Expiration month must be between 01 and 12.');
-      return;
-    }
-    if (cvv.length < 3) {
-      Alert.alert('CVV required', 'Please enter the 3 or 4-digit security code (CVV) on the back of your card.');
-      return;
-    }
-
-    onConfirmPay({
-      cardNumber: rawNum,
-      expiry,
-      cvv,
-      cardholderName: streetAddress ? `Resident (${city || 'Kenya'})` : 'Cardholder',
-      streetAddress,
-      aptSuite,
-      city,
-      state,
-      zipCode,
-      country,
-    });
+  const handleConfirmMethod = async () => {
+    await onConfirmPay();
     onClose();
   };
 
@@ -131,167 +40,147 @@ export function CardPaymentModal({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        style={[styles.root, { backgroundColor: '#FFFFFF' }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <View style={styles.root}>
         {/* ── TOP HEADER NAV ── */}
         <View style={[styles.headerNav, { paddingTop: Platform.OS === 'ios' ? insets.top + 6 : 16 }]}>
           <View style={styles.headerLeftSpacer} />
-          <Text style={styles.headerTitle}>Add card details</Text>
+          <Text style={styles.headerTitle}>Secure card checkout</Text>
           <Pressable onPress={onClose} style={styles.headerCloseBtn} hitSlop={12}>
             <Feather name="x" size={22} color="#111111" />
           </Pressable>
         </View>
 
-        {/* ── SCROLLABLE FORM (Matching Screenshot 2 exactly) ── */}
+        {/* ── PCI-DSS SAQ-A HOSTED CHECKOUT SUMMARY ── */}
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: insets.bottom + 90 },
+            { paddingBottom: insets.bottom + 96 },
           ]}
         >
-          {/* 1. CARD NUMBER & EXPIRY / CVV GROUP */}
-          <View style={styles.groupedCardBox}>
-            {/* Row 1: Card Number */}
-            <View style={styles.inputRow}>
-              <TextInput
-                value={cardNumber}
-                onChangeText={handleCardNumberChange}
-                placeholder="Card number"
-                placeholderTextColor="#717171"
-                keyboardType="numeric"
-                style={styles.fieldInput}
-                autoFocus={true}
-              />
-            </View>
-
-            <View style={styles.groupDivider} />
-
-            {/* Row 2: Expiration | CVV */}
-            <View style={styles.splitRow}>
-              <View style={styles.splitColLeft}>
-                <TextInput
-                  value={expiry}
-                  onChangeText={handleExpiryChange}
-                  placeholder="Expiration"
-                  placeholderTextColor="#717171"
-                  keyboardType="numeric"
-                  maxLength={5}
-                  style={styles.fieldInput}
-                />
+          {/* 1. ORDER & NETWORKS SUMMARY CARD */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryHeaderRow}>
+              <View style={styles.lockIconWrap}>
+                <Feather name="lock" size={20} color="#059669" />
               </View>
-
-              <View style={styles.verticalDivider} />
-
-              <View style={styles.splitColRight}>
-                <TextInput
-                  value={cvv}
-                  onChangeText={handleCvvChange}
-                  placeholder="CVV"
-                  placeholderTextColor="#717171"
-                  keyboardType="numeric"
-                  secureTextEntry={true}
-                  maxLength={4}
-                  style={styles.fieldInput}
-                />
+              <View style={styles.summaryHeaderTextCol}>
+                <Text style={styles.summaryTitle}>Paystack Hosted Card Checkout</Text>
+                <Text style={styles.summarySub}>
+                  PCI-DSS Level 1 encrypted payment window
+                </Text>
               </View>
             </View>
-          </View>
 
-          {/* 2. BILLING ADDRESS SECTION TITLE */}
-          <Text style={styles.sectionHeading}>Billing address</Text>
+            {(experienceTitle || amount != null) ? (
+              <>
+                <View style={styles.cardDivider} />
+                <View style={styles.orderMetaCol}>
+                  {experienceTitle ? (
+                    <View style={styles.orderMetaRow}>
+                      <Text style={styles.orderMetaLabel}>Reservation</Text>
+                      <Text style={styles.orderMetaValue} numberOfLines={1}>
+                        {experienceTitle}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {amount != null ? (
+                    <View style={styles.orderMetaRow}>
+                      <Text style={styles.orderMetaLabel}>Amount to authorize</Text>
+                      <Text style={styles.orderMetaAmount}>
+                        KES {Number(amount).toLocaleString()}.00
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </>
+            ) : null}
 
-          {/* 3. BILLING ADDRESS GROUPED BOX */}
-          <View style={styles.groupedCardBox}>
-            {/* Row 1: Street address */}
-            <View style={styles.inputRow}>
-              <TextInput
-                value={streetAddress}
-                onChangeText={setStreetAddress}
-                placeholder="Street address"
-                placeholderTextColor="#717171"
-                style={styles.fieldInput}
-              />
-            </View>
+            <View style={styles.cardDivider} />
 
-            <View style={styles.groupDivider} />
+            {/* Supported Card Networks */}
+            <View style={styles.networksSection}>
+              <Text style={styles.networksLabel}>SUPPORTED NETWORKS</Text>
+              <View style={styles.badgesRow}>
+                <View style={styles.visaBadge}>
+                  <Text style={styles.visaBadgeText}>VISA</Text>
+                </View>
 
-            {/* Row 2: Apt or suite number */}
-            <View style={styles.inputRow}>
-              <TextInput
-                value={aptSuite}
-                onChangeText={setAptSuite}
-                placeholder="Apt or suite number"
-                placeholderTextColor="#717171"
-                style={styles.fieldInput}
-              />
-            </View>
+                <View style={styles.mcBadge}>
+                  <View style={styles.mcRedCircle} />
+                  <View style={styles.mcAmberCircle} />
+                  <Text style={styles.mcBadgeText}>Mastercard</Text>
+                </View>
 
-            <View style={styles.groupDivider} />
+                <View style={styles.verveBadge}>
+                  <Text style={styles.verveBadgeText}>Verve</Text>
+                </View>
 
-            {/* Row 3: City */}
-            <View style={styles.inputRow}>
-              <TextInput
-                value={city}
-                onChangeText={setCity}
-                placeholder="City"
-                placeholderTextColor="#717171"
-                style={styles.fieldInput}
-              />
-            </View>
-
-            <View style={styles.groupDivider} />
-
-            {/* Row 4: State | ZIP code */}
-            <View style={styles.splitRow}>
-              <View style={styles.splitColLeft}>
-                <TextInput
-                  value={state}
-                  onChangeText={setState}
-                  placeholder="State"
-                  placeholderTextColor="#717171"
-                  style={styles.fieldInput}
-                />
-              </View>
-
-              <View style={styles.verticalDivider} />
-
-              <View style={styles.splitColRight}>
-                <TextInput
-                  value={zipCode}
-                  onChangeText={setZipCode}
-                  placeholder="ZIP code"
-                  placeholderTextColor="#717171"
-                  keyboardType="numeric"
-                  style={styles.fieldInput}
-                />
+                <View style={styles.threeDsBadge}>
+                  <MaterialCommunityIcons name="shield-lock-outline" size={13} color="#059669" />
+                  <Text style={styles.threeDsBadgeText}>3D Secure</Text>
+                </View>
               </View>
             </View>
           </View>
 
-          {/* 4. COUNTRY / REGION DROPDOWN BOX */}
-          <View style={styles.countryDropdownContainer}>
-            <View style={styles.countryTextCol}>
-              <Text style={styles.countryLabel}>Country/region</Text>
-              <Text style={styles.countryValue}>{country}</Text>
+          {/* 2. HOW IT WORKS / SECURITY GUARANTEES */}
+          <Text style={styles.sectionHeading}>How secure card payment works</Text>
+
+          <View style={styles.stepsBox}>
+            <View style={styles.stepRow}>
+              <View style={styles.stepIconCircle}>
+                <Feather name="external-link" size={16} color="#222222" />
+              </View>
+              <View style={styles.stepTextCol}>
+                <Text style={styles.stepTitle}>Official Paystack checkout window</Text>
+                <Text style={styles.stepDesc}>
+                  When you tap Confirm and pay, a secure Paystack browser sheet opens so you enter your card directly with Paystack — ZuruSasa never sees or stores your card digits.
+                </Text>
+              </View>
             </View>
-            <Feather name="chevron-down" size={20} color="#222222" />
+
+            <View style={styles.groupDivider} />
+
+            <View style={styles.stepRow}>
+              <View style={styles.stepIconCircle}>
+                <Feather name="shield" size={16} color="#222222" />
+              </View>
+              <View style={styles.stepTextCol}>
+                <Text style={styles.stepTitle}>3D-Secure bank verification</Text>
+                <Text style={styles.stepDesc}>
+                  Complete Visa Secure or Mastercard Identity Check OTP verification with your issuing bank, then return automatically to ZuruSasa.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.groupDivider} />
+
+            <View style={styles.stepRow}>
+              <View style={[styles.stepIconCircle, styles.escrowIconCircle]}>
+                <MaterialCommunityIcons name="shield-check" size={18} color="#059669" />
+              </View>
+              <View style={styles.stepTextCol}>
+                <Text style={styles.stepTitle}>ZuruSasa Escrow Protection</Text>
+                <Text style={styles.stepDesc}>
+                  Your payment is held safely in escrow and is only released to the host after check-in.
+                </Text>
+              </View>
+            </View>
           </View>
         </ScrollView>
 
-        {/* ── STICKY BOTTOM ACTION BAR (Cancel on left, Next on right) ── */}
+        {/* ── STICKY BOTTOM ACTION BAR ── */}
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
           <Pressable onPress={onClose} style={styles.cancelBtn} hitSlop={12}>
             <Text style={styles.cancelBtnText}>Cancel</Text>
           </Pressable>
 
-          <Pressable onPress={handleNext} style={styles.nextBtn}>
-            <Text style={styles.nextBtnText}>Next</Text>
+          <Pressable onPress={handleConfirmMethod} style={styles.nextBtn}>
+            <Text style={styles.nextBtnText}>Use card checkout</Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -299,6 +188,7 @@ export function CardPaymentModal({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   headerNav: {
     flexDirection: 'row',
@@ -326,81 +216,209 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    gap: 16,
+    gap: 18,
   },
-  groupedCardBox: {
+  summaryCard: {
     borderWidth: 1,
-    borderColor: '#B0B0B0',
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    backgroundColor: '#FAFAFA',
+    padding: 16,
+    gap: 14,
   },
-  inputRow: {
-    paddingHorizontal: 14,
-    height: 52,
-    justifyContent: 'center',
-  },
-  fieldInput: {
-    fontSize: 15,
-    fontFamily: 'DMSans_400Regular',
-    color: '#222222',
-    height: '100%',
-  },
-  groupDivider: {
-    height: 1,
-    backgroundColor: '#E0E0E0',
-  },
-  splitRow: {
+  summaryHeaderRow: {
     flexDirection: 'row',
-    height: 52,
     alignItems: 'center',
+    gap: 12,
   },
-  splitColLeft: {
-    flex: 1,
-    paddingHorizontal: 14,
-    height: '100%',
+  lockIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  verticalDivider: {
-    width: 1,
-    height: '100%',
-    backgroundColor: '#E0E0E0',
-  },
-  splitColRight: {
+  summaryHeaderTextCol: {
     flex: 1,
-    paddingHorizontal: 14,
-    height: '100%',
-    justifyContent: 'center',
+    gap: 2,
   },
-  sectionHeading: {
-    fontSize: 18,
+  summaryTitle: {
+    fontSize: 16,
     fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-    marginTop: 8,
+    color: '#111827',
   },
-  countryDropdownContainer: {
-    borderWidth: 1,
-    borderColor: '#B0B0B0',
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+  summarySub: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    color: '#6B7280',
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  orderMetaCol: {
+    gap: 8,
+  },
+  orderMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
   },
-  countryTextCol: {
-    gap: 2,
-  },
-  countryLabel: {
-    fontSize: 11,
+  orderMetaLabel: {
+    fontSize: 13,
     fontFamily: 'DMSans_400Regular',
-    color: '#717171',
+    color: '#6B7280',
   },
-  countryValue: {
+  orderMetaValue: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 14,
+    fontFamily: 'DMSans_500Medium',
+    color: '#111827',
+  },
+  orderMetaAmount: {
     fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+    color: '#111827',
+  },
+  networksSection: {
+    gap: 8,
+  },
+  networksLabel: {
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
+    color: '#6B7280',
+    letterSpacing: 0.6,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+  },
+  visaBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  visaBadgeText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: '#1A1F71',
+    letterSpacing: 0.5,
+  },
+  mcBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    gap: 5,
+  },
+  mcRedCircle: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#EB001B',
+  },
+  mcAmberCircle: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#F79E1B',
+    marginLeft: -9,
+  },
+  mcBadgeText: {
+    fontSize: 12,
     fontFamily: 'DMSans_500Medium',
     color: '#222222',
+  },
+  verveBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  verveBadgeText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: '#00425F',
+  },
+  threeDsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  threeDsBadgeText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
+    color: '#059669',
+  },
+  sectionHeading: {
+    fontSize: 17,
+    fontFamily: 'DMSans_700Bold',
+    color: '#222222',
+    marginTop: 4,
+  },
+  stepsBox: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
+    gap: 12,
+  },
+  stepIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  escrowIconCircle: {
+    backgroundColor: '#ECFDF5',
+  },
+  stepTextCol: {
+    flex: 1,
+    gap: 3,
+  },
+  stepTitle: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+    color: '#111827',
+  },
+  stepDesc: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: 'DMSans_400Regular',
+    color: '#4B5563',
+  },
+  groupDivider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
   },
   bottomBar: {
     position: 'absolute',
@@ -429,7 +447,7 @@ const styles = StyleSheet.create({
   nextBtn: {
     backgroundColor: '#222222',
     paddingVertical: 13,
-    paddingHorizontal: 30,
+    paddingHorizontal: 24,
     borderRadius: 8,
   },
   nextBtnText: {

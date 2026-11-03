@@ -31,4 +31,11 @@ verify_jwt = false
 [functions.zuru-ai]
 verify_jwt = false
 
+[functions.redis-cache]
+verify_jwt = false
 
+[functions.send-email]
+verify_jwt = true
+
+[functions.dispatch-notification]
+verify_jwt = true

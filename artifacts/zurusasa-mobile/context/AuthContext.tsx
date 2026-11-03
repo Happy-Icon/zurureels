@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -260,23 +261,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (session?.user) await loadProfile(session.user.id, session.user);
   }, [session, loadProfile]);
 
+  const contextValue = useMemo<AuthContextValue>(
+    () => ({
+      session,
+      user,
+      profile,
+      loading,
+      role,
+      viewMode,
+      switchViewMode,
+      hasPass,
+      sendOtp,
+      verifyOtp,
+      signOut,
+      refreshProfile,
+    }),
+    [
+      session,
+      user,
+      profile,
+      loading,
+      role,
+      viewMode,
+      switchViewMode,
+      hasPass,
+      sendOtp,
+      verifyOtp,
+      signOut,
+      refreshProfile,
+    ]
+  );
+
   return (
-    <AuthContext.Provider
-      value={{
-        session,
-        user,
-        profile,
-        loading,
-        role,
-        viewMode,
-        switchViewMode,
-        hasPass,
-        sendOtp,
-        verifyOtp,
-        signOut,
-        refreshProfile,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

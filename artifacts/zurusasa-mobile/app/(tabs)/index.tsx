@@ -18,6 +18,7 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useIsFocused } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { ZuruPlanHub } from '@/components/plan/ZuruPlanHub';
 import { HostDashboard } from '@/components/host/HostDashboard';
 import { ReelCard } from '@/components/ReelCard';
 import { CenteredState } from '@/components/Skeleton';
@@ -62,41 +63,28 @@ function ZuruFlowFeed() {
   const pillOpacity = useRef(new Animated.Value(0)).current;
 
   const flatListZuruRef = useRef<FlatList<ReelRow>>(null);
-  const flatListAroundRef = useRef<FlatList<ReelRow>>(null);
-
   // Active Stream: 'zuruflow' (left, 0) <--> 'around' (right, -width)
-  const [feedStream, setFeedStream] = useState<'zuruflow' | 'around'>('zuruflow');
+  const [feedStream, setFeedStream] = useState<'zuruflow' | 'zuruplan'>('zuruflow');
   const [activeIndexZuru, setActiveIndexZuru] = useState<number>(0);
-  const [activeIndexAround, setActiveIndexAround] = useState<number>(0);
   const { markInteractive } = useObserve();
 
   // Tab Center Positions for Sliding Indicator
-  const [tabX, setTabX] = useState({ zuruflow: 24, around: 124 });
+  const [tabX, setTabX] = useState({ zuruflow: 24, zuruplan: 124 });
 
   // Animated Horizontal Position (0 = ZuruFlow, -width = Around You) & Pull-to-Refresh Y
   const animX = useRef(new Animated.Value(0)).current;
   const pullY = useRef(new Animated.Value(0)).current;
-  const currentStreamRef = useRef<'zuruflow' | 'around'>('zuruflow');
+  const currentStreamRef = useRef<'zuruflow' | 'zuruplan'>('zuruflow');
   currentStreamRef.current = feedStream;
 
   const isRefreshingRef = useRef<boolean>(false);
   isRefreshingRef.current = isRefreshing;
 
   const scrollOffsetZuruRef = useRef<number>(0);
-  const scrollOffsetAroundRef = useRef<number>(0);
   const gestureMode = useRef<'none' | 'horizontal' | 'pulldown'>('none');
 
   // Curate streams: ZuruFlow has AI-personalized candidate reels; Around You highlights localized stays & activities
   const zuruReels = useMemo(() => reels ?? [], [reels]);
-  const aroundReels = useMemo(() => {
-    if (!reels || reels.length === 0) return [];
-    const localized = reels.filter((r) => Boolean(r.experience?.location));
-    const withoutLocation = reels.filter((r) => !r.experience?.location);
-    return [...localized.slice().reverse(), ...withoutLocation];
-  }, [reels]);
-
-
-
   // Clean, Wordless Premium Refresh: Shows ONLY the bouncing wave dots, rotates feed, scrolls to top
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) return;
@@ -120,10 +108,7 @@ function ZuruFlowFeed() {
     ]).start();
 
     try {
-      const activeReelId =
-        currentStreamRef.current === 'zuruflow'
-          ? (zuruReels[activeIndexZuru]?.id ?? zuruReels[0]?.id)
-          : (aroundReels[activeIndexAround]?.id ?? aroundReels[0]?.id);
+      const activeReelId = zuruReels[activeIndexZuru]?.id ?? zuruReels[0]?.id;
 
       await refreshReels(activeReelId);
 
@@ -132,10 +117,6 @@ function ZuruFlowFeed() {
         flatListZuruRef.current?.scrollToOffset({ offset: 0, animated: false });
         scrollOffsetZuruRef.current = 0;
         setActiveIndexZuru(0);
-      } else {
-        flatListAroundRef.current?.scrollToOffset({ offset: 0, animated: false });
-        scrollOffsetAroundRef.current = 0;
-        setActiveIndexAround(0);
       }
     } catch (err) {
       console.warn('Error refreshing reels:', err);
@@ -158,7 +139,7 @@ function ZuruFlowFeed() {
         });
       }, 400);
     }
-  }, [isRefreshing, refreshReels, pillAnimY, pillOpacity, activeIndexZuru, activeIndexAround, zuruReels, aroundReels]);
+  }, [isRefreshing, refreshReels, pillAnimY, pillOpacity, activeIndexZuru, zuruReels]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -179,7 +160,7 @@ function ZuruFlowFeed() {
 
   // Smooth programmatic switch between ZuruFlow and Around You (tapping active tab triggers refresh)
   const switchStream = useCallback(
-    (stream: 'zuruflow' | 'around') => {
+    (stream: 'zuruflow' | 'zuruplan') => {
       // Tap active tab to refresh & scroll to top (TikTok-style)
       if (stream === currentStreamRef.current) {
         handleRefresh();
@@ -210,11 +191,11 @@ function ZuruFlowFeed() {
         const currentOffset =
           currentStreamRef.current === 'zuruflow'
             ? scrollOffsetZuruRef.current
-            : scrollOffsetAroundRef.current;
+            : 0;
         const isAtTop =
-          (currentStreamRef.current === 'zuruflow'
-            ? activeIndexZuru === 0
-            : activeIndexAround === 0) && currentOffset <= 8;
+          currentStreamRef.current === 'zuruflow' &&
+          activeIndexZuru === 0 &&
+          currentOffset <= 8;
 
         const isPullDown =
           isAtTop &&
@@ -240,11 +221,11 @@ function ZuruFlowFeed() {
         const currentOffset =
           currentStreamRef.current === 'zuruflow'
             ? scrollOffsetZuruRef.current
-            : scrollOffsetAroundRef.current;
+            : 0;
         const isAtTop =
-          (currentStreamRef.current === 'zuruflow'
-            ? activeIndexZuru === 0
-            : activeIndexAround === 0) && currentOffset <= 8;
+          currentStreamRef.current === 'zuruflow' &&
+          activeIndexZuru === 0 &&
+          currentOffset <= 8;
 
         const isPullDown =
           isAtTop &&
@@ -291,7 +272,7 @@ function ZuruFlowFeed() {
           const isZuru = currentStreamRef.current === 'zuruflow';
           // Swipe Left from ZuruFlow -> go to Around You
           if (isZuru && (gestureState.dx < -32 || gestureState.vx < -0.22)) {
-            switchStream('around');
+            switchStream('zuruplan');
           }
           // Swipe Right from Around You -> go to ZuruFlow
           else if (!isZuru && (gestureState.dx > 32 || gestureState.vx > 0.22)) {
@@ -355,14 +336,6 @@ function ZuruFlowFeed() {
     }
   );
 
-  const onViewableItemsChangedAround = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      const first = viewableItems[0];
-      if (first && typeof first.index === 'number') {
-        setActiveIndexAround(first.index);
-      }
-    }
-  );
 
   const renderItemZuru = useCallback(
     ({ item, index }: { item: ReelRow; index: number }) => (
@@ -376,22 +349,11 @@ function ZuruFlowFeed() {
     [activeIndexZuru, pageHeight, isFocused, interactionsMap, feedStream]
   );
 
-  const renderItemAround = useCallback(
-    ({ item, index }: { item: ReelRow; index: number }) => (
-      <ReelCard
-        reel={item}
-        isActive={isFocused && feedStream === 'around' && index === activeIndexAround}
-        height={pageHeight}
-        prefetchInteractions={interactionsMap?.[item.id]}
-      />
-    ),
-    [activeIndexAround, pageHeight, isFocused, interactionsMap, feedStream]
-  );
 
   // Tab Indicator translation smoothly tracks animX
   const indicatorTranslateX = animX.interpolate({
     inputRange: [-width, 0],
-    outputRange: [tabX.around, tabX.zuruflow],
+    outputRange: [tabX.zuruplan, tabX.zuruflow],
     extrapolate: 'clamp',
   });
 
@@ -426,20 +388,23 @@ function ZuruFlowFeed() {
           </Pressable>
 
           <Pressable
-            testID="top-tab-around"
-            onPress={() => switchStream('around')}
+            testID="top-tab-zuruplan"
+            onPress={() => switchStream('zuruplan')}
             hitSlop={12}
             onLayout={(e) => {
               const { x, width: w } = e.nativeEvent.layout;
-              setTabX((prev) => ({ ...prev, around: x + (w - 28) / 2 }));
+              setTabX((prev) => ({ ...prev, zuruplan: x + (w - 28) / 2 }));
             }}
             style={({ pressed }) => [
               styles.tabItem,
               { transform: [{ scale: pressed ? 0.95 : 1 }] },
             ]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: feedStream === 'zuruplan' }}
+            accessibilityLabel="ZuruPlan trip planning workspace"
           >
-            <Text style={feedStream === 'around' ? styles.tabActive : styles.tabInactive}>
-              Around You
+            <Text style={feedStream === 'zuruplan' ? styles.tabActive : styles.tabInactive}>
+              ZuruPlan
             </Text>
           </Pressable>
 
@@ -574,38 +539,9 @@ function ZuruFlowFeed() {
           />
         </View>
 
-        {/* Stream 1: Around You Vertical Reel Feed */}
-        <View style={{ width, height: pageHeight }}>
-          <FlatList
-            ref={flatListAroundRef}
-            testID="reels-feed-around"
-            data={aroundReels}
-            keyExtractor={(item) => `around-${item.id}`}
-            renderItem={renderItemAround}
-            pagingEnabled
-            showsVerticalScrollIndicator={false}
-            snapToInterval={pageHeight}
-            decelerationRate="fast"
-            onViewableItemsChanged={onViewableItemsChangedAround.current}
-            viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
-            getItemLayout={(_, index) => ({
-              length: pageHeight,
-              offset: pageHeight * index,
-              index,
-            })}
-            windowSize={3}
-            maxToRenderPerBatch={2}
-            initialNumToRender={1}
-            scrollEventThrottle={16}
-            onScroll={(e) => {
-              scrollOffsetAroundRef.current = e.nativeEvent.contentOffset.y;
-            }}
-            onScrollEndDrag={(e) => {
-              if (e.nativeEvent.contentOffset.y < -35 && activeIndexAround === 0) {
-                handleRefresh();
-              }
-            }}
-          />
+        {/* Stream 1: ZuruPlan Dedicated Trip Workspace */}
+        <View testID="zuruplan-stream-workspace" style={{ width, height: pageHeight }}>
+          <ZuruPlanHub />
         </View>
       </Animated.View>
 

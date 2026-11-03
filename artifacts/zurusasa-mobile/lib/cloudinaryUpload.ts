@@ -3,8 +3,8 @@
  * Uploads media files directly to Cloudinary using unsigned upload preset.
  */
 
-const CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dwcuyxujd';
-const UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'zurusasa';
+const CLOUD_NAME = (process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ?? '').trim();
+const UPLOAD_PRESET = (process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? '').trim();
 
 export interface CloudinaryUploadResult {
   secure_url: string;
@@ -21,8 +21,14 @@ export async function uploadToCloudinaryMobile(
     resourceType?: 'video' | 'image' | 'auto';
     folder?: string;
     onProgress?: (percent: number) => void;
-  }
+  },
 ): Promise<CloudinaryUploadResult> {
+  if (!CLOUD_NAME || !UPLOAD_PRESET) {
+    throw new Error(
+      'Cloudinary upload is not configured. Set EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME and EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET in your environment.',
+    );
+  }
+
   const isVideo = options?.resourceType === 'video' || !!localUri.match(/\.(mp4|mov|avi|mkv|webm)/i);
   const resourceType = isVideo ? 'video' : 'image';
   const folder = options?.folder || 'reels';
@@ -71,7 +77,7 @@ export async function uploadToCloudinaryMobile(
           duration: response.duration,
           format: response.format,
         });
-      } catch (e) {
+      } catch {
         reject(new Error('Failed to parse Cloudinary response'));
       }
     });

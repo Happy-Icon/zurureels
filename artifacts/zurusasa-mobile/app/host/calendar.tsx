@@ -121,11 +121,12 @@ export default function HostCalendarScreen() {
   const bottomPad = Platform.OS === 'web' ? 100 : insets.bottom + 40;
 
   const monthStartDate = useMemo(() => {
-    return new Date(currentYear, currentMonth, 1).toISOString();
+    return formatDateISO(currentYear, currentMonth, 1);
   }, [currentYear, currentMonth]);
 
   const monthEndDate = useMemo(() => {
-    return new Date(currentYear, currentMonth + 1, 0, 23, 59, 59).toISOString();
+    const lastDay = getDaysInMonth(currentYear, currentMonth);
+    return formatDateISO(currentYear, currentMonth, lastDay);
   }, [currentYear, currentMonth]);
 
   // Data Queries

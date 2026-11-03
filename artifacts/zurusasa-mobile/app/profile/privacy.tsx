@@ -19,6 +19,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
+import { Skeleton } from '@/components/Skeleton';
 
 export default function PrivacySettingsScreen() {
   const colors = useColors();
@@ -160,7 +161,12 @@ export default function PrivacySettingsScreen() {
         </Text>
 
         {loading ? (
-          <ActivityIndicator size="small" color={colors.text} style={{ marginTop: 40 }} />
+          <View style={{ gap: 16, marginTop: 24 }}>
+            <Skeleton style={{ height: 28, width: 140, borderRadius: 6 }} />
+            <Skeleton style={{ height: 60, width: '100%', borderRadius: 12 }} />
+            <Skeleton style={{ height: 60, width: '100%', borderRadius: 12 }} />
+            <Skeleton style={{ height: 60, width: '100%', borderRadius: 12 }} />
+          </View>
         ) : (
           <View style={styles.sectionsBlock}>
             {/* ── SECTION 1: MESSAGES ───────────────────────────────────────── */}

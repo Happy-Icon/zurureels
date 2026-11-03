@@ -19,6 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { notificationService } from '@/services/notificationService';
+import { Skeleton } from '@/components/Skeleton';
 
 interface ChannelPrefs {
   email: boolean;
@@ -240,7 +241,12 @@ export default function NotificationPreferencesScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="small" color={colors.text} style={{ marginTop: 40 }} />
+          <View style={{ gap: 16, marginTop: 24 }}>
+            <Skeleton style={{ height: 28, width: 180, borderRadius: 6 }} />
+            <Skeleton style={{ height: 60, width: '100%', borderRadius: 12 }} />
+            <Skeleton style={{ height: 60, width: '100%', borderRadius: 12 }} />
+            <Skeleton style={{ height: 60, width: '100%', borderRadius: 12 }} />
+          </View>
         ) : activeTab === 'offers' ? (
           /* ── TAB 1: OFFERS AND UPDATES ───────────────────────────────────── */
           <View style={styles.tabContentBlock}>
