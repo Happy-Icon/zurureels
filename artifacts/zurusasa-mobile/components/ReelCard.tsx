@@ -51,6 +51,15 @@ function ActiveReelPlayer({
   isPlaying,
   setIsPlaying,
 }: ActiveReelPlayerProps) {
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const player = useVideoPlayer(videoUrl, (p) => {
     p.loop = true;
     p.muted = muted;
@@ -61,16 +70,31 @@ function ActiveReelPlayer({
   });
 
   useEffect(() => {
-    setIsPlaying(eventState.isPlaying);
+    if (isMountedRef.current) {
+      setIsPlaying(eventState.isPlaying);
+    }
   }, [eventState.isPlaying, setIsPlaying]);
 
   useEffect(() => {
     if (!videoUrl) return;
-    player.muted = muted;
-    if (shouldPlay) {
-      player.play();
-    } else {
+    try {
+      player.muted = muted;
+      if (shouldPlay) {
+        player.play();
+      } else {
+        player.pause();
       }
+    } catch (err) {
+      console.warn('[ActiveReelPlayer] Playback toggle error:', err);
+    }
+
+    return () => {
+      try {
+        player.pause();
+      } catch {
+        // Player disposed safely
+      }
+    };
   }, [shouldPlay, muted, player, videoUrl]);
 
   return (

@@ -237,7 +237,14 @@ function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
+      <ErrorBoundary
+        onError={(error, componentStack) => {
+          console.error('[RootErrorBoundary] Unhandled rendering error caught:', error, componentStack);
+          try {
+            Sentry.captureException(error, { extra: { componentStack } });
+          } catch {}
+        }}
+      >
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
             <AuthProvider>

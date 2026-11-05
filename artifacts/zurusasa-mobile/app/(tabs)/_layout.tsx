@@ -29,8 +29,8 @@ function CustomBottomTabBar({ state, descriptors, navigation }: TabsTabBarProps)
   const bottomPad = Platform.OS === 'web' ? 8 : Math.max(insets.bottom, 6);
   const { data: unreadCount = 0 } = useUnreadMessageCount(user?.id);
 
-  const focusedRoute = state.routes[state.index];
-  const isOverVideo = !isHostMode && focusedRoute.name === 'index';
+  const focusedRoute = state?.routes?.[state?.index ?? 0];
+  const isOverVideo = !isHostMode && focusedRoute?.name === 'index';
 
   // Dynamic allowed routes per authentication and mode
   // LOGGED OUT: 3 tabs (Home, Discover, Log In)
@@ -66,7 +66,9 @@ function CustomBottomTabBar({ state, descriptors, navigation }: TabsTabBarProps)
         {state.routes.map((route: any, index: number) => {
           if (!allowedRoutes.includes(route.name)) return null;
 
-          const { options } = descriptors[route.key];
+          const descriptor = descriptors?.[route?.key];
+          if (!descriptor) return null;
+          const options = descriptor.options || {};
           const isFocused = state.index === index;
 
           const isInboxTab = route.name === 'inbox';
@@ -83,7 +85,7 @@ function CustomBottomTabBar({ state, descriptors, navigation }: TabsTabBarProps)
             });
 
             if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
+              navigation.navigate(route.name, undefined, { merge: true });
             }
           };
 

@@ -85,12 +85,16 @@ export const personaVerificationService = {
           ? PersonaSDK.Environment.PRODUCTION
           : PersonaSDK.Environment.SANDBOX;
 
+      let invokeErrorMessage: string | null = null;
       try {
         const { data, error } = await supabase.functions.invoke('create-persona-inquiry', {
           body: { userId },
         });
 
-        if (!error && data) {
+        if (error) {
+          invokeErrorMessage = error?.message || 'Could not initiate identity verification session.';
+          console.warn('[Persona] create-persona-inquiry error:', error);
+        } else if (data) {
           if (data.inquiryId) serverInquiryId = data.inquiryId;
           if (data.sessionToken) sessionToken = data.sessionToken;
           if (data.templateId) templateId = data.templateId;
@@ -98,7 +102,8 @@ export const personaVerificationService = {
             environment = PersonaSDK.Environment.PRODUCTION;
           }
         }
-      } catch (fnErr) {
+      } catch (fnErr: any) {
+        invokeErrorMessage = fnErr?.message || 'Network error connecting to verification service.';
         console.warn('Notice from create-persona-inquiry function:', fnErr);
       }
 
@@ -109,15 +114,13 @@ export const personaVerificationService = {
         inquiryBuilder = PersonaSDK.Inquiry.fromInquiry(serverInquiryId)
           .sessionToken(sessionToken);
       } else {
-        if (!templateId || !templateId.startsWith('itmpl_')) {
-          const cfgErr = 'Identity verification template is not configured.';
-          console.error('[Persona]', cfgErr);
-          onError?.(cfgErr);
-          return;
-        }
-        inquiryBuilder = PersonaSDK.Inquiry.fromTemplate(templateId)
-          .environment(environment)
-          .referenceId(userId);
+        // Fail securely: client-side fromTemplate without server session is rejected by Persona with 403 Forbidden.
+        const failureMessage =
+          invokeErrorMessage ||
+          'Could not establish a secure verification session. Please try again in a few moments.';
+        console.error('[Persona]', failureMessage);
+        onError?.(failureMessage);
+        return;
       }
 
       // 3. Attach Persona callbacks (fail-closed server verification)
@@ -184,8 +187,11 @@ export const personaVerificationService = {
           onCanceled?.();
         })
         .onError((error: any) => {
-          const message = error?.message || 'An error occurred during identity verification.';
           console.error('Persona SDK runtime error:', error);
+          let message = error?.message || 'An error occurred during identity verification.';
+          if (typeof message === 'string' && message.toLowerCase().includes('forbidden')) {
+            message = 'Verification session was not authorized or expired. Please tap Start again.';
+          }
           onError?.(message);
         });
 

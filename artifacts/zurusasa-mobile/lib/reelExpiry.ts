@@ -1,8 +1,8 @@
-// Mirrors the web app's utils/reelExpiry.ts: reels are valid for 90 days.
-// 0-45 days: "Posted X days ago" · 46-90: "X days left to expire" (urgent) · 90+: "Expired".
+// Reels are valid for exactly 15 days.
+// 0-10 days: "Posted X days ago" (or "Posted today") · 11-15: "X days left to expire" (urgent) · 15+: "Expired".
 
-export const REEL_VALIDITY_DAYS = 90;
-const URGENT_AFTER_DAYS = 45;
+export const REEL_VALIDITY_DAYS = 15;
+const URGENT_AFTER_DAYS = 10;
 
 export interface ReelExpiryDisplay {
   label: string;

@@ -2,7 +2,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
 
-const REEL_VALIDITY_DAYS = 90;
+const REEL_VALIDITY_DAYS = 15;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

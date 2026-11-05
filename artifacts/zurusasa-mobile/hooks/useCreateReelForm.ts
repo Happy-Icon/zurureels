@@ -312,6 +312,7 @@ export function useCreateReelForm() {
           duration: 20,
           status: 'published',
           processing_status: 'completed',
+          expires_at: new Date(Date.now() + 15 * 86_400_000).toISOString(),
         })
         .select()
         .single();

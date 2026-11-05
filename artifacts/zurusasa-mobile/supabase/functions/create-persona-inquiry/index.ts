@@ -48,7 +48,12 @@ Deno.serve(async (request) => {
     'sandbox';
   const environment = rawEnv.toLowerCase().trim() === 'production' ? 'production' : 'sandbox';
 
-  const personaApiKey = Deno.env.get('PERSONA_API_KEY');
+  const personaApiKey = Deno.env.get('PERSONA_API_KEY')?.trim();
+  if (!personaApiKey) {
+    console.error('[CreatePersonaInquiry] PERSONA_API_KEY is not configured in Supabase secrets');
+    return json({ error: 'Persona API key is not configured' }, 503);
+  }
+
   const adminClient = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 
   const { data: profile } = await adminClient
@@ -60,7 +65,47 @@ Deno.serve(async (request) => {
   let inquiryId: string | null = null;
   let sessionToken: string | null = null;
 
-  if (personaApiKey) {
+  const headers = {
+    Authorization: `Bearer ${personaApiKey}`,
+    'Persona-Version': '2023-01-05',
+    'Content-Type': 'application/json',
+    'Key-Inflection': 'camel',
+  };
+
+  // Helper function to resume an existing inquiry and extract its session token
+  async function tryResumeInquiry(id: string): Promise<string | null> {
+    try {
+      const resumeRes = await fetch(`https://withpersona.com/api/v1/inquiries/${encodeURIComponent(id)}/resume`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      if (resumeRes.ok) {
+        const resumeJson = await resumeRes.json();
+        return (
+          resumeJson?.meta?.['session-token'] ||
+          resumeJson?.meta?.sessionToken ||
+          resumeJson?.data?.attributes?.sessionToken ||
+          null
+        );
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  // 1. Try to resume existing pending inquiry if available
+  if (profile?.persona_inquiry_id && profile.persona_inquiry_id.startsWith('inq_')) {
+    const existingToken = await tryResumeInquiry(profile.persona_inquiry_id);
+    if (existingToken) {
+      inquiryId = profile.persona_inquiry_id;
+      sessionToken = existingToken;
+    }
+  }
+
+  // 2. If no existing inquiry could be resumed, create a new inquiry
+  if (!inquiryId || !sessionToken) {
     try {
       const fullName = (profile?.full_name || user.user_metadata?.full_name || '').trim();
       const parts = fullName.split(/\s+/);
@@ -69,7 +114,6 @@ Deno.serve(async (request) => {
       const email = profile?.email || user.email || '';
       const phone = profile?.phone || user.phone || '';
 
-      const personaEndpoint = 'https://withpersona.com/api/v1/inquiries';
       const personaPayload: any = {
         data: {
           attributes: {
@@ -89,35 +133,53 @@ Deno.serve(async (request) => {
         personaPayload.data.attributes.fields = fields;
       }
 
-      const res = await fetch(personaEndpoint, {
+      const res = await fetch('https://withpersona.com/api/v1/inquiries', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${personaApiKey}`,
-          'Persona-Version': '2023-01-05',
-          'Content-Type': 'application/json',
-          'Key-Inflection': 'camel',
-        },
+        headers,
         body: JSON.stringify(personaPayload),
       });
 
-      if (res.ok) {
-        const jsonRes = await res.json();
-        inquiryId = jsonRes?.data?.id || null;
-        sessionToken = jsonRes?.data?.attributes?.sessionToken || null;
-      } else {
+      if (!res.ok) {
         const errText = await res.text();
-        console.warn('Persona API inquiry creation notice:', errText);
+        console.error('[CreatePersonaInquiry] Persona API creation failed:', res.status, errText);
+        return json({
+          error: `Persona API inquiry creation failed (${res.status}): ${errText}`,
+          statusCode: res.status,
+        }, 502);
       }
-    } catch (err) {
-      console.warn('Persona REST call error:', err);
+
+      const jsonRes = await res.json();
+      inquiryId = jsonRes?.data?.id || null;
+
+      // Extract session token from creation response or explicitly resume
+      sessionToken =
+        jsonRes?.meta?.['session-token'] ||
+        jsonRes?.meta?.sessionToken ||
+        jsonRes?.data?.attributes?.sessionToken ||
+        null;
+
+      if (inquiryId && !sessionToken) {
+        sessionToken = await tryResumeInquiry(inquiryId);
+      }
+    } catch (err: any) {
+      console.error('[CreatePersonaInquiry] Unexpected error:', err);
+      return json({ error: err?.message || 'Failed to contact Persona service' }, 502);
     }
   }
 
+  if (!inquiryId || !sessionToken) {
+    return json({
+      error: 'Could not generate a valid Persona verification session token.',
+      inquiryId,
+    }, 502);
+  }
+
+  // Update profile to record pending state with newly verified inquiryId
   await adminClient
     .from('profiles')
     .update({
       verification_status: 'pending',
-      persona_inquiry_id: inquiryId || profile?.persona_inquiry_id || null,
+      persona_inquiry_id: inquiryId,
       verification_updated_at: new Date().toISOString(),
     })
     .eq('id', user.id);
