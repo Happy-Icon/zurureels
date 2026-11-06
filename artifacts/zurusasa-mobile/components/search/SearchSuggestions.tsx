@@ -14,7 +14,7 @@ import { useTheme } from '@/context/ThemeContext';
 
 interface SearchSuggestionsProps {
   recentSearches: RecentSearchItem[];
-  popularDestinations: Array<{ id: string; name: string; count: string; image: string }>;
+  popularDestinations: Array<{ id: string; name: string; region?: string; count?: string; image: string }>;
   trendingTags: string[];
   onSelectQuery: (query: string) => void;
   onSelectCity: (city: string) => void;
@@ -107,7 +107,9 @@ export function SearchSuggestions({
               <Image source={{ uri: dest.image }} style={styles.destImage} contentFit="cover" />
               <View style={styles.destInfo}>
                 <Text style={[styles.destName, { color: colors.text }]}>{dest.name}</Text>
-                <Text style={[styles.destCount, { color: colors.mutedForeground }]}>{dest.count}</Text>
+                {dest.region ? (
+                  <Text style={[styles.destRegion, { color: colors.mutedForeground }]}>{dest.region}</Text>
+                ) : null}
               </View>
             </Pressable>
           ))}
@@ -203,7 +205,7 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_700Bold',
     color: '#222222',
   },
-  destCount: {
+  destRegion: {
     fontSize: 12,
     fontFamily: 'DMSans_400Regular',
     color: '#717171',

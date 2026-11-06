@@ -21,7 +21,27 @@ import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { zuruAIService } from '@/services/zuruAIService';
 import { zuruPlanService } from '@/services/zuruPlanService';
-import type { CoastalDestinationId, ExperienceRow, TripPlan, TripPreferences } from '@/types/zuruPlan';
+import { distillCardsForHistory } from '@/services/aiConversationService';
+import {
+  DESTINATIONS,
+  type BudgetTier,
+  type CoastalDestinationId,
+  type DestinationId,
+  type ExperienceRow,
+  type InterestTag,
+  type TripPlan,
+  type TripPreferences,
+} from '@/types/zuruPlan';
+
+import {
+  type ExtractedTripConstraints,
+  parseConstraintsFromConversation,
+} from '@/services/zuruPlanService';
+
+export {
+  type ExtractedTripConstraints,
+  parseConstraintsFromConversation,
+};
 
 interface AgentChatMessage {
   id: string;
@@ -49,6 +69,18 @@ export default function ConversationalPlanAgentScreen() {
   const [isThinking, setIsThinking] = useState(false);
   const [aiStatusText, setAiStatusText] = useState('');
   const [dynamicPrompts, setDynamicPrompts] = useState<string[]>(QUICK_PROMPTS);
+  const [constraints, setConstraints] = useState<ExtractedTripConstraints>({
+    destinationId: 'diani',
+    destinationName: 'Diani Beach',
+    durationDays: 3,
+    adultsCount: 2,
+    childrenCount: 0,
+    budgetTier: 'comfort',
+    dietaryRestrictions: [],
+    pace: 'moderate',
+    interests: ['beaches', 'dhow_cruises', 'seafood_dining'],
+    exclusions: [],
+  });
   const [extractedGuestCount, setExtractedGuestCount] = useState<number>(2);
   const [extractedDuration, setExtractedDuration] = useState<number>(3);
   const [messages, setMessages] = useState<AgentChatMessage[]>([
@@ -63,6 +95,33 @@ export default function ConversationalPlanAgentScreen() {
   const [currentDestination, setCurrentDestination] = useState<CoastalDestinationId>('diani');
   const [candidateExperiences, setCandidateExperiences] = useState<ExperienceRow[]>([]);
   const flatListRef = useRef<FlatList>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const deltaBufferRef = useRef<string>('');
+  const throttleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushDeltaBuffer = (msgId: string) => {
+    if (!deltaBufferRef.current) return;
+    const incoming = deltaBufferRef.current;
+    deltaBufferRef.current = '';
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msgId ? { ...m, text: m.text + incoming } : m))
+    );
+    flatListRef.current?.scrollToEnd({ animated: false });
+  };
+
+  const handleStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (throttleTimerRef.current) {
+      clearTimeout(throttleTimerRef.current);
+      throttleTimerRef.current = null;
+    }
+    deltaBufferRef.current = '';
+    setIsThinking(false);
+    setAiStatusText('');
+  };
 
   // Load candidate experiences on mount
   useEffect(() => {
@@ -97,62 +156,59 @@ export default function ConversationalPlanAgentScreen() {
     setIsThinking(true);
     setAiStatusText('Understanding your travel request…');
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     const history = messages
       .filter((m) => m.id !== 'welcome_1' && m.text.length > 0)
-      .map((m) => ({
-        role: m.sender === 'user' ? ('user' as const) : ('assistant' as const),
-        content: m.text,
-      }));
+      .slice(-12)
+      .map((m) => {
+        let content = m.text;
+        if (m.sender === 'agent' && m.suggestedExperiences && m.suggestedExperiences.length > 0) {
+          content += distillCardsForHistory(m.suggestedExperiences);
+        }
+        return {
+          role: m.sender === 'user' ? ('user' as const) : ('assistant' as const),
+          content,
+        };
+      });
 
     try {
       const response = await zuruAIService.discover(trimmed, {
         history,
         stream: true,
+        signal: controller.signal,
         onStatusChange: (status) => {
           setAiStatusText(status.text);
         },
         onTextDelta: (delta) => {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === agentMsgId ? { ...m, text: m.text + delta } : m))
-          );
-          flatListRef.current?.scrollToEnd({ animated: false });
+          deltaBufferRef.current += delta;
+          if (!throttleTimerRef.current) {
+            throttleTimerRef.current = setTimeout(() => {
+              throttleTimerRef.current = null;
+              flushDeltaBuffer(agentMsgId);
+            }, 50);
+          }
         },
       });
 
-      // Analyze destination from AI criteria or text
-      const lower = (response.criteria?.location || trimmed).toLowerCase();
-      let dest: CoastalDestinationId = currentDestination;
-      let destName = 'Diani Beach';
-      if (lower.includes('lamu')) {
-        dest = 'lamu';
-        destName = 'Lamu Island';
-      } else if (lower.includes('watamu')) {
-        dest = 'watamu';
-        destName = 'Watamu & Malindi';
-      } else if (lower.includes('kilifi')) {
-        dest = 'kilifi';
-        destName = 'Kilifi Creek';
-      } else if (lower.includes('mombasa') || lower.includes('nyali')) {
-        dest = 'mombasa';
-        destName = 'Mombasa Old Town';
-      } else if (lower.includes('nairobi')) {
-        dest = 'nairobi';
-        destName = 'Nairobi Safari Hub';
-      } else {
-        dest = 'diani';
-        destName = 'Diani Beach';
+      if (throttleTimerRef.current) {
+        clearTimeout(throttleTimerRef.current);
+        throttleTimerRef.current = null;
       }
-      setCurrentDestination(dest);
+      flushDeltaBuffer(agentMsgId);
 
-      // Extract duration or guests if specified
-      if (response.criteria?.guests && response.criteria.guests > 0) {
-        setExtractedGuestCount(response.criteria.guests);
-      }
-      const durMatch = trimmed.match(/(\d+)\s*(?:day|days|night|nights)/i);
-      if (durMatch) {
-        const days = parseInt(durMatch[1], 10);
-        if (days >= 1 && days <= 14) setExtractedDuration(days);
-      }
+      // Extract comprehensive constraints from conversational dialogue and AI criteria (REM-03)
+      const nextConstraints = parseConstraintsFromConversation(trimmed, constraints, response.criteria);
+      setConstraints(nextConstraints);
+      setCurrentDestination(nextConstraints.destinationId as CoastalDestinationId);
+      setExtractedGuestCount(nextConstraints.adultsCount + nextConstraints.childrenCount);
+      setExtractedDuration(nextConstraints.durationDays);
+
+      const destName = nextConstraints.destinationName;
 
       // Convert AI listing cards to real ExperienceRow objects
       const realCards: ExperienceRow[] = (response.cards || [])
@@ -175,7 +231,7 @@ export default function ConversationalPlanAgentScreen() {
         })
         .filter(Boolean);
 
-      // If AI didn't return cards directly, fetch real candidate experiences
+      // If AI didn't return cards directly, fetch real candidate experiences for the active destination
       const finalExperiences =
         realCards.length > 0
           ? realCards.slice(0, 4)
@@ -203,9 +259,15 @@ export default function ConversationalPlanAgentScreen() {
       );
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    } catch (err) {
+    } catch (err: any) {
+      const isAbort = err?.name === 'AbortError' || controller.signal.aborted;
+      if (isAbort) {
+        return;
+      }
       console.warn('AI discover error, using live candidate experiences fallback:', err);
-      const fallbackExps = await zuruPlanService.fetchCandidateExperiences('Diani Beach');
+      // REM-10: Fall back to active destination instead of hardcoded Diani Beach
+      const activeDest = constraints.destinationName;
+      const fallbackExps = await zuruPlanService.fetchCandidateExperiences(activeDest);
       setCandidateExperiences(fallbackExps.slice(0, 3));
       setMessages((prev) =>
         prev.map((m) =>
@@ -214,7 +276,7 @@ export default function ConversationalPlanAgentScreen() {
                 ...m,
                 text:
                   m.text ||
-                  "I've searched our real coastal Kenya database for you! Here are verified stays and excursions:",
+                  `I've searched our real verified database in ${activeDest} for you! Here are authentic stays and excursions:`,
                 suggestedExperiences: fallbackExps.slice(0, 3),
               }
             : m
@@ -223,6 +285,7 @@ export default function ConversationalPlanAgentScreen() {
     } finally {
       setIsThinking(false);
       setAiStatusText('');
+      abortControllerRef.current = null;
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
   };
@@ -232,27 +295,24 @@ export default function ConversationalPlanAgentScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
     try {
-      const destDisplayName =
-        currentDestination === 'lamu'
-          ? 'Lamu Island'
-          : currentDestination === 'watamu'
-          ? 'Watamu & Malindi'
-          : currentDestination === 'kilifi'
-          ? 'Kilifi Creek'
-          : currentDestination === 'mombasa'
-          ? 'Mombasa Old Town'
-          : currentDestination === 'nairobi'
-          ? 'Nairobi Safari Hub'
-          : 'Diani Beach';
-
+      // Conversational constraint preservation (REM-03)
       const prefs: TripPreferences = {
-        destinationId: currentDestination,
-        destinationName: destDisplayName,
-        durationDays: extractedDuration,
-        adultsCount: extractedGuestCount,
-        childrenCount: 0,
-        budgetTier: 'comfort',
-        interests: ['beaches', 'dhow_cruises', 'seafood_dining'],
+        destinationId: constraints.destinationId,
+        destinationName: constraints.destinationName,
+        durationDays: constraints.durationDays,
+        adultsCount: constraints.adultsCount,
+        childrenCount: constraints.childrenCount,
+        budgetTier: constraints.budgetTier,
+        budgetMaxKes: constraints.budgetMaxKes,
+        dietaryRestrictions: constraints.dietaryRestrictions,
+        pace: constraints.pace,
+        interests:
+          constraints.interests.length > 0
+            ? constraints.interests
+            : ['beaches', 'dhow_cruises', 'seafood_dining'],
+        exclusions: constraints.exclusions,
+        startDate: constraints.startDate,
+        endDate: constraints.endDate,
       };
 
       const trip = await zuruPlanService.generateItineraryFromPreferences(prefs);
@@ -447,15 +507,26 @@ export default function ConversationalPlanAgentScreen() {
           onSubmitEditing={() => handleSendPrompt(input)}
           returnKeyType="send"
         />
-        <Pressable
-          onPress={() => handleSendPrompt(input)}
-          disabled={!input.trim()}
-          style={[styles.sendBtn, !input.trim() && { opacity: 0.5 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Send message"
-        >
-          <Feather name="arrow-up" size={20} color="#FFFFFF" />
-        </Pressable>
+        {isThinking ? (
+          <Pressable
+            onPress={handleStopGeneration}
+            style={[styles.sendBtn, { backgroundColor: '#EF4444' }]}
+            accessibilityRole="button"
+            accessibilityLabel="Stop generation"
+          >
+            <Feather name="square" size={16} color="#FFFFFF" />
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => handleSendPrompt(input)}
+            disabled={!input.trim()}
+            style={[styles.sendBtn, !input.trim() && { opacity: 0.5 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
+          >
+            <Feather name="arrow-up" size={20} color="#FFFFFF" />
+          </Pressable>
+        )}
       </View>
     </KeyboardAvoidingView>
   );

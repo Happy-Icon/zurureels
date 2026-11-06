@@ -39,7 +39,10 @@ import type { ReelRow } from '@/lib/supabase';
 export default function AIChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { initialPrompt } = useLocalSearchParams<{ initialPrompt?: string }>();
+  const { initialPrompt, conversationId } = useLocalSearchParams<{
+    initialPrompt?: string;
+    conversationId?: string;
+  }>();
   const { isOnline } = useNetworkStatus();
   const { user } = useAuth();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
@@ -47,12 +50,44 @@ export default function AIChatScreen() {
   const {
     messages,
     isLoading,
+    isStreaming,
     stageStatus,
     error,
+    lastMeta,
     sendMessage,
+    stopGeneration,
     clearMessages,
     retryLastMessage,
-  } = useZuruAI();
+    resumeInterruptedMessage,
+  } = useZuruAI(conversationId);
+
+  const badgeConfig = useMemo(() => {
+    if (!isOnline) {
+      return {
+        text: 'OFFLINE',
+        bg: '#FEE2E2',
+        color: '#B91C1C',
+        dotColor: '#EF4444',
+        statusText: 'Offline mode',
+      };
+    }
+    if (lastMeta?.degraded) {
+      return {
+        text: 'OFFLINE / BASIC',
+        bg: '#FEF3C7',
+        color: '#B45309',
+        dotColor: '#F59E0B',
+        statusText: lastMeta.fallbackReason ? 'Basic search active' : 'Degraded mode',
+      };
+    }
+    return {
+      text: 'AI CONCIERGE',
+      bg: AI_COLORS.orangeSoft,
+      color: AI_COLORS.orange,
+      dotColor: AI_COLORS.success,
+      statusText: 'Connected to Supabase',
+    };
+  }, [isOnline, lastMeta]);
 
   const [inputText, setInputText] = useState('');
   const [userLocation, setUserLocation] = useState<{
@@ -224,27 +259,41 @@ export default function AIChatScreen() {
           <View>
             <View style={styles.titleRow}>
               <Text style={styles.headerTitle}>Zuru Agent</Text>
-              <View style={styles.aiBadge}>
-                <Text style={styles.aiBadgeText}>FABLE 5.1</Text>
+              <View style={[styles.aiBadge, { backgroundColor: badgeConfig.bg }]}>
+                <Text style={[styles.aiBadgeText, { color: badgeConfig.color }]}>
+                  {badgeConfig.text}
+                </Text>
               </View>
             </View>
             <View style={styles.onlineRow}>
-              <View style={[styles.onlineDot, !isOnline && { backgroundColor: '#EF4444' }]} />
+              <View style={[styles.onlineDot, { backgroundColor: badgeConfig.dotColor }]} />
               <Text style={styles.onlineText}>
-                {!isOnline ? 'Offline' : 'Connected to Supabase'}
+                {badgeConfig.statusText}
               </Text>
             </View>
           </View>
         </View>
 
-        <Pressable
-          onPress={clearMessages}
-          style={styles.moreBtn}
-          hitSlop={8}
-          accessibilityLabel="Clear chat"
-        >
-          <Feather name="trash-2" size={18} color={AI_COLORS.textSecondary} />
-        </Pressable>
+        <View style={styles.headerRightActions}>
+          <Pressable
+            onPress={() => router.push('/ai/history' as any)}
+            style={styles.moreBtn}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="View history"
+          >
+            <Feather name="clock" size={18} color={AI_COLORS.textSecondary} />
+          </Pressable>
+
+          <Pressable
+            onPress={clearMessages}
+            style={styles.moreBtn}
+            hitSlop={8}
+            accessibilityLabel="Clear chat"
+          >
+            <Feather name="trash-2" size={18} color={AI_COLORS.textSecondary} />
+          </Pressable>
+        </View>
       </View>
 
       {/* ── Offline Banner State ─────────────────────────────────────────── */}
@@ -253,6 +302,16 @@ export default function AIChatScreen() {
           <Feather name="wifi-off" size={14} color="#B45309" />
           <Text style={styles.offlineText}>
             You are offline. Connect to internet to search ZuruSasa listings.
+          </Text>
+        </View>
+      )}
+
+      {/* ── Degraded Mode Banner (REM-06 / REM-10) ───────────────────────── */}
+      {lastMeta?.degraded && isOnline && (
+        <View style={styles.degradedBanner}>
+          <Feather name="alert-triangle" size={13} color="#B45309" />
+          <Text style={styles.degradedBannerText}>
+            Operating in basic search mode (AI gateway degraded). Results are matched using catalog filters.
           </Text>
         </View>
       )}
@@ -268,24 +327,50 @@ export default function AIChatScreen() {
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
-            <AIMessageBubble
-              message={item}
-              isLatest={index === messages.length - 1}
-              onOpen={handleOpenCard}
-              onBook={handleBookCard}
-              onSave={handleSaveCard}
-            />
+            <View>
+              <AIMessageBubble
+                message={item}
+                isLatest={index === messages.length - 1}
+                onOpen={handleOpenCard}
+                onBook={handleBookCard}
+                onSave={handleSaveCard}
+              />
+              {item.interrupted && (
+                <Pressable
+                  onPress={() => item.clientMessageId && resumeInterruptedMessage(item.clientMessageId)}
+                  style={styles.interruptedPill}
+                  accessibilityRole="button"
+                  accessibilityLabel="Connection interrupted. Tap to complete."
+                >
+                  <Feather name="rotate-cw" size={12} color="#B45309" />
+                  <Text style={styles.interruptedPillText}>
+                    Connection interrupted — tap to complete
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           )}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           ListFooterComponent={
             isLoading ? (
               <View style={styles.loadingFooter}>
-                <View style={styles.statusPill}>
-                  <Feather name="loader" size={12} color={AI_COLORS.orange} />
-                  <Text style={styles.statusText}>
-                    {stageStatus.text || 'Zuru Agent is thinking…'}
-                  </Text>
+                <View style={styles.statusPillRow}>
+                  <View style={styles.statusPill}>
+                    <Feather name="loader" size={12} color={AI_COLORS.orange} />
+                    <Text style={styles.statusText}>
+                      {stageStatus.text || 'Zuru Agent is thinking…'}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={stopGeneration}
+                    style={styles.inlineStopBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Stop generating"
+                  >
+                    <Feather name="square" size={11} color="#EF4444" />
+                    <Text style={styles.inlineStopText}>Stop</Text>
+                  </Pressable>
                 </View>
                 <AITypingIndicator />
               </View>
@@ -467,6 +552,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
 
   // Offline Banner
   offlineBanner: {
@@ -500,6 +590,28 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
   },
+  statusPillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 16,
+  },
+  inlineStopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: AI_RADIUS.full,
+  },
+  inlineStopText: {
+    fontSize: 11,
+    fontFamily: AI_FONTS.bold,
+    color: '#EF4444',
+  },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -516,6 +628,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: AI_FONTS.medium,
     color: AI_COLORS.orange,
+  },
+
+  // Interrupted Recovery Pill
+  interruptedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: AI_RADIUS.full,
+    marginLeft: 16,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  interruptedPillText: {
+    fontSize: 12,
+    fontFamily: AI_FONTS.medium,
+    color: '#92400E',
   },
 
   // Error Card
@@ -582,5 +716,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  degradedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#FDE68A',
+  },
+  degradedBannerText: {
+    fontSize: 12,
+    fontFamily: AI_FONTS.medium,
+    color: '#B45309',
+    flex: 1,
   },
 });

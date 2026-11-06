@@ -649,6 +649,26 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
 
       {/* 4. Bottom Information Stack & 5. Action Dock */}
       <View style={[styles.bottomOverlay, { bottom: baseBottom }]}>
+        {/* Zuru Agent Concierge Prompt Badge → opens new Zuru Agent chat */}
+        <Pressable
+          testID={`zuru-agent-${reel.id}`}
+          onPress={() => {
+            const prompt = exp?.title
+              ? `Tell me about "${exp.title}"${
+                  exp.location ? ` in ${exp.location}` : ''
+                } — is it worth booking?`
+              : 'What can you tell me about this experience?';
+            router.push({ pathname: '/ai/chat' as any, params: { initialPrompt: prompt } });
+          }}
+          style={({ pressed }) => [
+            styles.aiPromptPill,
+            { opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <MaterialCommunityIcons name="creation" size={15} color="#FFFFFF" />
+          <Text style={styles.aiPromptText}>✨ Ask Zuru Agent</Text>
+        </Pressable>
+
         <Pressable
           testID={`listing-details-${reel.id}`}
           onPress={() => {
@@ -691,26 +711,6 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
               <Text style={styles.priceUnitText}> / {priceUnit}</Text>
             </Text>
           ) : null}
-        </Pressable>
-
-        {/* Zuru Agent Concierge Prompt Badge → opens new Zuru Agent chat */}
-        <Pressable
-          testID={`zuru-agent-${reel.id}`}
-          onPress={() => {
-            const prompt = exp?.title
-              ? `Tell me about "${exp.title}"${
-                  exp.location ? ` in ${exp.location}` : ''
-                } — is it worth booking?`
-              : 'What can you tell me about this experience?';
-            router.push({ pathname: '/ai/chat' as any, params: { initialPrompt: prompt } });
-          }}
-          style={({ pressed }) => [
-            styles.aiPromptPill,
-            { opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <MaterialCommunityIcons name="creation" size={15} color="#FFFFFF" />
-          <Text style={styles.aiPromptText}>✨ Ask Zuru Agent</Text>
         </Pressable>
 
         {/* 5. Bottom Action Dock (Primary Dual Buttons) */}

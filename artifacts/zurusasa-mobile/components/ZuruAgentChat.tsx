@@ -37,6 +37,11 @@ interface ZuruAgentChatProps {
   isEmbedded?: boolean;
 }
 
+/**
+ * @deprecated REM-13: Legacy modal chat component.
+ * All Zuru Agent conversational entry points now route to the canonical
+ * full-screen persistent experience at `app/ai/chat.tsx` (`/ai/chat`).
+ */
 export function ZuruAgentChat({
   visible,
   onClose,

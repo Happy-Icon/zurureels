@@ -87,7 +87,13 @@ export default function AIHomeScreen() {
           </View>
         </View>
 
-        <Pressable style={styles.historyBtn} hitSlop={8}>
+        <Pressable
+          style={styles.historyBtn}
+          hitSlop={8}
+          onPress={() => router.push('/ai/history' as any)}
+          accessibilityRole="button"
+          accessibilityLabel="View conversation history"
+        >
           <Feather name="clock" size={18} color={AI_COLORS.textSecondary} />
         </Pressable>
       </View>

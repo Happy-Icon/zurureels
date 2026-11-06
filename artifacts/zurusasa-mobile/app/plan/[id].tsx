@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Platform,
@@ -42,6 +43,8 @@ export default function TripItineraryWorkspaceScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedDayFilter, setSelectedDayFilter] = useState<number | 'all'>('all');
   const [isRegeneratingDay, setIsRegeneratingDay] = useState<number | null>(null);
+  const [isUpgradingAi, setIsUpgradingAi] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Agent Sheet State
   const [agentSheetVisible, setAgentSheetVisible] = useState(false);
@@ -49,6 +52,17 @@ export default function TripItineraryWorkspaceScreen() {
   // Booking Sheet Integration
   const [bookingSheetVisible, setBookingSheetVisible] = useState(false);
   const [bookingReel, setBookingReel] = useState<ReelRow | null>(null);
+
+  // Cleanup in-flight requests on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  const isBusy = isRegeneratingDay !== null || isUpgradingAi;
 
   const loadTrip = useCallback(async () => {
     if (!id) return;
@@ -121,23 +135,42 @@ export default function TripItineraryWorkspaceScreen() {
     }
   };
 
+  // Single-Day Regeneration with Mutex & Error Handling (REM-08)
   const handleRegenerateDay = async (dayNumber: number) => {
-    if (!trip) return;
+    if (isBusy || !trip) return;
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setIsRegeneratingDay(dayNumber);
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const updatedTrip = await zuruPlanService.regenerateDay(trip, dayNumber);
+      const updatedTrip = await zuruPlanService.regenerateDay(trip, dayNumber, {
+        signal: controller.signal,
+      });
       await zuruPlanService.saveTrip(user?.id, updatedTrip);
       setTrip(updatedTrip);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (err: any) {
+      if (controller.signal.aborted) return;
+      console.warn('Day regeneration failed:', err);
+      Alert.alert(
+        'Regeneration Notice',
+        err?.message || 'Could not find alternative activities for this day without repeating previous experiences.'
+      );
     } finally {
       setIsRegeneratingDay(null);
+      abortControllerRef.current = null;
     }
   };
 
+  // Reorder Item with Mutex Guard and userModified Flagging
   const handleReorderItem = async (dayNumber: number, fromIndex: number, toIndex: number) => {
-    if (!trip) return;
+    if (isBusy || !trip) return;
     const dayIndex = trip.days.findIndex((d) => d.dayNumber === dayNumber);
     if (dayIndex < 0) return;
 
@@ -145,16 +178,21 @@ export default function TripItineraryWorkspaceScreen() {
     const targetDay = trip.days[dayIndex];
     const items = [...targetDay.items];
     const [moved] = items.splice(fromIndex, 1);
-    items.splice(toIndex, 0, moved);
+    const markedMoved = { ...moved, userModified: true };
+    items.splice(toIndex, 0, markedMoved);
 
     const updatedDays = [...trip.days];
     updatedDays[dayIndex] = {
       ...targetDay,
       items,
+      revision: (targetDay.revision ?? 1) + 1,
+      updatedAt: new Date().toISOString(),
     };
 
+    const nextRevision = (trip.revision ?? 1) + 1;
     const updatedTrip: TripPlan = {
       ...trip,
+      revision: nextRevision,
       days: updatedDays,
       updatedAt: new Date().toISOString(),
     };
@@ -163,16 +201,24 @@ export default function TripItineraryWorkspaceScreen() {
     await zuruPlanService.saveTrip(user?.id, updatedTrip);
   };
 
+  // Apply Agent Item with Mutex Guard and userModified Flagging
   const handleApplyAgentItem = async (dayNumber: number, newItem: ItineraryItem) => {
-    if (!trip) return;
+    if (isBusy || !trip) return;
     const dayIndex = trip.days.findIndex((d) => d.dayNumber === dayNumber);
     if (dayIndex < 0) return;
 
     const targetDay = trip.days[dayIndex];
+    const itemWithFlag: ItineraryItem = {
+      ...newItem,
+      userModified: true, // Guarantees item survives day regeneration
+    };
+
     const updatedDays = [...trip.days];
     updatedDays[dayIndex] = {
       ...targetDay,
-      items: [...targetDay.items, newItem],
+      items: [...targetDay.items, itemWithFlag],
+      revision: (targetDay.revision ?? 1) + 1,
+      updatedAt: new Date().toISOString(),
     };
 
     // Recalculate totals
@@ -185,8 +231,10 @@ export default function TripItineraryWorkspaceScreen() {
       }
     }
 
+    const nextRevision = (trip.revision ?? 1) + 1;
     const updatedTrip: TripPlan = {
       ...trip,
+      revision: nextRevision,
       days: updatedDays,
       budgetBreakdown: {
         ...trip.budgetBreakdown,
@@ -201,6 +249,46 @@ export default function TripItineraryWorkspaceScreen() {
 
     setTrip(updatedTrip);
     await zuruPlanService.saveTrip(user?.id, updatedTrip);
+  };
+
+  // Upgrade Plan with AI (REM-10)
+  const handleRetryFullAIRegeneration = async () => {
+    if (isBusy || !trip) return;
+    setIsUpgradingAi(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+    try {
+      const regenerated = await zuruPlanService.generateItineraryFromPreferences({
+        destinationId: trip.destinationId || (trip.destination?.toLowerCase().includes('lamu') ? 'lamu' : 'diani'),
+        destinationName: trip.destination,
+        durationDays: trip.durationDays,
+        adultsCount: trip.guestCount,
+        childrenCount: 0,
+        budgetTier: trip.budgetTier,
+        accommodationType: trip.preferences?.accommodationType || 'resort',
+        interests: trip.preferences?.interests || ['beaches', 'dhow_cruises', 'seafood_dining'],
+        dietaryRestrictions: trip.preferences?.dietaryRestrictions,
+        pace: trip.preferences?.pace,
+        exclusions: trip.preferences?.exclusions,
+      });
+
+      const finalTrip: TripPlan = {
+        ...regenerated,
+        id: trip.id,
+        title: trip.title,
+        revision: (trip.revision ?? 1) + 1,
+      };
+
+      await zuruPlanService.saveTrip(user?.id, finalTrip);
+      setTrip(finalTrip);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert('AI Plan Updated! ✨', 'Your itinerary has been refreshed with live intelligence from Claude.');
+    } catch (err: any) {
+      console.warn('AI upgrade failed:', err);
+      Alert.alert('Notice', err?.message || 'Unable to connect to AI gateway at this time.');
+    } finally {
+      setIsUpgradingAi(false);
+    }
   };
 
   const topInset = Platform.OS === 'web' ? 20 : insets.top + 10;
@@ -310,6 +398,47 @@ export default function TripItineraryWorkspaceScreen() {
 
         {/* Content Body */}
         <View style={[styles.mainBody, { backgroundColor: colors.background }]}>
+          {/* REM-10: Degraded Mode Notice Banner */}
+          {(trip.degraded || trip.metadata?.degraded) && (
+            <View
+              style={[
+                styles.degradedBanner,
+                {
+                  backgroundColor: isDark ? '#3D2005' : '#FEF3C7',
+                  borderColor: isDark ? '#B45309' : '#F59E0B',
+                },
+              ]}
+            >
+              <View style={styles.degradedBannerHeader}>
+                <Feather name="alert-triangle" size={16} color="#D97706" />
+                <Text style={[styles.degradedBannerTitle, { color: isDark ? '#FDE68A' : '#92400E' }]}>
+                  Operating in Offline Mode
+                </Text>
+              </View>
+              <Text style={[styles.degradedBannerText, { color: isDark ? '#FDE68A' : '#78350F' }]}>
+                {trip.fallbackReason && !trip.fallbackReason.includes('{"type":')
+                  ? trip.fallbackReason
+                  : 'This itinerary was assembled using verified local listings while the AI reasoning engine was momentarily unreachable. Tap below to retry AI synthesis.'}
+              </Text>
+              <Pressable
+                disabled={isBusy}
+                onPress={handleRetryFullAIRegeneration}
+                style={[styles.retryAiBtn, isBusy && { opacity: 0.6 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Upgrade Plan with AI"
+              >
+                {isUpgradingAi ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="sparkles" size={13} color="#FFFFFF" />
+                    <Text style={styles.retryAiBtnText}>Upgrade Plan with AI</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          )}
+
           {/* Cost Breakdown Card */}
           <View style={[styles.budgetCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.budgetHeaderRow}>
@@ -407,11 +536,13 @@ export default function TripItineraryWorkspaceScreen() {
       {/* Floating Zuru Agent Pill Button */}
       <Pressable
         testID="open-itinerary-agent-btn"
+        disabled={isBusy}
         onPress={() => {
+          if (isBusy) return;
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           setAgentSheetVisible(true);
         }}
-        style={[styles.floatingAgentBtn, { bottom: bottomInset }]}
+        style={[styles.floatingAgentBtn, { bottom: bottomInset }, isBusy && { opacity: 0.5 }]}
         accessibilityRole="button"
         accessibilityLabel="Ask Zuru Agent to edit this itinerary"
       >
@@ -638,6 +769,46 @@ const styles = StyleSheet.create({
   /* Days List */
   daysList: {
     marginTop: 4,
+  },
+
+  /* Degraded Mode Banner (REM-10) */
+  degradedBanner: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    gap: 8,
+    marginBottom: 4,
+  },
+  degradedBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  degradedBannerTitle: {
+    fontSize: 13.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  degradedBannerText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    lineHeight: 17,
+  },
+  retryAiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#D97706',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  retryAiBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'DMSans_700Bold',
   },
 
   /* Floating Agent Button */

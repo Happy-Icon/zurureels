@@ -2,16 +2,24 @@ import type { ExperienceRow } from '@/lib/supabase';
 
 export type { ExperienceRow };
 
-export type CoastalDestinationId =
+// ── Destination System (Expanded for Kenya Coastal & Safari Hubs) ───────────
+
+export type DestinationId =
   | 'diani'
   | 'lamu'
   | 'watamu'
   | 'kilifi'
   | 'mombasa'
-  | 'nairobi';
+  | 'nairobi'
+  | 'malindi'
+  | 'naivasha'
+  | 'mara';
 
-export interface CoastalDestination {
-  id: CoastalDestinationId;
+// Backward compatibility alias
+export type CoastalDestinationId = DestinationId;
+
+export interface DestinationConfig {
+  id: DestinationId;
   name: string;
   region: string;
   tagline: string;
@@ -19,7 +27,9 @@ export interface CoastalDestination {
   accentColor: string;
 }
 
-export const COASTAL_DESTINATIONS: CoastalDestination[] = [
+export type CoastalDestination = DestinationConfig;
+
+export const DESTINATIONS: DestinationConfig[] = [
   {
     id: 'diani',
     name: 'Diani Beach',
@@ -38,7 +48,7 @@ export const COASTAL_DESTINATIONS: CoastalDestination[] = [
   },
   {
     id: 'watamu',
-    name: 'Watamu & Malindi',
+    name: 'Watamu',
     region: 'North Coast',
     tagline: 'Marine parks, sunken sandbars, and coastal Italian dining',
     image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
@@ -57,7 +67,7 @@ export const COASTAL_DESTINATIONS: CoastalDestination[] = [
     name: 'Mombasa Old Town',
     region: 'Island Coast',
     tagline: 'Fort Jesus, spiced street food, and vibrant coastal culture',
-    image: 'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?w=800',
+    image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800',
     accentColor: '#9333EA',
   },
   {
@@ -68,7 +78,35 @@ export const COASTAL_DESTINATIONS: CoastalDestination[] = [
     image: 'https://images.unsplash.com/photo-1516426122078-c23e76319801?w=800',
     accentColor: '#0D9488',
   },
+  {
+    id: 'malindi',
+    name: 'Malindi',
+    region: 'North Coast',
+    tagline: 'Vasco da Gama Pillar, marine reserve, and coastal Swahili fusion',
+    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800',
+    accentColor: '#E11D48',
+  },
+  {
+    id: 'naivasha',
+    name: 'Lake Naivasha',
+    region: 'Rift Valley Gateway',
+    tagline: 'Crescent Island wildlife walks, Hell’s Gate cycling, and freshwater boating',
+    image: 'https://images.unsplash.com/photo-1516426122078-c23e76319801?w=800',
+    accentColor: '#10B981',
+  },
+  {
+    id: 'mara',
+    name: 'Maasai Mara',
+    region: 'Rift Valley Safari',
+    tagline: 'Great Migration, world-class game drives, and hot air balloon safaris',
+    image: 'https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=800',
+    accentColor: '#F59E0B',
+  },
 ];
+
+export const COASTAL_DESTINATIONS = DESTINATIONS;
+
+// ── Budget & Preferences ───────────────────────────────────────────────────
 
 export type BudgetTier = 'budget' | 'comfort' | 'luxury';
 
@@ -130,7 +168,7 @@ export const INTEREST_OPTIONS: InterestOption[] = [
 export type AccommodationType = 'villa' | 'resort' | 'boutique_hotel' | 'eco_cottage';
 
 export interface TripPreferences {
-  destinationId: CoastalDestinationId;
+  destinationId: DestinationId;
   destinationName: string;
   durationDays: number;
   startDate?: string | null;
@@ -141,7 +179,15 @@ export interface TripPreferences {
   interests: InterestTag[];
   accommodationType?: AccommodationType;
   specialRequests?: string;
+  // Conversational constraint extensions (REM-03)
+  budgetMaxKes?: number | null;
+  dietaryRestrictions?: string[]; // e.g. ['halal', 'vegetarian', 'vegan']
+  accessibility?: string[];       // e.g. ['wheelchair_accessible']
+  pace?: 'relaxed' | 'moderate' | 'packed';
+  exclusions?: string[];          // e.g. ['scuba_diving', 'nightlife']
 }
+
+// ── Schedule & Itinerary Items (REM-08 & REM-09) ───────────────────────────
 
 export type TimeSlot = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -150,7 +196,9 @@ export type ItineraryItemType = 'stay' | 'activity' | 'dining' | 'transit' | 'cu
 export interface ItineraryItem {
   id: string;
   timeSlot: TimeSlot;
+  slot?: 'morning' | 'afternoon' | 'evening'; // Semantic alias
   timeLabel?: string;
+  startTime?: string;                        // e.g. "09:00 AM" (REM-09)
   title: string;
   description: string;
   location?: string;
@@ -158,10 +206,12 @@ export interface ItineraryItem {
   experienceId?: string | null;
   experienceTitle?: string | null;
   experienceImageUrl?: string | null;
-  rating?: number | null;
+  rating?: number | null;                    // Authentic DB rating or null (REM-09)
+  reviewsCount?: number;                     // Authentic DB review count (REM-09)
   estimatedPriceKes?: number;
   isBookable: boolean;
   notes?: string;
+  userModified?: boolean;                    // Manual edit flag (REM-08)
 }
 
 export interface TripDay {
@@ -170,6 +220,8 @@ export interface TripDay {
   theme: string;
   items: ItineraryItem[];
   notes?: string;
+  revision?: number;                         // Optimistic concurrency (REM-08)
+  updatedAt?: string;
 }
 
 export interface BudgetBreakdown {
@@ -183,7 +235,7 @@ export interface TripPlan {
   id: string;
   title: string;
   destination: string;
-  destinationId: CoastalDestinationId;
+  destinationId: DestinationId;
   coverImage: string;
   startDate?: string | null;
   endDate?: string | null;
@@ -195,4 +247,11 @@ export interface TripPlan {
   status: 'draft' | 'planned' | 'booked';
   createdAt: string;
   updatedAt: string;
+  // Concurrency & Grounding / Degradation Metadata (REM-08, REM-10)
+  revision?: number;
+  generationEngine?: string;                // e.g. 'claude-3-5-sonnet-20241022' | 'grounded_local_planner'
+  degraded?: boolean;                       // Transparent fallback flag (REM-10)
+  fallbackReason?: string;                  // Honest reason for degradation (REM-10)
+  preferences?: TripPreferences;            // Preserved context for regeneration
+  metadata?: Record<string, any>;
 }

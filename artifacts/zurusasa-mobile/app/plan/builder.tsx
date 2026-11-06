@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -13,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { useAuth } from '@/context/AuthContext';
@@ -23,10 +25,12 @@ import { zuruPlanService } from '@/services/zuruPlanService';
 import {
   BUDGET_TIERS,
   COASTAL_DESTINATIONS,
+  DESTINATIONS,
   INTEREST_OPTIONS,
   type AccommodationType,
   type BudgetTier,
   type CoastalDestinationId,
+  type DestinationId,
   type InterestTag,
   type TripPreferences,
 } from '@/types/zuruPlan';
@@ -41,6 +45,15 @@ const ACCOMMODATION_OPTIONS: { id: AccommodationType; label: string; icon: strin
 ];
 
 export default function GuidedTripBuilderScreen() {
+  const params = useLocalSearchParams<{
+    destinationId?: DestinationId;
+    durationDays?: string;
+    adultsCount?: string;
+    childrenCount?: string;
+    budgetTier?: BudgetTier;
+    interests?: string;
+  }>();
+
   const colors = useColors();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -50,18 +63,26 @@ export default function GuidedTripBuilderScreen() {
   const [step, setStep] = useState<number>(1);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Form State
-  const [selectedDestination, setSelectedDestination] = useState<CoastalDestinationId>('diani');
-  const [durationDays, setDurationDays] = useState<number>(3);
-  const [adultsCount, setAdultsCount] = useState<number>(2);
-  const [childrenCount, setChildrenCount] = useState<number>(0);
-  const [budgetTier, setBudgetTier] = useState<BudgetTier>('comfort');
+  // Form State hydrated from params if present
+  const [selectedDestination, setSelectedDestination] = useState<CoastalDestinationId>(
+    (params.destinationId as CoastalDestinationId) || 'diani'
+  );
+  const [durationDays, setDurationDays] = useState<number>(
+    params.durationDays ? Math.max(1, Math.min(14, parseInt(params.durationDays, 10))) : 3
+  );
+  const [adultsCount, setAdultsCount] = useState<number>(
+    params.adultsCount ? Math.max(1, parseInt(params.adultsCount, 10)) : 2
+  );
+  const [childrenCount, setChildrenCount] = useState<number>(
+    params.childrenCount ? Math.max(0, parseInt(params.childrenCount, 10)) : 0
+  );
+  const [budgetTier, setBudgetTier] = useState<BudgetTier>(params.budgetTier || 'comfort');
   const [accommodationType, setAccommodationType] = useState<AccommodationType>('villa');
-  const [selectedInterests, setSelectedInterests] = useState<InterestTag[]>([
-    'beaches',
-    'dhow_cruises',
-    'seafood_dining',
-  ]);
+  const [selectedInterests, setSelectedInterests] = useState<InterestTag[]>(
+    params.interests
+      ? (params.interests.split(',').filter(Boolean) as InterestTag[])
+      : ['beaches', 'dhow_cruises', 'seafood_dining']
+  );
 
   const toggleInterest = (tag: InterestTag) => {
     Haptics.selectionAsync().catch(() => {});
@@ -92,7 +113,8 @@ export default function GuidedTripBuilderScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
     try {
-      const destConfig = COASTAL_DESTINATIONS.find((d) => d.id === selectedDestination)!;
+      const destConfig =
+        DESTINATIONS.find((d) => d.id === selectedDestination) || DESTINATIONS[0];
       const prefs: TripPreferences = {
         destinationId: selectedDestination,
         destinationName: destConfig.name,
@@ -112,9 +134,13 @@ export default function GuidedTripBuilderScreen() {
         pathname: '/plan/[id]',
         params: { id: newTrip.id },
       } as any);
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Trip generation failed:', e);
       setIsGenerating(false);
+      Alert.alert(
+        'Planning Notice',
+        e?.message || 'Unable to generate itinerary right now. Please try again.'
+      );
     }
   };
 

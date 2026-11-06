@@ -97,6 +97,7 @@ export default function AccountSettingsScreen() {
     {
       id: 'translation',
       title: 'Translation',
+      subtitle: 'Coming Soon',
       iconFamily: 'feather',
       iconName: 'globe',
       onPress: () => router.push('/profile/translation'),
@@ -199,9 +200,14 @@ export default function AccountSettingsScreen() {
                 )}
               </View>
 
-              {/* Title */}
+              {/* Title & Subtitle */}
               <View style={styles.titleWrapper}>
                 <Text style={[styles.rowTitle, { color: colors.text }]}>{item.title}</Text>
+                {item.subtitle && (
+                  <View style={[styles.valueBadge, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                    <Text style={[styles.valueBadgeText, { color: colors.primary }]}>{item.subtitle}</Text>
+                  </View>
+                )}
               </View>
 
               {/* Right Chevron */}

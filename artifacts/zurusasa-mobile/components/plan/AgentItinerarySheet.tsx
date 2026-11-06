@@ -18,7 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { zuruAIService } from '@/services/zuruAIService';
-import { zuruPlanService } from '@/services/zuruPlanService';
+import { zuruPlanService, extractRating, extractReviewsCount } from '@/services/zuruPlanService';
 import type { ExperienceRow, ItineraryItem, TripPlan } from '@/types/zuruPlan';
 
 export interface AgentItinerarySheetProps {
@@ -27,6 +27,14 @@ export interface AgentItinerarySheetProps {
   trip: TripPlan;
   onApplyItem: (dayNumber: number, newItem: ItineraryItem) => void;
 }
+
+export type PlanSlot = 'morning' | 'afternoon' | 'evening';
+
+export const TIME_SLOT_OPTIONS: { id: PlanSlot; label: string; defaultTime: string }[] = [
+  { id: 'morning', label: 'Morning', defaultTime: '09:00 AM' },
+  { id: 'afternoon', label: 'Afternoon', defaultTime: '02:00 PM' },
+  { id: 'evening', label: 'Evening', defaultTime: '06:30 PM' },
+];
 
 export function AgentItinerarySheet({
   visible,
@@ -41,6 +49,7 @@ export function AgentItinerarySheet({
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [selectedDayNumber, setSelectedDayNumber] = useState<number>(1);
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<PlanSlot>('afternoon');
   const [suggestions, setSuggestions] = useState<ExperienceRow[]>([]);
 
   const handleSendPrompt = async (promptText: string) => {
@@ -94,10 +103,16 @@ export function AgentItinerarySheet({
 
   const handleApplyExperience = (exp: ExperienceRow) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    const activeSlot = TIME_SLOT_OPTIONS.find((s) => s.id === selectedTimeSlot) || TIME_SLOT_OPTIONS[1];
+    const parsedRating = extractRating(exp);
+    const parsedReviewsCount = extractReviewsCount(exp);
+
     const newItem: ItineraryItem = {
       id: `act-${exp.id}-agent-${Date.now()}`,
-      timeSlot: 'afternoon',
-      timeLabel: '02:30 PM',
+      timeSlot: selectedTimeSlot,
+      slot: selectedTimeSlot,
+      startTime: activeSlot.defaultTime,
+      timeLabel: activeSlot.defaultTime,
       title: exp.title || 'Coastal Experience',
       description: exp.description || `Special experience added via Zuru Agent in ${trip.destination}.`,
       location: exp.location || undefined,
@@ -105,7 +120,10 @@ export function AgentItinerarySheet({
       experienceId: exp.id,
       experienceTitle: exp.title,
       experienceImageUrl: exp.image_url,
-      rating: 4.9,
+      // Grounded rating strictly from database (null if unrated) per REM-09
+      rating: parsedRating,
+      reviewsCount: parsedReviewsCount,
+      userModified: true, // Protects item from automated single-day regeneration
       estimatedPriceKes: Number(exp.current_price || 0),
       isBookable: true,
     };
@@ -199,6 +217,42 @@ export function AgentItinerarySheet({
               </ScrollView>
             </View>
 
+            {/* Target Time Slot Picker (REM-09) */}
+            <View style={styles.slotPickerBox}>
+              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+                TIME SLOT:
+              </Text>
+              <View style={styles.slotsRow}>
+                {TIME_SLOT_OPTIONS.map((slot) => {
+                  const isSelected = selectedTimeSlot === slot.id;
+                  return (
+                    <Pressable
+                      key={slot.id}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setSelectedTimeSlot(slot.id);
+                      }}
+                      style={[
+                        styles.slotPill,
+                        {
+                          backgroundColor: isSelected ? '#F26522' : isDark ? '#27272A' : '#F3F4F6',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.slotPillText,
+                          { color: isSelected ? '#FFFFFF' : colors.text },
+                        ]}
+                      >
+                        {slot.label} ({slot.defaultTime})
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
             {/* Quick Suggestions */}
             <View style={{ gap: 8 }}>
               <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
@@ -239,7 +293,7 @@ export function AgentItinerarySheet({
             {suggestions.length > 0 && (
               <View style={{ gap: 10, marginTop: 4 }}>
                 <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-                  TAP TO ADD TO DAY {selectedDayNumber}:
+                  TAP TO ADD TO DAY {selectedDayNumber} ({TIME_SLOT_OPTIONS.find((s) => s.id === selectedTimeSlot)?.label}):
                 </Text>
                 {suggestions.map((exp) => (
                   <View
@@ -256,9 +310,36 @@ export function AgentItinerarySheet({
                       <Text style={[styles.sugTitle, { color: colors.text }]} numberOfLines={1}>
                         {exp.title}
                       </Text>
-                      <Text style={[styles.sugPrice, { color: '#F26522' }]}>
-                        KSh {Number(exp.current_price ?? 3500).toLocaleString()}
-                      </Text>
+                      <View style={styles.sugMetaRow}>
+                        <Text style={[styles.sugPrice, { color: '#F26522' }]}>
+                          KSh {Number(exp.current_price ?? 3500).toLocaleString()}
+                        </Text>
+                        <Text style={[styles.sugMetaDot, { color: colors.mutedForeground }]}>·</Text>
+                        {(() => {
+                          const cardRating = extractRating(exp);
+                          const cardReviews = extractReviewsCount(exp);
+                          if (cardRating != null && cardRating > 0) {
+                            return (
+                              <View style={styles.ratingRow}>
+                                <Feather name="star" size={11} color="#F59E0B" />
+                                <Text style={[styles.ratingText, { color: colors.text }]}>
+                                  {cardRating.toFixed(1)}
+                                </Text>
+                                {cardReviews > 0 ? (
+                                  <Text style={[styles.reviewsCountText, { color: colors.mutedForeground }]}>
+                                    ({cardReviews})
+                                  </Text>
+                                ) : null}
+                              </View>
+                            );
+                          }
+                          return (
+                            <View style={styles.newBadge}>
+                              <Text style={styles.newBadgeText}>New</Text>
+                            </View>
+                          );
+                        })()}
+                      </View>
                     </View>
                     <Pressable
                       onPress={() => handleApplyExperience(exp)}
@@ -377,6 +458,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'DMSans_600SemiBold',
   },
+  slotPickerBox: {
+    gap: 8,
+    marginTop: 2,
+  },
+  slotsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  slotPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  slotPillText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+  },
   chipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -426,6 +525,39 @@ const styles = StyleSheet.create({
   sugPrice: {
     fontSize: 12,
     fontFamily: 'DMSans_600SemiBold',
+  },
+  sugMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  sugMetaDot: {
+    fontSize: 10,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  ratingText: {
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
+  },
+  reviewsCountText: {
+    fontSize: 10,
+    fontFamily: 'DMSans_400Regular',
+  },
+  newBadge: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  newBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontFamily: 'DMSans_700Bold',
   },
   applyBtn: {
     flexDirection: 'row',

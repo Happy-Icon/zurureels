@@ -11,11 +11,11 @@ export interface RecentSearchItem {
 }
 
 export const POPULAR_DESTINATIONS = [
-  { id: 'diani', name: 'Diani Beach', count: '142 stays', image: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=400' },
-  { id: 'mombasa', name: 'Mombasa City', count: '98 stays', image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400' },
-  { id: 'watamu', name: 'Watamu', count: '64 stays', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400' },
-  { id: 'lamu', name: 'Lamu Island', count: '38 stays', image: 'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=400' },
-  { id: 'nairobi', name: 'Nairobi', count: '210 stays', image: 'https://images.unsplash.com/photo-1580674684081-7617fbf3d745?w=400' },
+  { id: 'diani', name: 'Diani Beach', region: 'South Coast', image: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=400' },
+  { id: 'mombasa', name: 'Mombasa City', region: 'Coastal Hub', image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400' },
+  { id: 'watamu', name: 'Watamu', region: 'Marine Park', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400' },
+  { id: 'lamu', name: 'Lamu Island', region: 'Swahili Coast', image: 'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=400' },
+  { id: 'nairobi', name: 'Nairobi', region: 'Capital & Safari Hub', image: 'https://images.unsplash.com/photo-1580674684081-7617fbf3d745?w=400' },
 ];
 
 export const TRENDING_TAGS = [
@@ -29,10 +29,14 @@ export const TRENDING_TAGS = [
   'Deep Sea Fishing',
 ];
 
+export const AC_REGEX = /\b(?:a\/?c|air[\s-]*conditioning)\b/i;
+export const BUDGET_REGEX = /(?:under|below|less than|max|<)\s*(?:kes|ksh)?\s*(\d+[\d,]*)\s*(?:(k)\b|(?:kes|ksh)\b)?/i;
+export const STANDALONE_K_REGEX = /(?:kes|ksh)?\s*(\d+[\d,]*)\s*(k)\b/i;
+
 export const searchService = {
   /**
    * Intelligently convert AI natural language prompt into structured SearchFilters
-   * via Fable 5.1 server-side service with offline fallback.
+   * via server-side Zuru AI service with offline fallback.
    */
   async parseNaturalLanguageQueryAsync(query: string): Promise<Partial<SearchFilters>> {
     try {
@@ -70,12 +74,18 @@ export const searchService = {
       parsed.cities = [formatted];
     }
 
-    // 2. Detect Max Price (e.g., "under 15k", "under 15000", "below 20,000")
-    const priceMatch = q.match(/(?:under|below|less than|<|max)\s*kes?\s*(\d+)(k)?/i) || q.match(/(\d+)\s*k\b/i);
+    // 2. Detect Max Price (e.g., "under 15k", "under 15000", "below 20,000", "under 30000 kes")
+    const priceMatch =
+      q.match(BUDGET_REGEX) ||
+      q.match(STANDALONE_K_REGEX);
     if (priceMatch) {
-      let num = parseInt(priceMatch[1], 10);
-      if (priceMatch[2] || q.includes('k')) num *= 1000;
-      parsed.maxPrice = num;
+      let num = parseInt(priceMatch[1].replace(/,/g, ''), 10);
+      if (priceMatch[2]?.toLowerCase() === 'k') {
+        num *= 1000;
+      }
+      if (!Number.isNaN(num) && num > 0) {
+        parsed.maxPrice = num;
+      }
     }
 
     // 3. Detect Category / Property Type
@@ -89,7 +99,7 @@ export const searchService = {
     if (q.includes('beach') || q.includes('beachfront')) amenities.push('Beach Front');
     if (q.includes('pool')) amenities.push('Pool');
     if (q.includes('wifi') || q.includes('internet')) amenities.push('Wi-Fi');
-    if (q.includes('ac') || q.includes('air conditioning')) amenities.push('Air Conditioning');
+    if (AC_REGEX.test(q)) amenities.push('Air Conditioning');
     if (amenities.length > 0) parsed.amenities = amenities;
 
     // 5. Detect Guests

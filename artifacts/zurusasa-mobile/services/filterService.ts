@@ -86,6 +86,15 @@ function resolveEffectiveCategories(
   return filterCats ?? expandedTabCats;
 }
 
+export function computeReelEngagementScore(reel: any): number {
+  if (!reel) return 0;
+  const likes = Number(reel.likes_count ?? reel.likes ?? 0);
+  const saves = Number(reel.saves_count ?? reel.saves ?? 0);
+  const shares = Number(reel.shares_count ?? reel.shares ?? 0);
+  const views = Number(reel.views_count ?? reel.views ?? 0);
+  return likes * 2 + saves * 3 + shares * 4 + views * 0.1;
+}
+
 export const filterService = {
   /**
    * Returns true when active filters/categories contain SQL-pushable predicates
@@ -247,7 +256,9 @@ export const filterService = {
     if (filters.minRating != null) {
       const minR = filters.minRating;
       result = result.filter((r) => {
-        const rating = (r.experience?.metadata as { rating?: number } | null)?.rating ?? 4.9;
+        const expRating = (r.experience as any)?.rating;
+        const metaRating = (r.experience?.metadata as { rating?: number } | null)?.rating;
+        const rating = typeof expRating === 'number' ? expRating : typeof metaRating === 'number' ? metaRating : 0;
         return rating >= minR;
       });
     }
@@ -281,8 +292,14 @@ export const filterService = {
     result.sort((a, b) => {
       const priceA = a.experience?.current_price ?? 0;
       const priceB = b.experience?.current_price ?? 0;
-      const ratingA = (a.experience?.metadata as { rating?: number } | null)?.rating ?? 4.9;
-      const ratingB = (b.experience?.metadata as { rating?: number } | null)?.rating ?? 4.9;
+      const ratingA =
+        (a.experience as any)?.rating ??
+        (a.experience?.metadata as { rating?: number } | null)?.rating ??
+        0;
+      const ratingB =
+        (b.experience as any)?.rating ??
+        (b.experience?.metadata as { rating?: number } | null)?.rating ??
+        0;
 
       switch (filters.sortBy) {
         case 'price_asc':
@@ -291,8 +308,12 @@ export const filterService = {
           return priceB - priceA;
         case 'rating':
           return ratingB - ratingA;
-        case 'popular':
-          return (b.duration || 0) - (a.duration || 0);
+        case 'popular': {
+          const engA = computeReelEngagementScore(a);
+          const engB = computeReelEngagementScore(b);
+          if (engB !== engA) return engB - engA;
+          return ratingB - ratingA;
+        }
         case 'newest':
           return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
         case 'recommended':

@@ -31,7 +31,6 @@ import { WeatherCard } from '@/components/WeatherCard';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { ReelGridCard } from '@/components/ReelGridCard';
 import { ReelCard } from '@/components/ReelCard';
-import { ZuruAgentChat, type ReelSummary } from '@/components/ZuruAgentChat';
 import { Skeleton } from '@/components/Skeleton';
 import { OfflineState } from '@/components/OfflineState';
 import { useNetworkStatus } from '@/lib/networkManager';
@@ -77,7 +76,6 @@ export default function AirbnbDiscoverScreen() {
   const [coords, setCoords] = useState<Coordinates | null>(null);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [viewerReel, setViewerReel] = useState<ReelRow | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
   const [discoverViewMode, setDiscoverViewMode] = useState<'grid' | 'map'>('grid');
   const [journeyBooking, setJourneyBooking] = useState<BookingRow | null>(null);
 
@@ -221,18 +219,6 @@ export default function AirbnbDiscoverScreen() {
     // 3. Multi-faceted Smart Filters (Price, Rating, Amenities, Host Type, Sorting)
     return filterService.applyFilters(searchFiltered, filters);
   }, [hasServerFilters, serverFilteredQuery.data, reelsQuery.data, query, activeCategory, categoryObj, filters]);
-
-  const chatReels: ReelSummary[] = useMemo(
-    () =>
-      filteredReels.slice(0, 20).map((r) => ({
-        title: r.experience?.title ?? null,
-        category: r.category,
-        location: r.experience?.location ?? null,
-        price: r.experience?.current_price ?? null,
-        rating: null,
-      })),
-    [filteredReels],
-  );
 
   const cardWidth = (winWidth - 40 - 12) / 2;
   const topPad = Platform.OS === 'web' ? 12 : insets.top;
@@ -479,13 +465,6 @@ export default function AirbnbDiscoverScreen() {
         selectedSort={filters.sortBy}
         onClose={() => setSortSheetOpen(false)}
         onSelectSort={(sort) => updateFilters({ sortBy: sort })}
-      />
-
-      {/* Zuru AI Concierge Modal Chat */}
-      <ZuruAgentChat
-        visible={chatOpen}
-        onClose={() => setChatOpen(false)}
-        reels={chatReels}
       />
     </View>
   );

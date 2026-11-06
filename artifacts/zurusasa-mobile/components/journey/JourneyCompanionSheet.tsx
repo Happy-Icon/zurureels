@@ -34,6 +34,48 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export type JourneyMode = 'overview' | 'navigating';
 
+/**
+ * Parse time string ("15:00", "3:00 PM", "14:30") into total minutes from midnight.
+ */
+export function parseTimeToMinutes(timeStr?: string | null): number {
+  if (!timeStr) return 15 * 60; // Default 3:00 PM (900 minutes)
+  const trimmed = timeStr.trim().toLowerCase();
+
+  // 12-hour format: "3:00 pm", "11:30 am", "3pm"
+  const match12 = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  if (match12) {
+    let hours = parseInt(match12[1], 10);
+    const minutes = match12[2] ? parseInt(match12[2], 10) : 0;
+    const period = match12[3];
+    if (period === 'pm' && hours < 12) hours += 12;
+    if (period === 'am' && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  }
+
+  // 24-hour format: "15:00", "14:30", "09:00"
+  const match24 = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+  if (match24) {
+    const hours = parseInt(match24[1], 10);
+    const minutes = parseInt(match24[2], 10);
+    return hours * 60 + minutes;
+  }
+
+  return 15 * 60;
+}
+
+/**
+ * Format total minutes into friendly 12-hour time string ("3:00 PM").
+ */
+export function formatMinutesTo12Hour(totalMinutes: number): string {
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+  const hours24 = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  const minuteStr = minutes < 10 ? `0${minutes}` : `${minutes}`;
+  return `${hours12}:${minuteStr} ${period}`;
+}
+
 interface JourneyCompanionSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -61,11 +103,15 @@ export function JourneyCompanionSheet({
   const propertyTitle = exp?.title ?? 'Coastal Sanctuary';
   const locationName = exp?.location ?? 'Diani Beach, Kenya';
   const hostName = booking.experience?.entity_name ?? 'Zuru Host';
-  const checkInTime = '3:00 PM';
 
   const travelTimeMin = routeInfo?.durationMin ?? 42;
   const distanceKm = routeInfo?.distanceKm ?? 35;
   const trafficCond = routeInfo?.trafficCondition ?? 'Light';
+
+  const rawCheckIn = exp?.check_in_time || (booking as any)?.terms_snapshot?.check_in_time || '15:00';
+  const checkInMinutes = parseTimeToMinutes(rawCheckIn);
+  const formattedCheckIn = formatMinutesTo12Hour(checkInMinutes);
+  const recommendedDeparture = formatMinutesTo12Hour(checkInMinutes - travelTimeMin - 15);
 
   // Bottom sheet snap points: 35%, 60%, 90%
   const snapPoints = useMemo(() => ['35%', '60%', '90%'], []);
@@ -222,7 +268,7 @@ export function JourneyCompanionSheet({
             </View>
             <View style={styles.metricCard}>
               <Feather name="log-in" size={16} color="#10B981" />
-              <Text style={styles.metricValue}>{checkInTime}</Text>
+              <Text style={styles.metricValue}>{formattedCheckIn}</Text>
               <Text style={styles.metricLabel}>Check-in</Text>
             </View>
           </View>
@@ -289,16 +335,16 @@ export function JourneyCompanionSheet({
             </View>
           )}
 
-          {/* ── AI TRAVEL INSIGHTS ───────────────────────────────── */}
+          {/* ── ROUTE & TRAVEL SUMMARY ─────────────────────────── */}
           <View style={styles.insightCard}>
             <View style={styles.insightHeader}>
-              <MaterialCommunityIcons name="creation" size={16} color={ORANGE} />
-              <Text style={styles.insightTitle}>AI Travel Insights</Text>
+              <Feather name="navigation" size={16} color={ORANGE} />
+              <Text style={styles.insightTitle}>Route & Travel Summary</Text>
             </View>
             <Text style={styles.insightBody}>
               • {trafficCond} traffic along the coastal highway. {trafficCond === 'Light' ? 'Great conditions for travel.' : 'Consider leaving 15 min early.'}
               {'\n'}• Route distance: {routeInfo?.distanceText || `${distanceKm} km`} via the main highway.
-              {'\n'}• Recommended departure: 1:45 PM for a {checkInTime} check-in.
+              {'\n'}• Recommended departure: {recommendedDeparture} for a {formattedCheckIn} check-in.
             </Text>
           </View>
 
@@ -337,13 +383,6 @@ export function JourneyCompanionSheet({
             >
               <Feather name="share-2" size={16} color="#374151" />
               <Text style={styles.secActionText}>Share ETA</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => Alert.alert('Saved Offline 💾', 'Route and itinerary saved for offline access.')}
-              style={({ pressed }) => [styles.secAction, pressed && { opacity: 0.85 }]}
-            >
-              <Feather name="download" size={16} color="#374151" />
-              <Text style={styles.secActionText}>Save Offline</Text>
             </Pressable>
           </View>
 

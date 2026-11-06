@@ -20,6 +20,7 @@ import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
+import { zuruAIService } from '@/services/zuruAIService';
 
 export default function PrivacySettingsScreen() {
   const colors = useColors();
@@ -353,16 +354,16 @@ export default function PrivacySettingsScreen() {
                 <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
               </Pressable>
 
-              {/* AI Improvement Toggle */}
+              {/* AI Personalization & Improvement Toggle (REM-12) */}
               <View style={[styles.toggleRow, { marginTop: 24 }]}>
                 <View style={styles.textContainer}>
-                  <Text style={[styles.toggleMainTitle, { color: colors.text }]}>Help improve AI-powered features</Text>
+                  <Text style={[styles.toggleMainTitle, { color: colors.text }]}>AI feed personalization & recommendations</Text>
                   <Text style={[styles.toggleSubText, { color: colors.mutedForeground }]}>
-                    When this is on, we use your data to develop and improve AI models that power certain features on ZuruSasa.{' '}
+                    When this is on, ZuruSasa uses your liked and saved reels to personalize your ZuruFlow feed and travel suggestions. Turning this off disables AI behavioral profiling and keeps your feed chronological.{' '}
                     <Text
                       onPress={() =>
                         setLearnMoreModal(
-                          'We use anonymized search trends and reel engagement to train intelligent recommendation algorithms for coastal destinations.'
+                          'When enabled, ZuruSasa analyzes your in-app likes and saves to rank coastal stays and activities that match your travel style. ZuruSasa never sells your personal data or trains external foundation models on your private conversations.'
                         )
                       }
                       style={styles.learnMoreLink}
@@ -375,6 +376,7 @@ export default function PrivacySettingsScreen() {
                   value={aiImprovement}
                   onValueChange={(val) => {
                     setAiImprovement(val);
+                    zuruAIService.clearPersonalizationCache();
                     handleToggle('ai_improvement', val);
                   }}
                   trackColor={{ false: '#E2E8F0', true: colors.text }}

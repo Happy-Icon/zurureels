@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   Platform,
   Pressable,
@@ -12,58 +12,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
-import { supabase } from '@/lib/supabase';
 
 export default function TranslationSettingsScreen() {
   const colors = useColors();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
-
-  const [autoTranslate, setAutoTranslate] = useState(true);
 
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 16;
   const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 32;
-
-  useEffect(() => {
-    const loadSettings = async () => {
-      if (!user) return;
-      try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('translation_settings')
-          .eq('id', user.id)
-          .single();
-
-        if (data?.translation_settings) {
-          const t = data.translation_settings as Record<string, any>;
-          if (t.auto_translate !== undefined) {
-            setAutoTranslate(t.auto_translate);
-          }
-        }
-      } catch (e) {
-        console.warn('Note loading translation settings:', e);
-      }
-    };
-    loadSettings();
-  }, [user]);
-
-  const handleToggle = async (val: boolean) => {
-    setAutoTranslate(val);
-    if (!user?.id) return;
-    try {
-      await supabase
-        .from('profiles')
-        .update({ translation_settings: { auto_translate: val, target_language: 'English' } })
-        .eq('id', user.id);
-    } catch (e) {
-      console.warn('Error updating translation setting:', e);
-    }
-  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -92,23 +51,29 @@ export default function TranslationSettingsScreen() {
 
         {/* Intro Subtitle */}
         <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>
-          Automatically translate the reviews, descriptions and messages written by guests and Hosts to English. Turn this feature off if you'd like to show the original language.
+          Automatic translation of reviews, descriptions, and host-guest messages between Swahili, English, and international languages is currently in development and will be available in an upcoming release.
         </Text>
 
-        {/* Automatic translation row */}
-        <View style={styles.toggleRow}>
+        {/* Automatic translation row (Deferred / Coming Soon — REM-12) */}
+        <View style={[styles.toggleRow, { opacity: 0.65 }]}>
           <View style={styles.textContainer}>
-            <Text style={[styles.toggleTitle, { color: colors.text }]}>Automatic translation</Text>
+            <View style={styles.titleRow}>
+              <Text style={[styles.toggleTitle, { color: colors.text }]}>Automatic translation</Text>
+              <View style={[styles.comingSoonBadge, { backgroundColor: isDark ? '#27272A' : '#FFF7ED', borderColor: isDark ? '#3F3F46' : '#FED7AA' }]}>
+                <Text style={styles.comingSoonText}>COMING SOON</Text>
+              </View>
+            </View>
             <Text style={[styles.toggleSubtitle, { color: colors.mutedForeground }]}>
-              Translate reviews, descriptions and messages into English.
+              Reviews, listing descriptions, and messages are currently displayed in their original language.
             </Text>
           </View>
 
           <Switch
-            value={autoTranslate}
-            onValueChange={handleToggle}
+            testID="translation-auto-switch"
+            value={false}
+            disabled={true}
             trackColor={{ false: isDark ? '#3F3F46' : '#E2E8F0', true: colors.text }}
-            thumbColor={isDark ? '#FFFFFF' : '#FFFFFF'}
+            thumbColor={isDark ? '#A1A1AA' : '#FFFFFF'}
           />
         </View>
       </ScrollView>
@@ -172,16 +137,34 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 16,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+    flexWrap: 'wrap',
+  },
   toggleTitle: {
     fontSize: 16,
     fontWeight: '500',
     color: '#1E1E1E',
-    marginBottom: 4,
     fontFamily: Platform.select({
       ios: 'System',
       android: 'DMSans_500Medium',
       default: 'sans-serif',
     }),
+  },
+  comingSoonBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  comingSoonText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#F26522',
+    letterSpacing: 0.4,
   },
   toggleSubtitle: {
     fontSize: 14,

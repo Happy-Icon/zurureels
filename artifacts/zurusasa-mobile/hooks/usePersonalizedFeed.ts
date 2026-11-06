@@ -4,9 +4,10 @@
  *
  * Architecture:
  * - Uses existing Reel metadata and real user interaction data (likes, saves).
- * - Fable 5.1 computes category & location affinities server-side (cached for 1 hour in Redis).
+ * - Respects the traveler's `ai_improvement` privacy setting (REM-12).
+ * - Computes category & location affinities server-side (cached for 1 hour).
  * - Normal ranking logic on client/DB handles high-frequency feed retrieval.
- * - ZERO Fable API calls on reel swipes.
+ * - ZERO AI API calls on reel swipes.
  * - ZERO fake reels generated.
  */
 
@@ -16,24 +17,31 @@ import { useReels } from '@/lib/queries';
 import { zuruAIService } from '@/services/zuruAIService';
 import type { ReelRow } from '@/lib/supabase';
 
-export function usePersonalizedReels(userId?: string) {
+export function usePersonalizedReels(userId?: string, options?: { aiImprovementOptOut?: boolean }) {
   const reelsQuery = useReels();
+  const isOptedOut = options?.aiImprovementOptOut === true;
 
   const affinitiesQuery = useQuery({
-    queryKey: ['ai-personalization-affinities', userId],
-    enabled: Boolean(userId),
+    queryKey: ['ai-personalization-affinities', userId, isOptedOut],
+    enabled: Boolean(userId) && !isOptedOut,
     staleTime: 60 * 60 * 1000, // 1 hour
     queryFn: async () => {
-      if (!userId) return { categoryAffinities: {}, locationAffinities: {} };
-      return await zuruAIService.getPersonalizationAffinities(userId);
+      if (!userId || isOptedOut) {
+        return { categoryAffinities: {}, locationAffinities: {}, source: 'opted_out' as const };
+      }
+      return await zuruAIService.getPersonalizationAffinities(userId, { aiImprovementOptOut: isOptedOut });
     },
   });
 
   const personalizedReels = useMemo<ReelRow[]>(() => {
     const rawReels = reelsQuery.data ?? [];
-    if (!rawReels.length) return rawReels;
+    if (!rawReels.length || isOptedOut) return rawReels;
 
     const affinities = affinitiesQuery.data;
+    if (affinities?.source === 'opted_out') {
+      return rawReels;
+    }
+
     const catAffinities = affinities?.categoryAffinities ?? {};
     const locAffinities = affinities?.locationAffinities ?? {};
 
@@ -51,7 +59,6 @@ export function usePersonalizedReels(userId?: string) {
       const catB = (b.category || (b.experience as any)?.category || '').toLowerCase();
       const locA = (a.experience?.location || '').toLowerCase();
       const locB = (b.experience?.location || '').toLowerCase();
-
 
       const weightCatA = catAffinities[catA] || 0;
       const weightCatB = catAffinities[catB] || 0;
@@ -76,13 +83,14 @@ export function usePersonalizedReels(userId?: string) {
       const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
     });
-  }, [reelsQuery.data, affinitiesQuery.data]);
+  }, [reelsQuery.data, affinitiesQuery.data, isOptedOut]);
 
   return {
     reels: personalizedReels,
     isLoading: reelsQuery.isLoading,
     isError: reelsQuery.isError,
     refetch: reelsQuery.refetch,
-    persona: affinitiesQuery.data?.persona,
+    persona: isOptedOut ? undefined : affinitiesQuery.data?.persona,
+    source: isOptedOut ? 'opted_out' : affinitiesQuery.data?.source,
   };
 }
