@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { notificationService } from '@/services/notificationService';
 import { uploadToCloudinaryMobile, getCloudinaryVideoThumbnail } from '@/lib/cloudinaryUpload';
 import { invalidateServerCache } from '@/lib/redis';
+import type { PickedHostLocation } from '@/components/map/HostLocationPickerModal';
 import type { BookingMode, CancellationPolicyId } from '@/components/host/create-reel/createReelConstants';
 
 export function useCreateReelForm() {
@@ -20,6 +21,8 @@ export function useCreateReelForm() {
   const [category, setCategory] = useState('stays');
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('Diani');
+  const [pinnedLocation, setPinnedLocation] = useState<PickedHostLocation | null>(null);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [price, setPrice] = useState('');
   const [priceUnit, setPriceUnit] = useState('night');
   const [description, setDescription] = useState('');
@@ -255,7 +258,13 @@ export function useCreateReelForm() {
           category,
           entity_name: user.user_metadata?.full_name || 'Local Experience',
           title: title.trim(),
-          location: location.toLowerCase(),
+          location: (pinnedLocation?.city || location).toLowerCase(),
+          city: pinnedLocation?.city || location,
+          formatted_address: pinnedLocation?.formattedAddress || null,
+          country_code: pinnedLocation?.countryCode || 'KE',
+          latitude: pinnedLocation?.latitude ?? null,
+          longitude: pinnedLocation?.longitude ?? null,
+          location_precision: pinnedLocation ? pinnedLocation.precision : 'city_only',
           current_price: numPrice,
           price_unit: priceUnit,
           description: description.trim(),
@@ -309,6 +318,8 @@ export function useCreateReelForm() {
           category,
           video_url: finalVideoUrl,
           thumbnail_url: finalThumbUrl,
+          lat: exp.display_latitude ?? null,
+          lng: exp.display_longitude ?? null,
           duration: 20,
           status: 'published',
           processing_status: 'completed',
@@ -372,6 +383,10 @@ export function useCreateReelForm() {
     setTitle,
     location,
     setLocation,
+    pinnedLocation,
+    setPinnedLocation,
+    showLocationPicker,
+    setShowLocationPicker,
     price,
     setPrice,
     priceUnit,

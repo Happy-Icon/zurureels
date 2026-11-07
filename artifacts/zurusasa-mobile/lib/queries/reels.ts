@@ -41,8 +41,8 @@ export function useReels(options?: { excludeExpired?: boolean }) {
             .from('reels')
             .select(
               `*,
-              experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
-              host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)`,
+              experience:experiences(id, title, entity_name, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, availability_status, image_url, max_guests, min_stay_nights, max_stay_nights, check_in_time, check_out_time, booking_mode, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata),
+              host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, bio, role)`,
             )
             .in('status', ['active', 'published']);
 
@@ -81,8 +81,8 @@ export function useRefreshReels() {
       .from('reels')
       .select(
         `*,
-        experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
-        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)`,
+        experience:experiences(id, title, entity_name, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, availability_status, image_url, max_guests, min_stay_nights, max_stay_nights, check_in_time, check_out_time, booking_mode, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata),
+        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, bio, role)`,
       )
       .in('status', ['active', 'published']);
 
@@ -134,7 +134,7 @@ export function useExperiences(category?: string | null) {
           let query = supabase
             .from('experiences')
             .select(
-              'id, title, description, location, current_price, price_unit, entity_name, category, availability_status, metadata',
+              'id, title, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, entity_name, category, availability_status, image_url, metadata',
             )
             .limit(50);
           if (category) {

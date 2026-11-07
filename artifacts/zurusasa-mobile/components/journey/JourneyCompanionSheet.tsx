@@ -1,47 +1,37 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
-  Dimensions,
-  Linking,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import Animated, {
-  Easing,
-  FadeIn,
-  FadeOut,
-  SlideInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import * as Location from 'expo-location';
-import type { BookingRow } from '@/lib/supabase';
-import { googleMapsService, type LatLng, type RouteResult } from '@/services/googleMapsService';
+import type { BookingRow, LocationPrecision } from '@/lib/supabase';
 import { SafeRouteMapView } from '@/components/map/SafeMapView';
+import {
+  haversineDistanceKm,
+  mapService,
+  resolveExperienceCoords,
+  type LatLng,
+  type RoadRouteResult,
+} from '@/services/mapService';
 
 const ORANGE = '#F26522';
-const GOOGLE_BLUE = '#4285F4';
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const ROUTE_BLUE = '#2563EB';
 
 export type JourneyMode = 'overview' | 'navigating';
 
-/**
- * Parse time string ("15:00", "3:00 PM", "14:30") into total minutes from midnight.
- */
 export function parseTimeToMinutes(timeStr?: string | null): number {
-  if (!timeStr) return 15 * 60; // Default 3:00 PM (900 minutes)
+  if (!timeStr) return 15 * 60;
   const trimmed = timeStr.trim().toLowerCase();
 
-  // 12-hour format: "3:00 pm", "11:30 am", "3pm"
   const match12 = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
   if (match12) {
     let hours = parseInt(match12[1], 10);
@@ -52,7 +42,6 @@ export function parseTimeToMinutes(timeStr?: string | null): number {
     return hours * 60 + minutes;
   }
 
-  // 24-hour format: "15:00", "14:30", "09:00"
   const match24 = trimmed.match(/^(\d{1,2}):(\d{2})$/);
   if (match24) {
     const hours = parseInt(match24[1], 10);
@@ -63,9 +52,6 @@ export function parseTimeToMinutes(timeStr?: string | null): number {
   return 15 * 60;
 }
 
-/**
- * Format total minutes into friendly 12-hour time string ("3:00 PM").
- */
 export function formatMinutesTo12Hour(totalMinutes: number): string {
   const normalized = ((totalMinutes % 1440) + 1440) % 1440;
   const hours24 = Math.floor(normalized / 60);
@@ -91,136 +77,254 @@ export function JourneyCompanionSheet({
 }: JourneyCompanionSheetProps) {
   const insets = useSafeAreaInsets();
   const bottomSheetRef = useRef<BottomSheet>(null);
+  const lastRoutedOriginRef = useRef<LatLng | null>(null);
+
+  const exp = booking.experience;
+  const fallbackResolved = useMemo(() => resolveExperienceCoords(exp), [exp]);
 
   const [mode, setMode] = useState<JourneyMode>('overview');
   const [showNavChoice, setShowNavChoice] = useState(false);
-  const [routeInfo, setRouteInfo] = useState<RouteResult | null>(null);
-  const [userLocation, setUserLocation] = useState<LatLng>({ latitude: -4.0435, longitude: 39.6682 });
-  const [destLocation, setDestLocation] = useState<LatLng>({ latitude: -4.2797, longitude: 39.5947 });
-  const [mapReady, setMapReady] = useState(false);
+  const [loadingRoute, setLoadingRoute] = useState(false);
+  const [routeInfo, setRouteInfo] = useState<RoadRouteResult | null>(null);
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [destLocation, setDestLocation] = useState<LatLng>(
+    fallbackResolved.hasPin &&
+      fallbackResolved.latitude !== null &&
+      fallbackResolved.longitude !== null
+      ? { latitude: fallbackResolved.latitude, longitude: fallbackResolved.longitude }
+      : fallbackResolved.townCenter,
+  );
+  const [destPrecision, setDestPrecision] = useState<LocationPrecision>(
+    fallbackResolved.precision,
+  );
+  const [resolvedAddress, setResolvedAddress] = useState<string>(
+    fallbackResolved.formattedAddress,
+  );
+  const [directionsNote, setDirectionsNote] = useState<string | null>(
+    exp?.arrival_instructions?.directions ?? null,
+  );
 
-  const exp = booking.experience;
-  const propertyTitle = exp?.title ?? 'Coastal Sanctuary';
-  const locationName = exp?.location ?? 'Diani Beach, Kenya';
-  const hostName = booking.experience?.entity_name ?? 'Zuru Host';
+  const propertyTitle = exp?.title ?? booking.trip_title ?? 'Destination';
+  const hostName = exp?.entity_name ?? booking.host?.full_name ?? 'Zuru Host';
 
-  const travelTimeMin = routeInfo?.durationMin ?? 42;
-  const distanceKm = routeInfo?.distanceKm ?? 35;
-  const trafficCond = routeInfo?.trafficCondition ?? 'Light';
+  const travelTimeMin = routeInfo?.durationMinutes ?? 0;
+  const distanceKm = routeInfo?.distanceKm ?? 0;
 
-  const rawCheckIn = exp?.check_in_time || (booking as any)?.terms_snapshot?.check_in_time || '15:00';
+  const rawCheckIn =
+    exp?.check_in_time || booking.terms_snapshot?.check_in_time || '15:00';
   const checkInMinutes = parseTimeToMinutes(rawCheckIn);
   const formattedCheckIn = formatMinutesTo12Hour(checkInMinutes);
-  const recommendedDeparture = formatMinutesTo12Hour(checkInMinutes - travelTimeMin - 15);
+  const recommendedDeparture = formatMinutesTo12Hour(
+    checkInMinutes - (travelTimeMin || 35) - 15,
+  );
 
-  // Bottom sheet snap points: 35%, 60%, 90%
-  const snapPoints = useMemo(() => ['35%', '60%', '90%'], []);
+  const snapPoints = useMemo(() => ['36%', '62%', '90%'], []);
 
-  // Geocode destination & fetch route
+  // 1. Resolve Confirmed Booking Exact Coordinates + Initial GPS + OSRM Route
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      setMode('overview');
+      setShowNavChoice(false);
+      return;
+    }
+
     let active = true;
 
     (async () => {
+      setLoadingRoute(true);
       try {
-        const dest = await googleMapsService.geocodeLocation(locationName);
-        if (!active) return;
-        setDestLocation(dest);
+        let targetDest: LatLng =
+          fallbackResolved.hasPin &&
+          fallbackResolved.latitude !== null &&
+          fallbackResolved.longitude !== null
+            ? {
+                latitude: fallbackResolved.latitude,
+                longitude: fallbackResolved.longitude,
+              }
+            : fallbackResolved.townCenter;
+        let targetPrecision: LocationPrecision = fallbackResolved.precision;
+        let targetAddr = fallbackResolved.formattedAddress;
 
-        let origin = { latitude: -4.0435, longitude: 39.6682 };
-        const { status } = await Location.getForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const pos = await Location.getCurrentPositionAsync({});
-          if (pos?.coords) {
-            origin = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        // If linked to a real booking ID, fetch exact post-booking coordinates via RPC
+        if (booking.id) {
+          const confirmed = await mapService.fetchConfirmedBookingCoords(booking.id);
+          if (confirmed && confirmed.latitude !== null && confirmed.longitude !== null) {
+            targetDest = {
+              latitude: Number(confirmed.latitude),
+              longitude: Number(confirmed.longitude),
+            };
+            targetPrecision = confirmed.location_precision;
+            if (confirmed.formatted_address) {
+              targetAddr = confirmed.formatted_address;
+            }
+            if (confirmed.directions_note) {
+              setDirectionsNote(confirmed.directions_note);
+            }
           }
         }
+
+        if (!active) return;
+        setDestLocation(targetDest);
+        setDestPrecision(targetPrecision);
+        setResolvedAddress(targetAddr);
+
+        // Request foreground GPS permission if not yet granted
+        let { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'undetermined') {
+          const req = await Location.requestForegroundPermissionsAsync();
+          status = req.status;
+        }
+
+        let origin: LatLng | null = null;
+        if (status === 'granted') {
+          try {
+            const pos = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            origin = {
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            };
+          } catch {
+            origin = null;
+          }
+        }
+
         if (!active) return;
         setUserLocation(origin);
 
-        const route = await googleMapsService.fetchRoute(origin, dest);
-        if (active) setRouteInfo(route);
-      } catch {
-        // Fallback handled in service
+        if (origin) {
+          lastRoutedOriginRef.current = origin;
+          const roadRoute = await mapService.fetchRoadRoute(origin, targetDest);
+          if (active) setRouteInfo(roadRoute);
+        } else {
+          setRouteInfo(null);
+        }
+      } finally {
+        if (active) setLoadingRoute(false);
       }
     })();
 
-    return () => { active = false; };
-  }, [locationName, visible]);
+    return () => {
+      active = false;
+    };
+  }, [visible, booking.id, fallbackResolved]);
 
-  const handleStartNavigation = useCallback(() => {
-    setShowNavChoice(true);
-  }, []);
+  // 2. Live GPS Tracking (`watchPositionAsync`) when `mode === 'navigating'`
+  useEffect(() => {
+    if (!visible || mode !== 'navigating' || Platform.OS === 'web') return;
+
+    let sub: Location.LocationSubscription | null = null;
+    let cancelled = false;
+
+    (async () => {
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync();
+        status = req.status;
+      }
+      if (status !== 'granted' || cancelled) return;
+
+      sub = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          distanceInterval: 20,
+          timeInterval: 5000,
+        },
+        async (loc) => {
+          if (cancelled) return;
+          const current: LatLng = {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          };
+          setUserLocation(current);
+
+          const prevRouted = lastRoutedOriginRef.current;
+          if (!prevRouted || haversineDistanceKm(prevRouted, current) >= 0.18) {
+            lastRoutedOriginRef.current = current;
+            const updatedRoute = await mapService.fetchRoadRoute(current, destLocation);
+            if (!cancelled) setRouteInfo(updatedRoute);
+          }
+        },
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+      sub?.remove();
+    };
+  }, [visible, mode, destLocation]);
 
   const handleNavigateInApp = useCallback(() => {
     setShowNavChoice(false);
     setMode('navigating');
-    // Snap sheet to summary (35%)
     bottomSheetRef.current?.snapToIndex(0);
   }, []);
 
-  const handleNavigateGoogleMaps = useCallback(() => {
-    setShowNavChoice(false);
-    const locStr = `${destLocation.latitude},${destLocation.longitude}`;
-    const url = Platform.select({
-      ios: `maps:0,0?q=${encodeURIComponent(locationName)}&ll=${locStr}`,
-      android: `google.navigation:q=${locStr}`,
-      default: `https://www.google.com/maps/dir/?api=1&destination=${locStr}`,
-    }) || '';
-    if (url) Linking.openURL(url);
-  }, [destLocation, locationName]);
+  const handleOpenExternalApp = useCallback(
+    (app: 'google' | 'apple' | 'waze') => {
+      setShowNavChoice(false);
+      mapService.openExternalNavigation(destLocation, propertyTitle, app).catch(() => {
+        Alert.alert('Navigation App Unavailable', 'Could not open external maps app.');
+      });
+    },
+    [destLocation, propertyTitle],
+  );
 
   const handleShareETA = useCallback(() => {
+    const etaText = travelTimeMin > 0 ? `~${travelTimeMin} min away` : 'on the way';
     Alert.alert(
-      'ETA Shared ✈️',
-      `Your estimated arrival has been shared with ${hostName}. ~${travelTimeMin} min away.`,
+      'ETA Shared',
+      `Your arrival update (${etaText}) has been prepared for ${hostName}.`,
     );
   }, [hostName, travelTimeMin]);
-
-  const handleCallHost = useCallback(() => {
-    Alert.alert('Call Host', `Calling ${hostName}…`);
-  }, [hostName]);
-
-  const trafficColor = trafficCond === 'Heavy' ? '#EF4444' : trafficCond === 'Moderate' ? '#F59E0B' : '#10B981';
 
   if (!visible) return null;
 
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 999 }]}>
-      {/* ── FULL-SCREEN GOOGLE MAP ─────────────────────────────────── */}
+      {/* Full-Screen Interactive MapLibre Route Map */}
       <View style={StyleSheet.absoluteFill}>
         <SafeRouteMapView
           userLocation={userLocation}
           destLocation={destLocation}
+          destPrecision={destPrecision}
           routeInfo={routeInfo}
           propertyTitle={propertyTitle}
           isTracking={mode === 'navigating'}
-          onMapReady={() => setMapReady(true)}
         />
 
-        {/* Close button floating on map */}
+        {/* Back Button */}
         <Pressable
           onPress={onClose}
           style={[styles.mapCloseBtn, { top: insets.top + 10 }]}
           hitSlop={8}
         >
-          <Feather name="arrow-left" size={20} color="#111111" />
+          <Feather name="arrow-left" size={20} color="#111827" />
         </Pressable>
 
-        {/* Live ETA Bubble floating on map */}
+        {/* Live ETA Pill */}
         <Animated.View
-          entering={FadeIn.delay(300).duration(400)}
+          entering={FadeIn.delay(200).duration(320)}
           style={[styles.etaBubble, { top: insets.top + 10 }]}
         >
-          <View style={styles.etaBubbleInner}>
-            <Text style={styles.etaBubbleTime}>{travelTimeMin} min</Text>
-            <Text style={styles.etaBubbleDist}>{distanceKm} km</Text>
-          </View>
-          <View style={[styles.trafficDot, { backgroundColor: trafficColor }]} />
+          {loadingRoute ? (
+            <ActivityIndicator size="small" color={ORANGE} />
+          ) : routeInfo ? (
+            <>
+              <View style={styles.etaBubbleInner}>
+                <Text style={styles.etaBubbleTime}>{routeInfo.durationText}</Text>
+                <Text style={styles.etaBubbleDist}>{routeInfo.distanceText}</Text>
+              </View>
+              <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
+            </>
+          ) : (
+            <Text style={styles.etaBubbleDist}>Enable GPS for live ETA</Text>
+          )}
         </Animated.View>
       </View>
 
-      {/* ── DRAGGABLE BOTTOM SHEET ─────────────────────────────────── */}
+      {/* Draggable Bottom Sheet */}
       <BottomSheet
         ref={bottomSheetRef}
         index={1}
@@ -231,40 +335,67 @@ export function JourneyCompanionSheet({
         style={styles.sheetShadow}
       >
         <BottomSheetScrollView
-          contentContainerStyle={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, 20) + 16 }]}
+          contentContainerStyle={[
+            styles.sheetContent,
+            { paddingBottom: Math.max(insets.bottom, 20) + 16 },
+          ]}
           showsVerticalScrollIndicator={false}
         >
-          {/* ── JOURNEY SUMMARY HEADER ───────────────────────────── */}
+          {/* Header */}
           <View style={styles.summaryHeader}>
             <View style={styles.summaryLeft}>
-              <Text style={styles.summaryTitle} numberOfLines={1}>{propertyTitle}</Text>
+              <Text style={styles.summaryTitle} numberOfLines={1}>
+                {propertyTitle}
+              </Text>
               <View style={styles.summaryLocationRow}>
-                <Feather name="map-pin" size={12} color="#9CA3AF" />
-                <Text style={styles.summaryLocation} numberOfLines={1}>{locationName}</Text>
+                <Feather name="map-pin" size={12} color={ORANGE} />
+                <Text style={styles.summaryLocation} numberOfLines={1}>
+                  {resolvedAddress}
+                </Text>
               </View>
             </View>
-            <View style={styles.summaryEtaPill}>
-              <Feather name="clock" size={13} color={ORANGE} />
-              <Text style={styles.summaryEtaText}>{travelTimeMin} min</Text>
-            </View>
+            {routeInfo && (
+              <View style={styles.summaryEtaPill}>
+                <Feather name="clock" size={13} color={ORANGE} />
+                <Text style={styles.summaryEtaText}>{routeInfo.durationText}</Text>
+              </View>
+            )}
           </View>
 
-          {/* ── LIVE ROUTE METRICS ────────────────────────────────── */}
+          {/* Metrics Row */}
           <View style={styles.metricsRow}>
             <View style={styles.metricCard}>
-              <Feather name="navigation" size={16} color={GOOGLE_BLUE} />
-              <Text style={styles.metricValue}>{distanceKm} km</Text>
-              <Text style={styles.metricLabel}>Distance</Text>
+              <Feather name="navigation" size={16} color={ROUTE_BLUE} />
+              <Text style={styles.metricValue}>
+                {routeInfo ? routeInfo.distanceText : '—'}
+              </Text>
+              <Text style={styles.metricLabel}>Road Distance</Text>
             </View>
             <View style={styles.metricCard}>
               <Feather name="clock" size={16} color={ORANGE} />
-              <Text style={styles.metricValue}>{travelTimeMin} min</Text>
-              <Text style={styles.metricLabel}>Travel Time</Text>
+              <Text style={styles.metricValue}>
+                {routeInfo ? routeInfo.durationText : '—'}
+              </Text>
+              <Text style={styles.metricLabel}>Drive Time</Text>
             </View>
             <View style={styles.metricCard}>
-              <View style={[styles.trafficIndicator, { backgroundColor: trafficColor }]} />
-              <Text style={styles.metricValue}>{trafficCond}</Text>
-              <Text style={styles.metricLabel}>Traffic</Text>
+              <Ionicons
+                name={
+                  destPrecision === 'exact'
+                    ? 'location-outline'
+                    : 'shield-checkmark-outline'
+                }
+                size={16}
+                color="#10B981"
+              />
+              <Text style={styles.metricValue}>
+                {destPrecision === 'exact'
+                  ? 'Exact'
+                  : destPrecision === 'approximate'
+                    ? '~500m'
+                    : 'Town'}
+              </Text>
+              <Text style={styles.metricLabel}>Pin Precision</Text>
             </View>
             <View style={styles.metricCard}>
               <Feather name="log-in" size={16} color="#10B981" />
@@ -273,10 +404,10 @@ export function JourneyCompanionSheet({
             </View>
           </View>
 
-          {/* ── START NAVIGATION CTA ─────────────────────────────── */}
+          {/* Primary Start Navigation Button */}
           {mode === 'overview' && !showNavChoice && (
             <Pressable
-              onPress={handleStartNavigation}
+              onPress={() => setShowNavChoice(true)}
               style={({ pressed }) => [
                 styles.startNavBtn,
                 pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
@@ -287,72 +418,114 @@ export function JourneyCompanionSheet({
             </Pressable>
           )}
 
-          {/* ── NAVIGATION CHOICE STRIP ──────────────────────────── */}
+          {/* Navigation App Chooser (In-App + Google Maps + Apple Maps + Waze) */}
           {showNavChoice && (
-            <Animated.View entering={FadeIn.duration(200)} style={styles.navChoiceWrap}>
-              <Text style={styles.navChoiceTitle}>Continue with…</Text>
+            <Animated.View entering={FadeIn.duration(180)} style={styles.navChoiceWrap}>
+              <Text style={styles.navChoiceTitle}>Choose navigation mode</Text>
               <View style={styles.navChoiceRow}>
                 <Pressable
                   onPress={handleNavigateInApp}
-                  style={({ pressed }) => [
-                    styles.navChoiceBtn,
-                    styles.navChoiceBtnPrimary,
-                    pressed && { opacity: 0.9 },
-                  ]}
+                  style={[styles.navChoiceBtn, styles.navChoiceBtnPrimary]}
                 >
-                  <MaterialCommunityIcons name="compass-outline" size={20} color="#FFFFFF" />
-                  <View>
-                    <Text style={styles.navChoiceBtnTextPrimary}>Navigate in ZuruSasa</Text>
-                    <Text style={styles.navChoiceBtnSub}>Live in-app guidance</Text>
+                  <MaterialCommunityIcons
+                    name="compass-outline"
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.navChoiceBtnTextPrimary}>
+                      Live Companion in ZuruSasa
+                    </Text>
+                    <Text style={styles.navChoiceBtnSub}>
+                      Follow road route & live GPS puck in-app
+                    </Text>
                   </View>
                 </Pressable>
+
                 <Pressable
-                  onPress={handleNavigateGoogleMaps}
-                  style={({ pressed }) => [
-                    styles.navChoiceBtn,
-                    styles.navChoiceBtnSecondary,
-                    pressed && { opacity: 0.9 },
-                  ]}
+                  onPress={() => handleOpenExternalApp('google')}
+                  style={[styles.navChoiceBtn, styles.navChoiceBtnSecondary]}
                 >
-                  <Ionicons name="map-outline" size={20} color="#111111" />
-                  <View>
-                    <Text style={styles.navChoiceBtnTextSecondary}>Open Google Maps</Text>
-                    <Text style={styles.navChoiceBtnSubDark}>Turn-by-turn directions</Text>
+                  <Ionicons name="navigate-circle-outline" size={20} color="#111827" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.navChoiceBtnTextSecondary}>
+                      Open in Google Maps
+                    </Text>
+                    <Text style={styles.navChoiceBtnSubDark}>
+                      Voice turn-by-turn directions
+                    </Text>
+                  </View>
+                </Pressable>
+
+                {Platform.OS === 'ios' && (
+                  <Pressable
+                    onPress={() => handleOpenExternalApp('apple')}
+                    style={[styles.navChoiceBtn, styles.navChoiceBtnSecondary]}
+                  >
+                    <Ionicons name="map-outline" size={20} color="#111827" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.navChoiceBtnTextSecondary}>
+                        Open in Apple Maps
+                      </Text>
+                      <Text style={styles.navChoiceBtnSubDark}>
+                        Native iOS turn-by-turn
+                      </Text>
+                    </View>
+                  </Pressable>
+                )}
+
+                <Pressable
+                  onPress={() => handleOpenExternalApp('waze')}
+                  style={[styles.navChoiceBtn, styles.navChoiceBtnSecondary]}
+                >
+                  <MaterialCommunityIcons name="car-connected" size={20} color="#111827" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.navChoiceBtnTextSecondary}>Open in Waze</Text>
+                    <Text style={styles.navChoiceBtnSubDark}>
+                      Community live traffic alerts
+                    </Text>
                   </View>
                 </Pressable>
               </View>
             </Animated.View>
           )}
 
-          {/* ── IN-APP NAVIGATING STRIP ──────────────────────────── */}
+          {/* Active Live GPS Tracking Banner */}
           {mode === 'navigating' && (
             <View style={styles.navActiveStrip}>
               <View style={styles.navActiveDot} />
-              <Text style={styles.navActiveText}>NAVIGATING — {travelTimeMin} min remaining</Text>
+              <Text style={styles.navActiveText}>
+                LIVE GPS TRACKING
+                {routeInfo ? ` · ${routeInfo.durationText} remaining` : ''}
+              </Text>
               <Pressable onPress={() => setMode('overview')} hitSlop={8}>
                 <Text style={styles.navActiveStop}>End</Text>
               </Pressable>
             </View>
           )}
 
-          {/* ── ROUTE & TRAVEL SUMMARY ─────────────────────────── */}
+          {/* Route & Host Arrival Notes */}
           <View style={styles.insightCard}>
             <View style={styles.insightHeader}>
-              <Feather name="navigation" size={16} color={ORANGE} />
-              <Text style={styles.insightTitle}>Route & Travel Summary</Text>
+              <Feather name="navigation" size={15} color={ORANGE} />
+              <Text style={styles.insightTitle}>Trip & Arrival Guidance</Text>
             </View>
             <Text style={styles.insightBody}>
-              • {trafficCond} traffic along the coastal highway. {trafficCond === 'Light' ? 'Great conditions for travel.' : 'Consider leaving 15 min early.'}
-              {'\n'}• Route distance: {routeInfo?.distanceText || `${distanceKm} km`} via the main highway.
-              {'\n'}• Recommended departure: {recommendedDeparture} for a {formattedCheckIn} check-in.
+              {routeInfo
+                ? `• Driving distance: ${routeInfo.distanceText} (${routeInfo.durationText} estimated).`
+                : '• Enable location services to calculate live driving distance and ETA from your current position.'}
+              {'\n'}• Recommended departure: {recommendedDeparture} for {formattedCheckIn} check-in.
+              {directionsNote ? `\n• Host arrival note: ${directionsNote}` : ''}
             </Text>
           </View>
 
-          {/* ── HOST INFORMATION ──────────────────────────────────── */}
+          {/* Host Contact Card */}
           <View style={styles.hostCard}>
             <View style={styles.hostLeft}>
               <View style={styles.hostAvatar}>
-                <Text style={styles.hostAvatarText}>{hostName.charAt(0)}</Text>
+                <Text style={styles.hostAvatarText}>
+                  {hostName.charAt(0).toUpperCase()}
+                </Text>
               </View>
               <View>
                 <Text style={styles.hostLabel}>Your Host</Text>
@@ -360,42 +533,21 @@ export function JourneyCompanionSheet({
               </View>
             </View>
             <View style={styles.hostActions}>
-              <Pressable
-                onPress={onMessageHost}
-                style={({ pressed }) => [styles.hostActionBtn, pressed && { opacity: 0.8 }]}
-              >
+              <Pressable onPress={onMessageHost} style={styles.hostActionBtn}>
                 <Feather name="message-square" size={16} color={ORANGE} />
               </Pressable>
-              <Pressable
-                onPress={handleCallHost}
-                style={({ pressed }) => [styles.hostActionBtn, pressed && { opacity: 0.8 }]}
-              >
-                <Feather name="phone" size={16} color="#10B981" />
+              <Pressable onPress={handleShareETA} style={styles.hostActionBtn}>
+                <Feather name="share-2" size={16} color="#10B981" />
               </Pressable>
             </View>
           </View>
-
-          {/* ── SECONDARY ACTIONS ─────────────────────────────────── */}
-          <View style={styles.secondaryRow}>
-            <Pressable
-              onPress={handleShareETA}
-              style={({ pressed }) => [styles.secAction, pressed && { opacity: 0.85 }]}
-            >
-              <Feather name="share-2" size={16} color="#374151" />
-              <Text style={styles.secActionText}>Share ETA</Text>
-            </Pressable>
-          </View>
-
         </BottomSheetScrollView>
       </BottomSheet>
     </View>
   );
 }
 
-// ── STYLES ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  // Map Overlay Controls
   mapCloseBtn: {
     position: 'absolute',
     left: 16,
@@ -406,7 +558,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.14,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
@@ -417,38 +569,36 @@ const styles = StyleSheet.create({
     right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 100,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
     elevation: 5,
     zIndex: 10,
   },
   etaBubbleInner: {
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
   etaBubbleTime: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontFamily: 'DMSans_700Bold',
-    color: '#111111',
+    color: '#111827',
   },
   etaBubbleDist: {
-    fontSize: 11,
-    fontFamily: 'DMSans_400Regular',
-    color: '#9CA3AF',
+    fontSize: 11.5,
+    fontFamily: 'DMSans_500Medium',
+    color: '#6B7280',
   },
-  trafficDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  statusDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
   },
-
-  // Bottom Sheet
   sheetBg: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
@@ -456,7 +606,7 @@ const styles = StyleSheet.create({
   },
   sheetShadow: {
     shadowColor: '#000',
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: -4 },
     elevation: 10,
@@ -471,8 +621,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 16,
   },
-
-  // Summary Header
   summaryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -481,20 +629,21 @@ const styles = StyleSheet.create({
   },
   summaryLeft: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   summaryTitle: {
-    fontSize: 19,
+    fontSize: 18.5,
     fontFamily: 'DMSans_700Bold',
-    color: '#111111',
+    color: '#111827',
   },
   summaryLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
   summaryLocation: {
-    fontSize: 13,
+    flex: 1,
+    fontSize: 12.5,
     fontFamily: 'DMSans_400Regular',
     color: '#6B7280',
   },
@@ -510,12 +659,10 @@ const styles = StyleSheet.create({
     borderColor: '#FDDFCB',
   },
   summaryEtaText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontFamily: 'DMSans_700Bold',
     color: ORANGE,
   },
-
-  // Metrics Row
   metricsRow: {
     flexDirection: 'row',
     gap: 8,
@@ -531,22 +678,15 @@ const styles = StyleSheet.create({
     borderColor: '#F3F4F6',
   },
   metricValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'DMSans_700Bold',
-    color: '#111111',
+    color: '#111827',
   },
   metricLabel: {
     fontSize: 10,
     fontFamily: 'DMSans_400Regular',
     color: '#9CA3AF',
   },
-  trafficIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-
-  // Start Navigation CTA
   startNavBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -557,24 +697,22 @@ const styles = StyleSheet.create({
     backgroundColor: ORANGE,
     shadowColor: ORANGE,
     shadowOpacity: 0.3,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
     elevation: 6,
   },
   startNavBtnText: {
-    fontSize: 16,
+    fontSize: 15.5,
     fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
-
-  // Navigation Choice
   navChoiceWrap: {
     gap: 10,
   },
   navChoiceTitle: {
-    fontSize: 14,
-    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 13.5,
+    fontFamily: 'DMSans_700Bold',
     color: '#374151',
   },
   navChoiceRow: {
@@ -584,8 +722,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
-    borderRadius: 16,
+    padding: 13,
+    borderRadius: 15,
   },
   navChoiceBtnPrimary: {
     backgroundColor: ORANGE,
@@ -596,32 +734,30 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   navChoiceBtnTextPrimary: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
   },
   navChoiceBtnSub: {
     fontSize: 11.5,
     fontFamily: 'DMSans_400Regular',
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.84)',
   },
   navChoiceBtnTextSecondary: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontFamily: 'DMSans_700Bold',
-    color: '#111111',
+    color: '#111827',
   },
   navChoiceBtnSubDark: {
     fontSize: 11.5,
     fontFamily: 'DMSans_400Regular',
-    color: '#9CA3AF',
+    color: '#6B7280',
   },
-
-  // Navigation Active Strip
   navActiveStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#111111',
+    backgroundColor: '#111827',
     borderRadius: 14,
     padding: 14,
   },
@@ -636,15 +772,12 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
-    letterSpacing: 0.3,
   },
   navActiveStop: {
     fontSize: 13,
     fontFamily: 'DMSans_700Bold',
     color: '#EF4444',
   },
-
-  // AI Insight Card
   insightCard: {
     backgroundColor: '#FAFAFA',
     borderRadius: 16,
@@ -669,8 +802,6 @@ const styles = StyleSheet.create({
     color: '#4B5563',
     lineHeight: 19,
   },
-
-  // Host Card
   hostCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -696,7 +827,7 @@ const styles = StyleSheet.create({
   },
   hostAvatarText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: 'DMSans_700Bold',
   },
   hostLabel: {
@@ -707,7 +838,7 @@ const styles = StyleSheet.create({
   hostName: {
     fontSize: 14.5,
     fontFamily: 'DMSans_700Bold',
-    color: '#111111',
+    color: '#111827',
   },
   hostActions: {
     flexDirection: 'row',
@@ -722,28 +853,5 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  // Secondary Actions
-  secondaryRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  secAction: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  secActionText: {
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-    color: '#374151',
   },
 });

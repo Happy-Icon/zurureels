@@ -1,33 +1,49 @@
+import { Platform, TurboModuleRegistry } from 'react-native';
+
+const MAPLIBRE_RN_PKG = '@maplibre/' + 'maplibre-react-native';
+
+let cachedMapLibre: any = undefined;
+
 /**
- * Native Maps Bridge — uses fully dynamic require() to prevent Metro
- * from eagerly evaluating react-native-maps at bundle time.
- *
- * The path string is built dynamically so Metro cannot statically resolve it.
+ * Safely loads `@maplibre/maplibre-react-native` v11 only when compiled into the
+ * native binary (Expo Dev Client / EAS Build / `expo run:android` / `expo run:ios`).
+ * Prevents `TurboModuleRegistry.getEnforcing("MLRNMapViewModule")` from crashing
+ * if the JS bundle is opened inside a plain Expo Go client without native MapLibre.
  */
+export function getNativeMapLibre(): {
+  Map: any;
+  Camera: any;
+  GeoJSONSource: any;
+  Layer: any;
+  Marker: any;
+  UserLocation: any;
+} | null {
+  if (Platform.OS === 'web') return null;
+  if (cachedMapLibre !== undefined) return cachedMapLibre;
 
-const RN_MAPS_PKG = 'react-native' + '-maps';
-const CLUSTERING_PKG = 'react-native' + '-map-clustering';
-
-export function getNativeMaps() {
-  // Dynamic string prevents Metro static analysis from resolving the module
-  const maps = require(RN_MAPS_PKG);
-
-  let ClusteredMap: any = null;
   try {
-    ClusteredMap = require(CLUSTERING_PKG).default;
-  } catch {
-    // Not available
+    const turboMod = TurboModuleRegistry.get('MLRNMapViewModule');
+    if (!turboMod) {
+      cachedMapLibre = null;
+      return null;
+    }
+    // Dynamic string keeps Metro web bundling isolated from native codegen imports
+    const ml = require(MAPLIBRE_RN_PKG);
+    if (ml && ml.Map && ml.Camera) {
+      cachedMapLibre = {
+        Map: ml.Map,
+        Camera: ml.Camera,
+        GeoJSONSource: ml.GeoJSONSource,
+        Layer: ml.Layer,
+        Marker: ml.Marker,
+        UserLocation: ml.UserLocation,
+      };
+      return cachedMapLibre;
+    }
+  } catch (err) {
+    console.warn('[MapLibre] Native module unavailable in current binary:', err);
   }
 
-  return {
-    MapView: maps.default,
-    NativeMapView: maps.default,
-    Marker: maps.Marker,
-    NativeMarker: maps.Marker,
-    Polyline: maps.Polyline,
-    NativePolyline: maps.Polyline,
-    PROVIDER_GOOGLE: maps.PROVIDER_GOOGLE,
-    NativeProviderGoogle: maps.PROVIDER_GOOGLE,
-    ClusteredMapView: ClusteredMap || maps.default,
-  };
+  cachedMapLibre = null;
+  return null;
 }

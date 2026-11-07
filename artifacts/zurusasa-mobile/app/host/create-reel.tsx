@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
+import { HostLocationPickerModal } from '@/components/map/HostLocationPickerModal';
 import { useCreateReelForm } from '@/hooks/useCreateReelForm';
 import { MediaAndBasicsSection } from '@/components/host/create-reel/MediaAndBasicsSection';
 import { BookingAndRulesSection } from '@/components/host/create-reel/BookingAndRulesSection';
@@ -95,6 +96,26 @@ export default function CreateReelScreen() {
           onSuccess={() => form.handleSubmit()}
           title="Verification Required to List"
           subtitle="ZuruSasa requires hosts to verify their identity before publishing listings and reels."
+        />
+
+        <HostLocationPickerModal
+          visible={form.showLocationPicker}
+          initialLocationText={form.pinnedLocation?.city || form.location}
+          initialCoordinates={
+            form.pinnedLocation
+              ? {
+                  latitude: form.pinnedLocation.latitude,
+                  longitude: form.pinnedLocation.longitude,
+                }
+              : null
+          }
+          initialPrecision={form.pinnedLocation?.precision ?? 'exact'}
+          onClose={() => form.setShowLocationPicker(false)}
+          onConfirm={(picked) => {
+            form.setPinnedLocation(picked);
+            form.setLocation(picked.city);
+            form.setShowLocationPicker(false);
+          }}
         />
       </View>
     </KeyboardAvoidingView>

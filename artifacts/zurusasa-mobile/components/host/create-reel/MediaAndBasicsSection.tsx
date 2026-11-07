@@ -120,16 +120,21 @@ export function MediaAndBasicsSection({ form, colors, isDark }: MediaAndBasicsSe
         />
       </View>
 
-      {/* Location Selector */}
+      {/* Location Selector + Map Pin-Drop */}
       <View style={styles.formGroup}>
-        <Text style={[styles.inputLabel, { color: colors.text }]}>Location *</Text>
+        <Text style={[styles.inputLabel, { color: colors.text }]}>Location & Map Pin *</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           {LOCATIONS.map((loc) => {
-            const sel = form.location === loc;
+            const sel = form.location.toLowerCase() === loc.toLowerCase();
             return (
               <Pressable
                 key={loc}
-                onPress={() => form.setLocation(loc)}
+                onPress={() => {
+                  form.setLocation(loc);
+                  if (form.pinnedLocation && form.pinnedLocation.city.toLowerCase() !== loc.toLowerCase()) {
+                    form.setPinnedLocation(null);
+                  }
+                }}
                 style={[
                   styles.locChip,
                   { backgroundColor: isDark ? '#27272A' : '#F7F7F7' },
@@ -143,6 +148,63 @@ export function MediaAndBasicsSection({ form, colors, isDark }: MediaAndBasicsSe
             );
           })}
         </ScrollView>
+
+        <Pressable
+          onPress={() => form.setShowLocationPicker(true)}
+          style={({ pressed }) => [
+            {
+              marginTop: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: form.pinnedLocation ? '#F26522' : colors.border,
+              backgroundColor: form.pinnedLocation
+                ? 'rgba(242,101,34,0.08)'
+                : isDark
+                  ? '#27272A'
+                  : '#F9FAFB',
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Feather
+            name="map-pin"
+            size={18}
+            color={form.pinnedLocation ? '#F26522' : colors.mutedForeground}
+          />
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontSize: 13.5,
+                fontFamily: 'DMSans_700Bold',
+                color: colors.text,
+              }}
+              numberOfLines={1}
+            >
+              {form.pinnedLocation
+                ? `${form.pinnedLocation.city} (${form.pinnedLocation.precision === 'approximate' ? '~500m privacy circle' : 'Exact pin'})`
+                : 'Drop property pin on map (Recommended)'}
+            </Text>
+            <Text
+              style={{
+                fontSize: 12,
+                fontFamily: 'DMSans_400Regular',
+                color: colors.mutedForeground,
+                marginTop: 1,
+              }}
+              numberOfLines={1}
+            >
+              {form.pinnedLocation
+                ? form.pinnedLocation.formattedAddress
+                : 'Search any address across Kenya & Africa or use your current GPS'}
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+        </Pressable>
       </View>
 
       {/* Price & Price Unit */}

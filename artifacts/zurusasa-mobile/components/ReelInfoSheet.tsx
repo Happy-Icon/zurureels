@@ -20,6 +20,7 @@ import { reviewService, type ReviewSummaryData } from '@/services/reviewService'
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { ListingLocationMapCard } from '@/components/map/ListingLocationMapCard';
 
 const BRAND_ORANGE = '#F26522';
 
@@ -490,18 +491,11 @@ function formatHostTenure(createdAt?: string | null): { num: string; label: stri
             {/* ── 8. WHERE YOU'LL BE (LOCATION) ── */}
             <View style={styles.locationSection}>
               <Text style={styles.sectionHeading}>Where you’ll be</Text>
-              <Text style={styles.locationSub}>{exp?.location || 'Kenyan Coast'}</Text>
-
-              <View style={styles.mapCardMock}>
-                <Image
-                  source={{ uri: heroImage }}
-                  style={styles.mapCardImage}
-                  contentFit="cover"
-                />
-                <View style={styles.mapPinCircle}>
-                  <Feather name="map-pin" size={18} color="#FFFFFF" />
-                </View>
-              </View>
+              <ListingLocationMapCard
+                experience={exp}
+                reelCoords={{ lat: reel.lat, lng: reel.lng }}
+                themeOverride="light"
+              />
             </View>
 
             <View style={styles.separator} />

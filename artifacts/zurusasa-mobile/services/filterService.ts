@@ -144,11 +144,11 @@ export const filterService = {
 
     const selectClause = hasExperiencePredicate
       ? `*,
-        experience:experiences!inner(id, title, description, location, current_price, price_unit, availability_status, metadata),
-        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)`
+        experience:experiences!inner(id, title, entity_name, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, availability_status, image_url, max_guests, min_stay_nights, max_stay_nights, check_in_time, check_out_time, booking_mode, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata),
+        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, bio, role)`
       : `*,
-        experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
-        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)`;
+        experience:experiences(id, title, entity_name, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, availability_status, image_url, max_guests, min_stay_nights, max_stay_nights, check_in_time, check_out_time, booking_mode, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata),
+        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, bio, role)`;
 
     let query = supabase
       .from('reels')
@@ -173,7 +173,7 @@ export const filterService = {
 
     if (sanitizedCities.length > 0) {
       const orClause = sanitizedCities
-        .map((city) => `location.ilike.%${city}%`)
+        .flatMap((city) => [`location.ilike.%${city}%`, `city.ilike.%${city}%`])
         .join(',');
       query = query.or(orClause, { referencedTable: 'experience' });
     }
@@ -248,7 +248,11 @@ export const filterService = {
       const selectedCities = filters.cities.map((c) => c.toLowerCase());
       result = result.filter((r) => {
         const loc = (r.experience?.location ?? '').toLowerCase();
-        return selectedCities.some((city) => loc.includes(city));
+        const cityCol = (r.experience?.city ?? '').toLowerCase();
+        const addr = (r.experience?.formatted_address ?? '').toLowerCase();
+        return selectedCities.some(
+          (city) => loc.includes(city) || cityCol.includes(city) || addr.includes(city),
+        );
       });
     }
 

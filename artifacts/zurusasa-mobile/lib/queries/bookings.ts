@@ -17,7 +17,7 @@ export function useMyBookings(userId: string | undefined) {
         .from('bookings')
         .select(
           `*,
-          experience:experiences(id, user_id, title, location, current_price, price_unit, image_url, entity_name, max_guests, check_in_time, check_out_time, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata)`,
+          experience:experiences(id, user_id, title, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, image_url, entity_name, max_guests, check_in_time, check_out_time, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata)`,
         )
         .eq('user_id', userId!)
         .order('created_at', { ascending: false })

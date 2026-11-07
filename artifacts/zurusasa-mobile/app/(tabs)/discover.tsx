@@ -329,12 +329,30 @@ export default function AirbnbDiscoverScreen() {
           />
         </View>
       ) : discoverViewMode === 'map' ? (
-        /* REAL GOOGLE MAPS DISCOVER VIEW */
+        /* INTERACTIVE MAPLIBRE VECTOR DISCOVER MAP */
         <View style={{ flex: 1 }}>
           <DiscoverMapView
             reels={filteredReels}
+            filters={filters}
+            activeCategories={activeCategory !== 'all' ? categoryObj.categories : undefined}
+            initialUserCoords={coords}
             onSelectReel={(reel) => setViewerReel(reel)}
-            onOpenDirections={(reel) => setJourneyBooking(reel as any)}
+            onOpenDirections={(reel) =>
+              setJourneyBooking({
+                id: '',
+                user_id: null,
+                experience_id: reel.experience_id,
+                reel_id: reel.id,
+                trip_title: reel.experience?.title ?? 'ZuruSasa Destination',
+                amount: reel.experience?.current_price ?? 0,
+                status: 'preview',
+                check_in: null,
+                check_out: null,
+                guests: 1,
+                experience: (reel.experience as any) ?? null,
+                host: (reel.host as any) ?? null,
+              })
+            }
           />
         </View>
       ) : (
@@ -402,8 +420,42 @@ export default function AirbnbDiscoverScreen() {
         />
       )}
 
-      {/* Zuru Agent AI Floating Button */}
+      {/* Floating Map / List Mode Toggle Pill */}
       {!isSearchFocused && activeCategory !== 'ai' ? (
+        <Pressable
+          testID="discover-map-toggle"
+          accessibilityRole="button"
+          accessibilityLabel={discoverViewMode === 'map' ? 'Show list view' : 'Show map view'}
+          onPress={() =>
+            setDiscoverViewMode((prev) => (prev === 'grid' ? 'map' : 'grid'))
+          }
+          style={({ pressed }) => [
+            styles.mapToggleFab,
+            {
+              bottom: Platform.OS === 'web' ? 28 : insets.bottom + 90,
+              backgroundColor: isDark ? '#F9FAFB' : '#111827',
+              transform: [{ scale: pressed ? 0.96 : 1 }],
+            },
+          ]}
+        >
+          <Feather
+            name={discoverViewMode === 'map' ? 'list' : 'map'}
+            size={16}
+            color={isDark ? '#111827' : '#FFFFFF'}
+          />
+          <Text
+            style={[
+              styles.mapToggleFabText,
+              { color: isDark ? '#111827' : '#FFFFFF' },
+            ]}
+          >
+            {discoverViewMode === 'map' ? 'List' : 'Map'}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {/* Zuru Agent AI Floating Button (Grid Mode Only to keep Map uncluttered) */}
+      {!isSearchFocused && activeCategory !== 'ai' && discoverViewMode === 'grid' ? (
         <AIFloatingButton
           onPress={() => router.push('/ai' as any)}
           label="Ask Zuru Agent"

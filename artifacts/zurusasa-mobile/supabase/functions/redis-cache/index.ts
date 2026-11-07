@@ -73,7 +73,7 @@ Deno.serve(async (request) => {
   // 1. Get Reels Feed (sub-10ms Redis Cache with DB Fallback)
   if (action === 'get_reels_feed') {
     const excludeExpired = body.excludeExpired === true;
-    const cacheKey = excludeExpired ? 'reels_feed_active_v2_fresh' : 'reels_feed_active_v2';
+    const cacheKey = excludeExpired ? 'reels_feed_active_v3_fresh' : 'reels_feed_active_v3';
     if (redisUrl && redisToken) {
       const cached = await redisRestCommand(redisUrl, redisToken, ['GET', cacheKey]);
       if (cached) {
@@ -89,8 +89,8 @@ Deno.serve(async (request) => {
       .from('reels')
       .select(
         `*,
-        experience:experiences(id, title, description, location, current_price, price_unit, availability_status, metadata),
-        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, role)`,
+        experience:experiences(id, title, entity_name, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, availability_status, image_url, max_guests, min_stay_nights, max_stay_nights, check_in_time, check_out_time, booking_mode, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata),
+        host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, bio, role)`,
       )
       .in('status', ['active', 'published']);
 
@@ -119,6 +119,8 @@ Deno.serve(async (request) => {
         'reels_feed_active_v1',
         'reels_feed_active_v2',
         'reels_feed_active_v2_fresh',
+        'reels_feed_active_v3',
+        'reels_feed_active_v3_fresh',
       ]);
     }
     return json({ success: true });
@@ -127,7 +129,7 @@ Deno.serve(async (request) => {
   // 3. Get Experiences Feed by Category
   if (action === 'get_experiences') {
     const category = body.category || 'all';
-    const cacheKey = `experiences_cat_${category}`;
+    const cacheKey = `experiences_cat_v2_${category}`;
 
     if (redisUrl && redisToken) {
       const cached = await redisRestCommand(redisUrl, redisToken, ['GET', cacheKey]);
@@ -143,7 +145,7 @@ Deno.serve(async (request) => {
     let query = supabase
       .from('experiences')
       .select(
-        'id, title, description, location, current_price, price_unit, entity_name, category, availability_status, metadata',
+        'id, title, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, entity_name, category, availability_status, image_url, metadata',
       )
       .limit(50);
 

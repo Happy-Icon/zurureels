@@ -122,12 +122,22 @@ export interface CancellationPolicySnapshot {
 
 // ---- Shared row types (mirrors web app tables) ----
 
+export type LocationPrecision = 'exact' | 'approximate' | 'city_only';
+
 export interface ExperienceRow {
   id: string;
   user_id?: string;
   title: string | null;
   description: string | null;
   location: string | null;
+  city?: string | null;
+  formatted_address?: string | null;
+  country_code?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  display_latitude?: number | null;
+  display_longitude?: number | null;
+  location_precision?: LocationPrecision | null;
   current_price: number | null;
   price_unit: string | null;
   entity_name: string | null;
@@ -234,12 +244,21 @@ export interface ReelRow {
   is_live: boolean | null;
   status: string | null;
   created_at?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   experience?: Pick<
     ExperienceRow,
     | 'id'
     | 'title'
+    | 'entity_name'
     | 'description'
     | 'location'
+    | 'city'
+    | 'formatted_address'
+    | 'country_code'
+    | 'display_latitude'
+    | 'display_longitude'
+    | 'location_precision'
     | 'current_price'
     | 'price_unit'
     | 'availability_status'
@@ -289,6 +308,12 @@ export interface BookingRow {
     | 'user_id'
     | 'title'
     | 'location'
+    | 'city'
+    | 'formatted_address'
+    | 'country_code'
+    | 'display_latitude'
+    | 'display_longitude'
+    | 'location_precision'
     | 'current_price'
     | 'price_unit'
     | 'image_url'

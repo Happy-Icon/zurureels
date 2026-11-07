@@ -23,6 +23,11 @@ import { invalidateServerCache } from '@/lib/redis';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { ReelCard } from '@/components/ReelCard';
 import { Skeleton } from '@/components/Skeleton';
+import {
+  HostLocationPickerModal,
+  type PickedHostLocation,
+} from '@/components/map/HostLocationPickerModal';
+import { resolveExperienceCoords } from '@/services/mapService';
 
 interface HostReelItem extends ReelRow {
   title?: string | null;
@@ -47,6 +52,7 @@ export default function HostListingsScreen() {
   const [activeTab, setActiveTab] = useState<'published' | 'drafts'>('published');
   const [reels, setReels] = useState<HostReelItem[]>([]);
   const [selectedPreviewReel, setSelectedPreviewReel] = useState<HostReelItem | null>(null);
+  const [pinningReel, setPinningReel] = useState<HostReelItem | null>(null);
 
   const topPad = Platform.OS === 'web' ? 60 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 100 : 90;
@@ -56,7 +62,7 @@ export default function HostListingsScreen() {
     try {
       const { data, error } = await supabase
         .from('reels')
-        .select('*, experience:experiences(id, title, location, current_price, price_unit, availability_status)')
+        .select('*, experience:experiences(id, title, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, availability_status, metadata)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -145,6 +151,57 @@ export default function HostListingsScreen() {
     });
   };
 
+  const handleSaveHostPin = async (picked: PickedHostLocation) => {
+    const target = pinningReel;
+    setPinningReel(null);
+    if (!target || !target.experience_id) return;
+
+    try {
+      const { data: updatedExp, error: expErr } = await supabase
+        .from('experiences')
+        .update({
+          latitude: picked.latitude,
+          longitude: picked.longitude,
+          location_precision: picked.precision,
+          city: picked.city,
+          formatted_address: picked.formattedAddress,
+          country_code: picked.countryCode,
+          location: picked.city.toLowerCase(),
+        })
+        .eq('id', target.experience_id)
+        .select('id, display_latitude, display_longitude, location_precision, city, formatted_address, country_code, location')
+        .single();
+
+      if (expErr) throw expErr;
+
+      await supabase
+        .from('reels')
+        .update({
+          lat: updatedExp?.display_latitude ?? picked.latitude,
+          lng: updatedExp?.display_longitude ?? picked.longitude,
+        })
+        .eq('id', target.id);
+
+      await invalidateServerCache('invalidate_reels_feed').catch(() => null);
+      await fetchListings();
+
+      showAlert({
+        title: 'Map Pin Saved',
+        message:
+          picked.precision === 'approximate'
+            ? 'Your ~500m privacy circle is now live on Discover Map. Exact coordinates remain private until booking confirmation.'
+            : 'Your exact property pin is now live on the ZuruSasa Discover Map.',
+        icon: 'check-circle',
+      });
+    } catch (err: any) {
+      showAlert({
+        title: 'Could Not Save Pin',
+        message: err?.message || 'Failed to update map coordinates.',
+        icon: 'alert-circle',
+      });
+    }
+  };
+
   const filteredReels = reels.filter((r) =>
     activeTab === 'published' ? r.status === 'published' || !r.status : r.status === 'draft',
   );
@@ -152,6 +209,10 @@ export default function HostListingsScreen() {
   const renderItem = ({ item }: { item: HostReelItem }) => {
     const priceUnit = item.price_unit ? `/${item.price_unit}` : '';
     const isBooked = item.availability_status === 'booked_out';
+    const resolvedPin = resolveExperienceCoords(item.experience, {
+      lat: item.lat,
+      lng: item.lng,
+    });
 
     return (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -206,6 +267,46 @@ export default function HostListingsScreen() {
               </Text>
             ) : null}
           </View>
+
+          <Pressable
+            onPress={() => setPinningReel(item)}
+            style={({ pressed }) => [
+              {
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                alignSelf: 'flex-start',
+                backgroundColor: resolvedPin.hasPin
+                  ? 'rgba(16, 185, 129, 0.1)'
+                  : 'rgba(242, 101, 34, 0.12)',
+                borderWidth: 1,
+                borderColor: resolvedPin.hasPin
+                  ? 'rgba(16, 185, 129, 0.35)'
+                  : 'rgba(242, 101, 34, 0.35)',
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 999,
+                opacity: pressed ? 0.8 : 1,
+              },
+            ]}
+          >
+            <Feather
+              name="map-pin"
+              size={11}
+              color={resolvedPin.hasPin ? '#10B981' : '#F26522'}
+            />
+            <Text
+              style={{
+                fontSize: 11,
+                fontFamily: 'DMSans_700Bold',
+                color: resolvedPin.hasPin ? '#10B981' : '#F26522',
+              }}
+            >
+              {resolvedPin.hasPin
+                ? `${resolvedPin.precision === 'approximate' ? '~500m pin' : 'Exact pin'} · Edit`
+                : 'Add map pin'}
+            </Text>
+          </Pressable>
 
           <View style={styles.actionsRow}>
             <Pressable
@@ -423,6 +524,26 @@ export default function HostListingsScreen() {
           ) : null}
         </View>
       </Modal>
+
+      <HostLocationPickerModal
+        visible={Boolean(pinningReel)}
+        initialLocationText={pinningReel?.location || 'Diani'}
+        initialCoordinates={
+          pinningReel?.experience?.display_latitude && pinningReel?.experience?.display_longitude
+            ? {
+                latitude: Number(pinningReel.experience.display_latitude),
+                longitude: Number(pinningReel.experience.display_longitude),
+              }
+            : null
+        }
+        initialPrecision={
+          pinningReel?.experience?.location_precision === 'approximate'
+            ? 'approximate'
+            : 'exact'
+        }
+        onClose={() => setPinningReel(null)}
+        onConfirm={handleSaveHostPin}
+      />
     </View>
   );
 }

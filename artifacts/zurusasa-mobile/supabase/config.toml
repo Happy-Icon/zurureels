@@ -34,6 +34,9 @@ verify_jwt = false
 [functions.redis-cache]
 verify_jwt = false
 
+[functions.maps-proxy]
+verify_jwt = false
+
 [functions.send-email]
 verify_jwt = true
 

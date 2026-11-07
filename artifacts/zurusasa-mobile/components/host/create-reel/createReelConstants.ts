@@ -7,7 +7,19 @@ export const CATEGORIES = [
   { label: 'Boats & Water Sports', value: 'boats' },
 ];
 
-export const LOCATIONS = ['Diani', 'Watamu', 'Lamu', 'Mombasa', 'Malindi', 'Kilifi'];
+export const LOCATIONS = [
+  'Diani',
+  'Mombasa',
+  'Watamu',
+  'Malindi',
+  'Lamu',
+  'Kilifi',
+  'Nairobi',
+  'Naivasha',
+  'Nanyuki',
+  'Maasai Mara',
+  'Zanzibar',
+];
 
 export const POPULAR_AMENITIES = [
   'Fast Wi-Fi',

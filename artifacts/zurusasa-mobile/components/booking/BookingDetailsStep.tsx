@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 
 import type { ReelRow } from '@/lib/supabase';
 import type { BookingCheckoutState } from '@/hooks/useBookingCheckout';
+import { ListingLocationMapCard } from '@/components/map/ListingLocationMapCard';
 import { bookingStyles as styles } from './bookingStyles';
 
 interface BookingDetailsStepProps {
@@ -316,14 +317,11 @@ export function BookingDetailsStep({ reel, topInset, checkout }: BookingDetailsS
         {/* 8. WHERE YOU'LL BE */}
         <View style={styles.locationSection}>
           <Text style={styles.sectionHeading}>Where you’ll be</Text>
-          <Text style={styles.locationSub}>{exp?.location || 'Kenyan Coast'}</Text>
-
-          <View style={styles.mapCardMock}>
-            <Image source={{ uri: heroImage }} style={styles.mapCardImage} contentFit="cover" />
-            <View style={styles.mapPinCircle}>
-              <Feather name="map-pin" size={18} color="#FFFFFF" />
-            </View>
-          </View>
+          <ListingLocationMapCard
+            experience={exp}
+            reelCoords={{ lat: reel.lat, lng: reel.lng }}
+            themeOverride="light"
+          />
         </View>
 
         <View style={styles.separator} />
