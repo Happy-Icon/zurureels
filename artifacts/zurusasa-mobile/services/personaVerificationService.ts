@@ -26,6 +26,62 @@ export interface VerificationStatusResult {
   failureReason?: string;
 }
 
+/**
+ * Extracts structured JSON error details from Supabase Edge Function `FunctionsHttpError`
+ * responses instead of exposing the generic "Edge Function returned a non-2xx status code" wrapper.
+ */
+async function extractEdgeFunctionError(
+  error: any,
+  data: any,
+  fallback: string,
+): Promise<{ userMessage: string; code?: string; debugInfo?: Record<string, unknown> }> {
+  if (data?.error && typeof data.error === 'string') {
+    return { userMessage: data.error, code: data.code, debugInfo: data };
+  }
+
+  const context = error?.context;
+  if (context) {
+    try {
+      const responseClone = typeof context.clone === 'function' ? context.clone() : context;
+      if (typeof responseClone.json === 'function') {
+        const payload = await responseClone.json();
+        if (payload?.error) {
+          return {
+            userMessage: String(payload.error),
+            code: typeof payload.code === 'string' ? payload.code : undefined,
+            debugInfo: payload,
+          };
+        }
+      } else if (typeof responseClone.text === 'function') {
+        const rawText = await responseClone.text();
+        if (rawText) {
+          try {
+            const parsed = JSON.parse(rawText);
+            if (parsed?.error) {
+              return {
+                userMessage: String(parsed.error),
+                code: typeof parsed.code === 'string' ? parsed.code : undefined,
+                debugInfo: parsed,
+              };
+            }
+          } catch {
+            return { userMessage: rawText };
+          }
+        }
+      }
+    } catch {
+      // Fall through if response stream could not be decoded as JSON
+    }
+  }
+
+  const rawMsg = typeof error?.message === 'string' ? error.message.trim() : '';
+  if (rawMsg && !rawMsg.toLowerCase().includes('non-2xx status code')) {
+    return { userMessage: rawMsg };
+  }
+
+  return { userMessage: fallback };
+}
+
 export const personaVerificationService = {
   /**
    * Check if Persona native module is available in the current environment
@@ -91,9 +147,18 @@ export const personaVerificationService = {
           body: { userId },
         });
 
-        if (error) {
-          invokeErrorMessage = error?.message || 'Could not initiate identity verification session.';
-          console.warn('[Persona] create-persona-inquiry error:', error);
+        if (error || data?.error) {
+          const extracted = await extractEdgeFunctionError(
+            error,
+            data,
+            'Could not initiate identity verification session. Please try again.',
+          );
+          invokeErrorMessage = extracted.userMessage;
+          console.warn('[Persona] create-persona-inquiry error:', {
+            message: extracted.userMessage,
+            code: extracted.code,
+            ...(extracted.debugInfo ? { details: extracted.debugInfo } : {}),
+          });
         } else if (data) {
           if (data.inquiryId) serverInquiryId = data.inquiryId;
           if (data.sessionToken) sessionToken = data.sessionToken;
@@ -103,8 +168,13 @@ export const personaVerificationService = {
           }
         }
       } catch (fnErr: any) {
-        invokeErrorMessage = fnErr?.message || 'Network error connecting to verification service.';
-        console.warn('Notice from create-persona-inquiry function:', fnErr);
+        const extracted = await extractEdgeFunctionError(
+          fnErr,
+          null,
+          'Network error connecting to verification service.',
+        );
+        invokeErrorMessage = extracted.userMessage;
+        console.warn('Notice from create-persona-inquiry function:', extracted);
       }
 
       // 2. Build Persona Inquiry using SDK v2
@@ -146,11 +216,13 @@ export const personaVerificationService = {
             );
 
             if (verifyErr || !verifyData?.success) {
-              const errMsg =
-                verifyData?.error ||
-                verifyErr?.message ||
-                'Could not confirm identity verification with server. Your submission is queued for webhook review.';
-              onError?.(errMsg);
+              const extracted = await extractEdgeFunctionError(
+                verifyErr,
+                verifyData,
+                'Could not confirm identity verification with server. Your submission is queued for webhook review.',
+              );
+              console.warn('[Persona] verify-persona-inquiry error:', extracted);
+              onError?.(extracted.userMessage);
               return;
             }
 

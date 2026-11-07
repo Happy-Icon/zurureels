@@ -120,8 +120,14 @@ Deno.serve(async (request) => {
     inquiryAttributes['reference-id'] ??
     inquiryAttributes.reference_id;
 
-  if (!inquiryId || !referenceId) {
-    return json({ error: 'Missing inquiryId or referenceId in webhook payload' }, 400);
+  if (!inquiryId || !String(inquiryId).startsWith('inq_') || !referenceId) {
+    console.info('[persona-webhook] Ignoring non-inquiry or unlinked webhook event:', {
+      eventName,
+      resourceType: inquiryData?.type,
+      inquiryId: inquiryId || null,
+      hasReferenceId: Boolean(referenceId),
+    });
+    return json({ received: true, ignored: true, eventName: eventName || null });
   }
 
   const adminClient = createClient(url, serviceRoleKey, { auth: { persistSession: false } });

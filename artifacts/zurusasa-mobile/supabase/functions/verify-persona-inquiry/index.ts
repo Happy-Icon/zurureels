@@ -1,6 +1,8 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const PERSONA_API_BASE = 'https://api.withpersona.com/api/v1';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
@@ -16,10 +18,10 @@ function json(body: unknown, status = 200) {
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+  if (request.method !== 'POST') return json({ error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' }, 405);
 
   const authorization = request.headers.get('Authorization');
-  if (!authorization) return json({ error: 'Authentication is required' }, 401);
+  if (!authorization) return json({ error: 'Authentication is required', code: 'UNAUTHENTICATED' }, 401);
 
   const url = Deno.env.get('SUPABASE_URL') || '';
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
@@ -27,13 +29,13 @@ Deno.serve(async (request) => {
   const personaApiKey = Deno.env.get('PERSONA_API_KEY')?.trim() || '';
 
   if (!url || !anonKey || !serviceRoleKey) {
-    return json({ error: 'Verification database service is not configured' }, 503);
+    return json({ error: 'Verification database service is not configured', code: 'DB_NOT_CONFIGURED' }, 503);
   }
 
   // Fail closed: require server-side Persona API key
   if (!personaApiKey) {
     console.error('[verify-persona-inquiry] PERSONA_API_KEY is not configured');
-    return json({ error: 'Identity verification service is not configured' }, 503);
+    return json({ error: 'Identity verification service is not configured', code: 'MISSING_API_KEY' }, 503);
   }
 
   const userClient = createClient(url, anonKey, {
@@ -44,27 +46,28 @@ Deno.serve(async (request) => {
     data: { user },
     error: userError,
   } = await userClient.auth.getUser();
-  if (userError || !user) return json({ error: 'Authentication is required' }, 401);
+  if (userError || !user) return json({ error: 'Authentication is required', code: 'UNAUTHENTICATED' }, 401);
 
   let body: { inquiryId?: unknown; status?: unknown; fields?: Record<string, unknown> } = {};
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
+    return json({ error: 'Invalid JSON body', code: 'INVALID_JSON' }, 400);
   }
 
   const inquiryId = typeof body.inquiryId === 'string' ? body.inquiryId.trim() : '';
   if (!/^inq_[A-Za-z0-9_-]+$/.test(inquiryId)) {
-    return json({ error: 'A valid Persona inquiryId (inq_...) is required' }, 400);
+    return json({ error: 'A valid Persona inquiryId (inq_...) is required', code: 'INVALID_INQUIRY_ID' }, 400);
   }
 
   // Authoritative lookup against Persona REST API (never trust client-reported status)
   let serverInquiryStatus = '';
   let serverRefId = '';
   try {
-    const res = await fetch(`https://withpersona.com/api/v1/inquiries/${encodeURIComponent(inquiryId)}`, {
+    const res = await fetch(`${PERSONA_API_BASE}/inquiries/${encodeURIComponent(inquiryId)}`, {
       headers: {
         Authorization: `Bearer ${personaApiKey}`,
+        Accept: 'application/json',
         'Persona-Version': '2023-01-05',
         'Key-Inflection': 'camel',
       },
@@ -72,8 +75,28 @@ Deno.serve(async (request) => {
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => '');
-      console.error('[verify-persona-inquiry] Persona API lookup failed:', res.status, errBody);
-      return json({ error: 'Could not verify inquiry with Persona API' }, res.status === 404 ? 404 : 502);
+      const resolvedEnvId = res.headers.get('persona-environment-id') || null;
+      const personaRequestId = res.headers.get('request-id') || null;
+      console.error('[verify-persona-inquiry] Persona API lookup failed:', {
+        status: res.status,
+        inquiryId,
+        resolvedEnvId,
+        personaRequestId,
+        body: errBody,
+      });
+      return json(
+        {
+          error:
+            res.status === 404
+              ? 'Verification inquiry was not found in the active Persona environment.'
+              : 'Could not verify inquiry status with Persona API.',
+          code: res.status === 404 ? 'PERSONA_INQUIRY_NOT_FOUND' : 'PERSONA_LOOKUP_FAILED',
+          personaStatus: res.status,
+          environmentId: resolvedEnvId,
+          requestId: personaRequestId,
+        },
+        res.status === 404 ? 404 : 502,
+      );
     }
 
     const jsonRes = await res.json();
@@ -82,12 +105,18 @@ Deno.serve(async (request) => {
     serverRefId = String(attrs.referenceId ?? attrs['reference-id'] ?? attrs.reference_id ?? '');
   } catch (err) {
     console.error('[verify-persona-inquiry] Persona network failure:', err);
-    return json({ error: 'Identity verification provider could not be reached' }, 502);
+    return json(
+      { error: 'Identity verification provider could not be reached', code: 'PERSONA_NETWORK_ERROR' },
+      502,
+    );
   }
 
   // Enforce strict inquiry ownership
   if (!serverRefId || serverRefId !== user.id) {
-    return json({ error: 'Inquiry does not belong to the authenticated user' }, 403);
+    return json(
+      { error: 'Inquiry does not belong to the authenticated user', code: 'INQUIRY_OWNERSHIP_MISMATCH' },
+      403,
+    );
   }
 
   const normalized = serverInquiryStatus.toLowerCase().trim();
@@ -134,7 +163,7 @@ Deno.serve(async (request) => {
 
   if (updateErr) {
     console.error('[verify-persona-inquiry] Error updating profile:', updateErr);
-    return json({ error: 'Failed to persist verification status' }, 500);
+    return json({ error: 'Failed to persist verification status', code: 'PROFILE_UPDATE_FAILED' }, 500);
   }
 
   return json({
