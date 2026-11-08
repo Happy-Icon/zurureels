@@ -433,5 +433,49 @@ export interface UserDeviceRow {
   updated_at?: string;
 }
 
+export type PersonalDataRequestStatus =
+  | 'pending_verification'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'expired'
+  | 'cancelled';
+
+export type PersonalDataExportFormat = 'json' | 'pdf' | 'both';
+
+export interface PersonalDataRequestRow {
+  id: string;
+  user_id: string;
+  status: PersonalDataRequestStatus;
+  format: PersonalDataExportFormat;
+  otp_attempts: number;
+  otp_max_attempts: number;
+  otp_expires_at?: string | null;
+  verified_at?: string | null;
+  json_storage_path?: string | null;
+  pdf_storage_path?: string | null;
+  file_size_bytes?: number | null;
+  checksum_sha256?: string | null;
+  expires_at?: string | null;
+  download_count: number;
+  last_downloaded_at?: string | null;
+  error_message?: string | null;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonalDataAuditLogRow {
+  id: string;
+  request_id?: string | null;
+  user_id: string;
+  event_type: string;
+  actor_role: string;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  details?: Record<string, unknown>;
+  created_at: string;
+}
+
 export { resolveAvatarUrl } from '@/lib/avatar';
 

@@ -18,9 +18,11 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, PersonalDataRequestRow } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
 import { zuruAIService } from '@/services/zuruAIService';
+import { dataRequestService } from '@/services/dataRequestService';
+import { DataRequestStatusCard } from '@/components/privacy/DataRequestStatusCard';
 
 export default function PrivacySettingsScreen() {
   const colors = useColors();
@@ -43,11 +45,22 @@ export default function PrivacySettingsScreen() {
   // Modals
   const [learnMoreModal, setLearnMoreModal] = useState<string | null>(null);
   const [dataRequestLoading, setDataRequestLoading] = useState(false);
+  const [activeDataRequest, setActiveDataRequest] = useState<PersonalDataRequestRow | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 16;
   const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 32;
+
+  const loadDataRequest = async () => {
+    if (!user?.id) return;
+    try {
+      const req = await dataRequestService.getActiveDataRequest(user.id);
+      setActiveDataRequest(req);
+    } catch (e) {
+      console.warn('Note loading active data request:', e);
+    }
+  };
 
   useEffect(() => {
     const loadPrivacySettings = async () => {
@@ -72,6 +85,8 @@ export default function PrivacySettingsScreen() {
           if (p.show_booked_services !== undefined) setShowBookedServices(p.show_booked_services);
           if (p.ai_improvement !== undefined) setAiImprovement(p.ai_improvement);
         }
+
+        await loadDataRequest();
       } catch (e) {
         console.warn('Note loading privacy settings:', e);
       } finally {
@@ -102,15 +117,8 @@ export default function PrivacySettingsScreen() {
     }
   };
 
-  const handleRequestData = async () => {
-    setDataRequestLoading(true);
-    setTimeout(() => {
-      setDataRequestLoading(false);
-      Alert.alert(
-        'Data Export Requested',
-        `A full copy of your ZuruSasa account data, booking records, and reel activity will be compiled and emailed to ${user?.email || 'your registered address'} within 24 hours.`
-      );
-    }, 800);
+  const handleRequestData = () => {
+    router.push('/profile/data-request');
   };
 
   const handleDeleteAccount = async () => {
@@ -321,23 +329,27 @@ export default function PrivacySettingsScreen() {
             <View style={styles.sectionContainer}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Data privacy</Text>
 
-              {/* Request Data Card */}
+              {/* Active Export Status Card if present */}
+              {activeDataRequest && (
+                <DataRequestStatusCard
+                  request={activeDataRequest}
+                  onRefresh={loadDataRequest}
+                  onRequestVerification={handleRequestData}
+                />
+              )}
+
+              {/* Request Data Navigation Card */}
               <Pressable
                 testID="request-data-btn"
                 onPress={handleRequestData}
-                disabled={dataRequestLoading}
                 style={({ pressed }) => [
                   styles.roundedCardBtn,
-                  { borderColor: colors.border, backgroundColor: colors.card },
+                  { borderColor: colors.border, backgroundColor: colors.card, marginTop: activeDataRequest ? 10 : 0 },
                   pressed && styles.cardBtnPressed,
                 ]}
               >
                 <Text style={[styles.cardBtnText, { color: colors.text }]}>Request my personal data</Text>
-                {dataRequestLoading ? (
-                  <ActivityIndicator size="small" color={colors.text} />
-                ) : (
-                  <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-                )}
+                <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
               </Pressable>
 
               {/* View Full Legal & Policies */}

@@ -42,3 +42,12 @@ verify_jwt = true
 
 [functions.dispatch-notification]
 verify_jwt = true
+
+[functions.request-personal-data]
+verify_jwt = true
+
+[functions.process-personal-data-export]
+verify_jwt = false
+
+[functions.cleanup-personal-data-exports]
+verify_jwt = false
