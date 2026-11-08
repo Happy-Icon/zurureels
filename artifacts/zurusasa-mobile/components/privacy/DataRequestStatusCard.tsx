@@ -20,61 +20,75 @@ export function DataRequestStatusCard({
   const [downloading, setDownloading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  const getStatusBadge = () => {
+  const getStatusConfig = () => {
     switch (request.status) {
       case 'pending_verification':
         return {
-          label: 'Verification Pending',
-          bg: 'rgba(242,101,34,0.12)',
+          title: 'Verification required',
+          desc: 'A 6-digit code was sent to your email. Authorize the request to start compiling.',
+          badge: 'Verification pending',
+          bg: 'rgba(242, 101, 34, 0.08)',
           text: '#F26522',
           icon: 'clock' as const,
         };
       case 'processing':
         return {
-          label: 'Compiling Data Archive',
-          bg: 'rgba(59,130,246,0.12)',
+          title: 'Preparing your data archive',
+          desc: 'Gathering records across 20 tables and generating your secure PDF & JSON bundle. Usually takes 30–60s.',
+          badge: 'Compiling archive',
+          bg: 'rgba(59, 130, 246, 0.08)',
           text: '#3B82F6',
           icon: 'loader' as const,
         };
       case 'completed':
         return {
-          label: 'Ready for Download',
-          bg: 'rgba(34,197,94,0.12)',
-          text: '#22C55E',
+          title: 'Your archive is ready',
+          desc: 'Your personal data export has been compiled and is ready for secure download.',
+          badge: 'Ready for download',
+          bg: 'rgba(16, 185, 129, 0.08)',
+          text: '#10B981',
           icon: 'check-circle' as const,
         };
       case 'failed':
         return {
-          label: 'Export Failed',
-          bg: 'rgba(239,68,68,0.12)',
+          title: 'Export could not be generated',
+          desc: request.error_message || 'An error occurred during export processing. Please try again.',
+          badge: 'Failed',
+          bg: 'rgba(239, 68, 68, 0.08)',
           text: '#EF4444',
-          icon: 'alert-triangle' as const,
+          icon: 'alert-circle' as const,
         };
       case 'expired':
         return {
-          label: 'Export Expired',
-          bg: 'rgba(156,163,175,0.12)',
+          title: 'Archive has expired',
+          desc: 'In compliance with our 7-day retention policy, the previous files have been deleted.',
+          badge: 'Expired',
+          bg: 'rgba(156, 163, 175, 0.08)',
           text: '#9CA3AF',
           icon: 'archive' as const,
         };
       case 'cancelled':
         return {
-          label: 'Cancelled',
-          bg: 'rgba(156,163,175,0.12)',
+          title: 'Request cancelled',
+          desc: 'This export request was cancelled by you.',
+          badge: 'Cancelled',
+          bg: 'rgba(156, 163, 175, 0.08)',
           text: '#9CA3AF',
           icon: 'x-circle' as const,
         };
       default:
         return {
-          label: request.status,
-          bg: 'rgba(156,163,175,0.12)',
+          title: 'Export status',
+          desc: '',
+          badge: request.status,
+          bg: 'rgba(156, 163, 175, 0.08)',
           text: colors.text,
           icon: 'info' as const,
         };
     }
   };
 
-  const badge = getStatusBadge();
+  const config = getStatusConfig();
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -101,8 +115,8 @@ export function DataRequestStatusCard({
 
   const handleCancel = async () => {
     Alert.alert(
-      'Cancel Request',
-      'Are you sure you want to cancel this personal data export request?',
+      'Cancel request',
+      'Are you sure you want to cancel this data export request?',
       [
         { text: 'Keep Request', style: 'cancel' },
         {
@@ -142,67 +156,69 @@ export function DataRequestStatusCard({
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      {/* Top Row: Title & Badge */}
-      <View style={styles.topRow}>
+      {/* Top Header Row with Title & Badge */}
+      <View style={styles.headerRow}>
         <View style={styles.titleCol}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Personal Data Export</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{config.title}</Text>
           <Text style={[styles.dateText, { color: colors.mutedForeground }]}>
             Requested {new Date(request.created_at).toLocaleDateString()} • Format: {request.format.toUpperCase()}
           </Text>
         </View>
 
-        <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-          <Feather name={badge.icon} size={11} color={badge.text} />
-          <Text style={[styles.badgeText, { color: badge.text }]}>{badge.label}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: config.bg }]}>
+          <Feather name={config.icon} size={11} color={config.text} />
+          <Text style={[styles.badgeText, { color: config.text }]}>{config.badge}</Text>
         </View>
       </View>
 
-      {/* Middle Status Information */}
+      {/* Description */}
+      {config.desc ? (
+        <Text style={[styles.descText, { color: colors.mutedForeground }]}>{config.desc}</Text>
+      ) : null}
+
+      {/* Processing Animation */}
       {request.status === 'processing' && (
-        <View style={styles.processingRow}>
+        <View style={styles.progressRow}>
           <ActivityIndicator size="small" color="#3B82F6" />
-          <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-            Gathering records across 20 tables and generating signed archives. This typically takes 30–60 seconds.
+          <Text style={[styles.progressText, { color: colors.text }]}>
+            Extracting records & compiling files...
           </Text>
         </View>
       )}
 
+      {/* Metadata Chips (Size & Expiration) */}
       {request.status === 'completed' && (
-        <View style={styles.completedInfoBox}>
-          <View style={styles.metaRow}>
-            {request.file_size_bytes ? (
-              <View style={styles.metaChip}>
-                <Feather name="file" size={12} color={colors.mutedForeground} />
-                <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
-                  {formatFileSize(request.file_size_bytes)}
-                </Text>
-              </View>
-            ) : null}
+        <View style={styles.chipsRow}>
+          {request.file_size_bytes ? (
+            <View style={[styles.chip, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Feather name="file-text" size={12} color={colors.mutedForeground} />
+              <Text style={[styles.chipText, { color: colors.text }]}>
+                {formatFileSize(request.file_size_bytes)}
+              </Text>
+            </View>
+          ) : null}
 
-            {request.expires_at ? (
-              <View style={styles.metaChip}>
-                <Feather name="clock" size={12} color="#F26522" />
-                <Text style={[styles.metaText, { color: '#F26522' }]}>{getRemainingDays()}</Text>
-              </View>
-            ) : null}
-          </View>
+          {request.expires_at ? (
+            <View style={[styles.chip, { backgroundColor: 'rgba(242, 101, 34, 0.08)' }]}>
+              <Feather name="clock" size={12} color="#F26522" />
+              <Text style={[styles.chipText, { color: '#F26522' }]}>{getRemainingDays()}</Text>
+            </View>
+          ) : null}
         </View>
       )}
 
-      {request.status === 'failed' && request.error_message && (
-        <View style={styles.errorBox}>
-          <Feather name="alert-circle" size={13} color="#EF4444" />
-          <Text style={styles.errorText}>{request.error_message}</Text>
-        </View>
-      )}
-
-      {/* Bottom Action Buttons */}
-      <View style={styles.actionRow}>
+      {/* Action Row */}
+      <View style={[styles.actionRow, { borderTopColor: colors.border }]}>
         {request.status === 'completed' && (
           <Pressable
+            testID="download-archive-btn"
             onPress={handleDownload}
             disabled={downloading}
-            style={[styles.downloadBtn, downloading && styles.btnDisabled]}
+            style={({ pressed }) => [
+              styles.downloadBtn,
+              downloading && styles.btnDisabled,
+              pressed && styles.btnPressed,
+            ]}
           >
             {downloading ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
@@ -216,23 +232,30 @@ export function DataRequestStatusCard({
         )}
 
         {request.status === 'pending_verification' && onRequestVerification && (
-          <Pressable onPress={onRequestVerification} style={styles.verifyBtn}>
+          <Pressable
+            testID="verify-code-btn"
+            onPress={onRequestVerification}
+            style={({ pressed }) => [styles.verifyBtn, pressed && styles.btnPressed]}
+          >
             <Feather name="check" size={14} color="#FFFFFF" />
-            <Text style={styles.verifyBtnText}>Enter Verification Code</Text>
+            <Text style={styles.verifyBtnText}>Enter 6-Digit Code</Text>
           </Pressable>
         )}
 
         {(request.status === 'pending_verification' || request.status === 'processing') && (
           <Pressable
+            testID="cancel-data-request-btn"
             onPress={handleCancel}
             disabled={cancelling}
+            hitSlop={10}
             style={styles.cancelBtn}
-            hitSlop={8}
           >
             {cancelling ? (
               <ActivityIndicator size="small" color={colors.mutedForeground} />
             ) : (
-              <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
+              <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>
+                Cancel request
+              </Text>
             )}
           </Pressable>
         )}
@@ -243,126 +266,126 @@ export function DataRequestStatusCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    marginVertical: 10,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 18,
+    gap: 12,
   },
-  topRow: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: 10,
   },
   titleCol: {
     flex: 1,
+    gap: 2,
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 2,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
+    letterSpacing: -0.2,
   },
   dateText: {
     fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
   },
-  badge: {
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
   badgeText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
   },
-  processingRow: {
+  descText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+    lineHeight: 18,
+  },
+  progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 12,
-    padding: 10,
+    paddingVertical: 6,
+  },
+  progressText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: 'rgba(59,130,246,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  infoText: {
-    fontSize: 12,
-    lineHeight: 17,
-    flex: 1,
-  },
-  completedInfoBox: {
-    marginTop: 10,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  metaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
+  chipText: {
     fontSize: 12,
     fontWeight: '500',
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 10,
-  },
-  errorText: {
-    color: '#EF4444',
-    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 10,
-    marginTop: 14,
+    gap: 12,
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   downloadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#F26522',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 8,
+    height: 40,
+    paddingHorizontal: 18,
+    borderRadius: 10,
   },
   downloadBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
   verifyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#F26522',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 8,
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 10,
   },
   verifyBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
   },
   cancelBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
   cancelBtnText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: 'DMSans_500Medium',
+  },
+  btnPressed: {
+    opacity: 0.85,
   },
   btnDisabled: {
     opacity: 0.6,

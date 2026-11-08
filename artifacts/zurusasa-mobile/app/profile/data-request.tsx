@@ -7,9 +7,10 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
@@ -21,12 +22,16 @@ import { DataRequestStatusCard } from '@/components/privacy/DataRequestStatusCar
 export default function DataRequestScreen() {
   const colors = useColors();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeRequest, setActiveRequest] = useState<PersonalDataRequestRow | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 24;
 
   const fetchRequest = useCallback(async () => {
     if (!user?.id) return;
@@ -56,35 +61,79 @@ export default function DataRequestScreen() {
         activeRequest.expires_at &&
         new Date(activeRequest.expires_at).getTime() > Date.now()));
 
+  const exportCategories = [
+    {
+      icon: 'user' as const,
+      title: 'Profile & Identity Verification',
+      desc: 'Account credentials, personal details, contact info, and KYC verification records.',
+    },
+    {
+      icon: 'calendar' as const,
+      title: 'Stays, Bookings & Quotes',
+      desc: 'Complete reservation history, dates, pricing breakdowns, quotes, and host inquiries.',
+    },
+    {
+      icon: 'credit-card' as const,
+      title: 'Financial & Payments',
+      desc: 'Payment receipts, transaction IDs, payment methods, and host payout histories (masked).',
+    },
+    {
+      icon: 'message-square' as const,
+      title: 'Messages & Support',
+      desc: 'Direct communications with hosts and customer support inquiries.',
+    },
+    {
+      icon: 'film' as const,
+      title: 'Reels, Reviews & Itineraries',
+      desc: 'Saved reels, social interactions, published reviews, and ZuruPlan travel itineraries.',
+    },
+  ];
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* ── MINIMAL TOP BAR ─────────────────────────────────────────────────── */}
+      <View style={[styles.navBar, { paddingTop: topPad }]}>
+        <Pressable
+          testID="data-request-back-btn"
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.push('/profile/privacy');
+          }}
+          hitSlop={12}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.btnPressed]}
+        >
           <Feather name="arrow-left" size={22} color={colors.text} />
         </Pressable>
-        <View style={styles.headerTitleCol}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Your Personal Data</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
-            Data Access & Portability
-          </Text>
-        </View>
       </View>
 
+      {/* ── SCROLLABLE BODY ─────────────────────────────────────────────────── */}
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F26522" />}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F26522" />
+        }
       >
+        {/* Page Title & Subtitle */}
+        <View style={styles.titleSection}>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Your personal data</Text>
+          <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>
+            Download a portable copy of your account activity, bookings, and content under the Kenya Data Protection Act 2019 and GDPR.
+          </Text>
+        </View>
+
         {loading ? (
-          <View style={styles.centerBox}>
-            <ActivityIndicator size="large" color="#F26522" />
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#F26522" />
+            <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
+              Checking export status...
+            </Text>
           </View>
         ) : (
           <>
-            {/* Active Request Card if present */}
+            {/* Active Request Card (Prominently Placed When Active) */}
             {hasActiveRequest && activeRequest && (
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Current Request</Text>
+              <View style={styles.activeRequestSection}>
                 <DataRequestStatusCard
                   request={activeRequest}
                   onRefresh={fetchRequest}
@@ -93,63 +142,95 @@ export default function DataRequestScreen() {
               </View>
             )}
 
-            {/* Explanation & Rights */}
+            {/* Privacy Rights Information Card */}
             <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.infoCardHeader}>
-                <View style={[styles.iconWrap, { backgroundColor: 'rgba(242,101,34,0.12)' }]}>
+              <View style={styles.infoCardRow}>
+                <View style={styles.infoIconWrap}>
                   <Feather name="shield" size={18} color="#F26522" />
                 </View>
-                <Text style={[styles.infoCardTitle, { color: colors.text }]}>Data Privacy Rights</Text>
-              </View>
-              <Text style={[styles.infoCardText, { color: colors.mutedForeground }]}>
-                Under the Kenya Data Protection Act 2019 (Sections 25, 26, 40) and General Data Protection Regulation (GDPR), you have the right to receive an export of the personal data you have provided to ZuruSasa in a structured, machine-readable format.
-              </Text>
-            </View>
-
-            {/* What's Included */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>What is included in the export?</Text>
-              <View style={[styles.listCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {[
-                  { icon: 'user' as const, label: 'Profile & Identity Verification', desc: 'Name, email, contact details, account status, and KYC verification records.' },
-                  { icon: 'calendar' as const, label: 'Stays, Bookings & Quotes', desc: 'Complete reservation history, dates, quotes, and stay details.' },
-                  { icon: 'credit-card' as const, label: 'Financial & Payments', desc: 'Transaction receipts, payment statuses, and host payout histories (masked).' },
-                  { icon: 'message-circle' as const, label: 'Messages & Support', desc: 'Communications with hosts and customer support.' },
-                  { icon: 'film' as const, label: 'Reels, Reviews & Itineraries', desc: 'Saved reels, reviews authored, and ZuruPlan travel itineraries.' },
-                ].map((item, idx) => (
-                  <View
-                    key={item.label}
-                    style={[
-                      styles.listItem,
-                      idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-                    ]}
-                  >
-                    <View style={[styles.listIconCircle, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-                      <Feather name={item.icon} size={15} color="#F26522" />
-                    </View>
-                    <View style={styles.listItemText}>
-                      <Text style={[styles.listItemTitle, { color: colors.text }]}>{item.label}</Text>
-                      <Text style={[styles.listItemDesc, { color: colors.mutedForeground }]}>{item.desc}</Text>
-                    </View>
-                  </View>
-                ))}
+                <View style={styles.infoTextCol}>
+                  <Text style={[styles.infoCardTitle, { color: colors.text }]}>
+                    Data portability & rights
+                  </Text>
+                  <Text style={[styles.infoCardBody, { color: colors.mutedForeground }]}>
+                    You have the right to access and export your data at any time at no charge. Exports are provided as a human-readable PDF summary and a machine-readable JSON archive.
+                  </Text>
+                </View>
               </View>
             </View>
 
-            {/* Storage & Retention Note */}
-            <View style={[styles.noteBox, { borderColor: colors.border }]}>
-              <Feather name="info" size={15} color={colors.mutedForeground} />
-              <Text style={[styles.noteText, { color: colors.mutedForeground }]}>
-                To protect your privacy, generated exports are stored in an encrypted private vault and automatically purged after 7 days. Only you can download your archive.
+            {/* Export Categories Section */}
+            <View style={styles.sectionContainer}>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>
+                What is included in your export
               </Text>
+
+              <View style={[styles.categoryList, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {exportCategories.map((item, index) => {
+                  const isLast = index === exportCategories.length - 1;
+                  return (
+                    <View
+                      key={item.title}
+                      style={[
+                        styles.categoryRow,
+                        !isLast && [styles.categoryRowBorder, { borderBottomColor: colors.border }],
+                      ]}
+                    >
+                      <View style={[styles.categoryIconWrap, { backgroundColor: colors.background }]}>
+                        <Feather name={item.icon} size={16} color="#F26522" />
+                      </View>
+                      <View style={styles.categoryTextCol}>
+                        <Text style={[styles.categoryTitle, { color: colors.text }]}>
+                          {item.title}
+                        </Text>
+                        <Text style={[styles.categoryDesc, { color: colors.mutedForeground }]}>
+                          {item.desc}
+                        </Text>
+                      </View>
+                      <View style={styles.checkPill}>
+                        <Feather name="check" size={12} color="#10B981" />
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
 
-            {/* Action Button: Only if no active pending/processing request */}
+            {/* Security & Retention Notice */}
+            <View style={[styles.vaultCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.vaultRow}>
+                <View style={[styles.vaultIconWrap, { backgroundColor: 'rgba(242, 101, 34, 0.08)' }]}>
+                  <Feather name="lock" size={18} color="#F26522" />
+                </View>
+                <View style={styles.vaultTextCol}>
+                  <Text style={[styles.vaultTitle, { color: colors.text }]}>
+                    Encrypted vault & 7-day retention
+                  </Text>
+                  <Text style={[styles.vaultDesc, { color: colors.mutedForeground }]}>
+                    Archives are generated securely and accessed only via short-lived signed links. To safeguard your privacy, all export files are automatically deleted after 7 days.
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Primary Action Button (If No Active Pending/Processing Request) */}
             {!hasActiveRequest && (
-              <Pressable onPress={() => setModalVisible(true)} style={styles.requestBtn}>
-                <Feather name="download" size={16} color="#FFFFFF" />
-                <Text style={styles.requestBtnText}>Request My Personal Data</Text>
-              </Pressable>
+              <View style={styles.actionContainer}>
+                <Pressable
+                  testID="request-personal-data-cta"
+                  onPress={() => setModalVisible(true)}
+                  style={({ pressed }) => [
+                    styles.primaryCtaBtn,
+                    pressed && styles.primaryCtaBtnPressed,
+                  ]}
+                >
+                  <Feather name="download" size={17} color="#FFFFFF" />
+                  <Text style={styles.primaryCtaText}>Request Personal Data</Text>
+                </Pressable>
+                <Text style={[styles.actionDisclaimer, { color: colors.mutedForeground }]}>
+                  A 6-digit confirmation code will be sent to your verified email to authorize this export.
+                </Text>
+              </View>
             )}
           </>
         )}
@@ -163,139 +244,212 @@ export default function DataRequestScreen() {
           fetchRequest();
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  navBar: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
+    paddingBottom: 8,
   },
   backBtn: {
-    padding: 6,
-  },
-  headerTitleCol: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    marginTop: 1,
-  },
-  scrollContent: {
-    padding: 18,
-    gap: 18,
-  },
-  centerBox: {
-    padding: 40,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  section: {
-    gap: 8,
+  btnPressed: {
+    opacity: 0.6,
   },
-  sectionTitle: {
-    fontSize: 14,
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    gap: 20,
+  },
+  titleSection: {
+    gap: 8,
+    marginBottom: 4,
+  },
+  pageTitle: {
+    fontSize: 28,
     fontWeight: '700',
-    letterSpacing: -0.2,
+    fontFamily: 'DMSans_700Bold',
+    letterSpacing: -0.5,
+    lineHeight: 34,
+  },
+  pageSubtitle: {
+    fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
+    lineHeight: 22,
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
+  },
+  activeRequestSection: {
     marginBottom: 4,
   },
   infoCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 10,
-  },
-  infoCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  iconWrap: {
-    width: 32,
-    height: 32,
     borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 18,
+  },
+  infoCardRow: {
+    flexDirection: 'row',
+    gap: 14,
+    alignItems: 'flex-start',
+  },
+  infoIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(242, 101, 34, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  infoTextCol: {
+    flex: 1,
+    gap: 4,
   },
   infoCardTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
+    letterSpacing: -0.2,
   },
-  infoCardText: {
+  infoCardBody: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     lineHeight: 19,
   },
-  listCard: {
-    borderRadius: 14,
-    borderWidth: 1,
+  sectionContainer: {
+    gap: 10,
+  },
+  sectionHeading: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
+    letterSpacing: -0.2,
+  },
+  categoryList: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
-  listItem: {
+  categoryRow: {
     flexDirection: 'row',
-    padding: 14,
-    gap: 12,
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 14,
   },
-  listIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  categoryRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  categoryIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
   },
-  listItemText: {
+  categoryTextCol: {
     flex: 1,
+    gap: 3,
   },
-  listItemTitle: {
-    fontSize: 13,
+  categoryTitle: {
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 2,
+    fontFamily: 'DMSans_600SemiBold',
+    letterSpacing: -0.1,
   },
-  listItemDesc: {
+  categoryDesc: {
     fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
     lineHeight: 16,
   },
-  noteBox: {
+  checkPill: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vaultCard: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+  },
+  vaultRow: {
     flexDirection: 'row',
+    gap: 14,
     alignItems: 'flex-start',
-    gap: 10,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderStyle: 'dashed',
   },
-  noteText: {
-    fontSize: 12,
-    lineHeight: 17,
+  vaultIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vaultTextCol: {
     flex: 1,
+    gap: 4,
   },
-  requestBtn: {
+  vaultTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
+  },
+  vaultDesc: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    lineHeight: 17,
+  },
+  actionContainer: {
+    marginTop: 6,
+    gap: 10,
+  },
+  primaryCtaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#F26522',
-    paddingVertical: 15,
-    borderRadius: 12,
-    marginTop: 8,
+    height: 52,
+    borderRadius: 14,
+    shadowColor: '#F26522',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  requestBtnText: {
+  primaryCtaBtnPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  primaryCtaText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
+  },
+  actionDisclaimer: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    textAlign: 'center',
+    lineHeight: 16,
+    paddingHorizontal: 8,
   },
 });

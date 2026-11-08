@@ -86,7 +86,10 @@ export function DataRequestModal({ visible, onClose, onSuccess }: DataRequestMod
     try {
       const result = await dataRequestService.verifyDataRequestOtp(requestId, otpCode);
       if (!result.success) {
-        const remaining = result.remaining_attempts !== undefined ? ` (${result.remaining_attempts} attempts left)` : '';
+        const remaining =
+          result.remaining_attempts !== undefined
+            ? ` (${result.remaining_attempts} attempts left)`
+            : '';
         setError((result.error || 'Verification failed') + remaining);
         setLoading(false);
         return;
@@ -132,14 +135,19 @@ export function DataRequestModal({ visible, onClose, onSuccess }: DataRequestMod
           {/* Header */}
           <View style={styles.modalHeader}>
             <View style={styles.headerTitleRow}>
-              <View style={[styles.iconCircle, { backgroundColor: 'rgba(242,101,34,0.12)' }]}>
-                <Feather name="shield" size={18} color="#F26522" />
+              <View style={[styles.iconCircle, { backgroundColor: 'rgba(242, 101, 34, 0.08)' }]}>
+                <Feather name="shield" size={17} color="#F26522" />
               </View>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
-                {step === 'format' ? 'Export Personal Data' : 'Verify Your Identity'}
+                {step === 'format' ? 'Choose export format' : 'Verify your identity'}
               </Text>
             </View>
-            <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
+            <Pressable
+              testID="close-data-request-modal"
+              onPress={onClose}
+              hitSlop={12}
+              style={({ pressed }) => [styles.closeBtn, pressed && styles.btnPressed]}
+            >
               <Feather name="x" size={20} color={colors.mutedForeground} />
             </Pressable>
           </View>
@@ -148,82 +156,118 @@ export function DataRequestModal({ visible, onClose, onSuccess }: DataRequestMod
           {step === 'format' ? (
             <View style={styles.bodyContent}>
               <Text style={[styles.description, { color: colors.mutedForeground }]}>
-                Request a secure export of your account activity, bookings, transactions, and content under the Kenya Data Protection Act 2019 & GDPR.
+                Select how you would like your archive packaged. You will receive an email verification code on the next step.
               </Text>
-
-              <Text style={[styles.subLabel, { color: colors.text }]}>Choose Export Format</Text>
 
               {/* Format Option: Both */}
               <Pressable
+                testID="format-both-btn"
                 onPress={() => setFormat('both')}
                 style={[
                   styles.optionCard,
-                  { borderColor: format === 'both' ? '#F26522' : colors.border },
-                  format === 'both' && { backgroundColor: 'rgba(242,101,34,0.06)' },
+                  {
+                    borderColor: format === 'both' ? '#F26522' : colors.border,
+                    backgroundColor: format === 'both' ? 'rgba(242, 101, 34, 0.04)' : colors.card,
+                  },
                 ]}
               >
                 <View style={styles.optionTextCol}>
-                  <Text style={[styles.optionTitle, { color: colors.text }]}>PDF & JSON Bundle (Recommended)</Text>
+                  <Text style={[styles.optionTitle, { color: colors.text }]}>
+                    PDF & JSON Bundle (Recommended)
+                  </Text>
                   <Text style={[styles.optionDesc, { color: colors.mutedForeground }]}>
-                    Human-readable summary document plus structured data file.
+                    Human-readable summary document plus structured data archive.
                   </Text>
                 </View>
-                <View style={[styles.radioCircle, format === 'both' && styles.radioCircleActive]}>
+                <View
+                  style={[
+                    styles.radioCircle,
+                    { borderColor: format === 'both' ? '#F26522' : colors.border },
+                    format === 'both' && styles.radioCircleActive,
+                  ]}
+                >
                   {format === 'both' && <View style={styles.radioDot} />}
                 </View>
               </Pressable>
 
               {/* Format Option: PDF */}
               <Pressable
+                testID="format-pdf-btn"
                 onPress={() => setFormat('pdf')}
                 style={[
                   styles.optionCard,
-                  { borderColor: format === 'pdf' ? '#F26522' : colors.border },
-                  format === 'pdf' && { backgroundColor: 'rgba(242,101,34,0.06)' },
+                  {
+                    borderColor: format === 'pdf' ? '#F26522' : colors.border,
+                    backgroundColor: format === 'pdf' ? 'rgba(242, 101, 34, 0.04)' : colors.card,
+                  },
                 ]}
               >
                 <View style={styles.optionTextCol}>
-                  <Text style={[styles.optionTitle, { color: colors.text }]}>PDF Summary Document Only</Text>
+                  <Text style={[styles.optionTitle, { color: colors.text }]}>
+                    PDF Summary Document Only
+                  </Text>
                   <Text style={[styles.optionDesc, { color: colors.mutedForeground }]}>
                     Clean, styled multi-page document formatted for reading.
                   </Text>
                 </View>
-                <View style={[styles.radioCircle, format === 'pdf' && styles.radioCircleActive]}>
+                <View
+                  style={[
+                    styles.radioCircle,
+                    { borderColor: format === 'pdf' ? '#F26522' : colors.border },
+                    format === 'pdf' && styles.radioCircleActive,
+                  ]}
+                >
                   {format === 'pdf' && <View style={styles.radioDot} />}
                 </View>
               </Pressable>
 
               {/* Format Option: JSON */}
               <Pressable
+                testID="format-json-btn"
                 onPress={() => setFormat('json')}
                 style={[
                   styles.optionCard,
-                  { borderColor: format === 'json' ? '#F26522' : colors.border },
-                  format === 'json' && { backgroundColor: 'rgba(242,101,34,0.06)' },
+                  {
+                    borderColor: format === 'json' ? '#F26522' : colors.border,
+                    backgroundColor: format === 'json' ? 'rgba(242, 101, 34, 0.04)' : colors.card,
+                  },
                 ]}
               >
                 <View style={styles.optionTextCol}>
-                  <Text style={[styles.optionTitle, { color: colors.text }]}>Machine-Readable JSON</Text>
+                  <Text style={[styles.optionTitle, { color: colors.text }]}>
+                    Machine-Readable JSON
+                  </Text>
                   <Text style={[styles.optionDesc, { color: colors.mutedForeground }]}>
                     Raw data portability archive conforming to GDPR Art. 20.
                   </Text>
                 </View>
-                <View style={[styles.radioCircle, format === 'json' && styles.radioCircleActive]}>
+                <View
+                  style={[
+                    styles.radioCircle,
+                    { borderColor: format === 'json' ? '#F26522' : colors.border },
+                    format === 'json' && styles.radioCircleActive,
+                  ]}
+                >
                   {format === 'json' && <View style={styles.radioDot} />}
                 </View>
               </Pressable>
 
               {error && (
                 <View style={styles.errorBox}>
-                  <Feather name="alert-circle" size={14} color="#FF6B6B" />
+                  <Feather name="alert-circle" size={14} color="#EF4444" />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
               )}
 
               <Pressable
+                testID="continue-to-verification-btn"
                 onPress={handleInitiate}
                 disabled={loading}
-                style={[styles.primaryBtn, loading && styles.btnDisabled]}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  loading && styles.btnDisabled,
+                  pressed && styles.btnPressed,
+                ]}
               >
                 {loading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -236,25 +280,26 @@ export function DataRequestModal({ visible, onClose, onSuccess }: DataRequestMod
             <View style={styles.bodyContent}>
               <Text style={[styles.description, { color: colors.mutedForeground }]}>
                 We sent a 6-digit verification code to{' '}
-                <Text style={{ color: colors.text, fontWeight: '600' }}>
-                  {recipientEmail || 'your registered email'}
+                <Text style={{ color: colors.text, fontWeight: '600', fontFamily: 'DMSans_600SemiBold' }}>
+                  {recipientEmail || 'your verified email'}
                 </Text>
-                . Enter it below to authorize this export:
+                . Enter the code to authorize the export.
               </Text>
 
               <TextInput
+                testID="data-request-otp-input"
                 value={otpCode}
                 onChangeText={(val) => setOtpCode(val.replace(/[^0-9]/g, '').slice(0, 6))}
                 keyboardType="number-pad"
                 maxLength={6}
                 placeholder="000000"
-                placeholderTextColor="rgba(255,255,255,0.2)"
+                placeholderTextColor="rgba(156,163,175,0.4)"
                 autoFocus
                 style={[
                   styles.otpInput,
                   {
                     color: colors.text,
-                    borderColor: error ? '#FF6B6B' : colors.border,
+                    borderColor: error ? '#EF4444' : colors.border,
                     backgroundColor: colors.background,
                   },
                 ]}
@@ -262,7 +307,7 @@ export function DataRequestModal({ visible, onClose, onSuccess }: DataRequestMod
 
               {error && (
                 <View style={styles.errorBox}>
-                  <Feather name="alert-circle" size={14} color="#FF6B6B" />
+                  <Feather name="alert-circle" size={14} color="#EF4444" />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
               )}
@@ -273,18 +318,20 @@ export function DataRequestModal({ visible, onClose, onSuccess }: DataRequestMod
                     Resend code in {resendCooldown}s
                   </Text>
                 ) : (
-                  <Pressable onPress={handleResend} disabled={loading}>
-                    <Text style={styles.resendLink}>Resend Verification Code</Text>
+                  <Pressable testID="resend-otp-btn" onPress={handleResend} disabled={loading}>
+                    <Text style={styles.resendLink}>Resend verification code</Text>
                   </Pressable>
                 )}
               </View>
 
               <Pressable
+                testID="verify-otp-submit-btn"
                 onPress={handleVerify}
                 disabled={loading || otpCode.trim().length !== 6}
-                style={[
+                style={({ pressed }) => [
                   styles.primaryBtn,
                   (loading || otpCode.trim().length !== 6) && styles.btnDisabled,
+                  pressed && styles.btnPressed,
                 ]}
               >
                 {loading ? (
@@ -306,7 +353,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     padding: 20,
   },
   backdrop: {
@@ -319,12 +366,12 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 440,
-    borderRadius: 18,
-    borderWidth: 1,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: 22,
     shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
   },
@@ -332,12 +379,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
   },
   iconCircle: {
     width: 32,
@@ -348,30 +396,28 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
     letterSpacing: -0.2,
   },
   closeBtn: {
     padding: 4,
   },
   bodyContent: {
-    gap: 14,
+    gap: 12,
   },
   description: {
     fontSize: 13,
-    lineHeight: 19,
-  },
-  subLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 4,
+    fontFamily: 'DMSans_400Regular',
+    lineHeight: 18,
+    marginBottom: 2,
   },
   optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1.5,
   },
   optionTextCol: {
@@ -381,10 +427,12 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 3,
+    fontFamily: 'DMSans_600SemiBold',
+    marginBottom: 2,
   },
   optionDesc: {
     fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
     lineHeight: 16,
   },
   radioCircle: {
@@ -392,7 +440,6 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#666',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -406,47 +453,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#F26522',
   },
   otpInput: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     letterSpacing: 8,
     textAlign: 'center',
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1.5,
-    marginVertical: 8,
+    marginVertical: 4,
   },
   resendRow: {
     alignItems: 'center',
-    marginVertical: 4,
+    marginVertical: 2,
   },
   cooldownText: {
     fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
   },
   resendLink: {
     fontSize: 13,
     color: '#F26522',
     fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,107,107,0.1)',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   errorText: {
-    color: '#FF6B6B',
+    color: '#EF4444',
     fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
     flex: 1,
   },
   primaryBtn: {
     backgroundColor: '#F26522',
-    paddingVertical: 14,
+    height: 48,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
+    marginTop: 4,
+  },
+  btnPressed: {
+    opacity: 0.9,
   },
   btnDisabled: {
     opacity: 0.5,
@@ -455,5 +509,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
 });
