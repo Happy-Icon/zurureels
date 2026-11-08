@@ -185,7 +185,7 @@ export function useZuruAI(initialConversationId?: string) {
       setMessages((prev) => [...prev, userMsg, placeholderAiMsg]);
       setIsLoading(true);
       setIsStreaming(true);
-      setStageStatus({ stage: 'understanding', text: 'Understanding your request…' });
+      setStageStatus({ stage: 'understanding', text: 'Understanding request…' });
 
       // Cancel prior in-flight request
       if (abortControllerRef.current) {

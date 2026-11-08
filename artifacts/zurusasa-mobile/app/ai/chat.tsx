@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -11,7 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -24,7 +25,7 @@ import {
   type AICard,
 } from '@/components/ai/tokens';
 import { AIMessageBubble } from '@/components/ai/AIMessageBubble';
-import { AITypingIndicator } from '@/components/ai/AITypingIndicator';
+import { AIStatusCapsule } from '@/components/ai/AIStatusCapsule';
 import { AIInputBar } from '@/components/ai/AIInputBar';
 import { AIEmptyState } from '@/components/ai/AIEmptyState';
 import { AISuggestionChips } from '@/components/ai/AISuggestionChip';
@@ -61,35 +62,8 @@ export default function AIChatScreen() {
     resumeInterruptedMessage,
   } = useZuruAI(conversationId);
 
-  const badgeConfig = useMemo(() => {
-    if (!isOnline) {
-      return {
-        text: 'OFFLINE',
-        bg: '#FEE2E2',
-        color: '#B91C1C',
-        dotColor: '#EF4444',
-        statusText: 'Offline mode',
-      };
-    }
-    if (lastMeta?.degraded) {
-      return {
-        text: 'OFFLINE / BASIC',
-        bg: '#FEF3C7',
-        color: '#B45309',
-        dotColor: '#F59E0B',
-        statusText: lastMeta.fallbackReason ? 'Basic search active' : 'Degraded mode',
-      };
-    }
-    return {
-      text: 'AI CONCIERGE',
-      bg: AI_COLORS.orangeSoft,
-      color: AI_COLORS.orange,
-      dotColor: AI_COLORS.success,
-      statusText: 'Connected to Supabase',
-    };
-  }, [isOnline, lastMeta]);
-
   const [inputText, setInputText] = useState('');
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [userLocation, setUserLocation] = useState<{
     city?: string;
     latitude?: number;
@@ -97,13 +71,13 @@ export default function AIChatScreen() {
   } | null>(null);
   const listRef = useRef<FlatList>(null);
 
-  // BookingSheet & Viewer State for Real Listing Actions
+  // BookingSheet & Immersive ReelCard Viewer State
   const [selectedBookingCard, setSelectedBookingCard] = useState<AICard | null>(null);
   const [selectedViewerCard, setSelectedViewerCard] = useState<AICard | null>(null);
 
   const toggleSaveMutation = useToggleSave();
 
-  // Detect user location for 'nearby' queries
+  // Detect user location for location-grounded queries
   useEffect(() => {
     (async () => {
       try {
@@ -163,7 +137,7 @@ export default function AIChatScreen() {
     scrollToBottom();
   };
 
-  // Convert AICard into ReelRow with REAL video, thumbnail, experience, and host data
+  // Convert AICard into ReelRow strictly with real listing data
   const createReelRowFromCard = useCallback((card: AICard): ReelRow => {
     const rawExp = card.experience;
     return {
@@ -176,34 +150,36 @@ export default function AIChatScreen() {
       duration: null,
       is_live: false,
       status: 'active',
-      experience: rawExp ? {
-        ...rawExp,
-        id: rawExp.id || card.id,
-        title: rawExp.title || card.title,
-        description: rawExp.description || card.subtitle || null,
-        location: rawExp.location || card.location || null,
-        current_price: rawExp.current_price != null ? Number(rawExp.current_price) : (card.price ?? null),
-        price_unit: rawExp.price_unit || card.priceUnit || 'night',
-        availability_status: rawExp.availability_status || 'available',
-        image_url: rawExp.image_url || card.thumbnailUrl || card.imageUrl || null,
-        amenities: Array.isArray(rawExp.amenities) && rawExp.amenities.length > 0 ? rawExp.amenities : (card.tags || null),
-        metadata: {
-          ...(rawExp.metadata || {}),
-          rating: card.rating,
-          review_count: card.reviewCount,
-        },
-      } : {
-        id: card.id,
-        title: card.title,
-        description: card.subtitle || null,
-        location: card.location || null,
-        current_price: card.price || null,
-        price_unit: card.priceUnit || 'night',
-        availability_status: 'available',
-        image_url: card.thumbnailUrl || card.imageUrl || null,
-        amenities: card.tags || null,
-        metadata: { rating: card.rating, review_count: card.reviewCount },
-      } as any,
+      experience: rawExp
+        ? {
+            ...rawExp,
+            id: rawExp.id || card.id,
+            title: rawExp.title || card.title,
+            description: rawExp.description || card.subtitle || null,
+            location: rawExp.location || card.location || null,
+            current_price: rawExp.current_price != null ? Number(rawExp.current_price) : (card.price ?? null),
+            price_unit: rawExp.price_unit || card.priceUnit || 'night',
+            availability_status: rawExp.availability_status || 'available',
+            image_url: rawExp.image_url || card.thumbnailUrl || card.imageUrl || null,
+            amenities: Array.isArray(rawExp.amenities) && rawExp.amenities.length > 0 ? rawExp.amenities : (card.tags || null),
+            metadata: {
+              ...(rawExp.metadata || {}),
+              rating: card.rating,
+              review_count: card.reviewCount,
+            },
+          }
+        : ({
+            id: card.id,
+            title: card.title,
+            description: card.subtitle || null,
+            location: card.location || null,
+            current_price: card.price || null,
+            price_unit: card.priceUnit || 'night',
+            availability_status: 'available',
+            image_url: card.thumbnailUrl || card.imageUrl || null,
+            amenities: card.tags || null,
+            metadata: { rating: card.rating, review_count: card.reviewCount },
+          } as any),
       host: card.host || null,
     };
   }, []);
@@ -217,16 +193,29 @@ export default function AIChatScreen() {
     setSelectedBookingCard(card);
   }, []);
 
-  const handleSaveCard = useCallback((id: string, card: AICard) => {
-    if (!user) {
-      router.push('/auth' as any);
-      return;
-    }
-    const reelId = card.reelId || id;
-    toggleSaveMutation.mutate({ reelId, userId: user.id, saved: false });
-  }, [user, router, toggleSaveMutation]);
+  const handleSaveCard = useCallback(
+    (id: string, card: AICard) => {
+      if (!user) {
+        router.push('/auth' as any);
+        return;
+      }
+      const reelId = card.reelId || id;
+      toggleSaveMutation.mutate({ reelId, userId: user.id, saved: false });
+    },
+    [user, router, toggleSaveMutation]
+  );
 
-  // Contextual follow-up suggestions from latest AI message or default
+  // Filter messages to avoid displaying empty placeholder bubbles while loading
+  const visibleMessages = useMemo(() => {
+    return messages.filter((m) => {
+      if (m.role === 'ai' && !m.text.trim() && (!m.cards || m.cards.length === 0)) {
+        return false;
+      }
+      return true;
+    });
+  }, [messages]);
+
+  // Contextual follow-up suggestions from latest AI message or search criteria
   const latestAiMessage = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === 'ai') return messages[i];
@@ -236,40 +225,81 @@ export default function AIChatScreen() {
 
   const activeFollowUps = useMemo(() => {
     if (latestAiMessage?.followUps && latestAiMessage.followUps.length > 0) {
-      return latestAiMessage.followUps;
+      return latestAiMessage.followUps.slice(0, 4);
     }
-    return SUGGESTION_CHIPS.slice(0, 4);
+    const criteria = latestAiMessage?.criteria;
+    const list: string[] = [];
+    if (criteria?.budget_max) {
+      list.push(`Cheaper options under KES ${Math.round(criteria.budget_max * 0.8).toLocaleString()}`);
+    } else {
+      list.push('Cheaper options');
+    }
+    if (!criteria?.amenities?.some((a: string) => a.toLowerCase().includes('beach'))) {
+      list.push('Near the beach');
+    }
+    if (!criteria?.amenities?.some((a: string) => a.toLowerCase().includes('pool'))) {
+      list.push('With a pool');
+    }
+    if (!criteria?.guests || criteria.guests <= 2) {
+      list.push('For more people');
+    } else {
+      list.push('For 4+ guests');
+    }
+    return list.slice(0, 4);
   }, [latestAiMessage]);
+
+  const handleClearWithConfirm = () => {
+    setShowOptionsMenu(false);
+    Alert.alert(
+      'Clear Conversation',
+      'Are you sure you want to clear your current conversation with Zuru Agent?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: clearMessages,
+        },
+      ]
+    );
+  };
+
+  const handleNewInquiry = () => {
+    setShowOptionsMenu(false);
+    clearMessages();
+  };
 
   return (
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+      {/* ── Refined Minimal Header ────────────────────────────────────────── */}
+      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.headerIconButton}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Feather name="arrow-left" size={20} color={AI_COLORS.textPrimary} />
         </Pressable>
 
         <View style={styles.headerCenter}>
-          <View style={styles.logoMini}>
-            <Text style={styles.logoMiniEmoji}>✦</Text>
+          <View style={styles.identityIcon}>
+            <MaterialCommunityIcons name="compass-outline" size={18} color="#FFFFFF" />
           </View>
-          <View>
-            <View style={styles.titleRow}>
-              <Text style={styles.headerTitle}>Zuru Agent</Text>
-              <View style={[styles.aiBadge, { backgroundColor: badgeConfig.bg }]}>
-                <Text style={[styles.aiBadgeText, { color: badgeConfig.color }]}>
-                  {badgeConfig.text}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.onlineRow}>
-              <View style={[styles.onlineDot, { backgroundColor: badgeConfig.dotColor }]} />
-              <Text style={styles.onlineText}>
-                {badgeConfig.statusText}
-              </Text>
+          <View style={styles.headerTextCol}>
+            <Text style={styles.headerTitle}>Zuru Agent</Text>
+            <View style={styles.subtitleRow}>
+              <Text style={styles.headerSubtitle}>Your personal travel concierge</Text>
+              {!isOnline ? (
+                <View style={styles.offlineDotWrap}>
+                  <View style={styles.offlineDot} />
+                  <Text style={styles.offlineBadgeText}>Offline</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         </View>
@@ -277,7 +307,7 @@ export default function AIChatScreen() {
         <View style={styles.headerRightActions}>
           <Pressable
             onPress={() => router.push('/ai/history' as any)}
-            style={styles.moreBtn}
+            style={styles.headerIconButton}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="View history"
@@ -286,17 +316,18 @@ export default function AIChatScreen() {
           </Pressable>
 
           <Pressable
-            onPress={clearMessages}
-            style={styles.moreBtn}
+            onPress={() => setShowOptionsMenu(true)}
+            style={styles.headerIconButton}
             hitSlop={8}
-            accessibilityLabel="Clear chat"
+            accessibilityRole="button"
+            accessibilityLabel="More options"
           >
-            <Feather name="trash-2" size={18} color={AI_COLORS.textSecondary} />
+            <Feather name="more-vertical" size={18} color={AI_COLORS.textSecondary} />
           </Pressable>
         </View>
       </View>
 
-      {/* ── Offline Banner State ─────────────────────────────────────────── */}
+      {/* ── Offline Banner ─────────────────────────────────────────────────── */}
       {!isOnline && (
         <View style={styles.offlineBanner}>
           <Feather name="wifi-off" size={14} color="#B45309" />
@@ -306,31 +337,31 @@ export default function AIChatScreen() {
         </View>
       )}
 
-      {/* ── Degraded Mode Banner (REM-06 / REM-10) ───────────────────────── */}
+      {/* ── Degraded AI Mode Notice ────────────────────────────────────────── */}
       {lastMeta?.degraded && isOnline && (
         <View style={styles.degradedBanner}>
-          <Feather name="alert-triangle" size={13} color="#B45309" />
+          <Feather name="info" size={13} color="#B45309" />
           <Text style={styles.degradedBannerText}>
-            Operating in basic search mode (AI gateway degraded). Results are matched using catalog filters.
+            Direct catalog matching active. Results are filtered from verified listings.
           </Text>
         </View>
       )}
 
-      {/* ── Messages Container ───────────────────────────────────────────── */}
-      {messages.length === 0 && !isLoading ? (
+      {/* ── Conversation Message Stream ────────────────────────────────────── */}
+      {visibleMessages.length === 0 && !isLoading ? (
         <View style={styles.emptyContainer}>
           <AIEmptyState onSuggestionSelect={handleSuggestion} />
         </View>
       ) : (
         <FlatList
           ref={listRef}
-          data={messages}
+          data={visibleMessages}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
             <View>
               <AIMessageBubble
                 message={item}
-                isLatest={index === messages.length - 1}
+                isLatest={index === visibleMessages.length - 1}
                 onOpen={handleOpenCard}
                 onBook={handleBookCard}
                 onSave={handleSaveCard}
@@ -354,26 +385,11 @@ export default function AIChatScreen() {
           showsVerticalScrollIndicator={false}
           ListFooterComponent={
             isLoading ? (
-              <View style={styles.loadingFooter}>
-                <View style={styles.statusPillRow}>
-                  <View style={styles.statusPill}>
-                    <Feather name="loader" size={12} color={AI_COLORS.orange} />
-                    <Text style={styles.statusText}>
-                      {stageStatus.text || 'Zuru Agent is thinking…'}
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={stopGeneration}
-                    style={styles.inlineStopBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel="Stop generating"
-                  >
-                    <Feather name="square" size={11} color="#EF4444" />
-                    <Text style={styles.inlineStopText}>Stop</Text>
-                  </Pressable>
-                </View>
-                <AITypingIndicator />
-              </View>
+              <AIStatusCapsule
+                stage={stageStatus.stage as any}
+                text={stageStatus.text}
+                onStop={stopGeneration}
+              />
             ) : null
           }
           onContentSizeChange={scrollToBottom}
@@ -397,7 +413,7 @@ export default function AIChatScreen() {
       )}
 
       {/* ── Contextual Follow-up Chips ───────────────────────────────────── */}
-      {messages.length > 0 && !isLoading && isOnline ? (
+      {visibleMessages.length > 0 && !isLoading && isOnline ? (
         <View style={styles.chipsBar}>
           <AISuggestionChips
             chips={activeFollowUps}
@@ -406,22 +422,74 @@ export default function AIChatScreen() {
         </View>
       ) : null}
 
-      {/* ── Input Bar ────────────────────────────────────────────────────── */}
+      {/* ── Bottom Message Composer ──────────────────────────────────────── */}
       <AIInputBar
         value={inputText}
         onChangeText={setInputText}
         onSend={handleSend}
         disabled={isLoading || !isOnline}
-        placeholder={
-          !isOnline
-            ? 'Connect to internet to chat…'
-            : isLoading
-              ? stageStatus.text || 'Zuru Agent is thinking…'
-              : 'Ask Zuru Agent anything…'
-        }
+        placeholder={!isOnline ? 'Connect to internet to chat…' : 'Ask me anything about your trip...'}
       />
 
-      {/* ── Booking Sheet Modal ──────────────────────────────────────────── */}
+      {/* ── More Options Modal Action Sheet ──────────────────────────────── */}
+      <Modal
+        visible={showOptionsMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOptionsMenu(false)}
+      >
+        <Pressable
+          style={styles.menuOverlay}
+          onPress={() => setShowOptionsMenu(false)}
+        >
+          <View
+            style={[
+              styles.menuSheet,
+              { paddingBottom: Math.max(insets.bottom, 16) + 8 },
+            ]}
+          >
+            <View style={styles.menuDragHandle} />
+
+            <Pressable
+              style={styles.menuItem}
+              onPress={handleNewInquiry}
+            >
+              <Feather name="plus-circle" size={18} color={AI_COLORS.textPrimary} />
+              <Text style={styles.menuItemText}>Start new trip inquiry</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.menuItem}
+              onPress={() => {
+                setShowOptionsMenu(false);
+                router.push('/ai/history' as any);
+              }}
+            >
+              <Feather name="clock" size={18} color={AI_COLORS.textPrimary} />
+              <Text style={styles.menuItemText}>View conversation history</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.menuItem, styles.menuItemDestructive]}
+              onPress={handleClearWithConfirm}
+            >
+              <Feather name="trash-2" size={18} color="#DC2626" />
+              <Text style={[styles.menuItemText, { color: '#DC2626' }]}>
+                Clear conversation
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.menuCancelBtn}
+              onPress={() => setShowOptionsMenu(false)}
+            >
+              <Text style={styles.menuCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Booking Sheet Modal (Real Booking Flow) ──────────────────────── */}
       {selectedBookingCard ? (
         <BookingSheet
           visible={Boolean(selectedBookingCard)}
@@ -431,7 +499,7 @@ export default function AIChatScreen() {
         />
       ) : null}
 
-      {/* ── Experience Preview Modal ─────────────────────────────────────── */}
+      {/* ── Immersive Reel Viewer Modal (Real View Flow) ─────────────────── */}
       {selectedViewerCard ? (
         <Modal
           visible={Boolean(selectedViewerCard)}
@@ -462,103 +530,93 @@ export default function AIChatScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: AI_COLORS.bg,
+    backgroundColor: '#FAFAFA',
   },
 
-  // Header
+  // Minimal Refined Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: AI_COLORS.bgCard,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: AI_COLORS.border,
+    borderBottomColor: '#EBEBEB',
     zIndex: 10,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: AI_COLORS.bgCardAlt,
-    borderWidth: 1,
-    borderColor: AI_COLORS.border,
+  headerIconButton: {
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    borderRadius: 19,
   },
   headerCenter: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 8,
     gap: 10,
   },
-  logoMini: {
-    width: 34,
-    height: 34,
-    borderRadius: 11,
+  identityIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     backgroundColor: AI_COLORS.orange,
     alignItems: 'center',
     justifyContent: 'center',
-    ...AI_SHADOW.orange,
+    ...AI_SHADOW.subtle,
   },
-  logoMiniEmoji: {
-    fontSize: 16,
-    color: '#FFFFFF',
+  headerTextCol: {
+    flex: 1,
   },
-  titleRow: {
+  headerTitle: {
+    fontSize: 15,
+    fontFamily: AI_FONTS.bold,
+    color: AI_COLORS.textPrimary,
+    letterSpacing: -0.2,
+  },
+  subtitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  headerTitle: {
-    fontSize: 16,
-    fontFamily: AI_FONTS.bold,
-    color: AI_COLORS.textPrimary,
-  },
-  aiBadge: {
-    backgroundColor: AI_COLORS.orangeSoft,
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  aiBadgeText: {
-    fontSize: 8,
-    fontFamily: AI_FONTS.bold,
-    color: AI_COLORS.orange,
-    letterSpacing: 0.5,
-  },
-  onlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 1,
-  },
-  onlineDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: AI_COLORS.success,
-  },
-  onlineText: {
-    fontSize: 11,
+  headerSubtitle: {
+    fontSize: 11.5,
     fontFamily: AI_FONTS.regular,
     color: AI_COLORS.textSecondary,
   },
-  moreBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  offlineDotWrap: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 3,
+  },
+  offlineDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#EF4444',
+  },
+  offlineBadgeText: {
+    fontSize: 10,
+    fontFamily: AI_FONTS.medium,
+    color: '#EF4444',
   },
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
 
-  // Offline Banner
+  // Messages list
+  messagesList: {
+    paddingVertical: 14,
+  },
+  emptyContainer: {
+    flex: 1,
+  },
+
+  // Offline banner
   offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -570,84 +628,48 @@ const styles = StyleSheet.create({
     borderBottomColor: '#FDE68A',
   },
   offlineText: {
+    flex: 1,
     fontSize: 12,
     fontFamily: AI_FONTS.medium,
     color: '#92400E',
-    flex: 1,
   },
 
-  // Messages
-  emptyContainer: {
-    flex: 1,
-  },
-  messagesList: {
-    paddingVertical: 16,
-    paddingBottom: 20,
-  },
-
-  // Loading Footer
-  loadingFooter: {
-    gap: 8,
-    marginTop: 4,
-  },
-  statusPillRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingRight: 16,
-  },
-  inlineStopBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: AI_RADIUS.full,
-  },
-  inlineStopText: {
-    fontSize: 11,
-    fontFamily: AI_FONTS.bold,
-    color: '#EF4444',
-  },
-  statusPill: {
+  // Degraded mode notice
+  degradedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: AI_COLORS.orangeSoft,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: AI_RADIUS.full,
-    marginLeft: 16,
-    marginBottom: 4,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FEE3A2',
   },
-  statusText: {
-    fontSize: 11,
-    fontFamily: AI_FONTS.medium,
-    color: AI_COLORS.orange,
+  degradedBannerText: {
+    flex: 1,
+    fontSize: 11.5,
+    fontFamily: AI_FONTS.regular,
+    color: '#B45309',
   },
 
-  // Interrupted Recovery Pill
+  // Interrupted pill
   interruptedPill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    gap: 6,
+    marginLeft: 52,
+    marginTop: 4,
+    marginBottom: 8,
+    gap: 5,
     backgroundColor: '#FEF3C7',
     borderWidth: 1,
     borderColor: '#FDE68A',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: AI_RADIUS.full,
-    marginLeft: 16,
-    marginTop: 4,
-    marginBottom: 8,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   interruptedPillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: AI_FONTS.medium,
     color: '#92400E',
   },
@@ -657,48 +679,98 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    borderRadius: 12,
     marginHorizontal: 16,
     marginBottom: 8,
     padding: 10,
-    backgroundColor: '#FEE2E2',
-    borderRadius: AI_RADIUS.md,
-    borderWidth: 1,
-    borderColor: '#FECACA',
+    gap: 8,
   },
   errorContent: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flex: 1,
-    marginRight: 10,
   },
   errorText: {
+    flex: 1,
     fontSize: 12,
     fontFamily: AI_FONTS.regular,
     color: '#B91C1C',
-    flex: 1,
   },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#DC2626',
+    backgroundColor: AI_COLORS.orange,
+    borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: AI_RADIUS.sm,
   },
   retryText: {
-    fontSize: 12,
-    fontFamily: AI_FONTS.bold,
+    fontSize: 11.5,
+    fontFamily: AI_FONTS.semibold,
     color: '#FFFFFF',
   },
 
-  // Chips bar
+  // Follow-up chips bar
   chipsBar: {
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: AI_COLORS.border,
-    backgroundColor: AI_COLORS.bgCard,
+    paddingVertical: 6,
+    backgroundColor: '#FAFAFA',
+  },
+
+  // Options Menu Action Sheet Modal
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  menuSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    gap: 6,
+  },
+  menuDragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  menuItemDestructive: {
+    borderBottomWidth: 0,
+  },
+  menuItemText: {
+    fontSize: 14.5,
+    fontFamily: AI_FONTS.medium,
+    color: AI_COLORS.textPrimary,
+  },
+  menuCancelBtn: {
+    marginTop: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuCancelText: {
+    fontSize: 14,
+    fontFamily: AI_FONTS.semibold,
+    color: AI_COLORS.textPrimary,
   },
 
   // Viewer Modal
@@ -708,29 +780,13 @@ const styles = StyleSheet.create({
   },
   closeViewerBtn: {
     position: 'absolute',
-    right: 18,
-    zIndex: 100,
+    right: 16,
+    zIndex: 50,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  degradedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#FDE68A',
-  },
-  degradedBannerText: {
-    fontSize: 12,
-    fontFamily: AI_FONTS.medium,
-    color: '#B45309',
-    flex: 1,
   },
 });

@@ -1,12 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AI_COLORS, AI_FONTS, AI_RADIUS, AI_SHADOW, SUGGESTION_CHIPS } from './tokens';
 import { AISuggestionChips } from './AISuggestionChip';
 
@@ -16,19 +15,19 @@ interface AIEmptyStateProps {
 
 export function AIEmptyState({ onSuggestionSelect }: AIEmptyStateProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(24)).current;
+  const slideAnim = useRef(new Animated.Value(18)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
       Animated.spring(slideAnim, {
         toValue: 0,
-        tension: 60,
+        tension: 80,
         friction: 9,
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   return (
     <Animated.View
@@ -40,56 +39,38 @@ export function AIEmptyState({ onSuggestionSelect }: AIEmptyStateProps) {
         },
       ]}
     >
-      {/* Illustration / Brand graphic */}
-      <View style={styles.illustrationWrap}>
-        <View style={styles.outerRing}>
-          <View style={styles.innerRing}>
-            <View style={styles.logoMark}>
-              <Text style={styles.logoEmoji}>✦</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Orbiting dots */}
-        <View style={[styles.orbitDot, { top: 10, right: 30 }]}>
-          <Text style={{ fontSize: 16 }}>🏖</Text>
-        </View>
-        <View style={[styles.orbitDot, { top: 20, left: 20 }]}>
-          <Text style={{ fontSize: 16 }}>🚤</Text>
-        </View>
-        <View style={[styles.orbitDot, { bottom: 8, right: 20 }]}>
-          <Text style={{ fontSize: 16 }}>🏨</Text>
-        </View>
-        <View style={[styles.orbitDot, { bottom: 14, left: 32 }]}>
-          <Text style={{ fontSize: 16 }}>🍽</Text>
+      {/* Concierge Avatar Icon */}
+      <View style={styles.iconContainer}>
+        <View style={styles.iconCircle}>
+          <MaterialCommunityIcons name="compass-outline" size={32} color="#FFFFFF" />
         </View>
       </View>
 
-      {/* Greeting */}
+      {/* Title & Subtitle */}
       <View style={styles.textBlock}>
-        <Text style={styles.greeting}>Your AI travel companion.</Text>
-        <Text style={styles.subGreeting}>
-          Ask me anything about Kenya's best experiences, stays, food, and adventures.
+        <Text style={styles.title}>Your Personal Travel Concierge</Text>
+        <Text style={styles.subtitle}>
+          Ask me anything about verified stays, ocean villas, dining, and activities across Kenya.
         </Text>
       </View>
 
-      {/* Capability pills */}
+      {/* Value props */}
       <View style={styles.capabilities}>
         {[
-          { icon: 'search', label: 'Search experiences' },
-          { icon: 'calendar', label: 'Plan itineraries' },
-          { icon: 'heart', label: 'Personalized picks' },
+          { icon: 'check-circle', label: 'Verified listings' },
+          { icon: 'calendar', label: 'Trip itineraries' },
+          { icon: 'heart', label: 'Curated stays' },
         ].map((cap) => (
           <View key={cap.label} style={styles.capPill}>
-            <Feather name={cap.icon as any} size={12} color={AI_COLORS.orange} />
+            <Feather name={cap.icon as any} size={11} color={AI_COLORS.orange} />
             <Text style={styles.capText}>{cap.label}</Text>
           </View>
         ))}
       </View>
 
-      {/* Suggestion chips */}
+      {/* Suggestion Chips */}
       <View style={styles.chipsSection}>
-        <Text style={styles.chipsLabel}>Try asking</Text>
+        <Text style={styles.chipsLabel}>Suggested ideas</Text>
         <AISuggestionChips chips={SUGGESTION_CHIPS} onSelect={onSuggestionSelect} />
       </View>
     </Animated.View>
@@ -101,120 +82,76 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 28,
-    paddingBottom: 40,
+    gap: 22,
+    paddingBottom: 30,
   },
-
-  // Illustration
-  illustrationWrap: {
-    width: 160,
-    height: 160,
+  iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   },
-  outerRing: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 1,
-    borderColor: AI_COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FAFAFA',
-  },
-  innerRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 1.5,
-    borderColor: AI_COLORS.orangeMid,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: AI_COLORS.orangeLight,
-  },
-  logoMark: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     backgroundColor: AI_COLORS.orange,
     alignItems: 'center',
     justifyContent: 'center',
     ...AI_SHADOW.orange,
   },
-  logoEmoji: {
-    fontSize: 26,
-    color: '#FFFFFF',
-  },
-  orbitDot: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: AI_COLORS.border,
-    ...AI_SHADOW.subtle,
-  },
-
-  // Text
   textBlock: {
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     paddingHorizontal: 32,
   },
-  greeting: {
-    fontSize: 22,
+  title: {
+    fontSize: 20,
     fontFamily: AI_FONTS.bold,
     color: AI_COLORS.textPrimary,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
-  subGreeting: {
-    fontSize: 14,
+  subtitle: {
+    fontSize: 13.5,
     fontFamily: AI_FONTS.regular,
     color: AI_COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: 20,
   },
-
-  // Capability pills
   capabilities: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
   capPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: AI_COLORS.orangeLight,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: AI_COLORS.orangeMid,
+    borderColor: '#EBEBEB',
     borderRadius: AI_RADIUS.full,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 5.5,
+    ...AI_SHADOW.subtle,
   },
   capText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontFamily: AI_FONTS.medium,
-    color: AI_COLORS.orange,
+    color: '#4B5563',
   },
-
-  // Chips section
   chipsSection: {
     width: '100%',
-    gap: 10,
+    gap: 8,
+    marginTop: 6,
   },
   chipsLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontFamily: AI_FONTS.semibold,
     color: AI_COLORS.textTertiary,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
     paddingHorizontal: 20,
   },
 });

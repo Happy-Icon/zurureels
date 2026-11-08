@@ -197,7 +197,7 @@ export const zuruAIService = {
       conversationId,
     } = options;
 
-    onStatusChange?.({ stage: 'understanding', text: 'Understanding your request…' });
+    onStatusChange?.({ stage: 'understanding', text: 'Understanding request…' });
 
     // Setup 25-second timeout with AbortController
     const controller = new AbortController();
@@ -301,16 +301,20 @@ export const zuruAIService = {
 
               if (eventType === 'status') {
                 if (data.stage === 'searching') {
-                  onStatusChange?.({ stage: 'searching', text: data.text || 'Finding matching experiences…' });
+                  onStatusChange?.({ stage: 'searching', text: data.text || 'Searching real listings…' });
                 } else if (data.stage === 'understanding') {
-                  onStatusChange?.({ stage: 'understanding', text: data.text || 'Understanding your request…' });
+                  onStatusChange?.({ stage: 'understanding', text: data.text || 'Understanding request…' });
+                } else if (data.stage === 'preparing') {
+                  onStatusChange?.({ stage: 'preparing', text: data.text || 'Preparing recommendations…' });
                 }
               } else if (eventType === 'delta') {
                 if (data.delta) {
+                  onStatusChange?.({ stage: 'preparing', text: 'Preparing recommendations…' });
                   onTextDelta?.(data.delta);
                   finalResult.text += data.delta;
                 }
               } else if (eventType === 'result') {
+                onStatusChange?.({ stage: 'preparing', text: 'Preparing recommendations…' });
                 finalResult = {
                   text: data.text || finalResult.text || "Here are matching experiences on ZuruSasa:",
                   cards: data.cards || [],

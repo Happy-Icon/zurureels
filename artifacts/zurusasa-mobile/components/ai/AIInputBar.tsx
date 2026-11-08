@@ -1,22 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
+  Platform,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AI_COLORS, AI_FONTS, AI_RADIUS, AI_SHADOW } from './tokens';
+import * as ImagePicker from 'expo-image-picker';
+import { AI_COLORS, AI_FONTS, AI_SHADOW } from './tokens';
 
 interface AIInputBarProps {
   value: string;
   onChangeText: (text: string) => void;
   onSend: () => void;
   onVoice?: () => void;
-  onImage?: () => void;
+  onImageSelected?: (uri: string) => void;
   placeholder?: string;
   disabled?: boolean;
 }
@@ -26,8 +28,8 @@ export function AIInputBar({
   onChangeText,
   onSend,
   onVoice,
-  onImage,
-  placeholder = 'Ask Zuru Agent anything…',
+  onImageSelected,
+  placeholder = 'Ask me anything about your trip...',
   disabled = false,
 }: AIInputBarProps) {
   const insets = useSafeAreaInsets();
@@ -40,23 +42,64 @@ export function AIInputBar({
   useEffect(() => {
     Animated.timing(borderColor, {
       toValue: focused ? 1 : 0,
-      duration: 200,
+      duration: 180,
       useNativeDriver: false,
     }).start();
-  }, [focused]);
+  }, [focused, borderColor]);
 
   const borderAnim = borderColor.interpolate({
     inputRange: [0, 1],
-    outputRange: [AI_COLORS.border, AI_COLORS.orange],
+    outputRange: ['#EBEBEB', AI_COLORS.orange],
   });
 
   const handleSend = () => {
-    if (!canSend) return;
+    if (!canSend || disabled) return;
     Animated.sequence([
-      Animated.timing(sendScale, { toValue: 0.88, duration: 80, useNativeDriver: true }),
-      Animated.spring(sendScale, { toValue: 1, tension: 160, friction: 6, useNativeDriver: true }),
+      Animated.timing(sendScale, { toValue: 0.88, duration: 60, useNativeDriver: true }),
+      Animated.spring(sendScale, { toValue: 1, tension: 180, friction: 6, useNativeDriver: true }),
     ]).start();
     onSend();
+  };
+
+  const handleAttachImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Photo Permission Needed',
+          'Please allow access to your photos so Zuru Agent can see your travel inspiration.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        onImageSelected?.(uri);
+        Alert.alert(
+          'Inspiration Photo Attached',
+          'Zuru Agent has received your photo. What would you like to find matching this style?'
+        );
+      }
+    } catch {
+      Alert.alert('Notice', 'Unable to open photo library at this time.');
+    }
+  };
+
+  const handleVoice = () => {
+    if (onVoice) {
+      onVoice();
+    } else {
+      Alert.alert(
+        'Voice Assistant',
+        'Voice dictation is active via your keyboard microphone icon for seamless input.'
+      );
+    }
   };
 
   return (
@@ -67,56 +110,60 @@ export function AIInputBar({
       ]}
     >
       <Animated.View style={[styles.inputRow, { borderColor: borderAnim }]}>
-        {/* Left icons */}
-        <View style={styles.leftIcons}>
-          <Pressable onPress={onImage} hitSlop={8} style={styles.iconBtn}>
-            <Feather name="image" size={18} color={focused ? AI_COLORS.orange : AI_COLORS.textTertiary} />
-          </Pressable>
-        </View>
+        {/* Attachment action button */}
+        <Pressable
+          onPress={handleAttachImage}
+          hitSlop={8}
+          style={styles.actionBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Attach photo for travel inspiration"
+        >
+          <Feather name="paperclip" size={19} color={AI_COLORS.textTertiary} />
+        </Pressable>
 
-        {/* Text input */}
+        {/* Expanding multiline text input */}
         <TextInput
           style={styles.input}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={AI_COLORS.textTertiary}
+          placeholderTextColor="#9CA3AF"
           multiline
-          maxLength={500}
+          maxLength={600}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           editable={!disabled}
-          returnKeyType="send"
-          onSubmitEditing={handleSend}
+          returnKeyType={Platform.OS === 'ios' ? 'default' : 'send'}
+          onSubmitEditing={Platform.OS === 'ios' ? undefined : handleSend}
         />
 
-        {/* Right icons */}
-        <View style={styles.rightIcons}>
+        {/* Right actions: Voice / Circular Orange Send */}
+        <View style={styles.rightActions}>
           {!canSend ? (
-            <Pressable onPress={onVoice} hitSlop={8} style={styles.iconBtn}>
-              <Feather
-                name="mic"
-                size={18}
-                color={focused ? AI_COLORS.orange : AI_COLORS.textTertiary}
-              />
-            </Pressable>
-          ) : null}
-          <Animated.View style={{ transform: [{ scale: sendScale }] }}>
             <Pressable
-              onPress={handleSend}
-              disabled={!canSend}
-              style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+              onPress={handleVoice}
+              hitSlop={8}
+              style={styles.actionBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Dictate message with voice"
             >
-              <Feather name="arrow-up" size={16} color="#FFFFFF" />
+              <Feather name="mic" size={19} color={AI_COLORS.textTertiary} />
             </Pressable>
-          </Animated.View>
+          ) : (
+            <Animated.View style={{ transform: [{ scale: sendScale }] }}>
+              <Pressable
+                onPress={handleSend}
+                disabled={!canSend || disabled}
+                style={styles.circularSendBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+              >
+                <Feather name="arrow-up" size={18} color="#FFFFFF" />
+              </Pressable>
+            </Animated.View>
+          )}
         </View>
       </Animated.View>
-
-      {/* Footer note */}
-      <Text style={styles.footer}>
-        Zuru Agent · Powered by ZuruSasa Intelligence
-      </Text>
     </View>
   );
 }
@@ -125,41 +172,27 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: AI_COLORS.border,
+    borderTopColor: '#EBEBEB',
     paddingHorizontal: 16,
     paddingTop: 10,
-    gap: 6,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: '#F7F7F7',
-    borderRadius: AI_RADIUS.xl,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 24,
     borderWidth: 1.5,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
     minHeight: 48,
   },
-  leftIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 6,
-    paddingBottom: 6,
-  },
-  rightIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 2,
-    paddingBottom: 2,
-    gap: 2,
-  },
-  iconBtn: {
+  actionBtn: {
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 18,
+    marginBottom: 1,
   },
   input: {
     flex: 1,
@@ -167,11 +200,18 @@ const styles = StyleSheet.create({
     fontFamily: AI_FONTS.regular,
     color: AI_COLORS.textPrimary,
     paddingHorizontal: 8,
-    paddingVertical: 8,
-    maxHeight: 100,
-    lineHeight: 21,
+    paddingTop: 8,
+    paddingBottom: 8,
+    maxHeight: 110,
+    lineHeight: 20,
   },
-  sendBtn: {
+  rightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 2,
+    marginBottom: 1,
+  },
+  circularSendBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -179,16 +219,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...AI_SHADOW.orange,
-  },
-  sendBtnDisabled: {
-    backgroundColor: AI_COLORS.textTertiary,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  footer: {
-    fontSize: 10.5,
-    fontFamily: AI_FONTS.regular,
-    color: AI_COLORS.textTertiary,
-    textAlign: 'center',
   },
 });

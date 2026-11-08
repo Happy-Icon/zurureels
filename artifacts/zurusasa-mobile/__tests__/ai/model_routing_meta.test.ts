@@ -40,33 +40,41 @@ describe('REM-01 & REM-06: Model Routing, Metadata & Honest Branding', () => {
       const discoverConfig = resolveProvider('discover');
       assert.strictEqual(
         discoverConfig.model,
-        'claude-3-5-haiku-20241022',
-        'discover action must resolve to claude-3-5-haiku-20241022',
+        'claude-sonnet-5-5',
+        'discover action must resolve to claude-sonnet-5-5',
       );
       assert.strictEqual(discoverConfig.apiKey, 'test-fable-key');
 
       const planConfig = resolveProvider('plan_itinerary');
       assert.strictEqual(
         planConfig.model,
-        'claude-3-5-sonnet-20241022',
-        'plan_itinerary action must resolve to claude-3-5-sonnet-20241022',
+        'claude-sonnet-5-5',
+        'plan_itinerary action must resolve to claude-sonnet-5-5',
       );
     });
 
     test('supports ANTHROPIC_API_KEY and custom ANTHROPIC_MODEL', () => {
       process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
-      process.env.ANTHROPIC_MODEL = 'claude-3-5-sonnet-20241022';
+      process.env.ANTHROPIC_MODEL = 'claude-haiku-5-5';
 
       const config = resolveProvider('discover');
       assert.strictEqual(config.apiKey, 'sk-ant-test-key');
-      assert.strictEqual(config.model, 'claude-3-5-sonnet-20241022');
+      assert.strictEqual(config.model, 'claude-haiku-5-5');
       assert.strictEqual(config.engine, 'anthropic');
     });
 
-    test('falls back to claude-3-5-haiku when model is unspecified', () => {
+    test('actively remaps retired claude-3-5-sonnet-20241022 to claude-sonnet-5-5', () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+      process.env.ANTHROPIC_MODEL = 'claude-3-5-sonnet-20241022';
+
+      const config = resolveProvider('discover');
+      assert.strictEqual(config.model, 'claude-sonnet-5-5');
+    });
+
+    test('falls back to claude-sonnet-5-5 when model is unspecified', () => {
       process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
       const config = resolveProvider('discover');
-      assert.strictEqual(config.model, 'claude-3-5-haiku-20241022');
+      assert.strictEqual(config.model, 'claude-sonnet-5-5');
     });
   });
 

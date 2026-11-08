@@ -5,16 +5,16 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { AI_COLORS, AI_FONTS, AI_RADIUS, AI_SHADOW, type AIMessage } from './tokens';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { AI_COLORS, AI_FONTS, AI_RADIUS, AI_SHADOW, type AIMessage, type AICard } from './tokens';
 import { AICardRow } from './AICards';
 
 interface AIMessageBubbleProps {
   message: AIMessage;
   isLatest?: boolean;
-  onSave?: (id: string, card: any) => void;
-  onOpen?: (id: string, card: any) => void;
-  onBook?: (id: string, card: any) => void;
+  onSave?: (id: string, card: AICard) => void;
+  onOpen?: (id: string, card: AICard) => void;
+  onBook?: (id: string, card: AICard) => void;
 }
 
 export function AIMessageBubble({
@@ -25,143 +25,149 @@ export function AIMessageBubble({
   onBook,
 }: AIMessageBubbleProps) {
   const isUser = message.role === 'user';
-  const scale = useRef(new Animated.Value(0.88)).current;
+  const scale = useRef(new Animated.Value(0.95)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.spring(scale, {
         toValue: 1,
-        tension: 80,
-        friction: 8,
+        tension: 100,
+        friction: 9,
         useNativeDriver: true,
       }),
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 200,
+        duration: 180,
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [opacity, scale]);
+
+  const timestampStr = message.timestamp
+    ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '';
 
   return (
-    <Animated.View
-      style={[
-        styles.wrapper,
-        isUser ? styles.wrapperUser : styles.wrapperAI,
-        { transform: [{ scale }], opacity },
-      ]}
-    >
-      {/* AI avatar */}
-      {!isUser ? (
-        <View style={styles.aiAvatar}>
-          <Text style={styles.aiAvatarEmoji}>✦</Text>
-        </View>
-      ) : null}
-
-      <View style={[styles.bubbleArea, isUser && { alignItems: 'flex-end' }]}>
-        {/* Message text bubble */}
-        <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAI]}>
-          <Text style={[styles.text, isUser ? styles.textUser : styles.textAI]}>
-            {message.text}
-          </Text>
-        </View>
-
-        {/* Cards below bubble */}
-        {message.cards && message.cards.length > 0 ? (
-          <View style={styles.cardsContainer}>
-            <AICardRow
-              cards={message.cards}
-              type={message.cards[0].type}
-              onSave={onSave}
-              onOpen={onOpen}
-              onBook={onBook}
-            />
+    <Animated.View style={[styles.container, { transform: [{ scale }], opacity }]}>
+      <View style={[styles.row, isUser ? styles.rowUser : styles.rowAI]}>
+        {/* Assistant Orange Identity Avatar */}
+        {!isUser ? (
+          <View style={styles.avatar}>
+            <MaterialCommunityIcons name="compass-outline" size={15} color="#FFFFFF" />
           </View>
         ) : null}
 
+        {/* Message Bubble Container */}
+        <View style={[styles.bubbleWrapper, isUser && styles.bubbleWrapperUser]}>
+          <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAI]}>
+            <Text style={[styles.text, isUser ? styles.textUser : styles.textAI]}>
+              {message.text}
+            </Text>
+          </View>
 
-        {/* Timestamp */}
-        <Text style={[styles.timestamp, isUser && { textAlign: 'right' }]}>
-          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
+          {/* Timestamp */}
+          {timestampStr ? (
+            <Text style={[styles.timestamp, isUser ? styles.timestampUser : styles.timestampAI]}>
+              {timestampStr}
+            </Text>
+          ) : null}
+        </View>
       </View>
+
+      {/* Horizontally Scrollable Recommendation Cards (Spans full screen width) */}
+      {!isUser && message.cards && message.cards.length > 0 ? (
+        <View style={styles.cardsSection}>
+          <AICardRow
+            cards={message.cards}
+            onSave={onSave}
+            onOpen={onOpen}
+            onBook={onBook}
+          />
+        </View>
+      ) : null}
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
+  container: {
+    marginBottom: 12,
+  },
+  row: {
     flexDirection: 'row',
-    marginBottom: 14,
     paddingHorizontal: 16,
     gap: 8,
   },
-  wrapperUser: {
+  rowUser: {
     justifyContent: 'flex-end',
   },
-  wrapperAI: {
+  rowAI: {
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
   },
-
-  aiAvatar: {
+  avatar: {
     width: 28,
     height: 28,
-    borderRadius: 9,
+    borderRadius: 8,
     backgroundColor: AI_COLORS.orange,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-    marginBottom: 20,
-    ...AI_SHADOW.orange,
+    marginBottom: 16,
+    ...AI_SHADOW.subtle,
   },
-  aiAvatarEmoji: {
-    fontSize: 14,
-    color: '#FFFFFF',
+  bubbleWrapper: {
+    maxWidth: '82%',
+    gap: 3,
   },
-
-  bubbleArea: {
-    maxWidth: '78%',
-    gap: 6,
+  bubbleWrapperUser: {
+    alignItems: 'flex-end',
   },
   bubble: {
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   bubbleUser: {
-    backgroundColor: AI_COLORS.userBubble,
+    backgroundColor: '#1E1E1E',
     borderBottomRightRadius: 4,
     ...AI_SHADOW.subtle,
   },
   bubbleAI: {
-    backgroundColor: AI_COLORS.aiBubble,
+    backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: AI_COLORS.border,
+    borderColor: '#EBEBEB',
     ...AI_SHADOW.subtle,
   },
   text: {
     fontSize: 14.5,
     lineHeight: 21,
+    letterSpacing: -0.1,
   },
   textUser: {
-    fontFamily: AI_FONTS.medium,
-    color: AI_COLORS.userText,
+    fontFamily: AI_FONTS.regular,
+    color: '#FFFFFF',
   },
   textAI: {
     fontFamily: AI_FONTS.regular,
-    color: AI_COLORS.aiText,
+    color: '#1A1A1A',
   },
-
-  cardsContainer: {
-    marginTop: 4,
-  },
-
   timestamp: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontFamily: AI_FONTS.regular,
-    color: AI_COLORS.textTertiary,
+    color: '#9CA3AF',
+    marginTop: 1,
+  },
+  timestampUser: {
+    textAlign: 'right',
+    paddingRight: 4,
+  },
+  timestampAI: {
+    textAlign: 'left',
+    paddingLeft: 4,
+  },
+  cardsSection: {
+    marginTop: 8,
   },
 });

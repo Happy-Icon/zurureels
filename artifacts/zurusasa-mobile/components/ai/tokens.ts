@@ -117,7 +117,7 @@ export const SUGGESTION_CHIPS = [
 // AI Message types
 export type MessageRole = 'user' | 'ai';
 
-export type AIStage = 'idle' | 'understanding' | 'searching' | 'answering' | 'done' | 'error';
+export type AIStage = 'idle' | 'understanding' | 'searching' | 'preparing' | 'answering' | 'done' | 'error';
 
 export interface AIStageStatus {
   stage: AIStage;

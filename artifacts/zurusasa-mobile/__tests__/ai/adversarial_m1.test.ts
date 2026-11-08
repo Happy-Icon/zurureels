@@ -55,29 +55,35 @@ describe('ADVERSARIAL CHALLENGE 1: REM-01 & REM-06 Routing & Metadata Schema Int
     process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
 
     const disc = resolveProvider('discover');
-    assert.strictEqual(disc.model, 'claude-3-5-haiku-20241022');
+    assert.strictEqual(disc.model, 'claude-sonnet-5-5');
 
     const plan = resolveProvider('plan_itinerary');
-    assert.strictEqual(plan.model, 'claude-3-5-sonnet-20241022');
+    assert.strictEqual(plan.model, 'claude-sonnet-5-5');
 
     const regen = resolveProvider('regenerate_day');
-    assert.strictEqual(regen.model, 'claude-3-5-haiku-20241022');
+    assert.strictEqual(regen.model, 'claude-sonnet-5-5');
   });
 
   test('Empty or whitespace model configs fall back safely', () => {
     process.env.FABLE_MODEL = '';
     const resEmpty = resolveProvider('discover');
-    assert.strictEqual(resEmpty.model, 'claude-3-5-haiku-20241022');
+    assert.strictEqual(resEmpty.model, 'claude-sonnet-5-5');
 
     process.env.ANTHROPIC_MODEL = '';
     const resEmptyAnt = resolveProvider('plan_itinerary');
-    assert.strictEqual(resEmptyAnt.model, 'claude-3-5-sonnet-20241022');
+    assert.strictEqual(resEmptyAnt.model, 'claude-sonnet-5-5');
   });
 
   test('Explicit valid production Claude model override is preserved', () => {
-    process.env.ANTHROPIC_MODEL = 'claude-3-opus-20240229';
+    process.env.ANTHROPIC_MODEL = 'claude-haiku-5-5';
     const res = resolveProvider('discover');
-    assert.strictEqual(res.model, 'claude-3-opus-20240229');
+    assert.strictEqual(res.model, 'claude-haiku-5-5');
+  });
+
+  test('Retired models like claude-3-5-sonnet-20241022 are remapped to claude-sonnet-5-5', () => {
+    process.env.ANTHROPIC_MODEL = 'claude-3-5-sonnet-20241022';
+    const res = resolveProvider('plan_itinerary');
+    assert.strictEqual(res.model, 'claude-sonnet-5-5');
   });
 
   test('parseAIMetadata strictly enforces boolean typing and fallback reasoning', () => {

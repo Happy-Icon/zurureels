@@ -365,6 +365,10 @@ const RETIRED_ANTHROPIC_MODELS = new Set([
   'claude-3-5-sonnet-latest',
   'claude-3-5-haiku-20241022',
   'claude-3-5-haiku-latest',
+  'claude-3-sonnet-20240229',
+  'claude-3-opus-20240229',
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5',
 ]);
 
 export function resolveProvider(action: string): {
@@ -380,12 +384,9 @@ export function resolveProvider(action: string): {
     'https://api.anthropic.com/v1/messages';
   let rawModel = (Deno.env.get('ANTHROPIC_MODEL') || Deno.env.get('FABLE_MODEL') || '').trim();
 
-  // Actively remap missing, invalid, or retired model identifiers to active Claude 4.5/4.6 models
+  // Actively remap missing, invalid, or retired model identifiers to official Claude Sonnet 5.5
   if (!rawModel || RETIRED_ANTHROPIC_MODELS.has(rawModel)) {
-    rawModel =
-      action === 'plan_itinerary' || action === 'regenerate_day'
-        ? 'claude-sonnet-4-6'
-        : 'claude-haiku-4-5';
+    rawModel = 'claude-sonnet-5-5';
   }
 
   return {
@@ -465,19 +466,35 @@ async function callAnthropicMessages(
 
   try {
     let activeModel = model;
+    let currentPayload: any = { ...payload };
     let res = await fetch(baseUrl, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify(currentPayload),
       signal: controller.signal,
     });
 
-    if (res.status === 404 && activeModel !== 'claude-sonnet-4-6') {
-      activeModel = 'claude-sonnet-4-6';
+    // 1. Intercept 404 (retired model) -> fallback immediately to claude-sonnet-5-5
+    if (res.status === 404 && activeModel !== 'claude-sonnet-5-5') {
+      console.warn(`[ZuruAI] Model ${activeModel} returned 404 not_found_error, remapping to claude-sonnet-5-5`);
+      activeModel = 'claude-sonnet-5-5';
+      currentPayload = { ...currentPayload, model: activeModel };
       res = await fetch(baseUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ ...payload, model: activeModel }),
+        body: JSON.stringify(currentPayload),
+        signal: controller.signal,
+      });
+    }
+
+    // 2. Intercept 400 (strict tool_choice rejected by Sonnet 5.5) -> fallback to { type: 'auto' }
+    if (res.status === 400 && currentPayload.tool_choice?.type === 'tool') {
+      console.warn('[ZuruAI] Forced tool_choice rejected (400), falling back to auto tool_choice');
+      currentPayload = { ...currentPayload, tool_choice: { type: 'auto' } };
+      res = await fetch(baseUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(currentPayload),
         signal: controller.signal,
       });
     }
@@ -571,19 +588,35 @@ async function streamAnthropicMessages(
 
   try {
     let activeModel = model;
+    let currentPayload: any = { ...payload };
     let res = await fetch(baseUrl, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify(currentPayload),
       signal: controller.signal,
     });
 
-    if (res.status === 404 && activeModel !== 'claude-sonnet-4-6') {
-      activeModel = 'claude-sonnet-4-6';
+    // 1. Intercept 404 (retired model) -> fallback immediately to claude-sonnet-5-5
+    if (res.status === 404 && activeModel !== 'claude-sonnet-5-5') {
+      console.warn(`[ZuruAI] Model ${activeModel} returned 404 not_found_error, remapping to claude-sonnet-5-5`);
+      activeModel = 'claude-sonnet-5-5';
+      currentPayload = { ...currentPayload, model: activeModel };
       res = await fetch(baseUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ ...payload, model: activeModel }),
+        body: JSON.stringify(currentPayload),
+        signal: controller.signal,
+      });
+    }
+
+    // 2. Intercept 400 (strict tool_choice rejected by Sonnet 5.5) -> fallback to { type: 'auto' }
+    if (res.status === 400 && currentPayload.tool_choice?.type === 'tool') {
+      console.warn('[ZuruAI] Forced tool_choice rejected (400), falling back to auto tool_choice');
+      currentPayload = { ...currentPayload, tool_choice: { type: 'auto' } };
+      res = await fetch(baseUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(currentPayload),
         signal: controller.signal,
       });
     }
@@ -642,6 +675,8 @@ async function streamAnthropicMessages(
               }
             } else if (eventData.delta?.type === 'input_json_delta' && eventData.delta.partial_json) {
               accumulatedToolJson += eventData.delta.partial_json;
+            } else if (eventData.delta?.type === 'thinking_delta') {
+              // Ignore internal thinking stream from Sonnet 5.5 without adding to chat text
             }
           } else if (eventType === 'message_start' && eventData.message?.usage) {
             promptTokens = eventData.message.usage.input_tokens || 0;
@@ -872,8 +907,8 @@ async function fetchVerifiedListings(
       const exp = r.experience;
       const host = r.host;
       const meta = (exp.metadata || {}) as Record<string, any>;
-      const rating = typeof meta.rating === 'number' ? meta.rating : 4.9;
-      const reviewCount = typeof meta.review_count === 'number' ? meta.review_count : 18;
+      const rating = typeof meta.rating === 'number' ? meta.rating : undefined;
+      const reviewCount = typeof meta.review_count === 'number' ? meta.review_count : undefined;
       const formattedThumb = formatCloudinaryThumbnail(r.thumbnail_url);
       const previewThumb = formattedThumb || r.thumbnail_url || exp.image_url || '';
 
@@ -946,8 +981,8 @@ async function fetchVerifiedListings(
   return experiences.map((exp: any): AICardResult => {
     const reel = reelMap.get(exp.id);
     const meta = (exp.metadata || {}) as Record<string, any>;
-    const rating = typeof meta.rating === 'number' ? meta.rating : 4.9;
-    const reviewCount = typeof meta.review_count === 'number' ? meta.review_count : 18;
+    const rating = typeof meta.rating === 'number' ? meta.rating : undefined;
+    const reviewCount = typeof meta.review_count === 'number' ? meta.review_count : undefined;
     const formattedThumb = formatCloudinaryThumbnail(reel?.thumbnail_url);
     const previewThumb = formattedThumb || reel?.thumbnail_url || exp.image_url || '';
 

@@ -13,3 +13,5 @@ export * from './AIMessageBubble';
 export * from './AIInputBar';
 export * from './AIEmptyState';
 export * from './AIFloatingButton';
+export * from './TextShimmerWave';
+export * from './AIStatusCapsule';
