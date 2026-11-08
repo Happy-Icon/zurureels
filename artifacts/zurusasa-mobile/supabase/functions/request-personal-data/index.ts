@@ -142,7 +142,7 @@ Deno.serve(async (request) => {
   // ── ACTION: initiate ────────────────────────────────────────────────────────
   if (action === 'initiate') {
     // 1. Rate limiting: max 5 initiate attempts per hour per user
-    const rateLimit = await checkRateLimit(`pdr:initiate:${user.id}`, 5, 3600);
+    const rateLimit = await checkRateLimit(request, 'pdr_initiate', 5, 3600, user.id);
     if (!rateLimit.allowed) {
       return json({ error: 'Too many data export requests. Please try again later.' }, 429);
     }
