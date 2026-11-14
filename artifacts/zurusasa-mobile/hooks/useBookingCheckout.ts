@@ -334,10 +334,12 @@ export function useBookingCheckout({
     setSuccessModalVisible(false);
     onSuccess?.();
     handleClose();
-    router.push({
-      pathname: '/(tabs)/reservations',
-      params: createdBookingId ? { bookingId: createdBookingId } : undefined,
-    });
+    setTimeout(() => {
+      router.push({
+        pathname: '/reservations' as any,
+        params: createdBookingId ? { bookingId: createdBookingId } : undefined,
+      });
+    }, 120);
   }, [onSuccess, handleClose, router, createdBookingId]);
 
   const handleSuccessClose = useCallback(() => {

@@ -130,6 +130,10 @@ function RootLayoutNav() {
         <Stack.Screen name="profile" options={{ headerShown: false }} />
         <Stack.Screen name="host" options={{ headerShown: false }} />
         <Stack.Screen name="become-host" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="payment-callback"
+          options={{ headerShown: false, animation: 'fade' }}
+        />
       </Stack>
     </NavThemeProvider>
   );
