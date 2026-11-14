@@ -109,23 +109,6 @@ Deno.serve(async (request) => {
     return json({ error: 'quoteId and idempotencyKey are required' }, 400);
   }
 
-  let phone: string | null = null;
-  if (channel === 'mobile_money') {
-    const rawPhone =
-      (typeof input.phone === 'string' ? input.phone : '') ||
-      user.phone ||
-      (user.user_metadata?.phone as string | undefined) ||
-      '';
-    if (!rawPhone) {
-      return json({ error: 'phone is required for mobile_money payments' }, 400);
-    }
-    try {
-      phone = normalizeKenyanPhone(rawPhone);
-    } catch (error) {
-      return json({ error: error instanceof Error ? error.message : 'Invalid phone number' }, 400);
-    }
-  }
-
   const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 
   const { data: attempt, error: attemptError } = await userClient
@@ -159,6 +142,69 @@ Deno.serve(async (request) => {
         : null,
       displayText: attempt.display_text,
     });
+  }
+
+  // Zero-amount (e.g. Free Entry event) reservations settle directly without calling Paystack.
+  if (Number(attempt.amount) === 0) {
+    const { data: bookingId, error: freeSettleError } = await admin.rpc('settle_paystack_success', {
+      p_provider_reference: attempt.provider_reference,
+      p_provider_charge_id: 'free_entry',
+      p_paystack_response: {
+        status: true,
+        channel: 'free_entry',
+        message: 'Free event reservation confirmed',
+      },
+    });
+
+    if (freeSettleError) {
+      console.error('Free entry settlement error:', freeSettleError);
+      await admin.rpc('settle_paystack_failure', {
+        p_provider_reference: attempt.provider_reference,
+        p_failure_code: 'free_entry_settle_failed',
+        p_failure_message: freeSettleError.message || 'Could not confirm free reservation',
+        p_paystack_response: { error: freeSettleError.message },
+      });
+      return json({ error: freeSettleError.message || 'Could not confirm reservation' }, 500);
+    }
+
+    return json({
+      attemptId: attempt.id,
+      bookingId: bookingId ?? null,
+      reference: attempt.provider_reference,
+      status: 'succeeded',
+      channel,
+      displayText: 'Reservation confirmed!',
+    });
+  }
+
+  let phone: string | null = null;
+  if (channel === 'mobile_money') {
+    const rawPhone =
+      (typeof input.phone === 'string' ? input.phone : '') ||
+      user.phone ||
+      (user.user_metadata?.phone as string | undefined) ||
+      '';
+    if (!rawPhone) {
+      await admin.rpc('settle_paystack_failure', {
+        p_provider_reference: attempt.provider_reference,
+        p_failure_code: 'missing_phone',
+        p_failure_message: 'phone is required for mobile_money payments',
+        p_paystack_response: { error: 'phone is required for mobile_money payments' },
+      });
+      return json({ error: 'phone is required for mobile_money payments' }, 400);
+    }
+    try {
+      phone = normalizeKenyanPhone(rawPhone);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Invalid phone number';
+      await admin.rpc('settle_paystack_failure', {
+        p_provider_reference: attempt.provider_reference,
+        p_failure_code: 'invalid_phone',
+        p_failure_message: msg,
+        p_paystack_response: { error: msg },
+      });
+      return json({ error: msg }, 400);
+    }
   }
 
   const customerEmail =

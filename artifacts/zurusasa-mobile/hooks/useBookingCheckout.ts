@@ -122,8 +122,30 @@ export function useBookingCheckout({
   const today = useMemo(() => startOfDay(new Date()), []);
   const maxDate = useMemo(() => addDays(today, 365), [today]);
 
-  const defaultFrom = useMemo(() => addDays(today, 1), [today]);
-  const defaultTo = useMemo(() => addDays(today, 2), [today]);
+  const eventDateIso =
+    reel.event?.event_date ||
+    ((reel as any)?.event_details?.event_date as string | undefined) ||
+    ((meta.event_details as Record<string, unknown> | undefined)?.event_date as string | undefined) ||
+    null;
+
+  const { defaultFrom, defaultTo } = useMemo(() => {
+    if (contentType === 'event' && eventDateIso) {
+      const parsed = new Date(eventDateIso);
+      if (!Number.isNaN(parsed.getTime())) {
+        const eventDay = startOfDay(parsed);
+        if (eventDay.getTime() >= today.getTime()) {
+          return {
+            defaultFrom: eventDay,
+            defaultTo: addDays(eventDay, 1),
+          };
+        }
+      }
+    }
+    return {
+      defaultFrom: addDays(today, 1),
+      defaultTo: addDays(today, 2),
+    };
+  }, [contentType, eventDateIso, today]);
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [step, setStep] = useState<Step>(initialStep);
@@ -132,7 +154,7 @@ export function useBookingCheckout({
   const [to, setTo] = useState<Date | undefined>(defaultTo);
   const [activeDateTab, setActiveDateTab] = useState<'checkin' | 'checkout'>('checkin');
   const [viewMonth, setViewMonth] = useState<Date>(
-    () => new Date(today.getFullYear(), today.getMonth(), 1),
+    () => new Date(defaultFrom.getFullYear(), defaultFrom.getMonth(), 1),
   );
   const [guests, setGuests] = useState<GuestCounts>({
     adults: 1,
@@ -148,12 +170,29 @@ export function useBookingCheckout({
   const [reviewsSummary, setReviewsSummary] = useState<ReviewSummaryData | null>(null);
   const [reviewsList, setReviewsList] = useState<any[]>([]);
 
+  const activeQuoteRef = useRef<{
+    quote: any;
+    experienceId: string;
+    checkInStr: string;
+    checkOutStr: string;
+    guestCount: number;
+    expiresAtMs: number;
+  } | null>(null);
+
   // Synchronize initial step when modal opens
   useEffect(() => {
     if (visible) {
       setStep(initialStep);
     }
   }, [visible, initialStep]);
+
+  // Synchronize default dates and clear stale cached quote when listing/reel changes
+  useEffect(() => {
+    activeQuoteRef.current = null;
+    setFrom(defaultFrom);
+    setTo(defaultTo);
+    setViewMonth(new Date(defaultFrom.getFullYear(), defaultFrom.getMonth(), 1));
+  }, [reel.id, defaultFrom, defaultTo]);
 
   // ── Load Real Reviews & Rating From Database ───────────────────────────────
   useEffect(() => {
@@ -249,11 +288,12 @@ export function useBookingCheckout({
   const hasHandledSuccessRef = useRef(false);
 
   const resetState = useCallback(() => {
+    activeQuoteRef.current = null;
     setStep(initialStep);
     setPaymentMethod('mpesa');
     setFrom(defaultFrom);
     setTo(defaultTo);
-    setViewMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setViewMonth(new Date(defaultFrom.getFullYear(), defaultFrom.getMonth(), 1));
     setGuests({ adults: 1, children: 0, infants: 0, pets: 0 });
     setMpesaPhone('');
     setCardMethodConfirmed(false);
@@ -261,7 +301,7 @@ export function useBookingCheckout({
     setCreatedBookingId(null);
     setSuccessModalVisible(false);
     hasHandledSuccessRef.current = false;
-  }, [initialStep, defaultFrom, defaultTo, today]);
+  }, [initialStep, defaultFrom, defaultTo]);
 
   const handleClose = useCallback(() => {
     cleanupPaymentListeners();
@@ -273,6 +313,7 @@ export function useBookingCheckout({
     (bookingId?: string | null) => {
       if (hasHandledSuccessRef.current) return;
       hasHandledSuccessRef.current = true;
+      activeQuoteRef.current = null;
       cleanupPaymentListeners();
       if (bookingId) {
         setCreatedBookingId(bookingId);
@@ -484,7 +525,7 @@ export function useBookingCheckout({
     }
 
     let phone = mpesaPhone.trim().replace(/[\s+-]/g, '');
-    if (method === 'mpesa') {
+    if (method === 'mpesa' && totalAmount > 0) {
       if (!phone) {
         const userMeta = (user.user_metadata ?? {}) as Record<string, unknown>;
         phone = String(userMeta.phone ?? user.phone ?? '');
@@ -503,7 +544,6 @@ export function useBookingCheckout({
 
     const checkInStr = from.toISOString();
     const checkOutStr = (to ?? addDays(from, 1)).toISOString();
-    const quoteIdempotencyKey = generateUUID();
 
     try {
       setPhase('submitting');
@@ -513,28 +553,57 @@ export function useBookingCheckout({
         throw new Error('This listing is not linked to an active experience.');
       }
 
-      // 1. Create Authoritative Booking Quote with Snapshot Terms from Database
-      const { data: quote, error: quoteErr } = await supabase.rpc('create_booking_quote', {
-        p_experience_id: targetExperienceId,
-        p_check_in: checkInStr,
-        p_check_out: checkOutStr,
-        p_guest_count: totalGuests,
-        p_idempotency_key: quoteIdempotencyKey,
-      });
+      // 1. Reuse active unconsumed quote on retry, or create an authoritative quote in DB
+      const cached = activeQuoteRef.current;
+      const nowMs = Date.now();
+      let quote: any = null;
 
-      if (quoteErr || !quote) {
-        console.error('[BOOKING_QUOTE_ERROR]', quoteErr);
-        if (
-          quoteErr?.code === '23P01' ||
-          quoteErr?.message?.includes('booking_quotes_active_dates_excl') ||
-          quoteErr?.message?.includes('exclusion')
-        ) {
-          throw new Error('These dates are no longer available. Please choose different dates.');
+      if (
+        cached &&
+        cached.experienceId === targetExperienceId &&
+        cached.checkInStr === checkInStr &&
+        cached.checkOutStr === checkOutStr &&
+        cached.guestCount === totalGuests &&
+        cached.expiresAtMs > nowMs + 30_000
+      ) {
+        quote = cached.quote;
+      } else {
+        const quoteIdempotencyKey = generateUUID();
+        const { data: createdQuote, error: quoteErr } = await supabase.rpc('create_booking_quote', {
+          p_experience_id: targetExperienceId,
+          p_check_in: checkInStr,
+          p_check_out: checkOutStr,
+          p_guest_count: totalGuests,
+          p_idempotency_key: quoteIdempotencyKey,
+        });
+
+        if (quoteErr || !createdQuote) {
+          console.error('[BOOKING_QUOTE_ERROR]', quoteErr);
+          if (
+            quoteErr?.code === '23P01' ||
+            quoteErr?.message?.includes('booking_quotes_active_dates_excl') ||
+            quoteErr?.message?.includes('exclusion')
+          ) {
+            throw new Error('These dates are no longer available. Please choose different dates.');
+          }
+          throw new Error(quoteErr?.message || 'Unable to generate booking quote. Please try again.');
         }
-        throw new Error(quoteErr?.message || 'Unable to generate booking quote. Please try again.');
+
+        quote = createdQuote;
+        const parsedExpiry = createdQuote.expires_at
+          ? new Date(createdQuote.expires_at).getTime()
+          : NaN;
+        activeQuoteRef.current = {
+          quote: createdQuote,
+          experienceId: targetExperienceId,
+          checkInStr,
+          checkOutStr,
+          guestCount: totalGuests,
+          expiresAtMs: Number.isFinite(parsedExpiry) ? parsedExpiry : nowMs + 14 * 60_000,
+        };
       }
 
-      // 2. Invoke Paystack Payment Edge Function (M-Pesa STK or Hosted Card Checkout)
+      // 2. Invoke Paystack Payment Edge Function (M-Pesa STK, Hosted Card, or Free Entry settlement)
       const paymentIdempotencyKey = generateUUID();
       const appCallbackUrl = Linking.createURL('payment-callback');
 
@@ -543,7 +612,7 @@ export function useBookingCheckout({
         {
           body: {
             quoteId: quote.id,
-            phone: method === 'mpesa' ? phone : undefined,
+            phone: method === 'mpesa' && totalAmount > 0 ? phone : undefined,
             channel: method === 'card' ? 'card' : 'mobile_money',
             callbackUrl: method === 'card' ? appCallbackUrl : undefined,
             idempotencyKey: paymentIdempotencyKey,
@@ -552,10 +621,19 @@ export function useBookingCheckout({
       );
 
       if (payErr || !payData || payData?.error) {
-        throw new Error(payData?.error || payErr?.message || 'Payment gateway connection failed.');
+        let edgeErrorMessage = payData?.error;
+        if (!edgeErrorMessage && payErr) {
+          try {
+            const errBody = await (payErr as any).context?.json?.();
+            if (errBody?.error) edgeErrorMessage = String(errBody.error);
+          } catch {
+            // Ignore non-JSON error responses
+          }
+        }
+        throw new Error(edgeErrorMessage || payErr?.message || 'Payment gateway connection failed.');
       }
 
-      if (method === 'card' && !payData?.authorization_url) {
+      if (method === 'card' && payData?.status !== 'succeeded' && !payData?.authorization_url) {
         throw new Error('Could not initialize secure Paystack card checkout.');
       }
 
