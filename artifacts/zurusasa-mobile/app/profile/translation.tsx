@@ -106,26 +106,17 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.5,
     marginBottom: 16,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   pageSubtitle: {
     fontSize: 15,
     color: '#484848',
     lineHeight: 22,
     marginBottom: 32,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_400Regular',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_400Regular',
   },
   toggleRow: {
     flexDirection: 'row',
@@ -146,13 +137,8 @@ const styles = StyleSheet.create({
   },
   toggleTitle: {
     fontSize: 16,
-    fontWeight: '500',
     color: '#1E1E1E',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   comingSoonBadge: {
     paddingHorizontal: 8,
@@ -162,7 +148,7 @@ const styles = StyleSheet.create({
   },
   comingSoonText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#F26522',
     letterSpacing: 0.4,
   },
@@ -170,10 +156,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#717171',
     lineHeight: 20,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_400Regular',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_400Regular',
   },
 });

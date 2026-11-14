@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -7,7 +7,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  AMENITIES_BY_CATEGORY,
+  PRIMARY_EXPERIENCE_CATEGORIES,
+  getPrimaryCategoryMeta,
+  normalizePrimaryCategory,
+  type PrimaryCategoryId,
+} from '@/constants/taxonomy';
 import type { SearchFilters } from '@/services/filterService';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
@@ -20,15 +27,6 @@ interface FilterSheetProps {
   onReset: () => void;
 }
 
-const CATEGORIES = [
-  { id: 'stay', label: 'Stays', icon: 'home' },
-  { id: 'tour', label: 'Tours', icon: 'compass' },
-  { id: 'boat', label: 'Boats', icon: 'anchor' },
-  { id: 'event', label: 'Events', icon: 'calendar' },
-  { id: 'food', label: 'Food', icon: 'coffee' },
-  { id: 'nightlife', label: 'Nightlife', icon: 'moon' },
-];
-
 const CITIES = ['Diani', 'Mombasa', 'Watamu', 'Nairobi', 'Lamu', 'Malindi'];
 
 const PRICE_PRESETS = [
@@ -38,17 +36,34 @@ const PRICE_PRESETS = [
   { label: 'Any Price', max: 150000 },
 ];
 
-const AMENITIES = [
+const DEFAULT_AMENITIES = [
   'Beach Front',
-  'Pool',
-  'Wi-Fi',
+  'Swimming Pool',
+  'Fast Wi-Fi',
   'Air Conditioning',
-  'Kitchen',
-  'Parking',
-  'Breakfast',
-  'Workspace',
-  'Pet Friendly',
+  'Free Parking',
+  'Certified Local Guide',
+  'Sunset Session',
+  'Craft Cocktails',
+  'Live Music / DJ',
+  'Life Jackets Provided',
 ];
+
+function resolveSelectedPrimaryId(category?: string | null): PrimaryCategoryId | null {
+  if (!category) return null;
+  const lower = category.trim().toLowerCase();
+  if (
+    lower === 'all' ||
+    lower === 'events' ||
+    lower === 'event' ||
+    lower === 'offers' ||
+    lower === 'offer' ||
+    lower === 'special_offer'
+  ) {
+    return null;
+  }
+  return normalizePrimaryCategory(category);
+}
 
 export function FilterSheet({
   visible,
@@ -65,10 +80,32 @@ export function FilterSheet({
     setDraft(initialFilters);
   }, [initialFilters, visible]);
 
-  const toggleCategory = (catId: string) => {
+  const activePrimaryId = resolveSelectedPrimaryId(draft.category);
+  const activePrimaryMeta = activePrimaryId ? getPrimaryCategoryMeta(activePrimaryId) : null;
+
+  const displayedAmenities = useMemo(() => {
+    if (activePrimaryId) {
+      return [...AMENITIES_BY_CATEGORY[activePrimaryId]];
+    }
+    return DEFAULT_AMENITIES;
+  }, [activePrimaryId]);
+
+  const toggleCategory = (catId: PrimaryCategoryId) => {
+    setDraft((prev) => {
+      const prevPrimary = resolveSelectedPrimaryId(prev.category);
+      const isSame = prevPrimary === catId;
+      return {
+        ...prev,
+        category: isSame ? null : catId,
+        subcategory: isSame ? null : null,
+      };
+    });
+  };
+
+  const toggleSubcategory = (subId: string) => {
     setDraft((prev) => ({
       ...prev,
-      category: prev.category === catId ? null : catId,
+      subcategory: prev.subcategory === subId ? null : subId,
     }));
   };
 
@@ -107,6 +144,13 @@ export function FilterSheet({
     onClose();
   };
 
+  const priceSuffix =
+    activePrimaryId === 'accommodation'
+      ? '/ night'
+      : activePrimaryId
+      ? `/ ${activePrimaryMeta?.defaultPriceUnit || 'person'}`
+      : 'max';
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -115,17 +159,17 @@ export function FilterSheet({
           <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
             <Text style={[styles.sheetTitle, { color: colors.text }]}>Filters</Text>
             <Pressable onPress={onClose} hitSlop={10}>
-              <Feather name="x" size={22} color={colors.text} />
+              <Ionicons name="close-outline" size={24} color={colors.text} />
             </Pressable>
           </View>
 
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* 1. CATEGORIES */}
+            {/* 1. PRIMARY EXPERIENCE CATEGORIES + SUBCATEGORIES */}
             <View style={styles.sectionBlock}>
-              <Text style={[styles.sectionHeading, { color: colors.text }]}>Category</Text>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>Experience Category</Text>
               <View style={styles.gridRow}>
-                {CATEGORIES.map((cat) => {
-                  const isSelected = draft.category === cat.id;
+                {PRIMARY_EXPERIENCE_CATEGORIES.map((cat) => {
+                  const isSelected = activePrimaryId === cat.id;
                   return (
                     <Pressable
                       key={cat.id}
@@ -135,18 +179,18 @@ export function FilterSheet({
                         {
                           backgroundColor: isSelected
                             ? isDark
-                              ? '#2A1F1A'
-                              : '#FFFBF8'
+                              ? 'rgba(242, 101, 34, 0.16)'
+                              : '#FFF8F5'
                             : isDark
                             ? '#27272A'
-                            : '#F9F9F9',
+                            : '#F7F7F7',
                           borderColor: isSelected ? '#F26522' : colors.border,
                         },
                       ]}
                     >
-                      <Feather
-                        name={cat.icon as any}
-                        size={18}
+                      <Ionicons
+                        name={isSelected ? cat.activeIcon : cat.icon}
+                        size={20}
                         color={isSelected ? '#F26522' : colors.mutedForeground}
                       />
                       <Text
@@ -154,6 +198,7 @@ export function FilterSheet({
                           styles.catTileText,
                           { color: isSelected ? '#F26522' : colors.text },
                         ]}
+                        numberOfLines={1}
                       >
                         {cat.label}
                       </Text>
@@ -161,15 +206,141 @@ export function FilterSheet({
                   );
                 })}
               </View>
+
+              {activePrimaryMeta ? (
+                <View style={{ gap: 8, marginTop: 4 }}>
+                  <Text style={[styles.subLabel, { color: colors.mutedForeground }]}>
+                    {activePrimaryMeta.shortLabel} Subcategory
+                  </Text>
+                  <View style={styles.pillRow}>
+                    {activePrimaryMeta.subcategories.map((sub) => {
+                      const subSelected = draft.subcategory === sub.id;
+                      return (
+                        <Pressable
+                          key={sub.id}
+                          onPress={() => toggleSubcategory(sub.id)}
+                          style={[
+                            styles.subChip,
+                            {
+                              backgroundColor: subSelected
+                                ? '#F26522'
+                                : isDark
+                                ? '#27272A'
+                                : '#F7F7F7',
+                              borderColor: subSelected ? '#F26522' : colors.border,
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name={sub.icon}
+                            size={13}
+                            color={subSelected ? '#FFFFFF' : colors.mutedForeground}
+                          />
+                          <Text
+                            style={[
+                              styles.subChipText,
+                              { color: subSelected ? '#FFFFFF' : colors.text },
+                            ]}
+                          >
+                            {sub.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
             </View>
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-            {/* 2. PRICE RANGE */}
+            {/* 2. PROMOTIONS & EVENTS */}
+            <View style={styles.sectionBlock}>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>Promotions & Events</Text>
+              <View style={styles.gridRow}>
+                <Pressable
+                  onPress={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      onlySpecialOffers: !prev.onlySpecialOffers,
+                    }))
+                  }
+                  style={[
+                    styles.catTile,
+                    {
+                      backgroundColor: draft.onlySpecialOffers
+                        ? isDark
+                          ? 'rgba(242, 101, 34, 0.16)'
+                          : '#FFF8F5'
+                        : isDark
+                        ? '#27272A'
+                        : '#F7F7F7',
+                      borderColor: draft.onlySpecialOffers ? '#F26522' : colors.border,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={draft.onlySpecialOffers ? 'pricetag' : 'pricetag-outline'}
+                    size={19}
+                    color={draft.onlySpecialOffers ? '#F26522' : colors.mutedForeground}
+                  />
+                  <Text
+                    style={[
+                      styles.catTileText,
+                      { color: draft.onlySpecialOffers ? '#F26522' : colors.text },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    Special Offers & Deals
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      onlyUpcomingEvents: !prev.onlyUpcomingEvents,
+                    }))
+                  }
+                  style={[
+                    styles.catTile,
+                    {
+                      backgroundColor: draft.onlyUpcomingEvents
+                        ? isDark
+                          ? 'rgba(242, 101, 34, 0.16)'
+                          : '#FFF8F5'
+                        : isDark
+                        ? '#27272A'
+                        : '#F7F7F7',
+                      borderColor: draft.onlyUpcomingEvents ? '#F26522' : colors.border,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={draft.onlyUpcomingEvents ? 'calendar' : 'calendar-outline'}
+                    size={19}
+                    color={draft.onlyUpcomingEvents ? '#F26522' : colors.mutedForeground}
+                  />
+                  <Text
+                    style={[
+                      styles.catTileText,
+                      { color: draft.onlyUpcomingEvents ? '#F26522' : colors.text },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    Upcoming Events
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+            {/* 3. PRICE RANGE */}
             <View style={styles.sectionBlock}>
               <Text style={[styles.sectionHeading, { color: colors.text }]}>Max Price</Text>
               <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
-                Up to KES {(draft.maxPrice ?? 150000).toLocaleString()} / night
+                Up to KES {(draft.maxPrice ?? 150000).toLocaleString()} {priceSuffix}
               </Text>
               <View style={styles.pillRow}>
                 {PRICE_PRESETS.map((p, idx) => {
@@ -201,7 +372,7 @@ export function FilterSheet({
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-            {/* 3. DESTINATIONS / CITIES */}
+            {/* 4. DESTINATIONS / CITIES */}
             <View style={styles.sectionBlock}>
               <Text style={[styles.sectionHeading, { color: colors.text }]}>Location / Destination</Text>
               <View style={styles.pillRow}>
@@ -236,7 +407,7 @@ export function FilterSheet({
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-            {/* 4. RATING */}
+            {/* 5. RATING */}
             <View style={styles.sectionBlock}>
               <Text style={[styles.sectionHeading, { color: colors.text }]}>Minimum Rating</Text>
               <View style={styles.pillRow}>
@@ -279,11 +450,13 @@ export function FilterSheet({
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-            {/* 5. AMENITIES */}
+            {/* 6. AMENITIES & HIGHLIGHTS */}
             <View style={styles.sectionBlock}>
-              <Text style={[styles.sectionHeading, { color: colors.text }]}>Amenities</Text>
+              <Text style={[styles.sectionHeading, { color: colors.text }]}>
+                {activePrimaryMeta ? `${activePrimaryMeta.shortLabel} Highlights` : 'Amenities & Highlights'}
+              </Text>
               <View style={styles.pillRow}>
-                {AMENITIES.map((amenity) => {
+                {displayedAmenities.map((amenity) => {
                   const isSelected = (draft.amenities || []).includes(amenity);
                   return (
                     <Pressable
@@ -314,7 +487,7 @@ export function FilterSheet({
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-            {/* 6. HOST TYPE */}
+            {/* 7. HOST TYPE */}
             <View style={styles.sectionBlock}>
               <Text style={[styles.sectionHeading, { color: colors.text }]}>Host Type & Booking</Text>
               <View style={styles.pillRow}>
@@ -417,6 +590,10 @@ const styles = StyleSheet.create({
     color: '#717171',
     marginTop: -6,
   },
+  subLabel: {
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+  },
   divider: {
     height: 1,
     backgroundColor: '#EBEBEB',
@@ -427,8 +604,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   catTile: {
-    width: '30%',
-    paddingVertical: 12,
+    width: '48%',
+    paddingVertical: 13,
+    paddingHorizontal: 10,
     borderRadius: 14,
     backgroundColor: '#F9F9F9',
     borderWidth: 1,
@@ -436,18 +614,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  catTileActive: {
-    backgroundColor: '#FFFBF8',
-    borderColor: '#FCE3D6',
-  },
   catTileText: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#717171',
+    textAlign: 'center',
+  },
+  subChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  subChipText: {
     fontSize: 12,
     fontFamily: 'DMSans_500Medium',
-    color: '#717171',
-  },
-  catTileTextActive: {
-    fontFamily: 'DMSans_700Bold',
-    color: '#F26522',
   },
   pillRow: {
     flexDirection: 'row',
@@ -462,18 +646,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EBEBEB',
   },
-  presetPillActive: {
-    backgroundColor: '#F26522',
-    borderColor: '#F26522',
-  },
   presetText: {
     fontSize: 13,
     fontFamily: 'DMSans_500Medium',
     color: '#717171',
-  },
-  presetTextActive: {
-    fontFamily: 'DMSans_700Bold',
-    color: '#FFFFFF',
   },
   cityChip: {
     paddingHorizontal: 14,
@@ -483,18 +659,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EBEBEB',
   },
-  cityChipActive: {
-    backgroundColor: '#FFFBF8',
-    borderColor: '#FCE3D6',
-  },
   cityChipText: {
     fontSize: 13,
     fontFamily: 'DMSans_500Medium',
     color: '#222222',
-  },
-  cityChipTextActive: {
-    fontFamily: 'DMSans_700Bold',
-    color: '#F26522',
   },
   starChip: {
     flexDirection: 'row',
@@ -507,18 +675,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EBEBEB',
   },
-  starChipActive: {
-    backgroundColor: '#F26522',
-    borderColor: '#F26522',
-  },
   starChipText: {
     fontSize: 13,
     fontFamily: 'DMSans_500Medium',
     color: '#222222',
-  },
-  starChipTextActive: {
-    fontFamily: 'DMSans_700Bold',
-    color: '#FFFFFF',
   },
   amenityChip: {
     paddingHorizontal: 12,
@@ -528,18 +688,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EBEBEB',
   },
-  amenityChipActive: {
-    backgroundColor: '#FFFBF8',
-    borderColor: '#FCE3D6',
-  },
   amenityText: {
     fontSize: 12,
     fontFamily: 'DMSans_500Medium',
     color: '#222222',
-  },
-  amenityTextActive: {
-    fontFamily: 'DMSans_700Bold',
-    color: '#F26522',
   },
   hostTypeChip: {
     paddingHorizontal: 14,
@@ -549,18 +701,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EBEBEB',
   },
-  hostTypeChipActive: {
-    backgroundColor: '#FFFBF8',
-    borderColor: '#FCE3D6',
-  },
   hostTypeText: {
     fontSize: 13,
     fontFamily: 'DMSans_500Medium',
     color: '#222222',
-  },
-  hostTypeTextActive: {
-    fontFamily: 'DMSans_700Bold',
-    color: '#F26522',
   },
   bottomBar: {
     flexDirection: 'row',

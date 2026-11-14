@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { paymentsStyles as styles } from './paymentsStyles';
 
 export interface CreditsCouponsViewProps {
@@ -18,6 +19,7 @@ export function CreditsCouponsView({
 }: CreditsCouponsViewProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { showAlert } = useCustomAlert();
 
   const [giftCardModal, setGiftCardModal] = useState(false);
   const [giftCardCode, setGiftCardCode] = useState('');
@@ -27,21 +29,37 @@ export function CreditsCouponsView({
 
   const handleApplyGiftCard = () => {
     if (!giftCardCode.trim()) {
-      Alert.alert('Invalid Code', 'Please enter a valid gift card code.');
+      showAlert({
+        title: 'Invalid Code',
+        message: 'Please enter a valid gift card code.',
+        variant: 'warning',
+      });
       return;
     }
-    Alert.alert('Gift Card Claimed', `Gift card code ${giftCardCode.toUpperCase()} applied to your balance.`);
+    showAlert({
+      title: 'Gift Card Claimed',
+      message: `Gift card code ${giftCardCode.toUpperCase()} applied to your balance.`,
+      variant: 'success',
+    });
     setGiftCardCode('');
     setGiftCardModal(false);
   };
 
   const handleApplyCoupon = () => {
     if (!couponCode.trim()) {
-      Alert.alert('Invalid Code', 'Please enter a valid coupon code.');
+      showAlert({
+        title: 'Invalid Code',
+        message: 'Please enter a valid coupon code.',
+        variant: 'warning',
+      });
       return;
     }
     setCouponsCount((prev) => prev + 1);
-    Alert.alert('Coupon Added', `Coupon ${couponCode.toUpperCase()} added to your wallet.`);
+    showAlert({
+      title: 'Coupon Added',
+      message: `Coupon ${couponCode.toUpperCase()} added to your wallet.`,
+      variant: 'success',
+    });
     setCouponCode('');
     setCouponModal(false);
   };

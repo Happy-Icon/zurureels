@@ -1,13 +1,16 @@
 import React from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
 import { HostLocationPickerModal } from '@/components/map/HostLocationPickerModal';
 import { useCreateReelForm } from '@/hooks/useCreateReelForm';
-import { MediaAndBasicsSection } from '@/components/host/create-reel/MediaAndBasicsSection';
+import {
+  MediaAndBasicsSection,
+  PublishingFormatChooser,
+} from '@/components/host/create-reel/MediaAndBasicsSection';
 import { BookingAndRulesSection } from '@/components/host/create-reel/BookingAndRulesSection';
 import {
   ArrivalAndAmenitiesSection,
@@ -25,6 +28,20 @@ export default function CreateReelScreen() {
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 16;
 
+  const headerTitle = !form.hasSelectedFormat
+    ? 'Create New Listing'
+    : form.isAttachingToExistingExp
+    ? 'Add Reel to Listing'
+    : form.contentType === 'event'
+    ? 'New Event'
+    : form.contentType === 'special_offer'
+    ? 'New Special Offer'
+    : 'New Experience';
+
+  const totalSteps = form.stepMeta.length;
+  const progressPercent = Math.round(((form.currentStep + 1) / Math.max(1, totalSteps)) * 100);
+  const nextStepMeta = form.stepMeta[form.currentStep + 1];
+
   return (
     <KeyboardAvoidingView
       style={styles.fill}
@@ -35,15 +52,116 @@ export default function CreateReelScreen() {
         {/* 1. Header Bar */}
         <View style={[styles.header, { paddingTop: topPad }]}>
           <Pressable
-            onPress={() => form.router.back()}
+            onPress={form.handlePrevStep}
             style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
             hitSlop={10}
           >
-            <Feather name="arrow-left" size={22} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Create Listing & Reel</Text>
-          <View style={{ width: 38 }} />
+
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+            {headerTitle}
+          </Text>
+
+          {form.hasSelectedFormat ? (
+            <View
+              style={[
+                styles.stepCounterPill,
+                {
+                  backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.stepCounterText, { color: colors.text }]}>
+                {form.currentStep + 1} / {totalSteps}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ width: 38 }} />
+          )}
         </View>
+
+        {/* 2. Wizard Stepper & Progress Track */}
+        {form.hasSelectedFormat ? (
+          <View style={[styles.stepperContainer, { borderBottomColor: colors.border }]}>
+            <View
+              style={[
+                styles.stepProgressBarTrack,
+                { backgroundColor: isDark ? '#27272A' : '#F3F4F6' },
+              ]}
+            >
+              <View style={[styles.stepProgressBarFill, { width: `${progressPercent}%` }]} />
+            </View>
+
+            <View style={styles.stepperPillsRow}>
+              {form.stepMeta.map((step, idx) => {
+                const isActive = idx === form.currentStep;
+                const isCompleted = idx < form.currentStep;
+                return (
+                  <Pressable
+                    key={step.id}
+                    onPress={() => form.goToStep(idx)}
+                    style={[
+                      styles.stepPill,
+                      {
+                        backgroundColor: isActive
+                          ? isDark
+                            ? '#3B2314'
+                            : '#FFF8F5'
+                          : isDark
+                          ? '#27272A'
+                          : '#F7F7F7',
+                        borderColor: isActive ? '#F26522' : colors.border,
+                      },
+                    ]}
+                  >
+                    {isCompleted ? (
+                      <Ionicons name="checkmark-circle" size={14} color="#F26522" />
+                    ) : (
+                      <View
+                        style={[
+                          styles.stepPillNum,
+                          {
+                            backgroundColor: isActive
+                              ? '#F26522'
+                              : isDark
+                              ? '#3F3F46'
+                              : '#E5E7EB',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.stepPillNumText,
+                            { color: isActive ? '#FFFFFF' : colors.mutedForeground },
+                          ]}
+                        >
+                          {idx + 1}
+                        </Text>
+                      </View>
+                    )}
+                    <Text
+                      style={[
+                        styles.stepPillText,
+                        {
+                          color: isActive
+                            ? '#F26522'
+                            : isCompleted
+                            ? colors.text
+                            : colors.mutedForeground,
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {step.shortLabel}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         {/* Upload Progress Bar */}
         {form.uploading ? (
@@ -55,31 +173,53 @@ export default function CreateReelScreen() {
         <ScrollView
           ref={form.scrollViewRef}
           style={styles.fill}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140, gap: 20 }}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: 16,
+            paddingBottom: form.hasSelectedFormat ? 120 : 40,
+            gap: 18,
+          }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           automaticallyAdjustKeyboardInsets={true}
         >
-          <MediaAndBasicsSection form={form} colors={colors} isDark={isDark} />
-
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-          <BookingAndRulesSection form={form} colors={colors} isDark={isDark} />
-
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-          <ArrivalAndAmenitiesSection form={form} colors={colors} isDark={isDark} />
+          {!form.hasSelectedFormat ? (
+            <PublishingFormatChooser form={form} colors={colors} isDark={isDark} />
+          ) : (
+            <>
+              <MediaAndBasicsSection form={form} colors={colors} isDark={isDark} />
+              <BookingAndRulesSection form={form} colors={colors} isDark={isDark} />
+              <ArrivalAndAmenitiesSection form={form} colors={colors} isDark={isDark} />
+            </>
+          )}
         </ScrollView>
 
-        <CreateReelBottomDock
-          uploading={form.uploading}
-          uploadStatusText={form.uploadStatusText}
-          uploadProgress={form.uploadProgress}
-          bottomPad={bottomPad}
-          colors={colors}
-          onPublish={form.handleSubmit}
-        />
+        {form.hasSelectedFormat ? (
+          <CreateReelBottomDock
+            uploading={form.uploading}
+            uploadStatusText={form.uploadStatusText}
+            uploadProgress={form.uploadProgress}
+            bottomPad={bottomPad}
+            colors={colors}
+            isDark={isDark}
+            currentStep={form.currentStep}
+            isLastStep={form.isLastStep}
+            backLabel={
+              form.currentStep === 0
+                ? form.openedWithDirectFormat
+                  ? 'Back'
+                  : 'Formats'
+                : 'Back'
+            }
+            nextStepLabel={nextStepMeta?.shortLabel}
+            onBackStep={form.handlePrevStep}
+            onNextStep={form.handleNextStep}
+            onPublish={form.handleSubmit}
+            contentType={form.contentType}
+            isAttachingToExistingExp={form.isAttachingToExistingExp}
+          />
+        ) : null}
 
         <VideoSourceModal
           visible={form.showVideoSourceModal}

@@ -280,7 +280,7 @@ export function DataRequestModal({ visible, onClose, onSuccess }: DataRequestMod
             <View style={styles.bodyContent}>
               <Text style={[styles.description, { color: colors.mutedForeground }]}>
                 We sent a 6-digit verification code to{' '}
-                <Text style={{ color: colors.text, fontWeight: '600', fontFamily: 'DMSans_600SemiBold' }}>
+                <Text style={{ color: colors.text, fontFamily: 'DMSans_600SemiBold' }}>
                   {recipientEmail || 'your verified email'}
                 </Text>
                 . Enter the code to authorize the export.
@@ -396,7 +396,6 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '600',
     fontFamily: 'DMSans_600SemiBold',
     letterSpacing: -0.2,
   },
@@ -426,7 +425,6 @@ const styles = StyleSheet.create({
   },
   optionTitle: {
     fontSize: 14,
-    fontWeight: '600',
     fontFamily: 'DMSans_600SemiBold',
     marginBottom: 2,
   },
@@ -454,7 +452,6 @@ const styles = StyleSheet.create({
   },
   otpInput: {
     fontSize: 24,
-    fontWeight: '700',
     fontFamily: 'DMSans_700Bold',
     letterSpacing: 8,
     textAlign: 'center',
@@ -474,7 +471,6 @@ const styles = StyleSheet.create({
   resendLink: {
     fontSize: 13,
     color: '#F26522',
-    fontWeight: '600',
     fontFamily: 'DMSans_600SemiBold',
   },
   errorBox: {
@@ -508,7 +504,6 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '700',
     fontFamily: 'DMSans_700Bold',
   },
 });

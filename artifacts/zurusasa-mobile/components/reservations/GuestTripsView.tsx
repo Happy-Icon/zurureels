@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Linking,
   Platform,
   Pressable,
@@ -35,6 +34,7 @@ export function GuestTripsView() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { showAlert } = useCustomAlert();
   const { isOnline } = useNetworkStatus();
   const enquire = useEnquire();
 
@@ -168,7 +168,11 @@ export function GuestTripsView() {
     }
 
     if (!targetHostId || !UUID_REGEX.test(targetHostId)) {
-      Alert.alert('Host Unavailable', 'This booking has no direct host contact details.');
+      showAlert({
+        title: 'Host Unavailable',
+        message: 'This booking has no direct host contact details.',
+        variant: 'info',
+      });
       return;
     }
 
@@ -184,7 +188,11 @@ export function GuestTripsView() {
         },
       });
     } catch (err) {
-      Alert.alert('Chat Error', err instanceof Error ? err.message : 'Could not open chat');
+      showAlert({
+        title: 'Chat Error',
+        message: err instanceof Error ? err.message : 'Could not open chat',
+        variant: 'error',
+      });
     }
   };
 
@@ -199,7 +207,6 @@ export function GuestTripsView() {
   };
 
   const cancelBookingMutation = useGuestCancelBooking();
-  const { showAlert } = useCustomAlert();
 
   const handleCancelBooking = (b: BookingRow) => {
     showAlert({

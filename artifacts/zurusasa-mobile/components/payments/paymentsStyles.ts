@@ -21,14 +21,9 @@ export const paymentsStyles = StyleSheet.create({
   },
   currencyTopLink: {
     fontSize: 14,
-    fontWeight: '700',
     color: '#111111',
     textDecorationLine: 'underline',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   content: {
     paddingHorizontal: 24,
@@ -36,17 +31,13 @@ export const paymentsStyles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.5,
     marginBottom: 24,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   pageSubtitle: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 15,
     color: '#717171',
     lineHeight: 22,
@@ -57,15 +48,10 @@ export const paymentsStyles = StyleSheet.create({
   },
   sectionHeader: {
     fontSize: 22,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.3,
     marginBottom: 12,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   navRow: {
     flexDirection: 'row',
@@ -83,12 +69,7 @@ export const paymentsStyles = StyleSheet.create({
   navRowTitle: {
     fontSize: 16,
     color: '#1E1E1E',
-    fontWeight: '400',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   dividerLine: {
     height: 1,
@@ -108,12 +89,7 @@ export const paymentsStyles = StyleSheet.create({
   blackActionBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   linkedMethodRow: {
     flexDirection: 'row',
@@ -134,16 +110,17 @@ export const paymentsStyles = StyleSheet.create({
     marginRight: 12,
   },
   mpesaBadgeText: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 16,
-    fontWeight: '900',
     color: '#16A34A',
   },
   methodRowTitle: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 15,
-    fontWeight: '600',
     color: '#111111',
   },
   methodRowSubtitle: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 13,
     color: '#717171',
     marginTop: 2,
@@ -155,8 +132,8 @@ export const paymentsStyles = StyleSheet.create({
     paddingVertical: 2,
   },
   defaultPillText: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 10,
-    fontWeight: '700',
     color: '#475569',
   },
   protectionCard: {
@@ -177,27 +154,23 @@ export const paymentsStyles = StyleSheet.create({
   },
   protectionCardTitle: {
     fontSize: 17,
-    fontWeight: '700',
     color: '#111111',
     marginBottom: 8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   protectionCardBody: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 14,
     color: '#484848',
     lineHeight: 20,
   },
   underlineLink: {
+    fontFamily: 'DMSans_600SemiBold',
     textDecorationLine: 'underline',
-    fontWeight: '600',
   },
   learnMoreBold: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 14,
-    fontWeight: '700',
     color: '#111111',
     textDecorationLine: 'underline',
   },
@@ -222,13 +195,8 @@ export const paymentsStyles = StyleSheet.create({
   },
   bottomSheetTitle: {
     fontSize: 22,
-    fontWeight: '700',
     color: '#111111',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   sheetCloseBtn: {
     width: 36,
@@ -255,8 +223,8 @@ export const paymentsStyles = StyleSheet.create({
     alignItems: 'center',
   },
   methodCardName: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 15,
-    fontWeight: '600',
     color: '#111111',
   },
   cardBadgesRow: {
@@ -265,8 +233,8 @@ export const paymentsStyles = StyleSheet.create({
     marginTop: 4,
   },
   visaBadge: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 12,
-    fontWeight: '900',
     color: '#1A1F71',
     marginRight: 8,
     letterSpacing: 0.5,
@@ -290,11 +258,12 @@ export const paymentsStyles = StyleSheet.create({
     marginRight: 12,
   },
   mpesaSmallBadgeText: {
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '900',
   },
   mpesaCardSubtitle: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 12,
     color: '#717171',
     marginTop: 2,
@@ -324,8 +293,8 @@ export const paymentsStyles = StyleSheet.create({
     marginTop: 32,
   },
   sheetCancelText: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 16,
-    fontWeight: '600',
     color: '#111111',
   },
   sheetCancelBtn: {
@@ -344,8 +313,8 @@ export const paymentsStyles = StyleSheet.create({
     backgroundColor: '#111111',
   },
   sheetDoneText: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 15,
-    fontWeight: '700',
   },
   sheetDoneTextDisabled: {
     color: '#9CA3AF',
@@ -366,8 +335,8 @@ export const paymentsStyles = StyleSheet.create({
     paddingBottom: 16,
   },
   currencyHeaderTitle: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 18,
-    fontWeight: '700',
     color: '#111111',
     textAlign: 'center',
   },
@@ -385,6 +354,7 @@ export const paymentsStyles = StyleSheet.create({
     paddingVertical: Platform.OS === 'ios' ? 12 : 8,
   },
   searchInput: {
+    fontFamily: 'DMSans_400Regular',
     flex: 1,
     fontSize: 15,
     color: '#111111',
@@ -404,21 +374,11 @@ export const paymentsStyles = StyleSheet.create({
   currencyItemLabel: {
     fontSize: 16,
     color: '#1E1E1E',
-    fontWeight: '400',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   currencyItemLabelActive: {
-    fontWeight: '700',
     color: '#111111',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
 
   /* Your Payments Styles */
@@ -431,18 +391,19 @@ export const paymentsStyles = StyleSheet.create({
     borderBottomColor: '#F0F0F0',
   },
   bookingRowTitle: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 15,
-    fontWeight: '600',
     color: '#111111',
   },
   bookingRowSub: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 13,
     color: '#717171',
     marginTop: 2,
   },
   bookingRowAmount: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 15,
-    fontWeight: '700',
     color: '#111111',
   },
   helpFooter: {
@@ -451,12 +412,13 @@ export const paymentsStyles = StyleSheet.create({
     borderTopColor: '#F0F0F0',
   },
   helpFooterText: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 14,
     color: '#484848',
   },
   underlineLinkBold: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 14,
-    fontWeight: '700',
     color: '#111111',
     textDecorationLine: 'underline',
   },
@@ -469,12 +431,13 @@ export const paymentsStyles = StyleSheet.create({
     paddingVertical: 12,
   },
   couponCountLabel: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 15,
     color: '#1E1E1E',
   },
   couponCountValue: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 15,
-    fontWeight: '700',
     color: '#111111',
   },
 
@@ -491,11 +454,12 @@ export const paymentsStyles = StyleSheet.create({
     marginBottom: 6,
   },
   warningTitle: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 16,
-    fontWeight: '700',
     color: '#111111',
   },
   warningSubtitle: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 14,
     color: '#717171',
     lineHeight: 20,
@@ -510,8 +474,8 @@ export const paymentsStyles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   setupPayoutsBtnText: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 14,
-    fontWeight: '700',
     color: '#111111',
   },
   performanceCard: {
@@ -526,23 +490,19 @@ export const paymentsStyles = StyleSheet.create({
     elevation: 2,
   },
   performanceHeader: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 14,
-    fontWeight: '600',
     color: '#111111',
     marginBottom: 12,
   },
   performanceAmount: {
     fontSize: 36,
-    fontWeight: '700',
     color: '#111111',
     marginBottom: 4,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   performanceSub: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 13,
     color: '#717171',
     marginBottom: 20,
@@ -559,6 +519,7 @@ export const paymentsStyles = StyleSheet.create({
     borderRadius: 10,
   },
   performanceFooterText: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 13,
     color: '#717171',
     lineHeight: 18,
@@ -577,13 +538,14 @@ export const paymentsStyles = StyleSheet.create({
     marginBottom: 12,
   },
   illustrationTitle: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 16,
-    fontWeight: '700',
     color: '#111111',
     marginBottom: 6,
     textAlign: 'center',
   },
   illustrationSub: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 13,
     color: '#717171',
     textAlign: 'center',
@@ -616,22 +578,23 @@ export const paymentsStyles = StyleSheet.create({
     elevation: 1,
   },
   typeBtnText: {
+    fontFamily: 'DMSans_500Medium',
     fontSize: 14,
-    fontWeight: '500',
     color: '#717171',
   },
   typeBtnTextActive: {
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
-    fontWeight: '700',
   },
   inputLabel: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 14,
-    fontWeight: '600',
     color: '#222222',
     marginBottom: 8,
     marginTop: 8,
   },
   sheetInput: {
+    fontFamily: 'DMSans_400Regular',
     backgroundColor: '#F8F8F8',
     borderRadius: 12,
     paddingHorizontal: 16,
@@ -643,6 +606,7 @@ export const paymentsStyles = StyleSheet.create({
     marginBottom: 8,
   },
   inputHint: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 12,
     color: '#717171',
     lineHeight: 16,
@@ -657,8 +621,8 @@ export const paymentsStyles = StyleSheet.create({
     marginTop: 20,
   },
   modalPrimaryBtnText: {
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
   },
 });

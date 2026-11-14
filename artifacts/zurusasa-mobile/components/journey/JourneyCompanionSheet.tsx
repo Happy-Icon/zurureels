@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   StyleSheet,
@@ -15,6 +14,7 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import type { BookingRow, LocationPrecision } from '@/lib/supabase';
 import { SafeRouteMapView } from '@/components/map/SafeMapView';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import {
   haversineDistanceKm,
   mapService,
@@ -76,6 +76,7 @@ export function JourneyCompanionSheet({
   onMessageHost,
 }: JourneyCompanionSheetProps) {
   const insets = useSafeAreaInsets();
+  const { showAlert } = useCustomAlert();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const lastRoutedOriginRef = useRef<LatLng | null>(null);
 
@@ -265,19 +266,26 @@ export function JourneyCompanionSheet({
     (app: 'google' | 'apple' | 'waze') => {
       setShowNavChoice(false);
       mapService.openExternalNavigation(destLocation, propertyTitle, app).catch(() => {
-        Alert.alert('Navigation App Unavailable', 'Could not open external maps app.');
+        showAlert({
+          title: 'Navigation App Unavailable',
+          message: 'Could not open external maps app.',
+          variant: 'error',
+          icon: 'navigation',
+        });
       });
     },
-    [destLocation, propertyTitle],
+    [destLocation, propertyTitle, showAlert],
   );
 
   const handleShareETA = useCallback(() => {
     const etaText = travelTimeMin > 0 ? `~${travelTimeMin} min away` : 'on the way';
-    Alert.alert(
-      'ETA Shared',
-      `Your arrival update (${etaText}) has been prepared for ${hostName}.`,
-    );
-  }, [hostName, travelTimeMin]);
+    showAlert({
+      title: 'ETA Shared',
+      message: `Your arrival update (${etaText}) has been prepared for ${hostName}.`,
+      variant: 'success',
+      icon: 'navigation',
+    });
+  }, [hostName, travelTimeMin, showAlert]);
 
   if (!visible) return null;
 

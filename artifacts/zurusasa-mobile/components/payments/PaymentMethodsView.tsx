@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import type { PaymentMethodItem } from './paymentTypes';
 import { paymentsStyles as styles } from './paymentsStyles';
 
@@ -25,6 +26,7 @@ export function PaymentMethodsView({
   const colors = useColors();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { showAlert } = useCustomAlert();
 
   const [paymentMethodSelectionModal, setPaymentMethodSelectionModal] = useState(false);
   const [chosenMethodType, setChosenMethodType] = useState<'card' | 'mpesa' | null>(null);
@@ -40,7 +42,11 @@ export function PaymentMethodsView({
   const handleSavePaymentMethodDetails = () => {
     if (chosenMethodType === 'mpesa') {
       if (!mpesaNumber || mpesaNumber.length < 9) {
-        Alert.alert('Invalid Number', 'Please enter a valid Safaricom phone number.');
+        showAlert({
+          title: 'Invalid Number',
+          message: 'Please enter a valid Safaricom phone number.',
+          variant: 'warning',
+        });
         return;
       }
       const newMethod: PaymentMethodItem = {
@@ -53,7 +59,11 @@ export function PaymentMethodsView({
       setDetailsModalVisible(false);
       setMpesaNumber('');
       setChosenMethodType(null);
-      Alert.alert('Payment Method Added', 'M-Pesa account linked successfully.');
+      showAlert({
+        title: 'Payment Method Added',
+        message: 'M-Pesa account linked successfully.',
+        variant: 'success',
+      });
     } else {
       const alreadyLinked = paymentMethods.some((m) => m.type === 'card');
       if (!alreadyLinked) {
@@ -67,10 +77,11 @@ export function PaymentMethodsView({
       }
       setDetailsModalVisible(false);
       setChosenMethodType(null);
-      Alert.alert(
-        'Card Checkout Enabled',
-        'For your security, card details are entered directly in Paystack’s encrypted 3D-Secure checkout window when you confirm a reservation.',
-      );
+      showAlert({
+        title: 'Card Checkout Enabled',
+        message: 'For your security, card details are entered directly in Paystack’s encrypted 3D-Secure checkout window when you confirm a reservation.',
+        variant: 'success',
+      });
     }
   };
 
@@ -141,10 +152,12 @@ export function PaymentMethodsView({
           </Text>
           <Pressable
             onPress={() =>
-              Alert.alert(
-                'Payment Protection',
-                'ZuruSasa guarantees secure coastal transactions. Paying off-platform voids reservation dispute rights and insurance coverage.'
-              )
+              showAlert({
+                title: 'Payment Protection',
+                message: 'ZuruSasa guarantees secure coastal transactions. Paying off-platform voids reservation dispute rights and insurance coverage.',
+                variant: 'info',
+                icon: 'shield',
+              })
             }
             style={{ marginTop: 12 }}
             accessibilityRole="button"

@@ -7,8 +7,14 @@ import type { TextStyle } from 'react-native';
  * - DMSans_500Medium
  * - DMSans_600SemiBold
  * - DMSans_700Bold
- * - InstrumentSerif_400Regular
  */
+
+export const fonts = {
+  regular: 'DMSans_400Regular',
+  medium: 'DMSans_500Medium',
+  semibold: 'DMSans_600SemiBold',
+  bold: 'DMSans_700Bold',
+} as const;
 
 export const typography = {
   largeTitle: {

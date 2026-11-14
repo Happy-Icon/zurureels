@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   KeyboardAvoidingView,
   Modal,
@@ -19,6 +18,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useEnquire, useSendMessage } from '@/lib/queries';
 import { GrowingInput } from '@/components/keyboard';
 import { useColors, useTheme } from '@/hooks/useColors';
@@ -65,6 +65,7 @@ export function EnquireModal({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { showAlert } = useCustomAlert();
   const enquire = useEnquire();
   const sendMessage = useSendMessage();
   const queryClient = useQueryClient();
@@ -136,10 +137,11 @@ export function EnquireModal({
       }).start();
     } catch (err) {
       setSending(false);
-      Alert.alert(
-        'Message failed',
-        err instanceof Error ? err.message : 'Could not send your message. Please try again.',
-      );
+      showAlert({
+        title: 'Message Failed',
+        message: err instanceof Error ? err.message : 'Could not send your message. Please try again.',
+        variant: 'error',
+      });
     }
   };
 

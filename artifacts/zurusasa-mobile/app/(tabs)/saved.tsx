@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import {
-  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -10,19 +9,19 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useColors } from '@/hooks/useColors';
 import { useSavedEvents, useSavedReels } from '@/lib/queries';
 import { HistoryBottomSheet } from '@/components/history/HistoryBottomSheet';
+import { SavedFavoritesBottomSheet } from '@/components/saved/SavedFavoritesBottomSheet';
 
 export default function WishlistsScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const colors = useColors();
   const { isDark } = useTheme();
   const { user } = useAuth();
@@ -123,117 +122,16 @@ export default function WishlistsScreen() {
         </View>
       </ScrollView>
 
-      {/* ── SAVED FAVORITES MODAL SHEET ───────────────────────────────────────── */}
-      <Modal
+      {/* ── SAVED FAVORITES BOTTOM SHEET ──────────────────────────────────────── */}
+      <SavedFavoritesBottomSheet
         visible={savedFavoritesModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setSavedFavoritesModal(false)}
-      >
-        <View style={[styles.modalSheet, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Pressable onPress={() => setSavedFavoritesModal(false)} style={[styles.circleCloseBtn, { backgroundColor: isDark ? '#27272A' : '#F5F5F5' }]}>
-              <Feather name="x" size={20} color={colors.text} />
-            </Pressable>
-            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Saved favorites</Text>
-            <View style={{ width: 36 }} />
-          </View>
-
-          <ScrollView
-            contentContainerStyle={[styles.modalScrollContent, { paddingBottom: insets.bottom + 32 }]}
-            showsVerticalScrollIndicator={false}
-          >
-            {totalSavedCount > 0 ? (
-              <View style={{ gap: 14 }}>
-                {reels?.map((reel) => (
-                  <Pressable
-                    key={`saved-reel-${reel.id}`}
-                    onPress={() => {
-                      setSavedFavoritesModal(false);
-                      router.push('/discover');
-                    }}
-                    style={[styles.recentItemRow, { borderBottomColor: colors.border }]}
-                  >
-                    <View style={styles.recentThumbBox}>
-                      {reel.thumbnail_url ? (
-                        <Image source={{ uri: reel.thumbnail_url }} style={styles.recentThumb} contentFit="cover" />
-                      ) : (
-                        <View style={[styles.recentThumb, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
-                          <Feather name="film" size={20} color={colors.mutedForeground} />
-                        </View>
-                      )}
-                    </View>
-                    <View style={{ flex: 1, paddingLeft: 12 }}>
-                      <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={1}>
-                        {reel.experience?.title ?? 'Coastal Stay'}
-                      </Text>
-                      <Text style={[styles.recentLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
-                        {reel.experience?.location ?? 'Kenya Coast'}
-                      </Text>
-                      <Text style={styles.recentPrice}>
-                        KES {Number(reel.experience?.current_price ?? 0).toLocaleString()} / night
-                      </Text>
-                    </View>
-                    <Ionicons name="heart" size={20} color="#F26522" style={{ marginRight: 8 }} />
-                  </Pressable>
-                ))}
-
-                {events?.map((ev) => (
-                  <Pressable
-                    key={`saved-event-${ev.id}`}
-                    onPress={() => {
-                      setSavedFavoritesModal(false);
-                      router.push('/discover');
-                    }}
-                    style={[styles.recentItemRow, { borderBottomColor: colors.border }]}
-                  >
-                    <View style={styles.recentThumbBox}>
-                      {ev.image_url ? (
-                        <Image source={{ uri: ev.image_url }} style={styles.recentThumb} contentFit="cover" />
-                      ) : (
-                        <View style={[styles.recentThumb, { backgroundColor: isDark ? '#27272A' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
-                          <Feather name="calendar" size={20} color={colors.mutedForeground} />
-                        </View>
-                      )}
-                    </View>
-                    <View style={{ flex: 1, paddingLeft: 12 }}>
-                      <Text style={[styles.recentTitle, { color: colors.text }]} numberOfLines={1}>
-                        {ev.title ?? 'Coastal Event'}
-                      </Text>
-                      <Text style={[styles.recentLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
-                        {ev.location ?? 'Kenya Coast'}
-                      </Text>
-                      <Text style={styles.recentPrice}>
-                        {ev.event_date ? new Date(ev.event_date).toLocaleDateString() : 'Upcoming Event'}
-                      </Text>
-                    </View>
-                    <Ionicons name="heart" size={20} color="#F26522" style={{ marginRight: 8 }} />
-                  </Pressable>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.emptyRecentWrap}>
-                <View style={[styles.emptyRecentIconCircle, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
-                  <Ionicons name="heart-outline" size={32} color={colors.mutedForeground} />
-                </View>
-                <Text style={[styles.emptyRecentTitle, { color: colors.text }]}>No saved favorites yet</Text>
-                <Text style={[styles.emptyRecentSub, { color: colors.mutedForeground }]}>
-                  Tap the heart icon on any stay, experience, or event to save it to your favorites list.
-                </Text>
-                <Pressable
-                  onPress={() => {
-                    setSavedFavoritesModal(false);
-                    router.push('/discover');
-                  }}
-                  style={[styles.exploreCtaBtn, { backgroundColor: '#F26522' }]}
-                >
-                  <Text style={styles.exploreCtaBtnText}>Explore coastal stays</Text>
-                </Pressable>
-              </View>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
+        onClose={() => setSavedFavoritesModal(false)}
+        reels={reels}
+        events={events}
+        isLoading={reelsLoading || eventsLoading}
+        userId={user?.id}
+        onRefresh={onRefresh}
+      />
 
       {/* ── RECENTLY VIEWED BOTTOM SHEET ────────────────────────────────────── */}
       <HistoryBottomSheet
@@ -253,14 +151,9 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 34,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
     letterSpacing: -0.8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
   },
   gridRow: {
     flexDirection: 'row',
@@ -310,125 +203,18 @@ const styles = StyleSheet.create({
   countBadgeText: {
     color: '#FFFFFF',
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
     marginTop: 10,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
   },
   cardSub: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     marginTop: 2,
-  },
-
-  /* Recently viewed modal */
-  modalSheet: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  circleCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F5F5F5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111111',
-  },
-  modalScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  recentItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  recentThumbBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  recentThumb: {
-    width: '100%',
-    height: '100%',
-  },
-  recentTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111111',
-  },
-  recentLocation: {
-    fontSize: 13,
-    color: '#717171',
-    marginTop: 2,
-  },
-  recentPrice: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#F26522',
-    marginTop: 2,
-  },
-  emptyRecentWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 24,
-  },
-  emptyRecentIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyRecentTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111111',
-    marginBottom: 8,
-  },
-  emptyRecentSub: {
-    fontSize: 14,
-    color: '#717171',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  exploreCtaBtn: {
-    backgroundColor: '#111111',
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-  },
-  exploreCtaBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
   },
 });

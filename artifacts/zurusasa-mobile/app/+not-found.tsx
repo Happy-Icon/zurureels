@@ -31,14 +31,15 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   title: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 20,
-    fontWeight: 'bold',
   },
   link: {
     marginTop: 15,
     paddingVertical: 15,
   },
   linkText: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 14,
   },
 });

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -14,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { resolveAvatarUrl } from '@/lib/avatar';
 import { useHostProfile } from '@/hooks/useHostProfile';
 import { useEnquire } from '@/lib/queries';
@@ -37,6 +37,7 @@ export default function PublicHostProfileScreen() {
   const router = useRouter();
   const { hostId } = useLocalSearchParams<{ hostId: string }>();
   const { user, profile } = useAuth();
+  const { showAlert } = useCustomAlert();
   const enquire = useEnquire();
 
   const {
@@ -85,7 +86,11 @@ export default function PublicHostProfileScreen() {
       return;
     }
     if (!hostId || hostId === user.id) {
-      Alert.alert('Host Contact', 'You are currently viewing your own profile.');
+      showAlert({
+        title: 'Host Contact',
+        message: 'You are currently viewing your own profile.',
+        variant: 'info',
+      });
       return;
     }
 
@@ -247,7 +252,12 @@ export default function PublicHostProfileScreen() {
             <Pressable
               onPress={() => {
                 setMenuOpen(false);
-                Alert.alert('Report Submitted', 'Thank you for keeping our community safe. Our team will review this host profile.');
+                showAlert({
+                  title: 'Report Submitted',
+                  message: 'Thank you for keeping our community safe. Our team will review this host profile.',
+                  variant: 'success',
+                  icon: 'shield',
+                });
               }}
               style={[styles.menuOptionRow, { borderBottomColor: colors.border }]}
             >

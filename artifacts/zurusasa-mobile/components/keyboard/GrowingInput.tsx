@@ -52,6 +52,7 @@ export function GrowingInput({
 
 const styles = StyleSheet.create({
   defaultInput: {
+    fontFamily: 'DMSans_400Regular',
     paddingVertical: 10,
     paddingHorizontal: 14,
     textAlignVertical: 'top',

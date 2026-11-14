@@ -240,6 +240,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionTitle: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 16,
     marginBottom: 3,
   },

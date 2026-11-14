@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 
 import { useAuth } from '@/context/AuthContext';
-import { useExperienceBlockedDates } from '@/lib/queries';
+import { useCustomAlert } from '@/context/CustomAlertContext';
+import { useActiveSpecialOffers, useExperienceBlockedDates } from '@/lib/queries';
 import { supabase, resolveAvatarUrl, type ReelRow } from '@/lib/supabase';
+import {
+  getPrimaryCategoryMeta,
+  getSubcategoryLabel,
+  normalizePrimaryCategory,
+  resolveReelContentType,
+} from '@/constants/taxonomy';
 import { reviewService, type ReviewSummaryData } from '@/services/reviewService';
 import {
   DAY_MS,
@@ -38,6 +44,7 @@ export function useBookingCheckout({
 }: UseBookingCheckoutArgs) {
   const router = useRouter();
   const { user } = useAuth();
+  const { showAlert } = useCustomAlert();
   const queryClient = useQueryClient();
 
   const exp = reel.experience;
@@ -46,8 +53,31 @@ export function useBookingCheckout({
   const title = exp?.title ?? (reel as any).caption ?? 'Coastal Experience';
   const price = exp?.current_price != null ? Number(exp.current_price) : 0;
   const priceUnit = exp?.price_unit ?? 'night';
-  const category = (reel.category ?? '').toLowerCase();
-  const isNightBased = ['hotel', 'villa', 'apartment', 'stay'].includes(category) || priceUnit === 'night';
+  const category = (reel.category ?? exp?.category ?? '').toLowerCase();
+  const contentType = resolveReelContentType(reel);
+  const primaryCategory = normalizePrimaryCategory(reel.category || exp?.category);
+  const primaryCategoryMeta = getPrimaryCategoryMeta(primaryCategory);
+  const expExt = exp as
+    | (typeof exp & { subcategory?: string | null; operating_hours?: string | null })
+    | null
+    | undefined;
+  const subcategoryLabel = getSubcategoryLabel(
+    reel.subcategory || expExt?.subcategory || (meta.subcategory as string | undefined) || null,
+  );
+  const durationInfo = (meta.duration_info as string | undefined) || null;
+  const operatingHours =
+    expExt?.operating_hours || (meta.operating_hours as string | undefined) || null;
+  const whatsIncluded = (meta.whats_included as string | undefined) || null;
+  const meetingPoint =
+    (meta.meeting_point as string | undefined) || exp?.arrival_instructions?.directions || null;
+  const isNightBased =
+    (contentType === 'experience' && primaryCategory === 'accommodation') ||
+    ['accommodation', 'hotel', 'villa', 'apartment', 'stay', 'stays'].includes(category) ||
+    priceUnit === 'night';
+  const { data: activeOffers = [] } = useActiveSpecialOffers({
+    experienceId: exp?.id ?? null,
+    fallbackReels: [reel],
+  });
   const maxCapacity = exp?.max_guests || (meta.max_guests as number) || 2;
   const cancellationPolicy = (exp?.cancellation_policy || meta.cancellation_policy || 'flexible') as string;
   const checkInTime = exp?.check_in_time || (meta.check_in_time as string) || '14:00';
@@ -444,7 +474,12 @@ export function useBookingCheckout({
     }
 
     if (!from) {
-      Alert.alert('Select Dates', 'Please select your check-in dates to continue.');
+      showAlert({
+        title: 'Select Dates',
+        message: 'Please select your check-in dates to continue.',
+        icon: 'calendar',
+        variant: 'warning',
+      });
       return;
     }
 
@@ -456,7 +491,12 @@ export function useBookingCheckout({
       }
 
       if (!phone || phone.length < 9) {
-        Alert.alert('M-Pesa Phone Required', 'Please enter a valid Safaricom M-Pesa phone number.');
+        showAlert({
+          title: 'M-Pesa Phone Required',
+          message: 'Please enter a valid Safaricom M-Pesa phone number.',
+          icon: 'smartphone',
+          variant: 'warning',
+        });
         return;
       }
     }
@@ -579,7 +619,12 @@ export function useBookingCheckout({
             } else if (check.failed) {
               cleanupPaymentListeners();
               setPhase('idle');
-              Alert.alert('Payment Failed', check.reason || 'Payment was declined.');
+              showAlert({
+                title: 'Payment Failed',
+                message: check.reason || 'Payment was declined.',
+                icon: 'alert-circle',
+                variant: 'error',
+              });
             }
           },
         )
@@ -604,7 +649,12 @@ export function useBookingCheckout({
           if (check.failed) {
             cleanupPaymentListeners();
             setPhase('idle');
-            Alert.alert('Payment Failed', check.reason || 'Payment could not be completed.');
+            showAlert({
+              title: 'Payment Failed',
+              message: check.reason || 'Payment could not be completed.',
+              icon: 'alert-circle',
+              variant: 'error',
+            });
             return;
           }
 
@@ -619,14 +669,17 @@ export function useBookingCheckout({
 
             setPhase('idle');
 
-            Alert.alert(
-              'Payment is taking longer than expected',
-              'Your payment may still be processing. You can check your Trips and return here later.',
-              [
+            showAlert({
+              title: 'Payment is taking longer than expected',
+              message:
+                'Your payment may still be processing. You can check your Trips and return here later.',
+              icon: 'clock',
+              variant: 'warning',
+              buttons: [
                 { text: 'View Trips', onPress: handleViewItinerary },
                 { text: 'Done', style: 'cancel' },
               ],
-            );
+            });
           }
         } catch (pollErr) {
           console.warn('Poll iteration error (safe):', pollErr);
@@ -649,14 +702,24 @@ export function useBookingCheckout({
         if (postBrowserCheck.failed) {
           cleanupPaymentListeners();
           setPhase('idle');
-          Alert.alert('Payment Failed', postBrowserCheck.reason || 'Card payment could not be completed.');
+          showAlert({
+            title: 'Payment Failed',
+            message: postBrowserCheck.reason || 'Card payment could not be completed.',
+            icon: 'alert-circle',
+            variant: 'error',
+          });
           return;
         }
       }
     } catch (err: any) {
       cleanupPaymentListeners();
       setPhase('idle');
-      Alert.alert('Booking Error', err.message || 'An unexpected error occurred. Please try again.');
+      showAlert({
+        title: 'Booking Error',
+        message: err.message || 'An unexpected error occurred. Please try again.',
+        icon: 'alert-circle',
+        variant: 'error',
+      });
     }
   };
 
@@ -688,6 +751,15 @@ export function useBookingCheckout({
   return {
     user,
     exp,
+    contentType,
+    primaryCategory,
+    primaryCategoryMeta,
+    subcategoryLabel,
+    durationInfo,
+    operatingHours,
+    whatsIncluded,
+    meetingPoint,
+    activeOffers,
     title,
     price,
     priceUnit,

@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
   },
   pillTopBtnText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
     color: '#111111',
   },
   content: {
@@ -429,17 +429,12 @@ const styles = StyleSheet.create({
   },
   pageTitleCenter: {
     fontSize: 34,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.5,
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 40,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   rewardCard: {
     borderWidth: 1,
@@ -460,22 +455,18 @@ const styles = StyleSheet.create({
   },
   rewardCardTitle: {
     fontSize: 16,
-    fontWeight: '700',
     color: '#111111',
     marginBottom: 4,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   rewardCardSubtitle: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
   },
   boldAmount: {
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
   },
   rewardCardIllustration: {
@@ -495,15 +486,11 @@ const styles = StyleSheet.create({
   pinkShareBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   disclaimerText: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     textAlign: 'center',
     lineHeight: 18,
@@ -511,7 +498,7 @@ const styles = StyleSheet.create({
   },
   underlineLink: {
     color: '#111111',
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     textDecorationLine: 'underline',
   },
 
@@ -522,16 +509,11 @@ const styles = StyleSheet.create({
   },
   emptyHeadline: {
     fontSize: 28,
-    fontWeight: '700',
     color: '#111111',
     textAlign: 'center',
     lineHeight: 34,
     marginBottom: 48,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   sofaIllustrationWrapper: {
     alignItems: 'center',
@@ -560,12 +542,12 @@ const styles = StyleSheet.create({
   blackActionBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
   cantFindText: {
     fontSize: 14,
+    fontFamily: 'DMSans_600SemiBold',
     color: '#111111',
-    fontWeight: '600',
     textDecorationLine: 'underline',
   },
 
@@ -589,7 +571,7 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
   },
   sheetCloseBtn: {
@@ -606,7 +588,7 @@ const styles = StyleSheet.create({
   },
   sheetOptionText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: 'DMSans_500Medium',
     color: '#111111',
   },
 
@@ -627,12 +609,13 @@ const styles = StyleSheet.create({
   },
   qrDialogTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
     marginBottom: 8,
   },
   qrDialogSub: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     textAlign: 'center',
     marginBottom: 20,
@@ -647,7 +630,7 @@ const styles = StyleSheet.create({
   },
   qrCodeLinkText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
     color: '#E11D48',
     marginBottom: 20,
   },
@@ -661,7 +644,7 @@ const styles = StyleSheet.create({
   qrCloseBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
 
   /* Custom Slug Modal */
@@ -679,7 +662,7 @@ const styles = StyleSheet.create({
   },
   modalHeaderTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
   },
   modalSheetBody: {
@@ -688,7 +671,7 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
     color: '#222222',
     marginBottom: 8,
   },
@@ -705,13 +688,13 @@ const styles = StyleSheet.create({
   },
   slugPrefix: {
     fontSize: 15,
+    fontFamily: 'DMSans_600SemiBold',
     color: '#717171',
-    fontWeight: '600',
   },
   slugInput: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
   },
   saveLinkBtn: {
@@ -723,6 +706,6 @@ const styles = StyleSheet.create({
   saveLinkBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
 });

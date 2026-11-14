@@ -4,7 +4,7 @@
  */
 
 import { colors } from '@/theme/colors';
-import { typography } from '@/theme/typography';
+import { fonts } from '@/theme/typography';
 import { radius } from '@/theme/radius';
 
 export const AI_COLORS = {
@@ -42,10 +42,10 @@ export const AI_COLORS = {
 } as const;
 
 export const AI_FONTS = {
-  regular: 'DMSans_400Regular',
-  medium: 'DMSans_500Medium',
-  semibold: 'DMSans_600SemiBold',
-  bold: 'DMSans_700Bold',
+  regular: fonts.regular,
+  medium: fonts.medium,
+  semibold: fonts.semibold,
+  bold: fonts.bold,
 } as const;
 
 export const AI_RADIUS = {

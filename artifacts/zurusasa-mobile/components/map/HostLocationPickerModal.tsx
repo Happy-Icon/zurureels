@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   Modal,
   Platform,
@@ -18,6 +17,7 @@ import * as Location from 'expo-location';
 import { MapCanvas } from '@/components/map/MapCanvas';
 import type { MapCanvasRef, MapViewportEvent } from '@/components/map/MapCanvas.types';
 import { useTheme } from '@/context/ThemeContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import {
   lookupKnownTownCenter,
   mapService,
@@ -54,6 +54,7 @@ export function HostLocationPickerModal({
   onConfirm,
 }: HostLocationPickerModalProps) {
   const { isDark } = useTheme();
+  const { showAlert } = useCustomAlert();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapCanvasRef>(null);
 
@@ -172,10 +173,12 @@ export function HostLocationPickerModal({
         status = req.status;
       }
       if (status !== 'granted') {
-        Alert.alert(
-          'Location Permission Required',
-          'Grant foreground location access to drop a pin at your current GPS position.',
-        );
+        showAlert({
+          title: 'Location Permission Required',
+          message: 'Grant foreground location access to drop a pin at your current GPS position.',
+          variant: 'warning',
+          icon: 'map-pin',
+        });
         return;
       }
 
@@ -190,11 +193,16 @@ export function HostLocationPickerModal({
       mapRef.current?.flyTo(coords, 16, 500);
       triggerReverseGeocode(coords);
     } catch {
-      Alert.alert('GPS Unavailable', 'Could not read your device location.');
+      showAlert({
+        title: 'GPS Unavailable',
+        message: 'Could not read your device location.',
+        variant: 'error',
+        icon: 'navigation',
+      });
     } finally {
       setLocatingGps(false);
     }
-  }, [triggerReverseGeocode]);
+  }, [triggerReverseGeocode, showAlert]);
 
   const handleConfirm = useCallback(() => {
     onConfirm({

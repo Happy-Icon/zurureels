@@ -1,13 +1,20 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, Pressable, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import type { SearchFilters } from '@/services/filterService';
+import {
+  getPrimaryCategoryMeta,
+  getSubcategoryLabel,
+} from '@/constants/taxonomy';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 
 interface FilterChipProps {
   filters: SearchFilters;
   onRemoveCategory: () => void;
+  onRemoveSubcategory?: () => void;
+  onRemoveOnlySpecialOffers?: () => void;
+  onRemoveOnlyUpcomingEvents?: () => void;
   onRemoveCity: (city: string) => void;
   onRemovePrice: () => void;
   onRemoveRating: () => void;
@@ -15,9 +22,21 @@ interface FilterChipProps {
   onResetAll: () => void;
 }
 
+function formatCategoryFilterLabel(rawCategory: string): string {
+  const lower = rawCategory.trim().toLowerCase();
+  if (lower === 'events' || lower === 'event') return 'Events';
+  if (lower === 'offers' || lower === 'offer' || lower === 'special_offer') {
+    return 'Special Offers';
+  }
+  return getPrimaryCategoryMeta(rawCategory).label;
+}
+
 export function FilterChip({
   filters,
   onRemoveCategory,
+  onRemoveSubcategory,
+  onRemoveOnlySpecialOffers,
+  onRemoveOnlyUpcomingEvents,
   onRemoveCity,
   onRemovePrice,
   onRemoveRating,
@@ -30,8 +49,29 @@ export function FilterChip({
 
   if (filters.category) {
     chips.push({
-      label: `Category: ${filters.category}`,
+      label: formatCategoryFilterLabel(filters.category),
       onRemove: onRemoveCategory,
+    });
+  }
+
+  if (filters.subcategory && onRemoveSubcategory) {
+    chips.push({
+      label: getSubcategoryLabel(filters.subcategory) || filters.subcategory,
+      onRemove: onRemoveSubcategory,
+    });
+  }
+
+  if (filters.onlySpecialOffers && onRemoveOnlySpecialOffers) {
+    chips.push({
+      label: 'Special Offers & Deals',
+      onRemove: onRemoveOnlySpecialOffers,
+    });
+  }
+
+  if (filters.onlyUpcomingEvents && onRemoveOnlyUpcomingEvents) {
+    chips.push({
+      label: 'Upcoming Events',
+      onRemove: onRemoveOnlyUpcomingEvents,
     });
   }
 
@@ -93,7 +133,7 @@ export function FilterChip({
 
         {chips.map((chip, idx) => (
           <View
-            key={idx}
+            key={`${chip.label}-${idx}`}
             style={[
               styles.chip,
               {
@@ -104,7 +144,7 @@ export function FilterChip({
           >
             <Text style={styles.chipText}>{chip.label}</Text>
             <Pressable onPress={chip.onRemove} hitSlop={6} style={styles.removeIconBtn}>
-              <Feather name="x" size={12} color="#F26522" />
+              <Ionicons name="close" size={13} color="#F26522" />
             </Pressable>
           </View>
         ))}
@@ -151,4 +191,3 @@ const styles = StyleSheet.create({
     padding: 2,
   },
 });
-

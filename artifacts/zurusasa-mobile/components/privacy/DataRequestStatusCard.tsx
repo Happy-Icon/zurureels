@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { PersonalDataRequestRow } from '@/lib/supabase';
 import { dataRequestService } from '@/services/dataRequestService';
 
@@ -17,6 +18,7 @@ export function DataRequestStatusCard({
   onRequestVerification,
 }: DataRequestStatusCardProps) {
   const colors = useColors();
+  const { showAlert } = useCustomAlert();
   const [downloading, setDownloading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
@@ -95,7 +97,11 @@ export function DataRequestStatusCard({
     try {
       const result = await dataRequestService.getDownloadSignedUrls(request.id);
       if (!result.success) {
-        Alert.alert('Download Error', result.error || 'Failed to generate download link.');
+        showAlert({
+          title: 'Download Error',
+          message: result.error || 'Failed to generate download link.',
+          variant: 'error',
+        });
         return;
       }
 
@@ -104,20 +110,30 @@ export function DataRequestStatusCard({
         await Linking.openURL(urlToOpen);
         onRefresh();
       } else {
-        Alert.alert('Download Error', 'No download file found.');
+        showAlert({
+          title: 'Download Error',
+          message: 'No download file found.',
+          variant: 'error',
+        });
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Could not open download link.');
+      showAlert({
+        title: 'Error',
+        message: e?.message || 'Could not open download link.',
+        variant: 'error',
+      });
     } finally {
       setDownloading(false);
     }
   };
 
   const handleCancel = async () => {
-    Alert.alert(
-      'Cancel request',
-      'Are you sure you want to cancel this data export request?',
-      [
+    showAlert({
+      title: 'Cancel Request',
+      message: 'Are you sure you want to cancel this data export request?',
+      variant: 'destructive',
+      icon: 'trash-2',
+      buttons: [
         { text: 'Keep Request', style: 'cancel' },
         {
           text: 'Cancel Export',
@@ -129,7 +145,11 @@ export function DataRequestStatusCard({
               if (res.success) {
                 onRefresh();
               } else {
-                Alert.alert('Error', res.error || 'Failed to cancel request.');
+                showAlert({
+                  title: 'Error',
+                  message: res.error || 'Failed to cancel request.',
+                  variant: 'error',
+                });
               }
             } finally {
               setCancelling(false);
@@ -137,7 +157,7 @@ export function DataRequestStatusCard({
           },
         },
       ],
-    );
+    });
   };
 
   const formatFileSize = (bytes?: number | null) => {
@@ -283,7 +303,6 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: '600',
     fontFamily: 'DMSans_600SemiBold',
     letterSpacing: -0.2,
   },
@@ -301,7 +320,6 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 11,
-    fontWeight: '600',
     fontFamily: 'DMSans_600SemiBold',
   },
   descText: {
@@ -335,7 +353,6 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 12,
-    fontWeight: '500',
     fontFamily: 'DMSans_500Medium',
   },
   actionRow: {
@@ -358,7 +375,6 @@ const styles = StyleSheet.create({
   downloadBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '700',
     fontFamily: 'DMSans_700Bold',
   },
   verifyBtn: {
@@ -373,7 +389,6 @@ const styles = StyleSheet.create({
   verifyBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '600',
     fontFamily: 'DMSans_600SemiBold',
   },
   cancelBtn: {

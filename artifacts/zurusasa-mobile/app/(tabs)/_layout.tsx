@@ -345,6 +345,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tabLabel: {
+    fontFamily: 'DMSans_500Medium',
     fontSize: 10,
     textAlign: 'center',
     marginTop: 2,

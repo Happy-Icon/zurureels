@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +15,7 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase, type MessageRow } from '@/lib/supabase';
@@ -40,6 +40,7 @@ export default function NativeChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { showAlert } = useCustomAlert();
   const { id, name, avatar, otherId } = useLocalSearchParams<{
     id: string;
     name?: string;
@@ -203,7 +204,11 @@ export default function NativeChatScreen() {
       });
     } catch (err: any) {
       console.warn('Attachment upload error:', err);
-      Alert.alert('Upload Failed', 'Could not upload the selected photo. Please try again.');
+      showAlert({
+        title: 'Upload Failed',
+        message: 'Could not upload the selected photo. Please try again.',
+        variant: 'error',
+      });
     } finally {
       setUploadingPhoto(false);
     }
@@ -393,7 +398,11 @@ export default function NativeChatScreen() {
         {/* Right Info Action */}
         <Pressable
           onPress={() => {
-            Alert.alert(displayName, 'Conversation details and direct host messaging.');
+            showAlert({
+              title: displayName,
+              message: 'Conversation details and direct host messaging.',
+              variant: 'info',
+            });
           }}
           hitSlop={10}
           style={({ pressed }) => [styles.infoBtn, { opacity: pressed ? 0.6 : 1 }]}

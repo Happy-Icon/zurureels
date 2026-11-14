@@ -1,11 +1,16 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useReelInteractions, useToggleSave } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
+import {
+  formatEventScheduleBadge,
+  getCategoryDisplayMeta,
+  resolveReelContentType,
+} from '@/constants/taxonomy';
 
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
@@ -24,9 +29,41 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
   const toggleSave = useToggleSave();
 
   const exp = reel.experience;
-  const meta = (exp?.metadata ?? {}) as Record<string, unknown>;
+  const meta = (exp?.metadata ?? {}) as Record<string, any>;
   const rating = Number((meta.rating as number | string | undefined) ?? 5.0);
-  const category = (reel.category ?? 'Reel').toUpperCase().replace(/_/g, ' ');
+
+  const contentType = resolveReelContentType(reel);
+  const subcategory = reel.subcategory || (meta.subcategory as string | undefined) || null;
+  const catMeta = getCategoryDisplayMeta(
+    reel.category || exp?.category,
+    contentType,
+    subcategory,
+  );
+  const evDetails = (meta.event_details ?? {}) as Record<string, any>;
+  const offDetails = (meta.offer_details ?? {}) as Record<string, any>;
+
+  const badgeLabel =
+    contentType === 'event'
+      ? `EVENT · ${formatEventScheduleBadge(
+          evDetails.event_date || reel.event?.event_date,
+          evDetails.start_time || reel.event?.start_time,
+        )}`
+      : contentType === 'special_offer'
+      ? `OFFER · ${String(
+          reel.offer?.discount_label || offDetails.discount_label || 'DEAL',
+        ).toUpperCase()}`
+      : catMeta.shortLabel.toUpperCase();
+
+  const offerOriginalPrice =
+    contentType === 'special_offer'
+      ? typeof reel.offer?.original_price === 'number'
+        ? reel.offer.original_price
+        : typeof offDetails.original_price === 'number'
+        ? offDetails.original_price
+        : null
+      : null;
+
+  const displayPrice = Number(exp?.current_price ?? 0);
 
   const hostId = reel.user_id ?? null;
   const { data: inter } = useReelInteractions(reel.id, hostId, user?.id, true);
@@ -49,7 +86,12 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
       style={[styles.cardContainer, { width }]}
     >
       {/* High-res 4:5 Rounded Image Container */}
-      <View style={[styles.imageWrap, { width, height: imageHeight, backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}>
+      <View
+        style={[
+          styles.imageWrap,
+          { width, height: imageHeight, backgroundColor: isDark ? '#27272A' : '#F7F7F7' },
+        ]}
+      >
         {reel.thumbnail_url ? (
           <Image
             source={{ uri: reel.thumbnail_url }}
@@ -58,13 +100,16 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
           />
         ) : (
           <View style={styles.imageFallback}>
-            <Feather name="film" size={24} color={colors.mutedForeground} />
+            <Ionicons name="videocam-outline" size={26} color={colors.mutedForeground} />
           </View>
         )}
 
-        {/* Top Left: Category Badge in Blurred Glass */}
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryBadgeText}>{category}</Text>
+        {/* Top Left: Format / Category Badge */}
+        <View style={[styles.categoryBadge, { backgroundColor: catMeta.badgeBg }]}>
+          <Ionicons name={catMeta.icon} size={11} color="#FFFFFF" />
+          <Text style={styles.categoryBadgeText} numberOfLines={1}>
+            {badgeLabel}
+          </Text>
         </View>
 
         {/* Top Right: Floating Wishlist Heart Icon */}
@@ -72,7 +117,10 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
           testID={`grid-save-${reel.id}`}
           onPress={onSave}
           hitSlop={8}
-          style={[styles.heartCircleBtn, { backgroundColor: isDark ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.9)' }]}
+          style={[
+            styles.heartCircleBtn,
+            { backgroundColor: isDark ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.9)' },
+          ]}
         >
           <Ionicons
             name={saved ? 'heart' : 'heart-outline'}
@@ -86,7 +134,7 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
       <View style={styles.textMetaStack}>
         <View style={styles.titleRatingRow}>
           <Text style={[styles.titleText, { color: colors.text }]} numberOfLines={1}>
-            {exp?.title ?? 'Coastal Stay'}
+            {exp?.title ?? 'Coastal Experience'}
           </Text>
           <View style={styles.ratingRow}>
             <Ionicons name="star" size={12} color="#F59E0B" />
@@ -98,10 +146,28 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
           {exp?.location ?? 'Kenyan Coast'}
         </Text>
 
-        <Text style={[styles.priceText, { color: colors.text }]}>
-          KES {Number(exp?.current_price ?? 0).toLocaleString()}
-          <Text style={[styles.priceUnitText, { color: colors.mutedForeground }]}> / {exp?.price_unit ?? 'person'}</Text>
-        </Text>
+        {contentType === 'event' && displayPrice === 0 ? (
+          <Text style={[styles.priceText, { color: colors.text }]}>Free Entry</Text>
+        ) : contentType === 'special_offer' && offerOriginalPrice && offerOriginalPrice > 0 ? (
+          <View style={styles.offerPriceWrap}>
+            <Text style={[styles.strikePriceText, { color: colors.mutedForeground }]}>
+              KES {offerOriginalPrice.toLocaleString()}
+            </Text>
+            <Text style={[styles.priceText, { color: colors.text, marginTop: 0 }]}>
+              {displayPrice > 0
+                ? `KES ${displayPrice.toLocaleString()}`
+                : String(reel.offer?.discount_label || offDetails.discount_label || 'Offer')}
+            </Text>
+          </View>
+        ) : (
+          <Text style={[styles.priceText, { color: colors.text }]}>
+            KES {displayPrice.toLocaleString()}
+            <Text style={[styles.priceUnitText, { color: colors.mutedForeground }]}>
+              {' '}
+              / {exp?.price_unit ?? 'person'}
+            </Text>
+          </Text>
+        )}
       </View>
     </Pressable>
   );
@@ -131,16 +197,21 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    right: 48,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   categoryBadgeText: {
     color: '#FFFFFF',
     fontSize: 10,
     fontFamily: 'DMSans_700Bold',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
+    flexShrink: 1,
   },
   heartCircleBtn: {
     position: 'absolute',
@@ -187,6 +258,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'DMSans_400Regular',
     color: '#717171',
+  },
+  offerPriceWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  strikePriceText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    textDecorationLine: 'line-through',
   },
   priceText: {
     fontSize: 14,

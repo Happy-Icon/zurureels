@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Platform,
   Pressable,
@@ -19,6 +18,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { zuruPlanService } from '@/services/zuruPlanService';
@@ -38,6 +38,7 @@ export default function TripItineraryWorkspaceScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { showAlert } = useCustomAlert();
 
   const [trip, setTrip] = useState<TripPlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,7 +128,11 @@ export default function TripItineraryWorkspaceScreen() {
           setBookingReel(mockReel);
           setBookingSheetVisible(true);
         } else {
-          Alert.alert('Unavailable', 'This listing is temporarily unavailable for direct booking.');
+          showAlert({
+            title: 'Unavailable',
+            message: 'This listing is temporarily unavailable for direct booking.',
+            variant: 'warning',
+          });
         }
       }
     } catch (err) {
@@ -158,10 +163,11 @@ export default function TripItineraryWorkspaceScreen() {
     } catch (err: any) {
       if (controller.signal.aborted) return;
       console.warn('Day regeneration failed:', err);
-      Alert.alert(
-        'Regeneration Notice',
-        err?.message || 'Could not find alternative activities for this day without repeating previous experiences.'
-      );
+      showAlert({
+        title: 'Regeneration Notice',
+        message: err?.message || 'Could not find alternative activities for this day without repeating previous experiences.',
+        variant: 'info',
+      });
     } finally {
       setIsRegeneratingDay(null);
       abortControllerRef.current = null;
@@ -282,10 +288,18 @@ export default function TripItineraryWorkspaceScreen() {
       await zuruPlanService.saveTrip(user?.id, finalTrip);
       setTrip(finalTrip);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert('AI Plan Updated! ✨', 'Your itinerary has been refreshed with live intelligence from Claude.');
+      showAlert({
+        title: 'AI Plan Updated',
+        message: 'Your itinerary has been refreshed with live intelligence from Claude.',
+        variant: 'success',
+      });
     } catch (err: any) {
       console.warn('AI upgrade failed:', err);
-      Alert.alert('Notice', err?.message || 'Unable to connect to AI gateway at this time.');
+      showAlert({
+        title: 'Notice',
+        message: err?.message || 'Unable to connect to AI gateway at this time.',
+        variant: 'error',
+      });
     } finally {
       setIsUpgradingAi(false);
     }
@@ -570,7 +584,11 @@ export default function TripItineraryWorkspaceScreen() {
           onSuccess={() => {
             setBookingSheetVisible(false);
             setBookingReel(null);
-            Alert.alert('Booking Confirmed! 🎉', 'Your stay or activity has been scheduled. Check Trips for details.');
+            showAlert({
+              title: 'Booking Confirmed',
+              message: 'Your stay or activity has been scheduled. Check Trips for details.',
+              variant: 'success',
+            });
           }}
         />
       )}

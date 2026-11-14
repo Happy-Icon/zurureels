@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -15,6 +14,7 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/context/ThemeContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { AppearanceModalSheet } from '@/components/settings/AppearanceSelector';
 
@@ -39,6 +39,7 @@ export default function AccountSettingsScreen() {
   const router = useRouter();
   const colors = useColors();
   const { appearanceMode, isDark } = useTheme();
+  const { showAlert } = useCustomAlert();
 
   const [activeModal, setActiveModal] = useState<SettingsModalType>(null);
 
@@ -362,7 +363,11 @@ export default function AccountSettingsScreen() {
 
             <Pressable
               onPress={() => {
-                Alert.alert('Permissions Updated', 'Your booking rules have been saved.');
+                showAlert({
+                  title: 'Permissions Updated',
+                  message: 'Your booking rules have been saved.',
+                  variant: 'success',
+                });
                 setActiveModal(null);
               }}
               style={[styles.primaryBtn, { backgroundColor: '#F26522' }]}
@@ -429,7 +434,11 @@ export default function AccountSettingsScreen() {
 
             <Pressable
               onPress={() => {
-                Alert.alert('Accessibility Updated', 'Display preferences have been applied.');
+                showAlert({
+                  title: 'Accessibility Updated',
+                  message: 'Display preferences have been applied.',
+                  variant: 'success',
+                });
                 setActiveModal(null);
               }}
               style={[styles.primaryBtn, { backgroundColor: '#F26522' }]}
@@ -468,14 +477,9 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '700',
     letterSpacing: -0.5,
     marginBottom: 20,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   sectionHeader: {
     fontSize: 12,
@@ -534,12 +538,7 @@ const styles = StyleSheet.create({
   badgeText: {
     color: '#FFFFFF',
     fontSize: 11,
-    fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   chevron: {
     marginLeft: 8,
@@ -574,15 +573,10 @@ const styles = StyleSheet.create({
   },
   modalHeaderTitle: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#111111',
     maxWidth: '70%',
     textAlign: 'center',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   modalScroll: {
     flex: 1,
@@ -594,17 +588,13 @@ const styles = StyleSheet.create({
   },
   docHeadline: {
     fontSize: 22,
-    fontWeight: '700',
     color: '#111111',
     marginBottom: 8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   formSub: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
     marginBottom: 24,
@@ -619,12 +609,13 @@ const styles = StyleSheet.create({
   },
   switchTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
     color: '#111111',
     marginBottom: 2,
   },
   switchSub: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 18,
   },
@@ -639,6 +630,6 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
 });

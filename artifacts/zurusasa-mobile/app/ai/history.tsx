@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -23,11 +22,13 @@ import {
   type ConversationSessionSummary,
 } from '@/services/aiConversationService';
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 
 export default function AIHistoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { showAlert } = useCustomAlert();
   const userId = user?.id || 'guest';
 
   const [sessions, setSessions] = useState<ConversationSessionSummary[]>([]);
@@ -61,10 +62,12 @@ export default function AIHistoryScreen() {
   };
 
   const handleDeleteSession = (item: ConversationSessionSummary) => {
-    Alert.alert(
-      'Delete Conversation',
-      `Are you sure you want to delete "${item.title}"?`,
-      [
+    showAlert({
+      title: 'Delete Conversation',
+      message: `Are you sure you want to delete "${item.title}"?`,
+      variant: 'destructive',
+      icon: 'trash-2',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -74,16 +77,18 @@ export default function AIHistoryScreen() {
             setSessions((prev) => prev.filter((s) => s.id !== item.id));
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const handleClearAll = () => {
     if (sessions.length === 0) return;
-    Alert.alert(
-      'Clear All History',
-      'This will permanently delete all saved AI conversations on this device.',
-      [
+    showAlert({
+      title: 'Clear All History',
+      message: 'This will permanently delete all saved AI conversations on this device.',
+      variant: 'destructive',
+      icon: 'trash-2',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Clear All',
@@ -93,8 +98,8 @@ export default function AIHistoryScreen() {
             setSessions([]);
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const handleStartNewChat = () => {

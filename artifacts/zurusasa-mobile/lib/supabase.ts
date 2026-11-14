@@ -15,27 +15,48 @@ if (!rawSupabaseUrl || !rawSupabaseKey) {
 const supabaseUrl = rawSupabaseUrl || 'https://unconfigured.invalid';
 const supabaseKey = rawSupabaseKey || 'unconfigured';
 
-const DEFAULT_FETCH_TIMEOUT_MS = 15_000; // 15s timeout on mobile requests
+const READ_FETCH_TIMEOUT_MS = 25_000;
+const MUTATION_FETCH_TIMEOUT_MS = 45_000;
+
+function resolveRequestMethod(input: RequestInfo | URL, init?: RequestInit): string {
+  const rawMethod =
+    init?.method ??
+    (typeof input === 'object' && input !== null && 'method' in input
+      ? (input as Request).method
+      : 'GET');
+  return String(rawMethod || 'GET').toUpperCase();
+}
 
 /**
  * Resilient fetch wrapper with AbortController timeout.
  * Prevents dead/dropped mobile connections from hanging requests indefinitely.
  */
 const customFetchWithTimeout: typeof fetch = async (input, init) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort(new Error('Network request timed out'));
-  }, DEFAULT_FETCH_TIMEOUT_MS);
+  const method = resolveRequestMethod(input, init);
+  const isMutation =
+    method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+  const timeoutMs = isMutation ? MUTATION_FETCH_TIMEOUT_MS : READ_FETCH_TIMEOUT_MS;
 
-  if (init?.signal) {
-    if (init.signal.aborted) {
+  const controller = new AbortController();
+  let didTimeout = false;
+
+  const timeoutId = setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
+
+  const externalSignal = init?.signal;
+  const handleExternalAbort = () => {
+    clearTimeout(timeoutId);
+    controller.abort();
+  };
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
       clearTimeout(timeoutId);
-      controller.abort(init.signal.reason);
-    } else {
-      init.signal.addEventListener('abort', () => {
-        clearTimeout(timeoutId);
-        controller.abort(init.signal?.reason);
-      });
+      controller.abort();
+    } else if (typeof externalSignal.addEventListener === 'function') {
+      externalSignal.addEventListener('abort', handleExternalAbort);
     }
   }
 
@@ -46,7 +67,7 @@ const customFetchWithTimeout: typeof fetch = async (input, init) => {
     });
     return response;
   } catch (error: any) {
-    if (controller.signal.aborted) {
+    if (didTimeout) {
       const err = new Error('Network request timed out. Please check your internet connection.');
       (err as any).name = 'TimeoutError';
       throw err;
@@ -54,6 +75,9 @@ const customFetchWithTimeout: typeof fetch = async (input, init) => {
     throw error;
   } finally {
     clearTimeout(timeoutId);
+    if (externalSignal && typeof externalSignal.removeEventListener === 'function') {
+      externalSignal.removeEventListener('abort', handleExternalAbort);
+    }
   }
 };
 
@@ -142,6 +166,9 @@ export interface ExperienceRow {
   price_unit: string | null;
   entity_name: string | null;
   category: string | null;
+  subcategory?: string | null;
+  promotional_tags?: string[] | null;
+  operating_hours?: string | null;
   availability_status: string | null;
   max_guests?: number | null;
   min_stay_nights?: number | null;
@@ -233,6 +260,57 @@ export interface HostProfileData {
   metadata?: Record<string, unknown> | null;
 }
 
+export interface EventRow {
+  id: string;
+  user_id?: string | null;
+  experience_id?: string | null;
+  title: string | null;
+  description: string | null;
+  category: string | null;
+  event_date: string | null;
+  end_date?: string | null;
+  price: number | null;
+  location?: string | null;
+  image_url?: string | null;
+  start_time?: string | null;
+  organizer_name?: string | null;
+  entry_conditions?: string | null;
+  booking_instructions?: string | null;
+  ticket_link?: string | null;
+  status?: string | null;
+  expires_at?: string | null;
+  reel_id?: string | null;
+  experience?: Pick<
+    ExperienceRow,
+    'id' | 'title' | 'entity_name' | 'location' | 'city' | 'image_url' | 'current_price' | 'price_unit' | 'category'
+  > | null;
+}
+
+export interface SpecialOfferRow {
+  id: string;
+  user_id: string;
+  experience_id?: string | null;
+  title: string;
+  description?: string | null;
+  offer_type: string;
+  discount_label: string;
+  original_price?: number | null;
+  offer_price?: number | null;
+  applicable_schedule?: string | null;
+  terms_conditions?: string | null;
+  redemption_instructions?: string | null;
+  image_url?: string | null;
+  valid_from?: string | null;
+  expires_at: string;
+  status?: string | null;
+  reel_id?: string | null;
+  location?: string | null;
+  experience?: Pick<
+    ExperienceRow,
+    'id' | 'title' | 'entity_name' | 'location' | 'city' | 'image_url' | 'current_price' | 'price_unit' | 'category'
+  > | null;
+}
+
 export interface ReelRow {
   id: string;
   video_url: string | null;
@@ -240,10 +318,15 @@ export interface ReelRow {
   experience_id: string | null;
   user_id: string | null;
   category: string | null;
+  subcategory?: string | null;
+  content_type?: 'experience' | 'event' | 'special_offer' | null;
+  event_id?: string | null;
+  offer_id?: string | null;
   duration: number | null;
   is_live: boolean | null;
   status: string | null;
   created_at?: string | null;
+  expires_at?: string | null;
   lat?: number | null;
   lng?: number | null;
   experience?: Pick<
@@ -251,6 +334,7 @@ export interface ReelRow {
     | 'id'
     | 'title'
     | 'entity_name'
+    | 'category'
     | 'description'
     | 'location'
     | 'city'
@@ -280,6 +364,8 @@ export interface ReelRow {
     ProfileRow,
     'id' | 'full_name' | 'email' | 'avatar_url' | 'verification_status' | 'is_verified' | 'metadata' | 'created_at' | 'bio' | 'role'
   > | null;
+  event?: EventRow | null;
+  offer?: SpecialOfferRow | null;
 }
 
 export interface BookingRow {
@@ -341,18 +427,6 @@ export interface HostBlockedDateRow {
   reason: string | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface EventRow {
-  id: string;
-  title: string | null;
-  description: string | null;
-  category: string | null;
-  event_date: string | null;
-  price: number | null;
-  location?: string | null;
-  image_url?: string | null;
-  start_time?: string | null;
 }
 
 export interface ConversationRow {
@@ -478,4 +552,3 @@ export interface PersonalDataAuditLogRow {
 }
 
 export { resolveAvatarUrl } from '@/lib/avatar';
-

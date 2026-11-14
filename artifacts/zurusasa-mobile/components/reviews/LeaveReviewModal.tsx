@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   KeyboardAvoidingView,
   Modal,
@@ -23,6 +22,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { RatingStars } from '@/components/reviews/RatingStars';
 import { reviewService } from '@/services/reviewService';
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -59,6 +59,7 @@ export function LeaveReviewModal({
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { showAlert } = useCustomAlert();
 
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
@@ -119,15 +120,27 @@ export function LeaveReviewModal({
 
   const handleSubmit = async () => {
     if (!user) {
-      Alert.alert('Sign In Required', 'Please sign in to submit a review.');
+      showAlert({
+        title: 'Sign In Required',
+        message: 'Please sign in to submit a review.',
+        variant: 'info',
+      });
       return;
     }
     if (!comment.trim()) {
-      Alert.alert('Review Text Required', 'Please share a few words about your experience in the review field.');
+      showAlert({
+        title: 'Review Text Required',
+        message: 'Please share a few words about your experience in the review field.',
+        variant: 'warning',
+      });
       return;
     }
     if (!certifiedGenuine) {
-      Alert.alert('Verification Required', 'Please check the box certifying that this review is based on your genuine stay and experience.');
+      showAlert({
+        title: 'Verification Required',
+        message: 'Please check the box certifying that this review is based on your genuine stay and experience.',
+        variant: 'warning',
+      });
       return;
     }
 
@@ -153,11 +166,19 @@ export function LeaveReviewModal({
       if (res) {
         setIsSuccess(true);
       } else {
-        Alert.alert('Error', 'Failed to submit review. Please try again.');
+        showAlert({
+          title: 'Error',
+          message: 'Failed to submit review. Please try again.',
+          variant: 'error',
+        });
       }
     } catch (err) {
       console.warn('Submit review error:', err);
-      Alert.alert('Error', 'Failed to submit review. Please try again.');
+      showAlert({
+        title: 'Error',
+        message: 'Failed to submit review. Please try again.',
+        variant: 'error',
+      });
     } finally {
       setSubmitting(false);
     }

@@ -61,14 +61,27 @@ export function HistoryBottomSheet({ visible, onClose }: HistoryBottomSheetProps
   const [filter, setFilter] = useState<HistoryFilter>('all');
   const [clearedIds, setClearedIds] = useState<Set<string>>(new Set());
   const [isRendered, setIsRendered] = useState(visible);
+  const [isListScrollable, setIsListScrollable] = useState(false);
 
-  // Animation values
+  // Animation & gesture tracking values
   const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const isClosing = useRef(false);
+  const scrollOffsetRef = useRef(0);
+  const bodyDraggingRef = useRef(false);
+  const flatListRef = useRef<FlatList<ReelRow>>(null);
+  const listLayoutHeightRef = useRef(0);
+  const listContentHeightRef = useRef(0);
+
+  const updateScrollableState = useCallback(() => {
+    const canScroll = listContentHeightRef.current > listLayoutHeightRef.current + 4;
+    setIsListScrollable((prev) => (prev === canScroll ? prev : canScroll));
+  }, []);
 
   const openSheet = useCallback(() => {
     isClosing.current = false;
+    scrollOffsetRef.current = 0;
+    bodyDraggingRef.current = false;
     translateY.setValue(SHEET_HEIGHT);
     backdropOpacity.setValue(0);
 
@@ -124,66 +137,147 @@ export function HistoryBottomSheet({ visible, onClose }: HistoryBottomSheetProps
     }
   }, [visible, openSheet, closeSheet, isRendered]);
 
-  // PanResponder for smooth drag-down dismissal on the handle and header area
-  const panResponder = useMemo(
+  const snapBack = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(translateY, {
+        toValue: 0,
+        damping: 24,
+        mass: 0.8,
+        stiffness: 260,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [translateY, backdropOpacity]);
+
+  const handleDragGrant = useCallback(() => {
+    translateY.stopAnimation();
+    backdropOpacity.stopAnimation();
+  }, [translateY, backdropOpacity]);
+
+  const handleDragMove = useCallback(
+    (dy: number) => {
+      if (dy > 0) {
+        translateY.setValue(dy);
+        const progress = Math.max(0, 1 - dy / (SHEET_HEIGHT * 0.65));
+        backdropOpacity.setValue(progress);
+      } else {
+        // Elastic upward drag resistance
+        translateY.setValue(dy * 0.15);
+      }
+    },
+    [translateY, backdropOpacity],
+  );
+
+  const handleDragRelease = useCallback(
+    (dy: number, vy: number) => {
+      if (dy > 75 || (dy > 18 && vy > 0.35)) {
+        closeSheet();
+      } else if (!isClosing.current) {
+        snapBack();
+      }
+    },
+    [closeSheet, snapBack],
+  );
+
+  const handlePanResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gestureState) => {
-          return gestureState.dy > 5 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: handleDragGrant,
+        onPanResponderMove: (_, g) => handleDragMove(g.dy),
+        onPanResponderRelease: (_, g) => handleDragRelease(g.dy, g.vy),
+        onPanResponderTerminate: () => {
+          if (!isClosing.current) snapBack();
         },
+      }),
+    [handleDragGrant, handleDragMove, handleDragRelease, snapBack],
+  );
+
+  const headerPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_, g) =>
+          Math.abs(g.dy) > 3 && Math.abs(g.dy) >= Math.abs(g.dx),
+        onMoveShouldSetPanResponderCapture: (_, g) =>
+          Math.abs(g.dy) > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: handleDragGrant,
+        onPanResponderMove: (_, g) => handleDragMove(g.dy),
+        onPanResponderRelease: (_, g) => handleDragRelease(g.dy, g.vy),
+        onPanResponderTerminate: () => {
+          if (!isClosing.current) snapBack();
+        },
+      }),
+    [handleDragGrant, handleDragMove, handleDragRelease, snapBack],
+  );
+
+  const bodyPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => scrollOffsetRef.current <= 2,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponder: (_, g) => {
+          const shouldGrab =
+            scrollOffsetRef.current <= 2 && g.dy > 3 && g.dy > Math.abs(g.dx);
+          if (shouldGrab) {
+            flatListRef.current?.setNativeProps({ scrollEnabled: false });
+          }
+          return shouldGrab;
+        },
+        onMoveShouldSetPanResponderCapture: (_, g) => {
+          const shouldGrab =
+            scrollOffsetRef.current <= 2 && g.dy > 3 && g.dy > Math.abs(g.dx);
+          if (shouldGrab) {
+            flatListRef.current?.setNativeProps({ scrollEnabled: false });
+          }
+          return shouldGrab;
+        },
+        onPanResponderTerminationRequest: () => !bodyDraggingRef.current,
         onPanResponderGrant: () => {
-          translateY.stopAnimation();
-          backdropOpacity.stopAnimation();
+          bodyDraggingRef.current = false;
+          handleDragGrant();
         },
-        onPanResponderMove: (_, gestureState) => {
-          if (gestureState.dy > 0) {
-            translateY.setValue(gestureState.dy);
-            const progress = Math.max(0, 1 - gestureState.dy / (SHEET_HEIGHT * 0.65));
-            backdropOpacity.setValue(progress);
-          } else {
-            // Elastic upward drag resistance
-            translateY.setValue(gestureState.dy * 0.15);
+        onPanResponderMove: (_, g) => {
+          if (g.dy > 0) {
+            if (!bodyDraggingRef.current && g.dy > 3 && g.dy > Math.abs(g.dx)) {
+              flatListRef.current?.setNativeProps({ scrollEnabled: false });
+            }
+            bodyDraggingRef.current = true;
+            handleDragMove(g.dy);
+          } else if (bodyDraggingRef.current) {
+            handleDragMove(g.dy);
           }
         },
-        onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dy > 100 || gestureState.vy > 0.4) {
-            closeSheet();
-          } else {
-            Animated.parallel([
-              Animated.spring(translateY, {
-                toValue: 0,
-                damping: 24,
-                mass: 0.8,
-                stiffness: 260,
-                useNativeDriver: true,
-              }),
-              Animated.timing(backdropOpacity, {
-                toValue: 1,
-                duration: 180,
-                useNativeDriver: true,
-              }),
-            ]).start();
+        onPanResponderRelease: (_, g) => {
+          const wasDragging = bodyDraggingRef.current;
+          bodyDraggingRef.current = false;
+          flatListRef.current?.setNativeProps({
+            scrollEnabled: listContentHeightRef.current > listLayoutHeightRef.current + 4,
+          });
+          if (wasDragging) {
+            handleDragRelease(g.dy, g.vy);
           }
         },
         onPanResponderTerminate: () => {
-          Animated.parallel([
-            Animated.spring(translateY, {
-              toValue: 0,
-              damping: 24,
-              mass: 0.8,
-              stiffness: 260,
-              useNativeDriver: true,
-            }),
-            Animated.timing(backdropOpacity, {
-              toValue: 1,
-              duration: 180,
-              useNativeDriver: true,
-            }),
-          ]).start();
+          bodyDraggingRef.current = false;
+          flatListRef.current?.setNativeProps({
+            scrollEnabled: listContentHeightRef.current > listLayoutHeightRef.current + 4,
+          });
+          if (!isClosing.current) snapBack();
         },
       }),
-    [translateY, backdropOpacity, closeSheet]
+    [handleDragGrant, handleDragMove, handleDragRelease, snapBack],
   );
 
   // Filter items by category & cleared status
@@ -353,124 +447,133 @@ export function HistoryBottomSheet({ visible, onClose }: HistoryBottomSheetProps
             },
           ]}
         >
-          {/* Header Section with Drag Handle & Close */}
+          {/* Header Section with Drag Handle & Filter Controls */}
           <View style={styles.headerSection}>
-            {/* Top Drag Handle Bar with PanResponder */}
-            <View {...panResponder.panHandlers} style={styles.handleArea}>
+            {/* Top Drag Handle Bar */}
+            <View {...handlePanResponder.panHandlers} collapsable={false} style={styles.handleArea}>
               <View style={[styles.dragHandle, { backgroundColor: isDark ? '#3F3F46' : '#D1D5DB' }]} />
             </View>
 
-            {/* Top Action Row: Title, Clear all, Close 'X' */}
-            <View style={styles.topRow}>
-              <View {...panResponder.panHandlers} style={styles.titleDragArea}>
-                <Text style={[styles.sheetTitle, { color: colors.text }]}>History</Text>
-                <Text style={[styles.sheetSubtitle, { color: colors.mutedForeground }]}>
-                  Recently viewed stays and experiences
-                </Text>
-              </View>
+            <View {...headerPanResponder.panHandlers} collapsable={false}>
+              {/* Top Action Row: Title & Clear all */}
+              <View style={styles.topRow}>
+                <View style={styles.titleDragArea}>
+                  <Text style={[styles.sheetTitle, { color: colors.text }]}>History</Text>
+                  <Text style={[styles.sheetSubtitle, { color: colors.mutedForeground }]}>
+                    Recently viewed stays and experiences
+                  </Text>
+                </View>
 
-              <View style={styles.actionButtonsRow}>
                 {rawList.length > 0 && (
                   <Pressable onPress={handleClearAll} style={styles.clearBtn} hitSlop={8}>
                     <Text style={[styles.clearBtnText, { color: colors.text }]}>Clear all</Text>
                   </Pressable>
                 )}
-
-                <Pressable
-                  testID="history-sheet-close-btn"
-                  onPress={closeSheet}
-                  style={[styles.closeCircleBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}
-                  hitSlop={10}
-                >
-                  <Feather name="x" size={18} color={colors.text} />
-                </Pressable>
               </View>
-            </View>
 
-            {/* 3-Tab Filter Pills */}
-            {rawList.length > 0 && (
-              <View style={styles.segmentRow}>
-                {(
-                  [
-                    { id: 'all', label: 'All history' },
-                    { id: 'stays', label: 'Stays' },
-                    { id: 'experiences', label: 'Experiences' },
-                  ] as const
-                ).map((chip) => {
-                  const isActive = filter === chip.id;
-                  return (
-                    <Pressable
-                      key={chip.id}
-                      onPress={() => setFilter(chip.id)}
-                      style={[
-                        styles.segmentPill,
-                        {
-                          backgroundColor: isActive
-                            ? colors.text
-                            : isDark
-                            ? '#27272A'
-                            : '#F7F7F7',
-                          borderColor: colors.border,
-                        },
-                      ]}
-                    >
-                      <Text
+              {/* 3-Tab Filter Pills */}
+              {rawList.length > 0 && (
+                <View style={styles.segmentRow}>
+                  {(
+                    [
+                      { id: 'all', label: 'All history' },
+                      { id: 'stays', label: 'Stays' },
+                      { id: 'experiences', label: 'Experiences' },
+                    ] as const
+                  ).map((chip) => {
+                    const isActive = filter === chip.id;
+                    return (
+                      <Pressable
+                        key={chip.id}
+                        onPress={() => setFilter(chip.id)}
                         style={[
-                          styles.segmentPillText,
+                          styles.segmentPill,
                           {
-                            color: isActive ? colors.background : colors.mutedForeground,
-                            fontFamily: isActive ? 'DMSans_700Bold' : 'DMSans_500Medium',
+                            backgroundColor: isActive
+                              ? colors.text
+                              : isDark
+                              ? '#27272A'
+                              : '#F7F7F7',
+                            borderColor: colors.border,
                           },
                         ]}
-                        numberOfLines={1}
                       >
-                        {chip.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
+                        <Text
+                          style={[
+                            styles.segmentPillText,
+                            {
+                              color: isActive ? colors.background : colors.mutedForeground,
+                              fontFamily: isActive ? 'DMSans_700Bold' : 'DMSans_500Medium',
+                            },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {chip.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
           </View>
 
           {/* List of History Items */}
-          <FlatList
-            data={historyList}
-            keyExtractor={(item) => item.id}
-            renderItem={renderHistoryItem}
-            contentContainerStyle={[
-              styles.listContent,
-              { paddingBottom: Math.max(insets.bottom, 24) + 24 },
-            ]}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              isLoading ? (
-                <View style={styles.loadingWrapper}>
-                  <Skeleton style={{ height: 110, borderRadius: 16, marginBottom: 14 }} />
-                  <Skeleton style={{ height: 110, borderRadius: 16, marginBottom: 14 }} />
-                  <Skeleton style={{ height: 110, borderRadius: 16 }} />
-                </View>
-              ) : (
-                <View style={styles.emptyContainer}>
-                  <View style={[styles.emptyIconCircle, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
-                    <MaterialCommunityIcons name="history" size={40} color="#717171" />
+          <View style={styles.listWrapper} {...bodyPanResponder.panHandlers} collapsable={false}>
+            <FlatList
+              ref={flatListRef}
+              data={historyList}
+              keyExtractor={(item) => item.id}
+              renderItem={renderHistoryItem}
+              bounces={false}
+              overScrollMode="never"
+              scrollEnabled={isListScrollable && !isLoading}
+              scrollEventThrottle={16}
+              onLayout={(e) => {
+                listLayoutHeightRef.current = e.nativeEvent.layout.height;
+                updateScrollableState();
+              }}
+              onContentSizeChange={(_, h) => {
+                listContentHeightRef.current = h;
+                updateScrollableState();
+              }}
+              onScroll={(e) => {
+                scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+              }}
+              contentContainerStyle={[
+                styles.listContent,
+                { paddingBottom: Math.max(insets.bottom, 24) + 24 },
+              ]}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                isLoading ? (
+                  <View style={styles.loadingWrapper}>
+                    <Skeleton style={{ height: 110, borderRadius: 16, marginBottom: 14 }} />
+                    <Skeleton style={{ height: 110, borderRadius: 16, marginBottom: 14 }} />
+                    <Skeleton style={{ height: 110, borderRadius: 16 }} />
                   </View>
-                  <Text style={[styles.emptyTitle, { color: colors.text }]}>No history yet</Text>
-                  <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-                    Explore stays and experiences across the coast to keep track of your recently viewed places.
-                  </Text>
-                  <Pressable
-                    onPress={() => handleItemPress()}
-                    style={[styles.exploreBtn, { backgroundColor: colors.text }]}
-                  >
-                    <Text style={[styles.exploreBtnText, { color: colors.background }]}>
-                      Explore coastal stays
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <View style={[styles.emptyIconCircle, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
+                      <MaterialCommunityIcons name="history" size={40} color="#717171" />
+                    </View>
+                    <Text style={[styles.emptyTitle, { color: colors.text }]}>No history yet</Text>
+                    <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
+                      Explore stays and experiences across the coast to keep track of your recently viewed places.
                     </Text>
-                  </Pressable>
-                </View>
-              )
-            }
-          />
+                    <Pressable
+                      onPress={() => handleItemPress()}
+                      style={[styles.exploreBtn, { backgroundColor: colors.text }]}
+                    >
+                      <Text style={[styles.exploreBtnText, { color: colors.background }]}>
+                        Explore coastal stays
+                      </Text>
+                    </Pressable>
+                  </View>
+                )
+              }
+            />
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -503,12 +606,12 @@ const styles = StyleSheet.create({
   },
   handleArea: {
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingTop: 14,
+    paddingBottom: 14,
     width: '100%',
   },
   dragHandle: {
-    width: 46,
+    width: 48,
     height: 5,
     borderRadius: 3,
   },
@@ -532,11 +635,6 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_400Regular',
     marginTop: 2,
   },
-  actionButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
   clearBtn: {
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -546,12 +644,8 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_500Medium',
     textDecorationLine: 'underline',
   },
-  closeCircleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+  listWrapper: {
+    flex: 1,
   },
   segmentRow: {
     flexDirection: 'row',
@@ -568,6 +662,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   segmentPillText: {
+    fontFamily: 'DMSans_500Medium',
     fontSize: 13,
   },
   listContent: {

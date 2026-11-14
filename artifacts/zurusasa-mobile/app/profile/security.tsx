@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -16,6 +15,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
@@ -29,6 +29,7 @@ export default function LoginAndSecurityScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { showAlert } = useCustomAlert();
 
   const [activeTab, setActiveTab] = useState<'login' | 'shared_access'>('login');
   const [pageLoading, setPageLoading] = useState(true);
@@ -105,10 +106,12 @@ export default function LoginAndSecurityScreen() {
       setPasskeyEnabled(true);
       const passkeyRes = await passkeyService.listPasskeys();
       setPasskeys(passkeyRes.passkeys);
-      Alert.alert(
-        'Passkey Enabled',
-        'Your passkey is now registered. You can use Face ID, Touch ID, or your device screen lock to sign in quickly and securely.'
-      );
+      showAlert({
+        title: 'Passkey Enabled',
+        message: 'Your passkey is now registered. You can use Face ID, Touch ID, or your device screen lock to sign in quickly and securely.',
+        variant: 'success',
+        icon: 'shield',
+      });
     } catch (err: any) {
       setPasskeyErrorMsg(err?.message || 'Failed to register passkey.');
       setPasskeySheetVisible(true);
@@ -119,10 +122,12 @@ export default function LoginAndSecurityScreen() {
 
   /* Handle Passkey Delete */
   const handleRemovePasskey = () => {
-    Alert.alert(
-      'Remove Passkey',
-      'Are you sure you want to remove your passkey from this device? You can add it back anytime.',
-      [
+    showAlert({
+      title: 'Remove Passkey',
+      message: 'Are you sure you want to remove your passkey from this device? You can add it back anytime.',
+      variant: 'destructive',
+      icon: 'trash-2',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
@@ -134,26 +139,42 @@ export default function LoginAndSecurityScreen() {
               await passkeyService.removePasskey(firstId);
               setPasskeyEnabled(false);
               setPasskeys([]);
-              Alert.alert('Passkey Removed', 'Your passkey has been removed.');
+              showAlert({
+                title: 'Passkey Removed',
+                message: 'Your passkey has been removed.',
+                variant: 'info',
+              });
             } catch (e: any) {
-              Alert.alert('Error', e?.message || 'Failed to remove passkey.');
+              showAlert({
+                title: 'Error',
+                message: e?.message || 'Failed to remove passkey.',
+                variant: 'error',
+              });
             } finally {
               setPasskeyLoading(false);
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   /* Handle Password Create / Update */
   const handleSavePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
-      Alert.alert('Invalid Password', 'Password must be at least 6 characters.');
+      showAlert({
+        title: 'Invalid Password',
+        message: 'Password must be at least 6 characters.',
+        variant: 'warning',
+      });
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Password Mismatch', 'Passwords do not match.');
+      showAlert({
+        title: 'Password Mismatch',
+        message: 'Passwords do not match.',
+        variant: 'warning',
+      });
       return;
     }
     setPasswordLoading(true);
@@ -164,9 +185,18 @@ export default function LoginAndSecurityScreen() {
       setPasswordModalVisible(false);
       setNewPassword('');
       setConfirmPassword('');
-      Alert.alert('Password Saved', 'Your account password has been updated.');
+      showAlert({
+        title: 'Password Saved',
+        message: 'Your account password has been updated.',
+        variant: 'success',
+        icon: 'shield',
+      });
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to update password.');
+      showAlert({
+        title: 'Error',
+        message: err?.message || 'Failed to update password.',
+        variant: 'error',
+      });
     } finally {
       setPasswordLoading(false);
     }
@@ -183,11 +213,19 @@ export default function LoginAndSecurityScreen() {
           .eq('id', user.id);
       }
       setDeactivateModalVisible(false);
-      Alert.alert('Account Deactivated', 'Your account has been deactivated. You have been logged out.');
+      showAlert({
+        title: 'Account Deactivated',
+        message: 'Your account has been deactivated. You have been logged out.',
+        variant: 'info',
+      });
       if (signOut) await signOut();
       router.replace('/auth');
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to deactivate account.');
+      showAlert({
+        title: 'Error',
+        message: err?.message || 'Failed to deactivate account.',
+        variant: 'error',
+      });
     } finally {
       setDeactivating(false);
     }
@@ -304,10 +342,11 @@ export default function LoginAndSecurityScreen() {
               <Pressable
                 testID="google-disconnect-btn"
                 onPress={() => {
-                  Alert.alert(
-                    'Social Account',
-                    'Your Google account is linked to your ZuruSasa identity for easy one-tap sign in.'
-                  );
+                  showAlert({
+                    title: 'Social Account',
+                    message: 'Your Google account is linked to your ZuruSasa identity for easy one-tap sign in.',
+                    variant: 'info',
+                  });
                 }}
                 hitSlop={8}
               >
@@ -348,7 +387,7 @@ export default function LoginAndSecurityScreen() {
                 </Text>
               </View>
               <Pressable
-                onPress={() => Alert.alert('Session Terminated', 'Logged out of Android 10 Chrome Mobile session.')}
+                onPress={() => showAlert({ title: 'Session Terminated', message: 'Logged out of Android 10 Chrome Mobile session.', variant: 'info' })}
                 hitSlop={8}
               >
                 <Text style={[styles.underlinedActionText, { color: colors.text }]}>Log out</Text>
@@ -367,7 +406,7 @@ export default function LoginAndSecurityScreen() {
                 </Text>
               </View>
               <Pressable
-                onPress={() => Alert.alert('Session Terminated', 'Logged out of iPad OS Safari session.')}
+                onPress={() => showAlert({ title: 'Session Terminated', message: 'Logged out of iPad OS Safari session.', variant: 'info' })}
                 hitSlop={8}
               >
                 <Text style={[styles.underlinedActionText, { color: colors.text }]}>Log out</Text>
@@ -386,7 +425,7 @@ export default function LoginAndSecurityScreen() {
                 </Text>
               </View>
               <Pressable
-                onPress={() => Alert.alert('Session Terminated', 'Logged out of Windows Chrome session.')}
+                onPress={() => showAlert({ title: 'Session Terminated', message: 'Logged out of Windows Chrome session.', variant: 'info' })}
                 hitSlop={8}
               >
                 <Text style={[styles.underlinedActionText, { color: colors.text }]}>Log out</Text>
@@ -566,7 +605,7 @@ export default function LoginAndSecurityScreen() {
 
             <Pressable
               onPress={() => {
-                Alert.alert('Invitation Sent', `Co-host invitation sent to ${coHostEmail}`);
+                showAlert({ title: 'Invitation Sent', message: `Co-host invitation sent to ${coHostEmail}`, variant: 'success' });
                 setCoHostEmail('');
                 setSharedAccessModal(false);
               }}
@@ -606,15 +645,10 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.5,
     marginBottom: 20,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -633,39 +667,25 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 16,
     color: '#717171',
-    fontWeight: '500',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   tabTextActive: {
     color: '#111111',
-    fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   tabContentBlock: {
     width: '100%',
   },
   sectionHeader: {
     fontSize: 22,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.3,
     marginBottom: 8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   tabDescription: {
     fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 22,
     marginBottom: 24,
@@ -684,35 +704,21 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     fontSize: 16,
-    fontWeight: '500',
     color: '#1E1E1E',
     marginBottom: 4,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   itemSubtitle: {
     fontSize: 14,
     color: '#717171',
     lineHeight: 20,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_400Regular',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_400Regular',
   },
   underlinedActionText: {
     fontSize: 15,
-    fontWeight: '600',
     color: '#111111',
     textDecorationLine: 'underline',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
 
   /* Device History Styles */
@@ -734,14 +740,9 @@ const styles = StyleSheet.create({
   },
   deviceTitle: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#111111',
     marginRight: 8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   currentSessionBadge: {
     backgroundColor: '#F1F5F9',
@@ -751,12 +752,13 @@ const styles = StyleSheet.create({
   },
   currentSessionBadgeText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#475569',
     letterSpacing: 0.3,
   },
   deviceSubtitle: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 18,
   },
@@ -776,15 +778,10 @@ const styles = StyleSheet.create({
   },
   modalHeaderTitle: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#111111',
     maxWidth: '70%',
     textAlign: 'center',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   modalScroll: {
     flex: 1,
@@ -796,24 +793,20 @@ const styles = StyleSheet.create({
   },
   modalHeadline: {
     fontSize: 22,
-    fontWeight: '700',
     color: '#111111',
     marginBottom: 8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   modalSub: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
     marginBottom: 24,
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
     color: '#222222',
     marginBottom: 8,
     marginTop: 12,
@@ -824,6 +817,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
     color: '#111111',
     borderWidth: 1,
     borderColor: '#EAEAEA',
@@ -840,12 +834,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   dangerBtn: {
     backgroundColor: '#DC2626',
@@ -858,11 +847,6 @@ const styles = StyleSheet.create({
   dangerBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
 });

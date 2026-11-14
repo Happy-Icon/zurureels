@@ -18,9 +18,119 @@ export const createReelStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'DMSans_700Bold',
     color: '#222222',
+    flex: 1,
+    textAlign: 'center',
+  },
+  stepCounterPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  stepCounterText: {
+    fontSize: 11.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  stepperContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    gap: 10,
+    borderBottomWidth: 1,
+  },
+  stepProgressBarTrack: {
+    height: 3.5,
+    borderRadius: 2,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  stepProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#F26522',
+    borderRadius: 2,
+  },
+  stepperPillsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  stepPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  stepPillNum: {
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepPillNumText: {
+    fontSize: 10,
+    fontFamily: 'DMSans_700Bold',
+  },
+  stepPillText: {
+    fontSize: 11.5,
+    fontFamily: 'DMSans_600SemiBold',
+  },
+
+  /* Full-Page Format Chooser (Airbnb Entry Flow) */
+  chooserHeroWrap: {
+    gap: 6,
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  chooserEyebrow: {
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
+    letterSpacing: 0.8,
+    color: '#F26522',
+  },
+  chooserHeroTitle: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontFamily: 'DMSans_700Bold',
+  },
+  chooserHeroSub: {
+    fontSize: 13.5,
+    lineHeight: 19,
+    fontFamily: 'DMSans_400Regular',
+  },
+  chooserCardsStack: {
+    gap: 14,
+  },
+  chooserCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  chooserIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chooserCardTitle: {
+    fontSize: 16,
+    fontFamily: 'DMSans_700Bold',
+  },
+  chooserCardSub: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontFamily: 'DMSans_400Regular',
+    marginTop: 3,
   },
   progressBarTrack: {
     height: 3,
@@ -45,6 +155,88 @@ export const createReelStyles = StyleSheet.create({
   },
   divider: {
     height: 1,
+  },
+
+  /* Publishing Type Cards (Step 1) */
+  formatCardsStack: {
+    gap: 10,
+  },
+  formatCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+  },
+  formatIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formatCardTitle: {
+    fontSize: 14.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  formatCardSub: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    marginTop: 2,
+  },
+
+  /* 2x2 Primary Experience Category Grid */
+  primaryCatGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  primaryCatCard: {
+    width: '48.4%',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    gap: 8,
+  },
+  primaryCatIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryCatTitle: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+  },
+  primaryCatSub: {
+    fontSize: 11.5,
+    lineHeight: 15,
+    fontFamily: 'DMSans_400Regular',
+  },
+
+  /* Establishment Link Pill */
+  estChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  estChipText: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_600SemiBold',
+  },
+  infoCalloutCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 13,
+    borderRadius: 14,
+    borderWidth: 1,
   },
 
   /* Media Action Cards */
@@ -158,15 +350,20 @@ export const createReelStyles = StyleSheet.create({
 
   /* Categories & Locations */
   categoryChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderRadius: 20,
+    borderWidth: 1,
   },
   categoryChipSelected: {
     backgroundColor: '#F26522',
+    borderColor: '#F26522',
   },
   categoryChipText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontFamily: 'DMSans_500Medium',
   },
   categoryChipTextSelected: {
@@ -319,6 +516,124 @@ export const createReelStyles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'DMSans_500Medium',
   },
+  badgePill: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  badgePillText: {
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
+  },
+
+  /* Quick Presets Row */
+  presetChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  presetChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    fontSize: 11.5,
+    fontFamily: 'DMSans_600SemiBold',
+  },
+
+  /* Compact Policy Pills */
+  policyPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  policyPill: {
+    flex: 1,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  policyPillText: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  policyDescCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+
+  /* Collapsible Accordion Cards */
+  accordionCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  accordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+  },
+  accordionIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accordionTitle: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+  },
+  accordionSummary: {
+    fontSize: 11.5,
+    fontFamily: 'DMSans_400Regular',
+    marginTop: 2,
+  },
+  accordionBody: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    paddingTop: 10,
+    gap: 12,
+    borderTopWidth: 1,
+  },
+
+  /* Summary Card */
+  summaryCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    gap: 8,
+  },
+  summaryCardTitle: {
+    fontSize: 13.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  summaryCardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+  },
+  summaryCardLabel: {
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+  },
+  summaryCardValue: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_700Bold',
+    flex: 1,
+    textAlign: 'right',
+  },
 
   /* Bottom Dock */
   bottomDock: {
@@ -330,16 +645,51 @@ export const createReelStyles = StyleSheet.create({
     paddingTop: 12,
     paddingHorizontal: 20,
   },
+  bottomDockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  backStepBtn: {
+    height: 50,
+    paddingHorizontal: 18,
+    borderRadius: 25,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  backStepBtnText: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+  },
+  continueBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#F26522',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  continueBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+  },
   publishBtn: {
-    height: 52,
-    borderRadius: 26,
+    flex: 1,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#F26522',
     alignItems: 'center',
     justifyContent: 'center',
   },
   publishBtnText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14.5,
     fontFamily: 'DMSans_700Bold',
   },
   uploadingRow: {

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   PanResponder,
   Pressable,
@@ -20,8 +19,11 @@ import * as Haptics from 'expo-haptics';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { resolveAvatarUrl } from '@/lib/avatar';
 import {
+  extractEventFromReel,
+  extractOfferFromReel,
   useReelInteractions,
   useToggleFollow,
   useToggleLike,
@@ -30,6 +32,13 @@ import {
 } from '@/lib/queries';
 import { BookingSheet } from '@/components/BookingSheet';
 import { EnquireModal } from '@/components/EnquireModal';
+import { EventDetailSheet } from '@/components/modals/EventDetailSheet';
+import { OfferDetailSheet } from '@/components/modals/OfferDetailSheet';
+import {
+  formatEventScheduleBadge,
+  getCategoryDisplayMeta,
+  resolveReelContentType,
+} from '@/constants/taxonomy';
 import { supabase, type ReelRow } from '@/lib/supabase';
 
 export const ZURU_ORANGE = '#EE7D30';
@@ -142,6 +151,7 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile, viewMode } = useAuth();
+  const { showAlert } = useCustomAlert();
   const isScreenFocused = useIsFocused();
   const toggleLike = useToggleLike();
   const toggleSave = useToggleSave();
@@ -150,6 +160,8 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
   const [muted, setMuted] = useState<boolean>(globalMuted);
   const [enquireOpen, setEnquireOpen] = useState<boolean>(false);
   const [bookingOpen, setBookingOpen] = useState<boolean>(false);
+  const [eventSheetOpen, setEventSheetOpen] = useState<boolean>(false);
+  const [offerSheetOpen, setOfferSheetOpen] = useState<boolean>(false);
 
   const hostId = reel.user_id ?? reel.host?.id ?? null;
   const { data: interFallback } = useReelInteractions(
@@ -170,7 +182,7 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
     if (!isActive) setUserPaused(false);
   }, [isActive]);
 
-  const isAnyModalOpen = enquireOpen || bookingOpen;
+  const isAnyModalOpen = enquireOpen || bookingOpen || eventSheetOpen || offerSheetOpen;
   const shouldPlay = isActive && isScreenFocused && viewMode === 'guest' && !isAnyModalOpen && !userPaused;
 
   const toggleMute = () => {
@@ -374,6 +386,39 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
   const priceUnit = exp?.price_unit ?? 'person';
   const bookedOut = exp?.availability_status === 'booked_out';
 
+  const contentType = resolveReelContentType(reel);
+  const subcategory = reel.subcategory || (meta.subcategory as string | undefined) || null;
+  const catMeta = getCategoryDisplayMeta(
+    reel.category || exp?.category,
+    contentType,
+    subcategory,
+  );
+  const eventDetails = useMemo(() => extractEventFromReel(reel), [reel]);
+  const offerDetails = useMemo(() => extractOfferFromReel(reel), [reel]);
+  const formatBadgeLabel =
+    contentType === 'event'
+      ? `EVENT · ${formatEventScheduleBadge(
+          eventDetails?.event_date,
+          eventDetails?.start_time,
+        ).toUpperCase()}`
+      : contentType === 'special_offer'
+      ? `SPECIAL OFFER · ${String(offerDetails?.discount_label || 'DEAL').toUpperCase()}`
+      : catMeta.label.toUpperCase();
+
+  const handlePrimaryAction = () => {
+    if (contentType === 'event' && eventDetails) {
+      setEventSheetOpen(true);
+      return;
+    }
+    if (contentType === 'special_offer' && offerDetails) {
+      setOfferSheetOpen(true);
+      return;
+    }
+    if (!bookedOut && exp?.id) {
+      setBookingOpen(true);
+    }
+  };
+
   const baseBottom = Math.max(80, insets.bottom + 76);
   const railBottom = baseBottom + 120;
 
@@ -453,19 +498,38 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
   const onEnquire = () => {
     if (!requireAuth()) return;
     if (!hostId) {
-      Alert.alert('Host unavailable', 'This reel has no host to message.');
+      showAlert({
+        title: 'Host Unavailable',
+        message: 'This reel has no host to message.',
+        variant: 'info',
+      });
       return;
     }
     if (hostId === user?.id) {
-      Alert.alert('This is your reel', 'You cannot enquire on your own listing.');
+      showAlert({
+        title: 'This Is Your Reel',
+        message: 'You cannot enquire on your own listing.',
+        variant: 'info',
+      });
       return;
     }
     setEnquireOpen(true);
   };
 
   const onBook = () => {
-    if (bookedOut || !exp?.id) return;
-    setBookingOpen(true);
+    if (bookedOut) return;
+    handlePrimaryAction();
+  };
+
+  const handleOpenLinkedEstablishment = (_linkedExpId: string, linkedHostId?: string | null) => {
+    const targetHostId = linkedHostId || hostId;
+    if (targetHostId) {
+      router.push(`/profile/${targetHostId}` as any);
+      return;
+    }
+    if (exp?.id) {
+      setBookingOpen(true);
+    }
   };
 
   return (
@@ -671,19 +735,14 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
 
         <Pressable
           testID={`listing-details-${reel.id}`}
-          onPress={() => {
-            setBookingOpen(true);
-          }}
+          onPress={handlePrimaryAction}
           style={{ gap: 4 }}
         >
-          {/* Category Glass Pill */}
-          {reel.category ? (
-            <View style={styles.categoryGlassPill}>
-              <Text style={styles.categoryGlassText}>
-                {(reel.category ?? 'Reel').toUpperCase().replace(/_/g, ' ')}
-              </Text>
-            </View>
-          ) : null}
+          {/* Format / Category Glass Pill */}
+          <View style={[styles.categoryGlassPill, { backgroundColor: catMeta.badgeBg }]}>
+            <Ionicons name={catMeta.icon} size={12} color="#FFFFFF" />
+            <Text style={styles.categoryGlassText}>{formatBadgeLabel}</Text>
+          </View>
 
           {/* Title & Rating Row */}
           <View style={styles.titleRatingRow}>
@@ -698,14 +757,32 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
 
           {/* Location Row */}
           <View style={styles.locationRow}>
-            <Feather name="map-pin" size={12} color="rgba(255,255,255,0.85)" />
+            <Ionicons name="location-outline" size={13} color="rgba(255,255,255,0.85)" />
             <Text style={styles.locationText} numberOfLines={1}>
               {exp?.location ?? 'Kenyan Coast'}
             </Text>
           </View>
 
           {/* Price Row */}
-          {priceAmount != null ? (
+          {contentType === 'event' && Number(priceAmount ?? 0) === 0 ? (
+            <Text style={styles.priceText}>Free Entry</Text>
+          ) : contentType === 'special_offer' && offerDetails?.original_price ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text
+                style={[
+                  styles.priceUnitText,
+                  { textDecorationLine: 'line-through', color: 'rgba(255,255,255,0.65)' },
+                ]}
+              >
+                KES {Number(offerDetails.original_price).toLocaleString()}
+              </Text>
+              <Text style={styles.priceText}>
+                {priceAmount != null && Number(priceAmount) > 0
+                  ? `KES ${Number(priceAmount).toLocaleString()}`
+                  : offerDetails.discount_label}
+              </Text>
+            </View>
+          ) : priceAmount != null ? (
             <Text style={styles.priceText}>
               KES {Number(priceAmount).toLocaleString()}
               <Text style={styles.priceUnitText}> / {priceUnit}</Text>
@@ -715,7 +792,7 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
 
         {/* 5. Bottom Action Dock (Primary Dual Buttons) */}
         <View style={styles.actionDockRow}>
-          {exp?.id ? (
+          {exp?.id || eventDetails || offerDetails ? (
             <Pressable
               testID={`book-button-${reel.id}`}
               onPress={onBook}
@@ -738,7 +815,7 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
                   bookedOut ? { color: 'rgba(255,255,255,0.55)' } : null,
                 ]}
               >
-                {bookedOut ? 'Fully Booked' : booked ? 'Booked ✓' : 'Book Now'}
+                {bookedOut ? 'Fully Booked' : booked ? 'Booked ✓' : catMeta.primaryCtaLabel}
               </Text>
             </Pressable>
           ) : null}
@@ -763,6 +840,42 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
         onClose={() => setBookingOpen(false)}
         onSuccess={() => setBooked(true)}
       />
+
+      {eventDetails ? (
+        <EventDetailSheet
+          visible={eventSheetOpen}
+          event={eventDetails}
+          reel={reel}
+          onClose={() => setEventSheetOpen(false)}
+          onBookTicket={
+            exp?.id
+              ? () => {
+                  setEventSheetOpen(false);
+                  setBookingOpen(true);
+                }
+              : undefined
+          }
+          onOpenEstablishment={handleOpenLinkedEstablishment}
+        />
+      ) : null}
+
+      {offerDetails ? (
+        <OfferDetailSheet
+          visible={offerSheetOpen}
+          offer={offerDetails}
+          reel={reel}
+          onClose={() => setOfferSheetOpen(false)}
+          onClaimOffer={
+            exp?.id
+              ? () => {
+                  setOfferSheetOpen(false);
+                  setBookingOpen(true);
+                }
+              : undefined
+          }
+          onOpenEstablishment={handleOpenLinkedEstablishment}
+        />
+      ) : null}
 
       <EnquireModal
         visible={enquireOpen}
@@ -881,10 +994,13 @@ const styles = StyleSheet.create({
   },
   categoryGlassPill: {
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   categoryGlassText: {
     color: '#FFFFFF',

@@ -141,6 +141,7 @@ const styles = StyleSheet.create({
     ...AI_SHADOW.subtle,
   },
   text: {
+    fontFamily: AI_FONTS.regular,
     fontSize: 14.5,
     lineHeight: 21,
     letterSpacing: -0.1,

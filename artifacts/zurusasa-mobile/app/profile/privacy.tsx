@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -16,6 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase, PersonalDataRequestRow } from '@/lib/supabase';
@@ -30,6 +30,7 @@ export default function PrivacySettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { showAlert } = useCustomAlert();
 
   const [loading, setLoading] = useState(true);
 
@@ -131,11 +132,19 @@ export default function PrivacySettingsScreen() {
           .eq('id', user.id);
       }
       setDeleteModalVisible(false);
-      Alert.alert('Account Deletion Scheduled', 'Your account has been scheduled for permanent deletion.');
+      showAlert({
+        title: 'Account Deletion Scheduled',
+        message: 'Your account has been scheduled for permanent deletion.',
+        variant: 'info',
+      });
       if (signOut) await signOut();
       router.replace('/auth');
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to request account deletion.');
+      showAlert({
+        title: 'Error',
+        message: err?.message || 'Failed to request account deletion.',
+        variant: 'error',
+      });
     } finally {
       setDeleting(false);
     }
@@ -499,26 +508,17 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.5,
     marginBottom: 8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   pageSubtitle: {
     fontSize: 15,
     color: '#484848',
     lineHeight: 22,
     marginBottom: 24,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_400Regular',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_400Regular',
   },
   sectionsBlock: {
     width: '100%',
@@ -528,18 +528,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.3,
     marginBottom: 12,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   sectionSub: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
     marginBottom: 16,
@@ -564,35 +560,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#1E1E1E',
     lineHeight: 22,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   toggleMainTitle: {
     fontSize: 15,
-    fontWeight: '500',
     color: '#1E1E1E',
     marginBottom: 2,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   toggleSubText: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 18,
   },
   exampleText: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
   },
   learnMoreLink: {
     color: '#111111',
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
     textDecorationLine: 'underline',
   },
   dividerLine: {
@@ -615,13 +604,8 @@ const styles = StyleSheet.create({
   },
   cardBtnText: {
     fontSize: 15,
-    fontWeight: '500',
     color: '#111111',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
 
   /* Dialog Styles */
@@ -640,12 +624,13 @@ const styles = StyleSheet.create({
   },
   infoDialogTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
     marginBottom: 8,
   },
   infoDialogBody: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#4B5563',
     lineHeight: 20,
     marginBottom: 20,
@@ -660,7 +645,7 @@ const styles = StyleSheet.create({
   infoDialogBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
   },
 
   /* Delete Modal */
@@ -686,7 +671,7 @@ const styles = StyleSheet.create({
   },
   modalHeaderTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
     color: '#111111',
     maxWidth: '70%',
     textAlign: 'center',
@@ -701,11 +686,12 @@ const styles = StyleSheet.create({
   },
   modalHeadline: {
     fontSize: 22,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     marginBottom: 8,
   },
   modalSub: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
     marginBottom: 24,
@@ -721,6 +707,6 @@ const styles = StyleSheet.create({
   dangerBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
 });

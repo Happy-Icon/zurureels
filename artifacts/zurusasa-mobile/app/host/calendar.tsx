@@ -560,9 +560,9 @@ export default function HostCalendarScreen() {
         {/* ── 4. SMART SUMMARY LINE ──────────────────────────────────────── */}
         <View style={styles.summaryLine}>
           <Text style={[styles.summaryText, { color: colors.mutedForeground }]}>
-            <Text style={{ fontWeight: '700', color: colors.text }}>{monthStats.bookedNights}</Text> booked nights ·{' '}
-            <Text style={{ fontWeight: '700', color: colors.text }}>{monthStats.availableNights}</Text> available ·{' '}
-            <Text style={{ fontWeight: '700', color: colors.text }}>{monthStats.blockedNights}</Text> blocked
+            <Text style={{ fontFamily: 'DMSans_700Bold', color: colors.text }}>{monthStats.bookedNights}</Text> booked nights ·{' '}
+            <Text style={{ fontFamily: 'DMSans_700Bold', color: colors.text }}>{monthStats.availableNights}</Text> available ·{' '}
+            <Text style={{ fontFamily: 'DMSans_700Bold', color: colors.text }}>{monthStats.blockedNights}</Text> blocked
           </Text>
         </View>
 
@@ -985,12 +985,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nonHostTitle: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 22,
-    fontWeight: '700',
     color: '#000000',
     textAlign: 'center',
   },
   nonHostSub: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 14,
     color: '#717171',
     textAlign: 'center',
@@ -1006,9 +1007,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   primaryBtnText: {
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '700',
   },
 
   // 1. Header
@@ -1032,8 +1033,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   headerTitle: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 20,
-    fontWeight: '800',
     color: '#000000',
   },
   plusBtn: {
@@ -1061,8 +1062,8 @@ const styles = StyleSheet.create({
     height: 44,
   },
   listingDropdownText: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 14,
-    fontWeight: '600',
     color: '#000000',
   },
   dropdownMenu: {
@@ -1080,11 +1081,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   dropdownItemText: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 14,
     color: '#334155',
   },
   dropdownItemActive: {
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#000000',
   },
 
@@ -1096,8 +1098,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   monthTitle: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 22,
-    fontWeight: '800',
     color: '#000000',
     letterSpacing: -0.5,
   },
@@ -1113,8 +1115,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   todayBtnText: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 13,
-    fontWeight: '600',
     color: '#000000',
   },
   monthNavArrow: {
@@ -1131,6 +1133,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   summaryText: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 13,
     color: '#64748B',
   },
@@ -1149,8 +1152,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   alertText: {
+    fontFamily: 'DMSans_500Medium',
     fontSize: 12,
-    fontWeight: '500',
     color: '#0F172A',
   },
 
@@ -1171,10 +1174,10 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   weekdayText: {
+    fontFamily: 'DMSans_700Bold',
     width: '14.28%',
     textAlign: 'center',
     fontSize: 11,
-    fontWeight: '700',
     color: '#94A3B8',
     letterSpacing: 0.5,
   },
@@ -1213,20 +1216,20 @@ const styles = StyleSheet.create({
   },
 
   dayNumber: {
+    fontFamily: 'DMSans_500Medium',
     fontSize: 14,
-    fontWeight: '500',
     color: '#0F172A',
   },
   dayNumberToday: {
-    fontWeight: '800',
+    fontFamily: 'DMSans_700Bold',
     color: '#000000',
   },
   dayNumberBooked: {
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#D9480F',
   },
   dayNumberPending: {
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#D97706',
   },
   dayNumberBlocked: {
@@ -1246,8 +1249,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   checkInTagText: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 8,
-    fontWeight: '800',
     color: '#FFFFFF',
   },
   checkOutTag: {
@@ -1256,8 +1259,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   checkOutTagText: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 8,
-    fontWeight: '800',
     color: '#FFFFFF',
   },
 
@@ -1279,6 +1282,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   legendLabel: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 12,
     color: '#64748B',
   },
@@ -1288,8 +1292,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 18,
-    fontWeight: '700',
     color: '#000000',
     marginBottom: 12,
   },
@@ -1301,6 +1305,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   emptyBookingsText: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 13,
     color: '#64748B',
   },
@@ -1317,11 +1322,12 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   bookingCardDates: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 14,
-    fontWeight: '700',
     color: '#000000',
   },
   bookingCardTitle: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
@@ -1330,13 +1336,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   bookingCardPrice: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 14,
-    fontWeight: '700',
     color: '#000000',
   },
   bookingBadge: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 10,
-    fontWeight: '800',
     marginTop: 2,
   },
   badgeConfirmed: {
@@ -1364,8 +1370,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sheetTitle: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 20,
-    fontWeight: '800',
     color: '#000000',
   },
   sheetBadgeRow: {
@@ -1377,8 +1383,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   statusPillText: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 12,
-    fontWeight: '700',
   },
   sheetInfoGroup: {
     backgroundColor: '#F8FAFC',
@@ -1391,12 +1397,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   infoRowLabel: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 14,
     color: '#64748B',
   },
   infoRowVal: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 14,
-    fontWeight: '700',
     color: '#000000',
   },
   sheetActionBtn: {
@@ -1411,9 +1418,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#DC2626',
   },
   sheetActionBtnText: {
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '700',
   },
 
   // Form Fields
@@ -1421,11 +1428,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   fieldLabel: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 13,
-    fontWeight: '600',
     color: '#475569',
   },
   fieldInput: {
+    fontFamily: 'DMSans_400Regular',
     borderWidth: 1,
     borderColor: '#CBD5E1',
     borderRadius: 12,
@@ -1449,8 +1457,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   reasonChipText: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 12,
-    fontWeight: '600',
     color: '#475569',
   },
   reasonChipTextActive: {

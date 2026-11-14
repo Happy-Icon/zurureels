@@ -88,11 +88,73 @@ export const searchService = {
       }
     }
 
-    // 3. Detect Category / Property Type
-    if (q.includes('villa') || q.includes('house')) parsed.category = 'stay';
-    else if (q.includes('boat') || q.includes('cruise')) parsed.category = 'boat';
-    else if (q.includes('tour') || q.includes('safari') || q.includes('snorkeling')) parsed.category = 'tour';
-    else if (q.includes('event') || q.includes('concert')) parsed.category = 'event';
+    // 3. Detect Primary Category, Events, or Special Offers
+    if (
+      q.includes('villa') ||
+      q.includes('house') ||
+      q.includes('hotel') ||
+      q.includes('stay') ||
+      q.includes('resort') ||
+      q.includes('lodge') ||
+      q.includes('apartment') ||
+      q.includes('glamping')
+    ) {
+      parsed.category = 'accommodation';
+    } else if (
+      q.includes('boat') ||
+      q.includes('cruise') ||
+      q.includes('dhow') ||
+      q.includes('snorkel') ||
+      q.includes('diving') ||
+      q.includes('fishing') ||
+      q.includes('water') ||
+      q.includes('jet ski')
+    ) {
+      parsed.category = 'water_experience';
+    } else if (
+      q.includes('tour') ||
+      q.includes('safari') ||
+      q.includes('hik') ||
+      q.includes('adventure') ||
+      q.includes('skydive') ||
+      q.includes('balloon') ||
+      q.includes('quad') ||
+      q.includes('land')
+    ) {
+      parsed.category = 'land_experience';
+    } else if (
+      q.includes('food') ||
+      q.includes('restaurant') ||
+      q.includes('dining') ||
+      q.includes('bar') ||
+      q.includes('cocktail') ||
+      q.includes('nightlife') ||
+      q.includes('club') ||
+      q.includes('cafe') ||
+      q.includes('brunch')
+    ) {
+      parsed.category = 'food_dining';
+    }
+
+    if (
+      q.includes('event') ||
+      q.includes('concert') ||
+      q.includes('festival') ||
+      q.includes('party')
+    ) {
+      parsed.category = parsed.category || 'events';
+      parsed.onlyUpcomingEvents = true;
+    }
+
+    if (
+      q.includes('offer') ||
+      q.includes('deal') ||
+      q.includes('discount') ||
+      q.includes('happy hour') ||
+      q.includes('promo')
+    ) {
+      parsed.onlySpecialOffers = true;
+    }
 
     // 4. Detect Amenities
     const amenities: string[] = [];

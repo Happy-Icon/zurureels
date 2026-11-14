@@ -6,7 +6,6 @@ import React, {
   useState,
 } from 'react';
 import {
-  Alert,
   FlatList,
   Modal,
   Platform,
@@ -19,22 +18,37 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { useQuery } from '@tanstack/react-query';
-import { useReels } from '@/lib/queries';
-import { useNotifications } from '@/hooks/useNotifications';
-import { NotificationBadge } from '@/components/NotificationBadge';
+import {
+  extractEventFromReel,
+  extractOfferFromReel,
+  useActiveSpecialOffers,
+  useReels,
+  useUpcomingEvents,
+} from '@/lib/queries';
 import { useWeather, type Coordinates } from '@/lib/weather';
 import { WeatherCard } from '@/components/WeatherCard';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { ReelGridCard } from '@/components/ReelGridCard';
 import { ReelCard } from '@/components/ReelCard';
+import { BookingSheet } from '@/components/BookingSheet';
+import { EventDetailSheet } from '@/components/modals/EventDetailSheet';
+import { OfferDetailSheet } from '@/components/modals/OfferDetailSheet';
 import { Skeleton } from '@/components/Skeleton';
 import { OfflineState } from '@/components/OfflineState';
 import { useNetworkStatus } from '@/lib/networkManager';
-import type { BookingRow, ReelRow } from '@/lib/supabase';
+import type { BookingRow, EventRow, ReelRow, SpecialOfferRow } from '@/lib/supabase';
+import {
+  DISCOVER_CATEGORY_TABS,
+  formatEventScheduleBadge,
+  formatExpiryCountdown,
+  resolveReelContentType,
+  type DiscoverTabItem,
+} from '@/constants/taxonomy';
 
 // Advanced Search & Smart Filters Imports
 import { useSearch } from '@/hooks/useSearch';
@@ -52,22 +66,16 @@ import { JourneyCompanionSheet } from '@/components/journey/JourneyCompanionShee
 
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 
-const DISCOVERY_CATEGORIES = [
-  { id: 'all', label: 'All', icon: 'grid', categories: ['all'] },
-  { id: 'accommodation', label: 'Stays', icon: 'home', categories: ['hotel', 'villa', 'apartment', 'stay', 'stays', 'parks_camps'] },
-  { id: 'events', label: 'Events', icon: 'calendar', categories: ['event', 'events', 'food', 'drinks'] },
-  { id: 'experiences', label: 'Experiences', icon: 'compass', categories: ['land_adventure', 'air_adventure', 'water_adventure', 'tour', 'tours', 'boat', 'boats'] },
-  { id: 'ai', label: 'Zuru Agent', icon: 'zap', categories: [] },
-] as const;
-
-type CategoryId = (typeof DISCOVERY_CATEGORIES)[number]['id'];
+type CategoryId = DiscoverTabItem['id'];
 
 export default function AirbnbDiscoverScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const colors = useColors();
   const { isDark } = useTheme();
+  const { showAlert } = useCustomAlert();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
   const { isOnline } = useNetworkStatus();
 
@@ -76,6 +84,15 @@ export default function AirbnbDiscoverScreen() {
   const [coords, setCoords] = useState<Coordinates | null>(null);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [viewerReel, setViewerReel] = useState<ReelRow | null>(null);
+  const [bookingSheetReel, setBookingSheetReel] = useState<ReelRow | null>(null);
+  const [selectedEventSheet, setSelectedEventSheet] = useState<{
+    event: EventRow;
+    reel: ReelRow | null;
+  } | null>(null);
+  const [selectedOfferSheet, setSelectedOfferSheet] = useState<{
+    offer: SpecialOfferRow;
+    reel: ReelRow | null;
+  } | null>(null);
   const [discoverViewMode, setDiscoverViewMode] = useState<'grid' | 'map'>('grid');
   const [journeyBooking, setJourneyBooking] = useState<BookingRow | null>(null);
 
@@ -102,20 +119,109 @@ export default function AirbnbDiscoverScreen() {
 
   const reelsQuery = useReels();
   const weatherQuery = useWeather(selectedCity, coords);
-  const { unreadCount } = useNotifications();
+
+  const cityFilter = filters.cities?.[0] ?? null;
+  const upcomingEventsQuery = useUpcomingEvents({
+    city: cityFilter,
+    fallbackReels: reelsQuery.data,
+  });
+  const activeOffersQuery = useActiveSpecialOffers({
+    city: cityFilter,
+    fallbackReels: reelsQuery.data,
+  });
+
+  // Merge DB table results with cached/live reel-backed events & offers for instant responsiveness
+  const upcomingEvents = useMemo(() => {
+    const merged = new Map<string, EventRow>();
+    for (const ev of upcomingEventsQuery.data ?? []) {
+      merged.set(ev.id, ev);
+    }
+    for (const r of reelsQuery.data ?? []) {
+      const ev = extractEventFromReel(r);
+      if (ev && !merged.has(ev.id)) {
+        merged.set(ev.id, ev);
+      }
+    }
+    return Array.from(merged.values()).sort((a, b) => {
+      const ta = a.event_date ? new Date(a.event_date).getTime() : Number.MAX_SAFE_INTEGER;
+      const tb = b.event_date ? new Date(b.event_date).getTime() : Number.MAX_SAFE_INTEGER;
+      return ta - tb;
+    });
+  }, [upcomingEventsQuery.data, reelsQuery.data]);
+
+  const activeOffers = useMemo(() => {
+    const merged = new Map<string, SpecialOfferRow>();
+    for (const off of activeOffersQuery.data ?? []) {
+      merged.set(off.id, off);
+    }
+    for (const r of reelsQuery.data ?? []) {
+      const off = extractOfferFromReel(r);
+      if (off && !merged.has(off.id)) {
+        merged.set(off.id, off);
+      }
+    }
+    return Array.from(merged.values());
+  }, [activeOffersQuery.data, reelsQuery.data]);
+
+  const findReelForEvent = useCallback(
+    (ev: EventRow): ReelRow | null => {
+      const all = reelsQuery.data ?? [];
+      return (
+        all.find(
+          (r) =>
+            r.id === ev.reel_id ||
+            r.event_id === ev.id ||
+            (ev.experience_id &&
+              r.experience_id === ev.experience_id &&
+              resolveReelContentType(r) === 'event'),
+        ) ?? null
+      );
+    },
+    [reelsQuery.data],
+  );
+
+  const findReelForOffer = useCallback(
+    (off: SpecialOfferRow): ReelRow | null => {
+      const all = reelsQuery.data ?? [];
+      return (
+        all.find(
+          (r) =>
+            r.id === off.reel_id ||
+            r.offer_id === off.id ||
+            (off.experience_id &&
+              r.experience_id === off.experience_id &&
+              resolveReelContentType(r) === 'special_offer'),
+        ) ?? null
+      );
+    },
+    [reelsQuery.data],
+  );
+
+  const handleOpenEstablishment = useCallback(
+    (experienceId: string) => {
+      const all = reelsQuery.data ?? [];
+      const primaryMatch =
+        all.find(
+          (r) => r.experience_id === experienceId && resolveReelContentType(r) === 'experience',
+        ) || all.find((r) => r.experience_id === experienceId);
+
+      if (primaryMatch) {
+        setBookingSheetReel(primaryMatch);
+      }
+    },
+    [reelsQuery.data],
+  );
 
   // Handle AI Natural Language Query submission
   const handleSearchSubmit = async (text: string) => {
     if (!text.trim()) return;
     addSearch(text);
-    // 1. Apply instant synchronous filters
     const syncParsed = parseAiQuery(text);
     if (Object.keys(syncParsed).length > 0) {
       updateFilters(syncParsed);
     }
     setIsSearchFocused(false);
 
-    // 2. Refine with Fable 5.1 server-side structured extraction
     try {
       const aiParsed = await parseAiQueryAsync(text);
       if (Object.keys(aiParsed).length > 0) {
@@ -126,7 +232,6 @@ export default function AirbnbDiscoverScreen() {
     }
   };
 
-
   const applyMyLocation = useCallback(async (interactive: boolean) => {
     try {
       let { status } = await Location.getForegroundPermissionsAsync();
@@ -136,10 +241,12 @@ export default function AirbnbDiscoverScreen() {
       }
       if (status !== 'granted') {
         if (interactive) {
-          Alert.alert(
-            'Location Required',
-            'Location permission was denied. Pick a coastal city instead.',
-          );
+          showAlert({
+            title: 'Location Required',
+            message: 'Location permission was denied. Pick a coastal city instead.',
+            variant: 'warning',
+            icon: 'map-pin',
+          });
         }
         return;
       }
@@ -150,16 +257,21 @@ export default function AirbnbDiscoverScreen() {
       setSelectedCity('Current Location');
     } catch {
       if (interactive) {
-        Alert.alert('Location Error', 'Could not retrieve your current location.');
+        showAlert({
+          title: 'Location Error',
+          message: 'Could not retrieve your current location.',
+          variant: 'error',
+          icon: 'navigation',
+        });
       }
     }
-  }, []);
+  }, [showAlert]);
 
   useEffect(() => {
     applyMyLocation(false);
   }, [applyMyLocation]);
 
-  const categoryObj = DISCOVERY_CATEGORIES.find((c) => c.id === activeCategory)!;
+  const categoryObj = DISCOVER_CATEGORY_TABS.find((c) => c.id === activeCategory)!;
 
   const hasServerFilters = useMemo(
     () =>
@@ -174,6 +286,9 @@ export default function AirbnbDiscoverScreen() {
       'discover-filtered-reels',
       activeCategory,
       filters.category ?? null,
+      filters.subcategory ?? null,
+      filters.onlySpecialOffers ?? false,
+      filters.onlyUpcomingEvents ?? false,
       filters.minPrice ?? 0,
       filters.maxPrice ?? 150000,
       (filters.cities ?? []).join('|'),
@@ -187,47 +302,92 @@ export default function AirbnbDiscoverScreen() {
       }),
   });
 
-  // Filter & Search Execution Pipeline (Server-side PostgREST pushdown + instant local fallback)
+  // Filter & Search Execution Pipeline
   const filteredReels = useMemo(() => {
     const rawReels =
       hasServerFilters && serverFilteredQuery.data
         ? serverFilteredQuery.data
         : (reelsQuery.data ?? []);
 
-    // 1. Text Search Filter (title, description, location, category)
+    // 1. Text Search Filter
     const q = query.trim().toLowerCase();
     let searchFiltered = rawReels;
     if (q) {
       searchFiltered = rawReels.filter((r) => {
         const cat = (r.category ?? '').toLowerCase();
+        const sub = (r.subcategory ?? '').toLowerCase();
         const title = (r.experience?.title ?? '').toLowerCase();
         const desc = (r.experience?.description ?? '').toLowerCase();
         const loc = (r.experience?.location ?? '').toLowerCase();
-        return title.includes(q) || desc.includes(q) || loc.includes(q) || cat.includes(q);
+        return (
+          title.includes(q) ||
+          desc.includes(q) ||
+          loc.includes(q) ||
+          cat.includes(q) ||
+          sub.includes(q)
+        );
       });
     }
 
     // 2. Category Tab Filter
-    if (activeCategory !== 'all') {
+    if (activeCategory === 'events') {
+      searchFiltered = searchFiltered.filter((r) => resolveReelContentType(r) === 'event');
+    } else if (activeCategory === 'offers') {
+      searchFiltered = searchFiltered.filter((r) => resolveReelContentType(r) === 'special_offer');
+    } else if (activeCategory !== 'all') {
       const catSubList = expandCategoryAliases(categoryObj.categories as readonly string[]);
       searchFiltered = searchFiltered.filter((r) => {
-        const cat = (r.category ?? '').toLowerCase();
-        return catSubList.includes(cat);
+        const reelCat = (r.category ?? '').toLowerCase();
+        const expCat = (r.experience?.category ?? '').toLowerCase();
+        const metaPrimary = String(
+          ((r.experience?.metadata as Record<string, unknown> | null)?.primary_category) || '',
+        ).toLowerCase();
+        return (
+          catSubList.includes(reelCat) ||
+          (expCat !== '' && catSubList.includes(expCat)) ||
+          (metaPrimary !== '' && catSubList.includes(metaPrimary))
+        );
       });
     }
 
-    // 3. Multi-faceted Smart Filters (Price, Rating, Amenities, Host Type, Sorting)
+    // 3. Multi-faceted Smart Filters (Expiry, Price, Subcategory, Rating, Amenities, Host Type, Sorting)
     return filterService.applyFilters(searchFiltered, filters);
-  }, [hasServerFilters, serverFilteredQuery.data, reelsQuery.data, query, activeCategory, categoryObj, filters]);
+  }, [
+    hasServerFilters,
+    serverFilteredQuery.data,
+    reelsQuery.data,
+    query,
+    activeCategory,
+    categoryObj,
+    filters,
+  ]);
 
   const cardWidth = (winWidth - 40 - 12) / 2;
   const topPad = Platform.OS === 'web' ? 12 : insets.top;
   const bottomPad = Platform.OS === 'web' ? 100 : insets.bottom + 84;
 
+  const showEventsCarousel =
+    !query.trim() &&
+    (activeCategory === 'all' || activeCategory === 'events') &&
+    upcomingEvents.length > 0;
+  const showOffersCarousel =
+    !query.trim() &&
+    (activeCategory === 'all' || activeCategory === 'offers') &&
+    activeOffers.length > 0;
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       {/* 1. Header & Search Integration */}
-      <View style={[styles.headerContainer, { paddingTop: topPad + 6, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.headerContainer,
+          {
+            paddingTop: topPad + 6,
+            backgroundColor: colors.background,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
         <View style={styles.headerTopRow}>
           <View style={{ flex: 1 }}>
             <SearchBar
@@ -248,11 +408,18 @@ export default function AirbnbDiscoverScreen() {
         {/* Active Filter Chips Row */}
         <FilterChip
           filters={filters}
-          onRemoveCategory={() => updateFilters({ category: null })}
-          onRemoveCity={(c) => updateFilters({ cities: (filters.cities || []).filter((x) => x !== c) })}
+          onRemoveCategory={() => updateFilters({ category: null, subcategory: null })}
+          onRemoveSubcategory={() => updateFilters({ subcategory: null })}
+          onRemoveOnlySpecialOffers={() => updateFilters({ onlySpecialOffers: false })}
+          onRemoveOnlyUpcomingEvents={() => updateFilters({ onlyUpcomingEvents: false })}
+          onRemoveCity={(c) =>
+            updateFilters({ cities: (filters.cities || []).filter((x) => x !== c) })
+          }
           onRemovePrice={() => updateFilters({ minPrice: 0, maxPrice: 150000 })}
           onRemoveRating={() => updateFilters({ minRating: null })}
-          onRemoveAmenity={(a) => updateFilters({ amenities: (filters.amenities || []).filter((x) => x !== a) })}
+          onRemoveAmenity={(a) =>
+            updateFilters({ amenities: (filters.amenities || []).filter((x) => x !== a) })
+          }
           onResetAll={resetFilters}
         />
 
@@ -263,7 +430,7 @@ export default function AirbnbDiscoverScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryBarScroll}
           >
-            {DISCOVERY_CATEGORIES.map((cat) => {
+            {DISCOVER_CATEGORY_TABS.map((cat) => {
               const isActive = activeCategory === cat.id;
               return (
                 <Pressable
@@ -278,8 +445,8 @@ export default function AirbnbDiscoverScreen() {
                   }}
                   style={styles.categoryItem}
                 >
-                  <Feather
-                    name={cat.icon as any}
+                  <Ionicons
+                    name={isActive ? cat.activeIcon : cat.icon}
                     size={20}
                     color={isActive ? colors.text : colors.mutedForeground}
                   />
@@ -294,7 +461,9 @@ export default function AirbnbDiscoverScreen() {
                   >
                     {cat.label}
                   </Text>
-                  {isActive ? <View style={[styles.categoryUnderline, { backgroundColor: colors.text }]} /> : null}
+                  {isActive ? (
+                    <View style={[styles.categoryUnderline, { backgroundColor: colors.text }]} />
+                  ) : null}
                 </Pressable>
               );
             })}
@@ -302,11 +471,18 @@ export default function AirbnbDiscoverScreen() {
         ) : null}
       </View>
 
-      {/* MAIN VIEW CONTENT: MAP MODE vs GRID MODE */}
+      {/* MAIN VIEW CONTENT: SEARCH vs MAP MODE vs GRID MODE */}
       {isSearchFocused ? (
-        <View style={[styles.suggestionsOverlay, { backgroundColor: colors.background, paddingBottom: bottomPad }]}>
+        <View
+          style={[
+            styles.suggestionsOverlay,
+            { backgroundColor: colors.background, paddingBottom: bottomPad },
+          ]}
+        >
           <View style={[styles.suggestionsHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.suggestionsTitle, { color: colors.text }]}>Search Suggestions</Text>
+            <Text style={[styles.suggestionsTitle, { color: colors.text }]}>
+              Search Suggestions
+            </Text>
             <Pressable onPress={() => setIsSearchFocused(false)} hitSlop={8}>
               <Text style={styles.closeSuggestionsText}>Done</Text>
             </Pressable>
@@ -329,7 +505,6 @@ export default function AirbnbDiscoverScreen() {
           />
         </View>
       ) : discoverViewMode === 'map' ? (
-        /* INTERACTIVE MAPLIBRE VECTOR DISCOVER MAP */
         <View style={{ flex: 1 }}>
           <DiscoverMapView
             reels={filteredReels}
@@ -356,7 +531,6 @@ export default function AirbnbDiscoverScreen() {
           />
         </View>
       ) : (
-        /* MAIN REELS & EXPERIENCES GRID LIST */
         <FlatList
           data={filteredReels}
           keyExtractor={(item) => item.id}
@@ -369,13 +543,248 @@ export default function AirbnbDiscoverScreen() {
           }}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            <View style={{ gap: 16, marginBottom: 8 }}>
+            <View style={{ gap: 18, marginBottom: 8 }}>
               {/* Weather Widget */}
               <WeatherCard
                 weather={weatherQuery.data}
                 loading={weatherQuery.isLoading}
                 city={selectedCity}
               />
+
+              {/* Section: Happening Around You (Upcoming Events) */}
+              {showEventsCarousel ? (
+                <View style={styles.sectionContainer}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionTitleRow}>
+                      <Ionicons name="calendar-outline" size={18} color="#F26522" />
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                        Happening around you
+                      </Text>
+                    </View>
+                    {activeCategory !== 'events' ? (
+                      <Pressable
+                        onPress={() => setActiveCategory('events')}
+                        style={styles.seeAllBtn}
+                        hitSlop={8}
+                      >
+                        <Text style={[styles.seeAllText, { color: '#F26522' }]}>See all</Text>
+                        <Ionicons name="chevron-forward" size={14} color="#F26522" />
+                      </Pressable>
+                    ) : null}
+                  </View>
+
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.carouselScrollContent}
+                  >
+                    {upcomingEvents.map((ev) => {
+                      const matchedReel = findReelForEvent(ev);
+                      const imageUrl =
+                        ev.image_url ||
+                        matchedReel?.thumbnail_url ||
+                        matchedReel?.experience?.image_url ||
+                        null;
+                      const scheduleLabel = formatEventScheduleBadge(
+                        ev.event_date,
+                        ev.start_time,
+                      );
+                      const evPrice =
+                        typeof ev.price === 'number'
+                          ? ev.price
+                          : matchedReel?.experience?.current_price ?? 0;
+
+                      return (
+                        <Pressable
+                          key={ev.id}
+                          onPress={() =>
+                            setSelectedEventSheet({ event: ev, reel: matchedReel })
+                          }
+                          style={({ pressed }) => [
+                            styles.promoCard,
+                            {
+                              backgroundColor: colors.card,
+                              borderColor: colors.border,
+                              opacity: pressed ? 0.9 : 1,
+                            },
+                          ]}
+                        >
+                          <View style={styles.promoMediaWrap}>
+                            {imageUrl ? (
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.promoMediaImg}
+                                contentFit="cover"
+                              />
+                            ) : (
+                              <View
+                                style={[
+                                  styles.promoMediaPlaceholder,
+                                  { backgroundColor: isDark ? '#27272A' : '#F7F7F7' },
+                                ]}
+                              >
+                                <Ionicons name="calendar-outline" size={28} color="#F26522" />
+                              </View>
+                            )}
+                            <View style={[styles.promoPill, { backgroundColor: 'rgba(17, 24, 39, 0.78)' }]}>
+                              <Ionicons name="calendar-outline" size={11} color="#FFFFFF" />
+                              <Text style={styles.promoPillText} numberOfLines={1}>
+                                {scheduleLabel}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.promoCardBody}>
+                            <Text style={[styles.promoCardTitle, { color: colors.text }]} numberOfLines={1}>
+                              {ev.title || 'Upcoming Event'}
+                            </Text>
+                            <View style={styles.promoMetaRow}>
+                              <Ionicons
+                                name="location-outline"
+                                size={12}
+                                color={colors.mutedForeground}
+                              />
+                              <Text
+                                style={[styles.promoCardSub, { color: colors.mutedForeground }]}
+                                numberOfLines={1}
+                              >
+                                {ev.location || ev.experience?.city || 'Kenya Coast'}
+                              </Text>
+                            </View>
+                            <Text style={[styles.promoPriceText, { color: colors.text }]}>
+                              {evPrice === 0 ? 'Free Entry' : `KES ${evPrice.toLocaleString()}`}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              ) : null}
+
+              {/* Section: Deals Worth Exploring (Active Special Offers) */}
+              {showOffersCarousel ? (
+                <View style={styles.sectionContainer}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionTitleRow}>
+                      <Ionicons name="pricetag-outline" size={18} color="#F26522" />
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                        Deals worth exploring
+                      </Text>
+                    </View>
+                    {activeCategory !== 'offers' ? (
+                      <Pressable
+                        onPress={() => setActiveCategory('offers')}
+                        style={styles.seeAllBtn}
+                        hitSlop={8}
+                      >
+                        <Text style={[styles.seeAllText, { color: '#F26522' }]}>See all</Text>
+                        <Ionicons name="chevron-forward" size={14} color="#F26522" />
+                      </Pressable>
+                    ) : null}
+                  </View>
+
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.carouselScrollContent}
+                  >
+                    {activeOffers.map((off) => {
+                      const matchedReel = findReelForOffer(off);
+                      const imageUrl =
+                        off.image_url ||
+                        matchedReel?.thumbnail_url ||
+                        matchedReel?.experience?.image_url ||
+                        null;
+                      const countdownLabel = formatExpiryCountdown(off.expires_at);
+
+                      return (
+                        <Pressable
+                          key={off.id}
+                          onPress={() =>
+                            setSelectedOfferSheet({ offer: off, reel: matchedReel })
+                          }
+                          style={({ pressed }) => [
+                            styles.promoCard,
+                            {
+                              backgroundColor: colors.card,
+                              borderColor: colors.border,
+                              opacity: pressed ? 0.9 : 1,
+                            },
+                          ]}
+                        >
+                          <View style={styles.promoMediaWrap}>
+                            {imageUrl ? (
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.promoMediaImg}
+                                contentFit="cover"
+                              />
+                            ) : (
+                              <View
+                                style={[
+                                  styles.promoMediaPlaceholder,
+                                  { backgroundColor: isDark ? '#27272A' : '#F7F7F7' },
+                                ]}
+                              >
+                                <Ionicons name="pricetag-outline" size={28} color="#F26522" />
+                              </View>
+                            )}
+                            <View style={[styles.promoPill, { backgroundColor: 'rgba(17, 24, 39, 0.78)' }]}>
+                              <Ionicons name="pricetag-outline" size={11} color="#FFFFFF" />
+                              <Text style={styles.promoPillText} numberOfLines={1}>
+                                {off.discount_label}
+                              </Text>
+                            </View>
+                            <View style={styles.expiryPill}>
+                              <Ionicons name="alarm-outline" size={10} color="#FFFFFF" />
+                              <Text style={styles.expiryPillText} numberOfLines={1}>
+                                {countdownLabel}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.promoCardBody}>
+                            <Text style={[styles.promoCardTitle, { color: colors.text }]} numberOfLines={1}>
+                              {off.title}
+                            </Text>
+                            <View style={styles.promoMetaRow}>
+                              <Ionicons
+                                name="business-outline"
+                                size={12}
+                                color={colors.mutedForeground}
+                              />
+                              <Text
+                                style={[styles.promoCardSub, { color: colors.mutedForeground }]}
+                                numberOfLines={1}
+                              >
+                                {off.experience?.title || off.location || 'Limited Offer'}
+                              </Text>
+                            </View>
+                            <View style={styles.offerPriceRow}>
+                              {off.original_price != null && off.original_price > 0 ? (
+                                <Text
+                                  style={[
+                                    styles.offerOriginalPrice,
+                                    { color: colors.mutedForeground },
+                                  ]}
+                                >
+                                  KES {off.original_price.toLocaleString()}
+                                </Text>
+                              ) : null}
+                              <Text style={[styles.promoPriceText, { color: colors.text }]}>
+                                {off.offer_price != null && off.offer_price > 0
+                                  ? `KES ${off.offer_price.toLocaleString()}`
+                                  : off.discount_label}
+                              </Text>
+                            </View>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              ) : null}
             </View>
           }
           renderItem={({ item }) => (
@@ -390,7 +799,13 @@ export default function AirbnbDiscoverScreen() {
               <View style={styles.skeletonGridWrapper}>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <View key={i} style={[styles.skeletonCard, { width: cardWidth }]}>
-                    <Skeleton style={{ width: '100%', height: Math.round(cardWidth * 1.25), borderRadius: 16 }} />
+                    <Skeleton
+                      style={{
+                        width: '100%',
+                        height: Math.round(cardWidth * 1.25),
+                        borderRadius: 16,
+                      }}
+                    />
                     <View style={styles.skeletonTitleRow}>
                       <Skeleton style={{ width: '68%', height: 16, borderRadius: 4 }} />
                       <Skeleton style={{ width: '24%', height: 14, borderRadius: 4 }} />
@@ -400,7 +815,8 @@ export default function AirbnbDiscoverScreen() {
                   </View>
                 ))}
               </View>
-            ) : (!isOnline && filteredReels.length === 0) || (reelsQuery.isError && filteredReels.length === 0) ? (
+            ) : (!isOnline && filteredReels.length === 0) ||
+              (reelsQuery.isError && filteredReels.length === 0) ? (
               <OfflineState
                 fullScreen={false}
                 onRetry={reelsQuery.refetch}
@@ -438,8 +854,8 @@ export default function AirbnbDiscoverScreen() {
             },
           ]}
         >
-          <Feather
-            name={discoverViewMode === 'map' ? 'list' : 'map'}
+          <Ionicons
+            name={discoverViewMode === 'map' ? 'grid-outline' : 'map-outline'}
             size={16}
             color={isDark ? '#111827' : '#FFFFFF'}
           />
@@ -454,7 +870,7 @@ export default function AirbnbDiscoverScreen() {
         </Pressable>
       ) : null}
 
-      {/* Zuru Agent AI Floating Button (Grid Mode Only to keep Map uncluttered) */}
+      {/* Zuru Agent AI Floating Button */}
       {!isSearchFocused && activeCategory !== 'ai' && discoverViewMode === 'grid' ? (
         <AIFloatingButton
           onPress={() => router.push('/ai' as any)}
@@ -464,7 +880,6 @@ export default function AirbnbDiscoverScreen() {
       ) : null}
 
       {/* Journey Companion Sheet for Map Directions */}
-
       {journeyBooking ? (
         <JourneyCompanionSheet
           visible={Boolean(journeyBooking)}
@@ -474,11 +889,60 @@ export default function AirbnbDiscoverScreen() {
         />
       ) : null}
 
+      {/* Event Detail Sheet */}
+      {selectedEventSheet ? (
+        <EventDetailSheet
+          visible={Boolean(selectedEventSheet)}
+          event={selectedEventSheet.event}
+          reel={selectedEventSheet.reel}
+          onClose={() => setSelectedEventSheet(null)}
+          onBookTicket={
+            selectedEventSheet.reel
+              ? () => {
+                  const target = selectedEventSheet.reel!;
+                  setSelectedEventSheet(null);
+                  setBookingSheetReel(target);
+                }
+              : undefined
+          }
+          onOpenEstablishment={(expId) => handleOpenEstablishment(expId)}
+        />
+      ) : null}
+
+      {/* Special Offer Detail Sheet */}
+      {selectedOfferSheet ? (
+        <OfferDetailSheet
+          visible={Boolean(selectedOfferSheet)}
+          offer={selectedOfferSheet.offer}
+          reel={selectedOfferSheet.reel}
+          onClose={() => setSelectedOfferSheet(null)}
+          onClaimOffer={
+            selectedOfferSheet.reel
+              ? () => {
+                  const target = selectedOfferSheet.reel!;
+                  setSelectedOfferSheet(null);
+                  setBookingSheetReel(target);
+                }
+              : undefined
+          }
+          onOpenEstablishment={(expId) => handleOpenEstablishment(expId)}
+        />
+      ) : null}
+
+      {/* Direct Booking Sheet for Events / Offers / Linked Establishments */}
+      {bookingSheetReel ? (
+        <BookingSheet
+          visible={Boolean(bookingSheetReel)}
+          reel={bookingSheetReel}
+          onClose={() => setBookingSheetReel(null)}
+        />
+      ) : null}
+
       {/* Full Reel Video Player Viewer Modal */}
       <Modal visible={Boolean(viewerReel)} animationType="slide" onRequestClose={() => setViewerReel(null)}>
         <View style={{ flex: 1, backgroundColor: '#000000' }}>
           <Pressable onPress={() => setViewerReel(null)} style={styles.closeViewerBtn} hitSlop={10}>
-            <Feather name="x" size={24} color="#FFFFFF" />
+            <Ionicons name="close" size={24} color="#FFFFFF" />
           </Pressable>
           {viewerReel ? (
             <ReelCard reel={viewerReel} isActive={true} height={winHeight} />
@@ -536,17 +1000,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  bellBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F7F7F7',
-    borderWidth: 1,
-    borderColor: '#EBEBEB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
   categoryBarScroll: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -563,13 +1016,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'DMSans_500Medium',
   },
-  categoryLabelActive: {
-    fontFamily: 'DMSans_700Bold',
-    color: '#222222',
-  },
-  categoryLabelInactive: {
-    color: '#717171',
-  },
   categoryUnderline: {
     position: 'absolute',
     bottom: 0,
@@ -578,6 +1024,126 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: '#222222',
     borderRadius: 1,
+  },
+  sectionContainer: {
+    gap: 10,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  sectionTitle: {
+    fontSize: 16.5,
+    fontFamily: 'DMSans_700Bold',
+    letterSpacing: -0.2,
+  },
+  seeAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  seeAllText: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  carouselScrollContent: {
+    gap: 12,
+    paddingRight: 4,
+  },
+  promoCard: {
+    width: 236,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  promoMediaWrap: {
+    width: '100%',
+    height: 126,
+    position: 'relative',
+  },
+  promoMediaImg: {
+    width: '100%',
+    height: '100%',
+  },
+  promoMediaPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promoPill: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    maxWidth: '72%',
+  },
+  promoPillText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  expiryPill: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(17, 24, 39, 0.78)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 7,
+  },
+  expiryPillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'DMSans_600SemiBold',
+  },
+  promoCardBody: {
+    padding: 11,
+    gap: 4,
+  },
+  promoCardTitle: {
+    fontSize: 14,
+    fontFamily: 'DMSans_700Bold',
+  },
+  promoMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  promoCardSub: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    flex: 1,
+  },
+  offerPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  offerOriginalPrice: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    textDecorationLine: 'line-through',
+  },
+  promoPriceText: {
+    fontSize: 13.5,
+    fontFamily: 'DMSans_700Bold',
+    marginTop: 2,
   },
   suggestionsOverlay: {
     flex: 1,
@@ -618,28 +1184,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 90,
-    right: 20,
-    backgroundColor: '#F26522',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 26,
-    shadowColor: '#F26522',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  fabText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'DMSans_700Bold',
   },
   mapToggleFab: {
     position: 'absolute',

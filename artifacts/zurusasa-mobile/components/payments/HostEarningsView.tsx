@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { paymentsStyles as styles } from './paymentsStyles';
 
 export interface HostEarningsViewProps {
@@ -20,6 +21,7 @@ export function HostEarningsView({
   const colors = useColors();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { showAlert } = useCustomAlert();
 
   const [payoutModal, setPayoutModal] = useState(false);
   const [payoutPhone, setPayoutPhone] = useState('');
@@ -31,18 +33,30 @@ export function HostEarningsView({
   const handleSavePayoutSetup = () => {
     if (payoutType === 'mpesa') {
       if (!payoutPhone) {
-        Alert.alert('Missing Phone', 'Please enter your M-Pesa phone number.');
+        showAlert({
+          title: 'Missing Phone',
+          message: 'Please enter your M-Pesa phone number.',
+          variant: 'warning',
+        });
         return;
       }
     } else {
       if (!payoutAccountNumber || !payoutBankName) {
-        Alert.alert('Missing Bank Details', 'Please fill in bank name and account number.');
+        showAlert({
+          title: 'Missing Bank Details',
+          message: 'Please fill in bank name and account number.',
+          variant: 'warning',
+        });
         return;
       }
     }
     setPayoutsConfigured(true);
     setPayoutModal(false);
-    Alert.alert('Payout Method Saved', 'Your host earnings will be dispatched automatically.');
+    showAlert({
+      title: 'Payout Method Saved',
+      message: 'Your host earnings will be dispatched automatically.',
+      variant: 'success',
+    });
   };
 
   return (
@@ -137,10 +151,11 @@ export function HostEarningsView({
           <Text style={[styles.illustrationTitle, { color: colors.text }]}>No sent payouts</Text>
           <Pressable
             onPress={() =>
-              Alert.alert(
-                'How Payouts Work',
-                'ZuruSasa automatically releases host earnings to your M-Pesa or Bank account 24 hours after guest check-in.'
-              )
+              showAlert({
+                title: 'How Payouts Work',
+                message: 'ZuruSasa automatically releases host earnings to your M-Pesa or Bank account 24 hours after guest check-in.',
+                variant: 'info',
+              })
             }
             accessibilityRole="button"
             accessibilityLabel="Learn how payouts work"

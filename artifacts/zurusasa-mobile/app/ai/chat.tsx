@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -34,6 +33,7 @@ import { ReelCard } from '@/components/ReelCard';
 import { useZuruAI } from '@/lib/zuruAI';
 import { useNetworkStatus } from '@/lib/networkManager';
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useToggleSave } from '@/lib/queries';
 import type { ReelRow } from '@/lib/supabase';
 
@@ -46,6 +46,7 @@ export default function AIChatScreen() {
   }>();
   const { isOnline } = useNetworkStatus();
   const { user } = useAuth();
+  const { showAlert } = useCustomAlert();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
 
   const {
@@ -250,18 +251,20 @@ export default function AIChatScreen() {
 
   const handleClearWithConfirm = () => {
     setShowOptionsMenu(false);
-    Alert.alert(
-      'Clear Conversation',
-      'Are you sure you want to clear your current conversation with Zuru Agent?',
-      [
+    showAlert({
+      title: 'Clear Conversation',
+      message: 'Are you sure you want to clear your current conversation with Zuru Agent?',
+      variant: 'destructive',
+      icon: 'trash-2',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Clear',
           style: 'destructive',
           onPress: clearMessages,
         },
-      ]
-    );
+      ],
+    });
   };
 
   const handleNewInquiry = () => {

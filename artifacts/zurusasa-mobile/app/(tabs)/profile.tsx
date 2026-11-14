@@ -656,12 +656,13 @@ const styles = StyleSheet.create({
   },
   loggedOutTitle: {
     fontSize: 22,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#000000',
     textAlign: 'center',
   },
   loggedOutSub: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     textAlign: 'center',
     lineHeight: 20,
@@ -678,7 +679,7 @@ const styles = StyleSheet.create({
   signInBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
   headerRow: {
     flexDirection: 'row',
@@ -688,7 +689,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '800',
+    fontFamily: 'DMSans_700Bold',
     color: '#000000',
     letterSpacing: -0.8,
   },
@@ -839,7 +840,7 @@ const styles = StyleSheet.create({
   },
   userRole: {
     fontSize: 14,
-    fontWeight: '400',
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     marginTop: 2,
     textAlign: 'center',
@@ -874,7 +875,7 @@ const styles = StyleSheet.create({
   },
   newBadgeText: {
     fontSize: 9,
-    fontWeight: '800',
+    fontFamily: 'DMSans_700Bold',
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
@@ -885,7 +886,7 @@ const styles = StyleSheet.create({
   },
   quickCardText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#000000',
     marginBottom: 4,
     textAlign: 'center',
@@ -911,11 +912,12 @@ const styles = StyleSheet.create({
   },
   becomeHostTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#000000',
   },
   becomeHostSub: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 18,
     marginTop: 2,
@@ -944,12 +946,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#1E1E1E',
-    fontWeight: '400',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   menuDivider: {
     height: 1,
@@ -991,12 +988,7 @@ const styles = StyleSheet.create({
   floatingSwitchText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
 
   /* ── SWITCHING TRANSITION SCREEN (SCREENSHOT 2) ─────────────────────────── */
@@ -1016,13 +1008,8 @@ const styles = StyleSheet.create({
   },
   switchingText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
     letterSpacing: -0.3,
   },
 });

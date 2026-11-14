@@ -23,6 +23,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase, type BookingRow } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
+import { PUBLISHING_FORMATS } from '@/constants/taxonomy';
 import { useHostConfirmBooking, useHostDeclineBooking, useHostBookings, useHostKPIs } from '@/lib/queries';
 
 interface HostKPIs {
@@ -459,6 +460,52 @@ export function HostDashboard() {
             </View>
           </View>
         </Pressable>
+
+        {/* 4b. Publish & Promote Quick Actions */}
+        <View style={styles.sectionHeaderWrap}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Publish & Promote</Text>
+        </View>
+
+        <View style={styles.publishStripRow}>
+          {PUBLISHING_FORMATS.map((fmt) => {
+            const shortTitle =
+              fmt.id === 'experience'
+                ? 'Experience'
+                : fmt.id === 'event'
+                ? 'Create Event'
+                : 'Special Offer';
+            return (
+              <Pressable
+                key={fmt.id}
+                testID={`dashboard-quick-${fmt.id}`}
+                onPress={() => router.push(`/host/create-reel?format=${fmt.id}`)}
+                style={({ pressed }) => [
+                  styles.publishActionCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.publishIconBadge,
+                    { backgroundColor: isDark ? '#27272A' : '#F7F7F7' },
+                  ]}
+                >
+                  <Ionicons name={fmt.icon} size={18} color={colors.text} />
+                </View>
+                <Text style={[styles.publishActionTitle, { color: colors.text }]} numberOfLines={1}>
+                  {shortTitle}
+                </Text>
+                <Text style={[styles.publishActionSub, { color: colors.mutedForeground }]} numberOfLines={1}>
+                  Post Reel
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         {/* 5. Reservation Requests Summary Widget */}
         <View style={styles.sectionHeaderWrap}>
@@ -1096,6 +1143,39 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_500Medium',
     color: '#64748B',
     marginTop: 1,
+  },
+  /* Publish & Promote Quick Actions */
+  publishStripRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginHorizontal: 20,
+    marginBottom: 22,
+  },
+  publishActionCard: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    gap: 6,
+  },
+  publishIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  publishActionTitle: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_700Bold',
+    textAlign: 'center',
+  },
+  publishActionSub: {
+    fontSize: 11,
+    fontFamily: 'DMSans_500Medium',
   },
   requestsMetricDivider: {
     width: 1,

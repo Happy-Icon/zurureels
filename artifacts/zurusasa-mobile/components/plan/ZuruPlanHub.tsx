@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from 'react';
 import {
-  Alert,
   Dimensions,
   Platform,
   Pressable,
@@ -18,6 +17,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { zuruPlanService } from '@/services/zuruPlanService';
@@ -32,6 +32,7 @@ export function ZuruPlanHub() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { showAlert } = useCustomAlert();
 
   const [trips, setTrips] = useState<TripPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,17 +75,23 @@ export function ZuruPlanHub() {
   };
 
   const handleDeleteTrip = (tripId: string, title: string) => {
-    Alert.alert('Delete Trip', `Are you sure you want to remove "${title}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await zuruPlanService.deleteTrip(user?.id, tripId);
-          loadTrips();
+    showAlert({
+      title: 'Delete Trip',
+      message: `Are you sure you want to remove "${title}"?`,
+      variant: 'destructive',
+      icon: 'trash-2',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await zuruPlanService.deleteTrip(user?.id, tripId);
+            loadTrips();
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const topInset = Platform.OS === 'web' ? 24 : insets.top + 54;

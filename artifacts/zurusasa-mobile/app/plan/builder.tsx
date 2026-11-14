@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Modal,
   Platform,
@@ -19,6 +18,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { useAuth } from '@/context/AuthContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { zuruPlanService } from '@/services/zuruPlanService';
@@ -59,6 +59,7 @@ export default function GuidedTripBuilderScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { showAlert } = useCustomAlert();
 
   const [step, setStep] = useState<number>(1);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -137,10 +138,11 @@ export default function GuidedTripBuilderScreen() {
     } catch (e: any) {
       console.warn('Trip generation failed:', e);
       setIsGenerating(false);
-      Alert.alert(
-        'Planning Notice',
-        e?.message || 'Unable to generate itinerary right now. Please try again.'
-      );
+      showAlert({
+        title: 'Planning Notice',
+        message: e?.message || 'Unable to generate itinerary right now. Please try again.',
+        variant: 'error',
+      });
     }
   };
 
@@ -707,6 +709,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   interestChipText: {
+    fontFamily: 'DMSans_500Medium',
     fontSize: 15,
   },
 

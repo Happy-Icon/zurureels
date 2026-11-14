@@ -18,7 +18,6 @@ import {
   DMSans_600SemiBold,
   DMSans_700Bold,
 } from '@expo-google-fonts/dm-sans';
-import { InstrumentSerif_400Regular } from '@expo-google-fonts/instrument-serif';
 import { useFonts } from 'expo-font';
 import {
   DarkTheme,
@@ -220,7 +219,6 @@ function RootLayout() {
     DMSans_500Medium,
     DMSans_600SemiBold,
     DMSans_700Bold,
-    InstrumentSerif_400Regular,
   });
   const { markInteractive } = useObserve();
 

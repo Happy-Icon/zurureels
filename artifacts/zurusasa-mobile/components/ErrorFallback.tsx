@@ -184,12 +184,13 @@ const styles = StyleSheet.create({
     maxWidth: 600,
   },
   title: {
+    fontFamily: 'DMSans_700Bold',
     fontSize: 28,
-    fontWeight: '700',
     textAlign: 'center',
     lineHeight: 40,
   },
   message: {
+    fontFamily: 'DMSans_400Regular',
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
@@ -220,7 +221,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   buttonText: {
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
     textAlign: 'center',
     fontSize: 16,
   },
@@ -245,8 +246,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   modalTitle: {
+    fontFamily: 'DMSans_600SemiBold',
     fontSize: 20,
-    fontWeight: '600',
   },
   closeButton: {
     width: 44,

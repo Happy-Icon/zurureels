@@ -277,7 +277,6 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 28,
-    fontWeight: '700',
     fontFamily: 'DMSans_700Bold',
     letterSpacing: -0.5,
     lineHeight: 34,
@@ -323,7 +322,6 @@ const styles = StyleSheet.create({
   },
   infoCardTitle: {
     fontSize: 15,
-    fontWeight: '600',
     fontFamily: 'DMSans_600SemiBold',
     letterSpacing: -0.2,
   },
@@ -337,7 +335,6 @@ const styles = StyleSheet.create({
   },
   sectionHeading: {
     fontSize: 16,
-    fontWeight: '600',
     fontFamily: 'DMSans_600SemiBold',
     letterSpacing: -0.2,
   },
@@ -369,7 +366,6 @@ const styles = StyleSheet.create({
   },
   categoryTitle: {
     fontSize: 14,
-    fontWeight: '600',
     fontFamily: 'DMSans_600SemiBold',
     letterSpacing: -0.1,
   },
@@ -409,7 +405,6 @@ const styles = StyleSheet.create({
   },
   vaultTitle: {
     fontSize: 14,
-    fontWeight: '600',
     fontFamily: 'DMSans_600SemiBold',
   },
   vaultDesc: {
@@ -442,7 +437,6 @@ const styles = StyleSheet.create({
   primaryCtaText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
     fontFamily: 'DMSans_700Bold',
   },
   actionDisclaimer: {

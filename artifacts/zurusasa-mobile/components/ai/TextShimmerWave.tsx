@@ -7,6 +7,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { AI_FONTS } from './tokens';
 
 export type TextShimmerWaveProps = {
   children: string;
@@ -147,6 +148,7 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
   },
   char: {
+    fontFamily: AI_FONTS.regular,
     fontSize: 13.5,
   },
 });

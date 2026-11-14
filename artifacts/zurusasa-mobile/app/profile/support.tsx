@@ -801,15 +801,10 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.5,
     marginBottom: 32,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   listBlock: {
     gap: 8,
@@ -833,14 +828,9 @@ const styles = StyleSheet.create({
   rowTitle: {
     flex: 1,
     fontSize: 16,
-    fontWeight: '400',
     color: '#1E1E1E',
     letterSpacing: -0.2,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   chevron: {
     marginLeft: 12,
@@ -869,15 +859,10 @@ const styles = StyleSheet.create({
   },
   modalHeaderTitle: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#111111',
     maxWidth: '70%',
     textAlign: 'center',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   modalScroll: {
     flex: 1,
@@ -888,31 +873,22 @@ const styles = StyleSheet.create({
   },
   docHeadline: {
     fontSize: 24,
-    fontWeight: '700',
     color: '#111111',
     marginBottom: 8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   formSub: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
     marginBottom: 24,
   },
   sectionHeading: {
     fontSize: 18,
-    fontWeight: '700',
     color: '#111111',
     marginBottom: 12,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   searchBox: {
     flexDirection: 'row',
@@ -926,6 +902,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
     color: '#111111',
     padding: 0,
   },
@@ -948,18 +925,14 @@ const styles = StyleSheet.create({
   faqQuestion: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '600',
     color: '#1E1E1E',
     marginRight: 10,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   faqAnswer: {
     marginTop: 10,
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     lineHeight: 20,
     color: '#4B5563',
   },
@@ -971,7 +944,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
     color: '#222222',
     marginBottom: 8,
     marginTop: 12,
@@ -982,6 +955,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
     color: '#111111',
     borderWidth: 1,
     borderColor: '#EAEAEA',
@@ -1001,12 +975,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
 
   /* Safety urgent styles */
@@ -1021,12 +990,13 @@ const styles = StyleSheet.create({
   },
   urgentTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#991B1B',
     marginBottom: 6,
   },
   urgentText: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     lineHeight: 18,
     color: '#7F1D1D',
     marginBottom: 12,
@@ -1045,7 +1015,7 @@ const styles = StyleSheet.create({
   emergencyPillText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
   urgentBtn: {
     backgroundColor: '#DC2626',
@@ -1058,7 +1028,7 @@ const styles = StyleSheet.create({
   urgentBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
   },
 
   /* Neighbourhood concern & Feedback pills */
@@ -1082,12 +1052,12 @@ const styles = StyleSheet.create({
   },
   catPillText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: 'DMSans_500Medium',
     color: '#4B5563',
   },
   catPillTextActive: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
   },
   anonymousRow: {
     flexDirection: 'row',
@@ -1097,6 +1067,7 @@ const styles = StyleSheet.create({
   },
   anonymousText: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     color: '#555555',
     flex: 1,
   },

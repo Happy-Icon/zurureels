@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Platform,
   Pressable,
@@ -11,6 +10,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { AI_COLORS, AI_FONTS, AI_SHADOW } from './tokens';
 
 interface AIInputBarProps {
@@ -33,6 +33,7 @@ export function AIInputBar({
   disabled = false,
 }: AIInputBarProps) {
   const insets = useSafeAreaInsets();
+  const { showAlert } = useCustomAlert();
   const [focused, setFocused] = useState(false);
   const borderColor = useRef(new Animated.Value(0)).current;
   const sendScale = useRef(new Animated.Value(1)).current;
@@ -65,10 +66,12 @@ export function AIInputBar({
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Photo Permission Needed',
-          'Please allow access to your photos so Zuru Agent can see your travel inspiration.'
-        );
+        showAlert({
+          title: 'Photo Permission Needed',
+          message: 'Please allow access to your photos so Zuru Agent can see your travel inspiration.',
+          variant: 'warning',
+          icon: 'image',
+        });
         return;
       }
 
@@ -81,13 +84,19 @@ export function AIInputBar({
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
         onImageSelected?.(uri);
-        Alert.alert(
-          'Inspiration Photo Attached',
-          'Zuru Agent has received your photo. What would you like to find matching this style?'
-        );
+        showAlert({
+          title: 'Inspiration Photo Attached',
+          message: 'Zuru Agent has received your photo. What would you like to find matching this style?',
+          variant: 'success',
+          icon: 'image',
+        });
       }
     } catch {
-      Alert.alert('Notice', 'Unable to open photo library at this time.');
+      showAlert({
+        title: 'Notice',
+        message: 'Unable to open photo library at this time.',
+        variant: 'info',
+      });
     }
   };
 
@@ -95,10 +104,12 @@ export function AIInputBar({
     if (onVoice) {
       onVoice();
     } else {
-      Alert.alert(
-        'Voice Assistant',
-        'Voice dictation is active via your keyboard microphone icon for seamless input.'
-      );
+      showAlert({
+        title: 'Voice Assistant',
+        message: 'Voice dictation is active via your keyboard microphone icon for seamless input.',
+        variant: 'info',
+        icon: 'mic',
+      });
     }
   };
 

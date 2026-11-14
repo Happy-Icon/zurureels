@@ -1,11 +1,27 @@
-export const CATEGORIES = [
-  { label: 'Stays & Villas', value: 'stays' },
-  { label: 'Tours & Excursions', value: 'tours' },
-  { label: 'Food & Dining', value: 'food' },
-  { label: 'Nightlife & Clubs', value: 'nightlife' },
-  { label: 'Events & Festivals', value: 'events' },
-  { label: 'Boats & Water Sports', value: 'boats' },
-];
+import {
+  AMENITIES_BY_CATEGORY,
+  EVENT_SUBCATEGORIES,
+  OFFER_TYPES,
+  PRIMARY_EXPERIENCE_CATEGORIES,
+  PUBLISHING_FORMATS,
+  type PrimaryCategoryId,
+  type PublishingContentType,
+} from '@/constants/taxonomy';
+
+export {
+  AMENITIES_BY_CATEGORY,
+  EVENT_SUBCATEGORIES,
+  OFFER_TYPES,
+  PRIMARY_EXPERIENCE_CATEGORIES,
+  PUBLISHING_FORMATS,
+  type PrimaryCategoryId,
+  type PublishingContentType,
+};
+
+export const CATEGORIES = PRIMARY_EXPERIENCE_CATEGORIES.map((c) => ({
+  label: c.label,
+  value: c.id,
+}));
 
 export const LOCATIONS = [
   'Diani',
@@ -21,31 +37,18 @@ export const LOCATIONS = [
   'Zanzibar',
 ];
 
-export const POPULAR_AMENITIES = [
-  'Fast Wi-Fi',
-  'Air Conditioning',
-  'Swimming Pool',
-  'Ocean View',
-  'Free Parking',
-  'Fully Equipped Kitchen',
-  'TV / Streaming',
-  'Hot Water',
-  '24/7 Security',
-  'Dedicated Workspace',
-  'Balcony / Terrace',
-  'Beach Access',
-];
+export const POPULAR_AMENITIES = AMENITIES_BY_CATEGORY.accommodation;
 
 export const CANCELLATION_POLICIES = [
   {
     id: 'flexible',
     title: 'Flexible',
-    desc: 'Full refund up to 24 hours before check-in',
+    desc: 'Full refund up to 24 hours before check-in or start time',
   },
   {
     id: 'moderate',
     title: 'Moderate',
-    desc: 'Full refund up to 5 days before check-in',
+    desc: 'Full refund up to 5 days before check-in or start time',
   },
   {
     id: 'strict',

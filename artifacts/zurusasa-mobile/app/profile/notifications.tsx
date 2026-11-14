@@ -678,15 +678,10 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.5,
     marginBottom: 20,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -705,39 +700,25 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 16,
     color: '#717171',
-    fontWeight: '500',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   tabTextActive: {
     color: '#111111',
-    fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   tabContentBlock: {
     width: '100%',
   },
   sectionHeader: {
     fontSize: 22,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.3,
     marginBottom: 6,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   sectionSubtitle: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
     marginBottom: 16,
@@ -754,30 +735,21 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     fontSize: 16,
-    fontWeight: '400',
     color: '#1E1E1E',
     marginBottom: 4,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   itemSummary: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
   },
   editActionText: {
     fontSize: 15,
-    fontWeight: '600',
     color: '#111111',
     textDecorationLine: 'underline',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   dividerLine: {
     height: 1,
@@ -810,17 +782,13 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 22,
-    fontWeight: '700',
     color: '#111111',
     marginBottom: 8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   modalDescription: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
     marginBottom: 28,
@@ -835,13 +803,8 @@ const styles = StyleSheet.create({
   },
   channelLabel: {
     fontSize: 16,
-    fontWeight: '400',
     color: '#1E1E1E',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   testPushCard: {
     flexDirection: 'row',

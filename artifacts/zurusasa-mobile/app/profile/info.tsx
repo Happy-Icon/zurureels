@@ -795,15 +795,10 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.5,
     marginBottom: 24,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   fieldsContainer: {
     width: '100%',
@@ -821,38 +816,25 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 16,
-    fontWeight: '400',
     color: '#1E1E1E',
     letterSpacing: -0.2,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   actionBtnText: {
     fontSize: 15,
-    fontWeight: '600',
     color: '#111111',
     textDecorationLine: 'underline',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   fieldValue: {
     fontSize: 14,
     color: '#717171',
     lineHeight: 20,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_400Regular',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_400Regular',
   },
   explanatoryText: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
     marginTop: 2,
@@ -881,15 +863,10 @@ const styles = StyleSheet.create({
   },
   modalHeaderTitle: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#111111',
     maxWidth: '70%',
     textAlign: 'center',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   modalScroll: {
     flex: 1,
@@ -901,17 +878,13 @@ const styles = StyleSheet.create({
   },
   modalFieldTitle: {
     fontSize: 20,
-    fontWeight: '700',
     color: '#111111',
     marginBottom: 6,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   modalFieldSub: {
     fontSize: 14,
+    fontFamily: 'DMSans_400Regular',
     color: '#717171',
     lineHeight: 20,
     marginBottom: 20,
@@ -922,6 +895,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
     color: '#111111',
     borderWidth: 1,
     borderColor: '#EAEAEA',
@@ -944,11 +918,12 @@ const styles = StyleSheet.create({
   },
   modalOptionText: {
     fontSize: 15,
+    fontFamily: 'DMSans_400Regular',
     color: '#4B5563',
   },
   modalOptionTextActive: {
     color: '#111111',
-    fontWeight: '600',
+    fontFamily: 'DMSans_600SemiBold',
   },
   idCardBox: {
     backgroundColor: '#F8FAFC',
@@ -961,12 +936,13 @@ const styles = StyleSheet.create({
   },
   idCardTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'DMSans_700Bold',
     color: '#111111',
     marginBottom: 4,
   },
   idCardSub: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     color: '#64748B',
     textAlign: 'center',
   },
@@ -981,11 +957,6 @@ const styles = StyleSheet.create({
   modalSaveBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
 });

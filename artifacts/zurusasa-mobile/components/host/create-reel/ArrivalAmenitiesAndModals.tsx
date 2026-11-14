@@ -1,9 +1,9 @@
 import React from 'react';
 import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import type { useColors } from '@/hooks/useColors';
 import type { CreateReelFormState } from '@/hooks/useCreateReelForm';
-import { POPULAR_AMENITIES } from './createReelConstants';
+import type { PublishingContentType } from '@/constants/taxonomy';
 import { createReelStyles as styles } from './createReelStyles';
 
 export interface ArrivalAndAmenitiesSectionProps {
@@ -13,91 +13,208 @@ export interface ArrivalAndAmenitiesSectionProps {
 }
 
 export function ArrivalAndAmenitiesSection({ form, colors, isDark }: ArrivalAndAmenitiesSectionProps) {
+  if (
+    form.contentType !== 'experience' ||
+    form.isAttachingToExistingExp ||
+    !form.isLastStep
+  ) {
+    return null;
+  }
+
+  const isAccommodation = form.category === 'accommodation';
+  const inputStyle = [
+    styles.textInput,
+    { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text },
+  ];
+
+  const arrivalSummary = isAccommodation
+    ? `${form.checkInMethod || 'Self check-in'} · Wi-Fi, codes & checkout`
+    : form.meetingPoint.trim() || 'Optional meeting point, pickup & parking info';
+
   return (
-    <>
-      {/* Step 5: Arrival & Checkout Instructions */}
-      <View style={styles.sectionBlock}>
-        <Text style={[styles.sectionHeading, { color: colors.text }]}>5. Arrival & Departure Instructions</Text>
-        <Text style={[styles.sectionSubText, { color: colors.mutedForeground }]}>
-          Sensitive details (Wi-Fi password, access codes) are only shared with guests who have a confirmed reservation.
-        </Text>
-
-        <View style={styles.formGroup}>
-          <Text style={[styles.inputLabel, { color: colors.text }]}>Check-in Method</Text>
-          <TextInput
-            placeholder="e.g. Self check-in (Smart Lock), Host greets in person"
-            placeholderTextColor={colors.mutedForeground}
-            value={form.checkInMethod}
-            onChangeText={form.setCheckInMethod}
-            style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
-          />
-        </View>
-
-        <View style={styles.rowTwoCol}>
-          <View style={[styles.formGroup, { flex: 1 }]}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Wi-Fi Network Name</Text>
-            <TextInput
-              placeholder="e.g. ZuruSunset_Guest"
-              placeholderTextColor={colors.mutedForeground}
-              value={form.wifiSsid}
-              onChangeText={form.setWifiSsid}
-              style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+    <View style={styles.sectionBlock}>
+      {/* Collapsible Arrival / Meeting Point Accordion */}
+      <View style={[styles.accordionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Pressable
+          onPress={() => form.setShowArrivalDetails(!form.showArrivalDetails)}
+          style={({ pressed }) => [styles.accordionHeader, { opacity: pressed ? 0.85 : 1 }]}
+        >
+          <View
+            style={[
+              styles.accordionIconBox,
+              { backgroundColor: isDark ? '#27272A' : '#FFF8F5' },
+            ]}
+          >
+            <Ionicons
+              name={isAccommodation ? 'key-outline' : 'navigate-outline'}
+              size={20}
+              color="#F26522"
             />
           </View>
-
-          <View style={[styles.formGroup, { flex: 1 }]}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Wi-Fi Password</Text>
-            <TextInput
-              placeholder="e.g. SunsetVilla2026"
-              placeholderTextColor={colors.mutedForeground}
-              value={form.wifiPassword}
-              onChangeText={form.setWifiPassword}
-              style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
-            />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.accordionTitle, { color: colors.text }]}>
+              {isAccommodation
+                ? 'Arrival & Checkout Info (Optional)'
+                : 'Meeting Point & Directions (Optional)'}
+            </Text>
+            <Text style={[styles.accordionSummary, { color: colors.mutedForeground }]} numberOfLines={1}>
+              {arrivalSummary}
+            </Text>
           </View>
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={[styles.inputLabel, { color: colors.text }]}>Access / Gate Code Instructions</Text>
-          <TextInput
-            placeholder="e.g. Gate code #4492, smart lock code sent on arrival"
-            placeholderTextColor={colors.mutedForeground}
-            value={form.accessInstructions}
-            onChangeText={form.setAccessInstructions}
-            style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
+          <Ionicons
+            name={form.showArrivalDetails ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color={colors.mutedForeground}
           />
-        </View>
+        </Pressable>
 
-        <View style={styles.formGroup}>
-          <Text style={[styles.inputLabel, { color: colors.text }]}>Directions & Parking Info</Text>
-          <TextInput
-            placeholder="e.g. Behind Diani Reef Resort, dedicated shaded parking slot #4"
-            placeholderTextColor={colors.mutedForeground}
-            value={form.directions}
-            onChangeText={form.setDirections}
-            style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
-          />
-        </View>
+        {form.showArrivalDetails ? (
+          <View style={[styles.accordionBody, { borderTopColor: colors.border }]}>
+            {isAccommodation ? (
+              <>
+                <Text style={[styles.sectionSubText, { color: colors.mutedForeground }]}>
+                  Sensitive details (Wi-Fi password, access codes) are only revealed after a booking is confirmed.
+                </Text>
 
-        <View style={styles.formGroup}>
-          <Text style={[styles.inputLabel, { color: colors.text }]}>Key Return & Checkout Instructions</Text>
-          <TextInput
-            placeholder="e.g. Leave keys on table, lock gate, switch off AC"
-            placeholderTextColor={colors.mutedForeground}
-            value={form.keyReturnInstructions}
-            onChangeText={form.setKeyReturnInstructions}
-            style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, color: colors.text }]}
-          />
-        </View>
+                <View style={styles.formGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Check-in Method</Text>
+                  <TextInput
+                    placeholder="e.g. Self check-in (Smart Lock), Host greets in person"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={form.checkInMethod}
+                    onChangeText={form.setCheckInMethod}
+                    style={inputStyle}
+                  />
+                </View>
+
+                <View style={styles.rowTwoCol}>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>Wi-Fi Network Name</Text>
+                    <TextInput
+                      placeholder="e.g. ZuruSunset_Guest"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={form.wifiSsid}
+                      onChangeText={form.setWifiSsid}
+                      style={inputStyle}
+                    />
+                  </View>
+
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>Wi-Fi Password</Text>
+                    <TextInput
+                      placeholder="e.g. SunsetVilla2026"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={form.wifiPassword}
+                      onChangeText={form.setWifiPassword}
+                      style={inputStyle}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Access / Gate Code Instructions</Text>
+                  <TextInput
+                    placeholder="e.g. Gate code #4492, smart lock code sent on arrival"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={form.accessInstructions}
+                    onChangeText={form.setAccessInstructions}
+                    style={inputStyle}
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Directions & Parking Info</Text>
+                  <TextInput
+                    placeholder="e.g. Behind Diani Reef Resort, shaded parking slot #4"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={form.directions}
+                    onChangeText={form.setDirections}
+                    style={inputStyle}
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Parking Spot Details</Text>
+                  <TextInput
+                    placeholder="e.g. Private driveway fits 2 cars inside compound"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={form.parkingInfo}
+                    onChangeText={form.setParkingInfo}
+                    style={inputStyle}
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Key Return & Checkout</Text>
+                  <TextInput
+                    placeholder="e.g. Leave keys on table, lock gate, switch off AC"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={form.keyReturnInstructions}
+                    onChangeText={form.setKeyReturnInstructions}
+                    style={inputStyle}
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Trash & Cleaning Notes</Text>
+                  <TextInput
+                    placeholder="e.g. Dispose trash in bins outside gate; wash used cookware"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={form.cleaningExpectations}
+                    onChangeText={form.setCleaningExpectations}
+                    style={inputStyle}
+                  />
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.formGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Meeting Point / Pickup Info</Text>
+                  <TextInput
+                    placeholder="e.g. Meet at Diani Marine jetty 15 mins before departure"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={form.meetingPoint}
+                    onChangeText={form.setMeetingPoint}
+                    style={inputStyle}
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Directions & Parking Info</Text>
+                  <TextInput
+                    placeholder="e.g. Opposite Baharini Plaza, free patron parking at gate"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={form.directions}
+                    onChangeText={form.setDirections}
+                    style={inputStyle}
+                  />
+                </View>
+              </>
+            )}
+          </View>
+        ) : null}
       </View>
 
-      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+      {/* Category-Aware Amenities & Highlights */}
+      <View style={[styles.sectionBlock, { marginTop: 4 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>
+            {isAccommodation ? 'Amenities & Highlights' : "What's Offered / Highlights"}
+          </Text>
+          <View
+            style={[
+              styles.badgePill,
+              { backgroundColor: isDark ? '#3B2314' : '#FFF8F5' },
+            ]}
+          >
+            <Text style={[styles.badgePillText, { color: '#F26522' }]}>
+              {form.selectedAmenities.length} selected
+            </Text>
+          </View>
+        </View>
 
-      {/* Step 6: Amenities Checklist */}
-      <View style={styles.sectionBlock}>
-        <Text style={[styles.sectionHeading, { color: colors.text }]}>6. Amenities</Text>
         <View style={styles.amenitiesWrap}>
-          {POPULAR_AMENITIES.map((am) => {
+          {form.availableAmenities.map((am) => {
             const selected = form.selectedAmenities.includes(am);
             return (
               <Pressable
@@ -106,14 +223,20 @@ export function ArrivalAndAmenitiesSection({ form, colors, isDark }: ArrivalAndA
                 style={[
                   styles.amenityChip,
                   {
-                    backgroundColor: selected ? (isDark ? '#3B2314' : '#FFF8F5') : (isDark ? '#27272A' : '#F9FAFB'),
+                    backgroundColor: selected
+                      ? isDark
+                        ? '#3B2314'
+                        : '#FFF8F5'
+                      : isDark
+                      ? '#27272A'
+                      : '#F9FAFB',
                     borderColor: selected ? '#F26522' : colors.border,
                   },
                 ]}
               >
-                <Feather
-                  name={selected ? 'check' : 'plus'}
-                  size={13}
+                <Ionicons
+                  name={selected ? 'checkmark-outline' : 'add-outline'}
+                  size={14}
                   color={selected ? '#F26522' : colors.mutedForeground}
                 />
                 <Text
@@ -129,7 +252,7 @@ export function ArrivalAndAmenitiesSection({ form, colors, isDark }: ArrivalAndA
           })}
         </View>
       </View>
-    </>
+    </View>
   );
 }
 
@@ -139,8 +262,23 @@ export interface CreateReelBottomDockProps {
   uploadProgress: number;
   bottomPad: number;
   colors: ReturnType<typeof useColors>;
+  isDark: boolean;
+  currentStep: number;
+  isLastStep: boolean;
+  backLabel?: string;
+  nextStepLabel?: string;
+  onBackStep: () => void;
+  onNextStep: () => void;
   onPublish: () => void;
+  contentType?: PublishingContentType;
+  isAttachingToExistingExp?: boolean;
 }
+
+const PUBLISH_CTA_LABELS: Record<PublishingContentType, string> = {
+  experience: 'Publish Experience & Reel',
+  event: 'Publish Event & Reel',
+  special_offer: 'Publish Special Offer & Reel',
+};
 
 export function CreateReelBottomDock({
   uploading,
@@ -148,29 +286,84 @@ export function CreateReelBottomDock({
   uploadProgress,
   bottomPad,
   colors,
+  isDark,
+  currentStep,
+  isLastStep,
+  backLabel,
+  nextStepLabel,
+  onBackStep,
+  onNextStep,
   onPublish,
+  contentType = 'experience',
+  isAttachingToExistingExp = false,
 }: CreateReelBottomDockProps) {
+  const publishLabel = isAttachingToExistingExp
+    ? 'Publish Reel to Listing'
+    : PUBLISH_CTA_LABELS[contentType] ?? 'Publish Experience & Reel';
+
+  const resolvedBackLabel = backLabel ?? (currentStep === 0 ? 'Formats' : 'Back');
+
   return (
-    <View style={[styles.bottomDock, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: bottomPad }]}>
-      <Pressable
-        disabled={uploading}
-        onPress={onPublish}
-        style={({ pressed }) => [
-          styles.publishBtn,
-          { opacity: pressed || uploading ? 0.88 : 1 },
-        ]}
-      >
-        {uploading ? (
-          <View style={styles.uploadingRow}>
-            <ActivityIndicator color="#FFFFFF" size="small" />
-            <Text style={styles.publishBtnText}>
-              {uploadStatusText || `Uploading (${uploadProgress}%)...`}
+    <View
+      style={[
+        styles.bottomDock,
+        { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: bottomPad },
+      ]}
+    >
+      <View style={styles.bottomDockRow}>
+        <Pressable
+          disabled={uploading}
+          onPress={onBackStep}
+          style={({ pressed }) => [
+            styles.backStepBtn,
+            {
+              borderColor: colors.border,
+              backgroundColor: isDark ? '#27272A' : '#F9FAFB',
+              opacity: pressed || uploading ? 0.7 : 1,
+            },
+          ]}
+        >
+          <Ionicons name="arrow-back" size={16} color={colors.text} />
+          <Text style={[styles.backStepBtnText, { color: colors.text }]}>
+            {resolvedBackLabel}
+          </Text>
+        </Pressable>
+
+        {!isLastStep ? (
+          <Pressable
+            onPress={onNextStep}
+            style={({ pressed }) => [
+              styles.continueBtn,
+              { opacity: pressed ? 0.88 : 1 },
+            ]}
+          >
+            <Text style={styles.continueBtnText}>
+              Continue{nextStepLabel ? ` · ${nextStepLabel}` : ''}
             </Text>
-          </View>
+            <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+          </Pressable>
         ) : (
-          <Text style={styles.publishBtnText}>Publish Experience & Reel</Text>
+          <Pressable
+            disabled={uploading}
+            onPress={onPublish}
+            style={({ pressed }) => [
+              styles.publishBtn,
+              { opacity: pressed || uploading ? 0.88 : 1 },
+            ]}
+          >
+            {uploading ? (
+              <View style={styles.uploadingRow}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={styles.publishBtnText}>
+                  {uploadStatusText || `Uploading (${uploadProgress}%)...`}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.publishBtnText}>{publishLabel}</Text>
+            )}
+          </Pressable>
         )}
-      </Pressable>
+      </View>
     </View>
   );
 }
@@ -202,7 +395,9 @@ export function VideoSourceModal({
       <Pressable style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={onClose}>
         <View style={[styles.modalSheet, { backgroundColor: colors.card }]} onStartShouldSetResponder={() => true}>
           <Text style={[styles.modalTitle, { color: colors.text }]}>Choose Reel Source</Text>
-          <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Record a live video or choose an existing video file</Text>
+          <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
+            Record a live video or choose an existing video file
+          </Text>
 
           <Pressable
             style={[styles.modalOptionBtn, { borderColor: colors.border }]}
@@ -212,13 +407,15 @@ export function VideoSourceModal({
             }}
           >
             <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(242, 101, 34, 0.12)' }]}>
-              <Feather name="video" size={22} color="#F26522" />
+              <Ionicons name="videocam-outline" size={22} color="#F26522" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.modalOptionTitle, { color: colors.text }]}>Record Reel (Live Camera)</Text>
-              <Text style={[styles.modalOptionSub, { color: colors.mutedForeground }]}>Record up to 60 seconds using camera</Text>
+              <Text style={[styles.modalOptionSub, { color: colors.mutedForeground }]}>
+                Record up to 60 seconds using camera
+              </Text>
             </View>
-            <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+            <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
           </Pressable>
 
           <Pressable
@@ -229,19 +426,18 @@ export function VideoSourceModal({
             }}
           >
             <View style={[styles.modalIconWrap, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
-              <Feather name="folder" size={22} color={colors.text} />
+              <Ionicons name="folder-outline" size={22} color={colors.text} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.modalOptionTitle, { color: colors.text }]}>Choose from Gallery</Text>
-              <Text style={[styles.modalOptionSub, { color: colors.mutedForeground }]}>Select an existing MP4 video from device</Text>
+              <Text style={[styles.modalOptionSub, { color: colors.mutedForeground }]}>
+                Select an existing MP4 video from device
+              </Text>
             </View>
-            <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+            <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
           </Pressable>
 
-          <Pressable
-            style={styles.modalCancelBtn}
-            onPress={onClose}
-          >
+          <Pressable style={styles.modalCancelBtn} onPress={onClose}>
             <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>Cancel</Text>
           </Pressable>
         </View>

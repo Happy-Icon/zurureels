@@ -12,13 +12,19 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase, type ReelRow } from '@/lib/supabase';
+import {
+  formatEventScheduleBadge,
+  getCategoryDisplayMeta,
+  resolveReelContentType,
+  type PublishingContentType,
+} from '@/constants/taxonomy';
 import { invalidateServerCache } from '@/lib/redis';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { ReelCard } from '@/components/ReelCard';
@@ -50,6 +56,7 @@ export default function HostListingsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'published' | 'drafts'>('published');
+  const [formatFilter, setFormatFilter] = useState<'all' | PublishingContentType>('all');
   const [reels, setReels] = useState<HostReelItem[]>([]);
   const [selectedPreviewReel, setSelectedPreviewReel] = useState<HostReelItem | null>(null);
   const [pinningReel, setPinningReel] = useState<HostReelItem | null>(null);
@@ -202,8 +209,11 @@ export default function HostListingsScreen() {
     }
   };
 
-  const filteredReels = reels.filter((r) =>
+  const tabFilteredReels = reels.filter((r) =>
     activeTab === 'published' ? r.status === 'published' || !r.status : r.status === 'draft',
+  );
+  const filteredReels = tabFilteredReels.filter((r) =>
+    formatFilter === 'all' ? true : resolveReelContentType(r) === formatFilter,
   );
 
   const renderItem = ({ item }: { item: HostReelItem }) => {
@@ -213,6 +223,20 @@ export default function HostListingsScreen() {
       lat: item.lat,
       lng: item.lng,
     });
+    const expMeta = ((item.experience as any)?.metadata || {}) as Record<string, any>;
+    const contentType = resolveReelContentType(item);
+    const subcategory = (item as any).subcategory || expMeta.subcategory || null;
+    const catMeta = getCategoryDisplayMeta(
+      item.category || (item.experience as any)?.category,
+      contentType,
+      subcategory,
+    );
+    const badgeLabel =
+      contentType === 'event'
+        ? `EVENT · ${formatEventScheduleBadge(expMeta.event_date, expMeta.start_time)}`
+        : contentType === 'special_offer' && expMeta.discount_label
+        ? `OFFER · ${String(expMeta.discount_label).toUpperCase()}`
+        : catMeta.shortLabel.toUpperCase();
 
     return (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -255,15 +279,25 @@ export default function HostListingsScreen() {
           </View>
 
           <View style={styles.metaRow}>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryBadgeText}>
-                {item.category?.toUpperCase() || 'STAY'}
+            <View
+              style={[
+                styles.categoryBadge,
+                { backgroundColor: isDark ? '#27272A' : '#F3F4F6' },
+              ]}
+            >
+              <Ionicons name={catMeta.icon} size={11} color="#F26522" />
+              <Text style={[styles.categoryBadgeText, { color: colors.text }]} numberOfLines={1}>
+                {badgeLabel}
               </Text>
             </View>
             {item.price != null ? (
               <Text style={[styles.price, { color: colors.text }]}>
-                KES {item.price.toLocaleString()}
-                <Text style={[styles.priceUnitText, { color: colors.mutedForeground }]}>{priceUnit}</Text>
+                {contentType === 'event' && item.price === 0
+                  ? 'Free Entry'
+                  : `KES ${item.price.toLocaleString()}`}
+                {contentType === 'event' && item.price === 0 ? null : (
+                  <Text style={[styles.priceUnitText, { color: colors.mutedForeground }]}>{priceUnit}</Text>
+                )}
               </Text>
             ) : null}
           </View>
@@ -277,11 +311,13 @@ export default function HostListingsScreen() {
                 gap: 6,
                 alignSelf: 'flex-start',
                 backgroundColor: resolvedPin.hasPin
-                  ? 'rgba(16, 185, 129, 0.1)'
+                  ? isDark
+                    ? '#27272A'
+                    : '#F3F4F6'
                   : 'rgba(242, 101, 34, 0.12)',
                 borderWidth: 1,
                 borderColor: resolvedPin.hasPin
-                  ? 'rgba(16, 185, 129, 0.35)'
+                  ? colors.border
                   : 'rgba(242, 101, 34, 0.35)',
                 paddingHorizontal: 10,
                 paddingVertical: 5,
@@ -293,13 +329,13 @@ export default function HostListingsScreen() {
             <Feather
               name="map-pin"
               size={11}
-              color={resolvedPin.hasPin ? '#10B981' : '#F26522'}
+              color={resolvedPin.hasPin ? colors.mutedForeground : '#F26522'}
             />
             <Text
               style={{
                 fontSize: 11,
                 fontFamily: 'DMSans_700Bold',
-                color: resolvedPin.hasPin ? '#10B981' : '#F26522',
+                color: resolvedPin.hasPin ? colors.text : '#F26522',
               }}
             >
               {resolvedPin.hasPin
@@ -450,6 +486,50 @@ export default function HostListingsScreen() {
                 ]}
               >
                 {t.charAt(0).toUpperCase() + t.slice(1)} ({count})
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.formatFilterRow}>
+        {(
+          [
+            { id: 'all', label: 'All', icon: 'grid-outline' },
+            { id: 'experience', label: 'Experiences', icon: 'home-outline' },
+            { id: 'event', label: 'Events', icon: 'calendar-outline' },
+            { id: 'special_offer', label: 'Offers', icon: 'pricetag-outline' },
+          ] as const
+        ).map((pill) => {
+          const active = formatFilter === pill.id;
+          return (
+            <Pressable
+              key={pill.id}
+              onPress={() => setFormatFilter(pill.id)}
+              style={[
+                styles.formatFilterPill,
+                {
+                  backgroundColor: active
+                    ? '#F26522'
+                    : isDark
+                    ? '#27272A'
+                    : '#F3F4F6',
+                  borderColor: active ? '#F26522' : colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name={pill.icon}
+                size={13}
+                color={active ? '#FFFFFF' : colors.mutedForeground}
+              />
+              <Text
+                style={[
+                  styles.formatFilterText,
+                  { color: active ? '#FFFFFF' : colors.text },
+                ]}
+              >
+                {pill.label}
               </Text>
             </Pressable>
           );
@@ -719,10 +799,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     backgroundColor: 'rgba(242, 101, 34, 0.1)',
+    maxWidth: '58%',
   },
   categoryBadgeText: {
     fontSize: 10,
@@ -822,5 +906,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  formatFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginBottom: 12,
+  },
+  formatFilterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  formatFilterText: {
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
   },
 });

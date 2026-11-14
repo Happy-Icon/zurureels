@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -21,6 +20,7 @@ import type {
   MapViewportEvent,
 } from '@/components/map/MapCanvas.types';
 import { useTheme } from '@/context/ThemeContext';
+import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import type { ReelRow } from '@/lib/supabase';
 import type { SearchFilters } from '@/services/filterService';
@@ -82,6 +82,7 @@ export function DiscoverMapView({
 }: DiscoverMapViewProps) {
   const { isDark } = useTheme();
   const colors = useColors();
+  const { showAlert } = useCustomAlert();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -296,10 +297,12 @@ export function DiscoverMapView({
         status = req.status;
       }
       if (status !== 'granted') {
-        Alert.alert(
-          'Location Permission Needed',
-          'Enable location access in Settings to center the map on your current position.',
-        );
+        showAlert({
+          title: 'Location Permission Needed',
+          message: 'Enable location access in Settings to center the map on your current position.',
+          variant: 'warning',
+          icon: 'map-pin',
+        });
         return;
       }
 
@@ -313,11 +316,16 @@ export function DiscoverMapView({
       setUserLocation(next);
       mapRef.current?.flyTo(next, 13.5, 500);
     } catch {
-      Alert.alert('Location Unavailable', 'Unable to determine your current GPS position.');
+      showAlert({
+        title: 'Location Unavailable',
+        message: 'Unable to determine your current GPS position.',
+        variant: 'error',
+        icon: 'navigation',
+      });
     } finally {
       setLocatingUser(false);
     }
-  }, []);
+  }, [showAlert]);
 
   const cardWidth = Math.min(screenWidth - 32, 360);
   const cardSnapInterval = cardWidth + 12;

@@ -374,14 +374,9 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 32,
-    fontWeight: '700',
     letterSpacing: -0.5,
     marginBottom: 28,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   listBlock: {
     gap: 4,
@@ -405,13 +400,8 @@ const styles = StyleSheet.create({
   rowTitle: {
     flex: 1,
     fontSize: 16,
-    fontWeight: '400',
     letterSpacing: -0.2,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_500Medium',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_500Medium',
   },
   chevron: {
     marginLeft: 12,
@@ -439,14 +429,9 @@ const styles = StyleSheet.create({
   },
   modalHeaderTitle: {
     fontSize: 16,
-    fontWeight: '600',
     maxWidth: '70%',
     textAlign: 'center',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   modalScroll: {
     flex: 1,
@@ -457,16 +442,12 @@ const styles = StyleSheet.create({
   },
   docHeadline: {
     fontSize: 24,
-    fontWeight: '700',
     marginBottom: 6,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   docLastUpdated: {
     fontSize: 13,
+    fontFamily: 'DMSans_400Regular',
     marginBottom: 24,
   },
   docSection: {
@@ -474,21 +455,12 @@ const styles = StyleSheet.create({
   },
   sectionHeading: {
     fontSize: 16,
-    fontWeight: '700',
     marginBottom: 8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   sectionBody: {
     fontSize: 14,
     lineHeight: 22,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_400Regular',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_400Regular',
   },
 });

@@ -1,9 +1,17 @@
 import { resolveAvatarUrl } from '@/lib/avatar';
 import { getReelExpiryCutoffIso } from '@/lib/reelExpiry';
 import { supabase, type ReelRow } from '@/lib/supabase';
+import {
+  isEventActive,
+  isOfferActive,
+  resolveReelContentType,
+} from '@/constants/taxonomy';
 
 export interface SearchFilters {
   category?: string | null;
+  subcategory?: string | null;
+  onlySpecialOffers?: boolean;
+  onlyUpcomingEvents?: boolean;
   minPrice?: number | null;
   maxPrice?: number | null;
   cities?: string[];
@@ -24,6 +32,9 @@ export interface ServerFilterOptions {
 
 export const DEFAULT_FILTERS: SearchFilters = {
   category: null,
+  subcategory: null,
+  onlySpecialOffers: false,
+  onlyUpcomingEvents: false,
   minPrice: 0,
   maxPrice: 150000,
   cities: [],
@@ -37,17 +48,94 @@ export const DEFAULT_FILTERS: SearchFilters = {
 
 const MAX_DEFAULT_PRICE = 150000;
 
+const ACCOMMODATION_ALIASES = [
+  'accommodation',
+  'stay',
+  'stays',
+  'hotel',
+  'hotels',
+  'villa',
+  'villas',
+  'apartment',
+  'apartments',
+  'resort',
+  'lodge',
+  'guesthouse',
+  'bnb',
+  'campsite',
+  'glamping',
+  'parks_camps',
+  'beach_house',
+] as const;
+
+const LAND_ALIASES = [
+  'land_experience',
+  'land_adventure',
+  'air_adventure',
+  'tour',
+  'tours',
+  'safari',
+  'hiking',
+  'trek',
+  'wildlife',
+  'excursion',
+  'adventure',
+  'skydiving',
+  'balloon',
+  'paragliding',
+  'zip_line',
+] as const;
+
+const WATER_ALIASES = [
+  'water_experience',
+  'water_adventure',
+  'boat',
+  'boats',
+  'cruise',
+  'dhow',
+  'marine',
+  'snorkelling',
+  'diving',
+  'water_sports',
+] as const;
+
+const FOOD_DINING_ALIASES = [
+  'food_dining',
+  'food',
+  'dining',
+  'restaurant',
+  'restaurants',
+  'drinks',
+  'bar',
+  'cocktails',
+  'nightlife',
+  'club',
+  'cafe',
+] as const;
+
+const EVENT_ALIASES = ['event', 'events'] as const;
+const OFFER_ALIASES = ['special_offer', 'offer', 'offers'] as const;
+
 const CATEGORY_ALIAS_GROUPS: Record<string, readonly string[]> = {
-  stay: ['stay', 'stays', 'hotel', 'villa', 'apartment', 'parks_camps'],
-  stays: ['stay', 'stays', 'hotel', 'villa', 'apartment', 'parks_camps'],
-  tour: ['tour', 'tours', 'land_adventure', 'air_adventure', 'water_adventure'],
-  tours: ['tour', 'tours', 'land_adventure', 'air_adventure', 'water_adventure'],
-  boat: ['boat', 'boats', 'water_adventure'],
-  boats: ['boat', 'boats', 'water_adventure'],
-  event: ['event', 'events'],
-  events: ['event', 'events'],
-  food: ['food', 'restaurant'],
-  nightlife: ['nightlife', 'drinks'],
+  accommodation: ACCOMMODATION_ALIASES,
+  stay: ACCOMMODATION_ALIASES,
+  stays: ACCOMMODATION_ALIASES,
+  land_experience: LAND_ALIASES,
+  tour: LAND_ALIASES,
+  tours: LAND_ALIASES,
+  water_experience: WATER_ALIASES,
+  boat: WATER_ALIASES,
+  boats: WATER_ALIASES,
+  food_dining: FOOD_DINING_ALIASES,
+  food: FOOD_DINING_ALIASES,
+  restaurant: FOOD_DINING_ALIASES,
+  nightlife: FOOD_DINING_ALIASES,
+  drinks: FOOD_DINING_ALIASES,
+  event: EVENT_ALIASES,
+  events: EVENT_ALIASES,
+  special_offer: OFFER_ALIASES,
+  offer: OFFER_ALIASES,
+  offers: OFFER_ALIASES,
 };
 
 export function expandCategoryAliases(categories: readonly string[]): string[] {
@@ -144,10 +232,10 @@ export const filterService = {
 
     const selectClause = hasExperiencePredicate
       ? `*,
-        experience:experiences!inner(id, title, entity_name, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, availability_status, image_url, max_guests, min_stay_nights, max_stay_nights, check_in_time, check_out_time, booking_mode, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata),
+        experience:experiences!inner(id, title, entity_name, category, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, availability_status, image_url, max_guests, min_stay_nights, max_stay_nights, check_in_time, check_out_time, booking_mode, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata),
         host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, bio, role)`
       : `*,
-        experience:experiences(id, title, entity_name, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, availability_status, image_url, max_guests, min_stay_nights, max_stay_nights, check_in_time, check_out_time, booking_mode, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata),
+        experience:experiences(id, title, entity_name, category, description, location, city, formatted_address, country_code, display_latitude, display_longitude, location_precision, current_price, price_unit, availability_status, image_url, max_guests, min_stay_nights, max_stay_nights, check_in_time, check_out_time, booking_mode, cancellation_policy, house_rules, arrival_instructions, checkout_instructions, amenities, metadata),
         host:profiles!reels_user_id_profiles_fkey(id, full_name, email, verification_status, is_verified, metadata, created_at, bio, role)`;
 
     let query = supabase
@@ -221,15 +309,79 @@ export const filterService = {
    * Filter reels/experiences based on active SearchFilters
    */
   applyFilters(reels: ReelRow[], filters: SearchFilters): ReelRow[] {
-    let result = [...reels];
+    let result = reels.filter((r) => {
+      const ct = resolveReelContentType(r);
+      const expMeta = ((r.experience?.metadata as Record<string, any>) || {});
+      if (ct === 'event') {
+        const ev = expMeta.event_details || {};
+        return isEventActive(
+          ev.event_date || r.event?.event_date,
+          ev.end_date || r.event?.end_date,
+          ev.expires_at || r.expires_at || r.event?.expires_at,
+          r.event?.status,
+        );
+      }
+      if (ct === 'special_offer') {
+        const off = expMeta.offer_details || {};
+        return isOfferActive(
+          off.expires_at || r.expires_at || r.offer?.expires_at,
+          r.offer?.status,
+        );
+      }
+      return true;
+    });
 
-    // 1. Category Filter (with singular/plural & umbrella alias expansion)
+    // 1. Category Filter (4 primary categories + events/offers + legacy alias expansion)
     if (filters.category) {
-      const allowedCategories = new Set(expandCategoryAliases([filters.category]));
+      const targetCat = filters.category.trim().toLowerCase();
+      if (targetCat === 'events' || targetCat === 'event') {
+        result = result.filter((r) => resolveReelContentType(r) === 'event');
+      } else if (
+        targetCat === 'offers' ||
+        targetCat === 'offer' ||
+        targetCat === 'special_offer'
+      ) {
+        result = result.filter((r) => resolveReelContentType(r) === 'special_offer');
+      } else {
+        const allowedCategories = new Set(expandCategoryAliases([filters.category]));
+        result = result.filter((r) => {
+          const reelCat = (r.category ?? '').toLowerCase();
+          const expCat = ((r.experience as any)?.category ?? '').toLowerCase();
+          const metaPrimary = String(
+            ((r.experience?.metadata as Record<string, unknown> | null)?.primary_category) || '',
+          ).toLowerCase();
+          return (
+            allowedCategories.has(reelCat) ||
+            (expCat !== '' && allowedCategories.has(expCat)) ||
+            (metaPrimary !== '' && allowedCategories.has(metaPrimary))
+          );
+        });
+      }
+    }
+
+    // 1b. Subcategory & Format Toggles
+    if (filters.subcategory) {
+      const targetSub = filters.subcategory.trim().toLowerCase();
       result = result.filter((r) => {
-        const reelCat = (r.category ?? '').toLowerCase();
-        const expCat = ((r.experience as any)?.category ?? '').toLowerCase();
-        return allowedCategories.has(reelCat) || (expCat !== '' && allowedCategories.has(expCat));
+        const expMeta = (r.experience?.metadata as Record<string, unknown> | null) || {};
+        const sub = String(
+          (r as any).subcategory ||
+            (r.experience as any)?.subcategory ||
+            expMeta.subcategory ||
+            '',
+        ).toLowerCase();
+        return sub === targetSub;
+      });
+    }
+
+    if (filters.onlySpecialOffers && !filters.onlyUpcomingEvents) {
+      result = result.filter((r) => resolveReelContentType(r) === 'special_offer');
+    } else if (filters.onlyUpcomingEvents && !filters.onlySpecialOffers) {
+      result = result.filter((r) => resolveReelContentType(r) === 'event');
+    } else if (filters.onlySpecialOffers && filters.onlyUpcomingEvents) {
+      result = result.filter((r) => {
+        const ct = resolveReelContentType(r);
+        return ct === 'special_offer' || ct === 'event';
       });
     }
 
@@ -272,7 +424,13 @@ export const filterService = {
       const requiredAmenities = filters.amenities.map((a) => a.toLowerCase());
       result = result.filter((r) => {
         const itemMeta = (r.experience?.metadata ?? {}) as Record<string, unknown>;
-        const itemAmenities = ((itemMeta.amenities as string[]) || []).map((a) => a.toLowerCase());
+        const expColAmenities = Array.isArray((r.experience as any)?.amenities)
+          ? ((r.experience as any).amenities as string[])
+          : [];
+        const metaAmenities = Array.isArray(itemMeta.amenities)
+          ? (itemMeta.amenities as string[])
+          : [];
+        const itemAmenities = [...expColAmenities, ...metaAmenities].map((a) => a.toLowerCase());
         return requiredAmenities.every((req) => itemAmenities.includes(req));
       });
     }
@@ -335,6 +493,9 @@ export const filterService = {
   getAppliedFilterCount(filters: SearchFilters): number {
     let count = 0;
     if (filters.category) count++;
+    if (filters.subcategory) count++;
+    if (filters.onlySpecialOffers) count++;
+    if (filters.onlyUpcomingEvents) count++;
     if ((filters.minPrice ?? 0) > 0 || (filters.maxPrice ?? MAX_DEFAULT_PRICE) < MAX_DEFAULT_PRICE) count++;
     if (filters.cities && filters.cities.length > 0) count += filters.cities.length;
     if (filters.minRating != null) count++;

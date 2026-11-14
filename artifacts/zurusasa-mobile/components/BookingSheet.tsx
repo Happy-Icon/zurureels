@@ -153,6 +153,11 @@ export function BookingSheet({
         visible={successModalVisible}
         title={title}
         bottomInset={insets.bottom}
+        checkIn={checkout.from}
+        checkOut={checkout.to}
+        guestSummary={checkout.guestSummary}
+        totalAmount={checkout.totalAmount}
+        paymentMethod={checkout.paymentMethod}
         onViewItinerary={handleViewItinerary}
         onClose={handleSuccessClose}
       />

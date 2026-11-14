@@ -322,14 +322,9 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 34,
-    fontWeight: '700',
     color: '#111111',
     letterSpacing: -0.8,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   listContent: {
     paddingHorizontal: 24,
@@ -356,16 +351,11 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 19,
-    fontWeight: '700',
     color: '#111111',
     marginTop: 20,
     marginBottom: 8,
     textAlign: 'center',
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_700Bold',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_700Bold',
   },
   emptySub: {
     fontSize: 15,
@@ -373,11 +363,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     maxWidth: 320,
-    fontFamily: Platform.select({
-      ios: 'System',
-      android: 'DMSans_400Regular',
-      default: 'sans-serif',
-    }),
+    fontFamily: 'DMSans_400Regular',
   },
   sectionHeaderWrap: {
     paddingTop: 16,
