@@ -9,6 +9,7 @@ import type { BookingRow } from '@/lib/supabase';
 import { dateRange, daysUntilLabel } from './reservationHelpers';
 import { StatusPill } from './StatusPill';
 import { TripProgressTimeline } from './TripProgressTimeline';
+import { isCheckInWindowOpen } from './reservationHelpers';
 import { reservationsStyles as styles } from './reservationsStyles';
 
 export interface FeaturedNextTripCardProps {
@@ -59,8 +60,23 @@ export function FeaturedNextTripCard({
           style={StyleSheet.absoluteFill}
         />
 
-        {/* Countdown Banner */}
-        {countdown ? (
+        {/* Status / Countdown Banner */}
+        {booking.arrival_issue_status === 'open' ? (
+          <View style={[styles.heroCountdownBadge, { backgroundColor: '#B45309' }]}>
+            <Feather name="alert-triangle" size={12} color="#FFFFFF" />
+            <Text style={styles.heroCountdownText}>Issue Reported</Text>
+          </View>
+        ) : booking.checked_in_at ? (
+          <View style={[styles.heroCountdownBadge, { backgroundColor: '#059669' }]}>
+            <Feather name="check-circle" size={12} color="#FFFFFF" />
+            <Text style={styles.heroCountdownText}>Checked In ✓</Text>
+          </View>
+        ) : isCheckInWindowOpen(booking) ? (
+          <View style={[styles.heroCountdownBadge, { backgroundColor: '#059669' }]}>
+            <Feather name="key" size={12} color="#FFFFFF" />
+            <Text style={styles.heroCountdownText}>Check-In Open</Text>
+          </View>
+        ) : countdown ? (
           <View style={styles.heroCountdownBadge}>
             <Feather name="zap" size={12} color="#FFFFFF" />
             <Text style={styles.heroCountdownText}>{countdown}</Text>
@@ -104,7 +120,12 @@ export function FeaturedNextTripCard({
       {/* Content Body: Timeline & Actions */}
       <View style={styles.heroBody}>
         {/* Timeline */}
-        <TripProgressTimeline status={booking.status} checkIn={booking.check_in} />
+        <TripProgressTimeline
+          status={booking.status}
+          checkIn={booking.check_in}
+          checkedInAt={booking.checked_in_at}
+          arrivalIssueStatus={booking.arrival_issue_status}
+        />
 
         {/* Price & Action Dock */}
         <View style={[styles.heroDockRow, { borderTopColor: colors.border }]}>
@@ -148,13 +169,15 @@ export function FeaturedNextTripCard({
               onPress={onViewBooking}
               style={({ pressed }) => [
                 styles.heroPrimaryBtn,
-                { backgroundColor: colors.text },
+                { backgroundColor: isCheckInWindowOpen(booking) ? '#059669' : colors.text },
                 pressed && { opacity: 0.88 },
               ]}
               accessibilityRole="button"
-              accessibilityLabel="View Itinerary"
+              accessibilityLabel={isCheckInWindowOpen(booking) ? 'Check In or View Pass' : 'View Itinerary'}
             >
-              <Text style={[styles.heroPrimaryBtnText, { color: colors.background }]}>View Itinerary</Text>
+              <Text style={[styles.heroPrimaryBtnText, { color: isCheckInWindowOpen(booking) ? '#FFFFFF' : colors.background }]}>
+                {isCheckInWindowOpen(booking) ? 'Check In / View Pass' : 'View Itinerary'}
+              </Text>
             </Pressable>
           </View>
         </View>

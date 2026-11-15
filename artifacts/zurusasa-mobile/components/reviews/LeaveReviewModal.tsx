@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Dimensions,
   KeyboardAvoidingView,
   Modal,
@@ -24,6 +23,7 @@ import { reviewService } from '@/services/reviewService';
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = Math.min(SCREEN_HEIGHT * 0.88, 760);
@@ -369,7 +369,7 @@ export function LeaveReviewModal({
                     ]}
                   >
                     {uploadingPhotos ? (
-                      <ActivityIndicator size="small" color="#F26522" />
+                      <PremiumLoader size={5} color="#F26522" />
                     ) : (
                       <>
                         <Feather name="camera" size={18} color="#F26522" />
@@ -434,7 +434,7 @@ export function LeaveReviewModal({
                 >
                   {submitting ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <ActivityIndicator color="#FFFFFF" size="small" />
+                      <PremiumLoader color="#FFFFFF" size={5} />
                       <Text style={styles.submitBtnText}>Submitting Verified Review...</Text>
                     </View>
                   ) : (

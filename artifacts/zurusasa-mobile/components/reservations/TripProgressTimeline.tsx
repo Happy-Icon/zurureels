@@ -4,15 +4,28 @@ import { Feather } from '@expo/vector-icons';
 import { daysUntilNumber } from './reservationHelpers';
 import { reservationsStyles as styles } from './reservationsStyles';
 
-export function TripProgressTimeline({ status, checkIn }: { status: string | null; checkIn: string | null }) {
+export function TripProgressTimeline({
+  status,
+  checkIn,
+  checkedInAt,
+  arrivalIssueStatus,
+}: {
+  status: string | null;
+  checkIn: string | null;
+  checkedInAt?: string | null;
+  arrivalIssueStatus?: string | null;
+}) {
   const days = daysUntilNumber(checkIn);
   const s = (status ?? 'pending').toLowerCase();
   const isPaid = s === 'paid' || s === 'confirmed';
 
-  let activeStep = 1; // 0: Booked, 1: Confirmed, 2: Check In, 3: Stay, 4: Checkout
-  if (isPaid) {
-    if (days !== null && days <= 0 && days >= -1) activeStep = 2; // Check In
-    else if (days !== null && days < -1) activeStep = 3; // Stay
+  let activeStep = 1; // 0: Booked, 1: Confirmed, 2: Check In, 3: Stay
+  if (s === 'completed' || Boolean(checkedInAt)) {
+    activeStep = 3; // Check In completed, Stay active
+  } else if (arrivalIssueStatus === 'open') {
+    activeStep = 2; // Paused at Check In under issue review
+  } else if (isPaid) {
+    if (days !== null && days <= 0) activeStep = 2; // Check In window
     else activeStep = 1; // Confirmed
   }
 

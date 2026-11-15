@@ -1,7 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   Easing,
   Modal,
@@ -17,6 +16,7 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter, type Href } from 'expo-router';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
@@ -261,6 +261,7 @@ export default function ProfileScreen() {
 
   const handleSwitchMode = () => {
     const nextMode = isHostMode ? 'guest' : 'host';
+    setHistorySheetVisible(false);
     setTargetMode(nextMode);
     setSwitchingOverlayVisible(true);
 
@@ -399,7 +400,7 @@ export default function ProfileScreen() {
               hitSlop={6}
             >
               {uploadingAvatar ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <PremiumLoader size={3} color="#FFFFFF" />
               ) : (
                 <Feather name="camera" size={12} color="#FFFFFF" />
               )}
@@ -447,38 +448,40 @@ export default function ProfileScreen() {
           </View>
         </Pressable>
 
-        {/* ── QUICK CARDS (Bookings & History) ─────────────────────────────────── */}
-        <View style={styles.quickCardsRow}>
-          <Pressable
-            testID="profile-quick-bookings"
-            onPress={() => router.push('/reservations')}
-            style={({ pressed }) => [
-              styles.quickCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-              pressed && styles.quickCardPressed,
-            ]}
-          >
-            <View style={[styles.quickCardIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
-              <Feather name="briefcase" size={36} color="#F26522" />
-            </View>
-            <Text style={[styles.quickCardText, { color: colors.text }]}>Bookings</Text>
-          </Pressable>
+        {/* ── QUICK CARDS (Bookings & History — Guest Mode Only) ────────────────── */}
+        {!isHostMode ? (
+          <View style={styles.quickCardsRow}>
+            <Pressable
+              testID="profile-quick-bookings"
+              onPress={() => router.push('/reservations')}
+              style={({ pressed }) => [
+                styles.quickCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+                pressed && styles.quickCardPressed,
+              ]}
+            >
+              <View style={[styles.quickCardIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
+                <Feather name="briefcase" size={36} color="#F26522" />
+              </View>
+              <Text style={[styles.quickCardText, { color: colors.text }]}>Bookings</Text>
+            </Pressable>
 
-          <Pressable
-            testID="profile-quick-history"
-            onPress={() => setHistorySheetVisible(true)}
-            style={({ pressed }) => [
-              styles.quickCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-              pressed && styles.quickCardPressed,
-            ]}
-          >
-            <View style={[styles.quickCardIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
-              <MaterialCommunityIcons name="history" size={38} color="#F26522" />
-            </View>
-            <Text style={[styles.quickCardText, { color: colors.text }]}>History</Text>
-          </Pressable>
-        </View>
+            <Pressable
+              testID="profile-quick-history"
+              onPress={() => setHistorySheetVisible(true)}
+              style={({ pressed }) => [
+                styles.quickCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+                pressed && styles.quickCardPressed,
+              ]}
+            >
+              <View style={[styles.quickCardIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
+                <MaterialCommunityIcons name="history" size={38} color="#F26522" />
+              </View>
+              <Text style={[styles.quickCardText, { color: colors.text }]}>History</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* ── BECOME A HOST CARD ──────────────────────────────────────────────── */}
         {!isHostMode && role !== 'host' && (

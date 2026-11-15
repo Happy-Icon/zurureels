@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -27,6 +26,7 @@ import {
 } from '@/lib/queries';
 import type { BookingRow, ExperienceRow, HostBlockedDateRow } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 // Date Utility Helpers
 function getDaysInMonth(year: number, month: number) {
@@ -870,7 +870,7 @@ export default function HostCalendarScreen() {
               style={({ pressed }) => [styles.sheetActionBtn, styles.btnDestructive, pressed && { opacity: 0.9 }]}
             >
               {unblockMutation.isPending ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <PremiumLoader color="#FFFFFF" size={6} />
               ) : (
                 <Text style={styles.sheetActionBtnText}>Unblock dates</Text>
               )}
@@ -945,7 +945,7 @@ export default function HostCalendarScreen() {
               style={({ pressed }) => [styles.sheetActionBtn, { backgroundColor: '#F26522' }, pressed && { opacity: 0.9 }]}
             >
               {blockMutation.isPending ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <PremiumLoader color="#FFFFFF" size={6} />
               ) : (
                 <Text style={styles.sheetActionBtnText}>Confirm date block</Text>
               )}

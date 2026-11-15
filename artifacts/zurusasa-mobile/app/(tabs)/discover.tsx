@@ -22,14 +22,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   extractEventFromReel,
   extractOfferFromReel,
+  filterActivePromotionalReels,
   useActiveSpecialOffers,
   useReels,
   useUpcomingEvents,
 } from '@/lib/queries';
+import { invalidateServerCache } from '@/lib/redis';
+import {
+  extractEventTiming,
+  extractPromoEndTimestampFromReel,
+  useExactExpirySweep,
+} from '@/hooks/useEventLifecycle';
 import { useWeather, type Coordinates } from '@/lib/weather';
 import { WeatherCard } from '@/components/WeatherCard';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
@@ -46,6 +53,10 @@ import {
   DISCOVER_CATEGORY_TABS,
   formatEventScheduleBadge,
   formatExpiryCountdown,
+  getEventLifecycleState,
+  isEventActive,
+  isOfferActive,
+  parseExpiryTimestamp,
   resolveReelContentType,
   type DiscoverTabItem,
 } from '@/constants/taxonomy';
@@ -85,6 +96,7 @@ export default function AirbnbDiscoverScreen() {
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [viewerReel, setViewerReel] = useState<ReelRow | null>(null);
   const [bookingSheetReel, setBookingSheetReel] = useState<ReelRow | null>(null);
+  const [bookingInitialStep, setBookingInitialStep] = useState<'details' | 'event_tickets' | 'offer_claim'>('details');
   const [selectedEventSheet, setSelectedEventSheet] = useState<{
     event: EventRow;
     reel: ReelRow | null;
@@ -116,6 +128,7 @@ export default function AirbnbDiscoverScreen() {
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
 
   const searchInputRef = useRef<TextInput>(null);
+  const queryClient = useQueryClient();
 
   const reelsQuery = useReels();
   const weatherQuery = useWeather(selectedCity, coords);
@@ -130,13 +143,74 @@ export default function AirbnbDiscoverScreen() {
     fallbackReels: reelsQuery.data,
   });
 
+  const [liveTickMs, setLiveTickMs] = useState<number>(() => Date.now());
+
+  const promoExpiryTimestamps = useMemo(() => {
+    const list: Array<number | null> = [];
+    for (const r of reelsQuery.data ?? []) {
+      list.push(extractPromoEndTimestampFromReel(r));
+    }
+    for (const ev of upcomingEventsQuery.data ?? []) {
+      const matched =
+        (reelsQuery.data ?? []).find(
+          (r) =>
+            r.id === ev.reel_id ||
+            r.event_id === ev.id ||
+            (ev.experience_id &&
+              r.experience_id === ev.experience_id &&
+              resolveReelContentType(r) === 'event'),
+        ) ?? null;
+      list.push(getEventLifecycleState(extractEventTiming(ev, matched)).endMs);
+    }
+    for (const off of activeOffersQuery.data ?? []) {
+      list.push(parseExpiryTimestamp(off.expires_at));
+    }
+    return list;
+  }, [reelsQuery.data, upcomingEventsQuery.data, activeOffersQuery.data]);
+
+  const exactExpiryTick = useExactExpirySweep(promoExpiryTimestamps, () => {
+    setLiveTickMs(Date.now());
+    invalidateServerCache('invalidate_reels_feed').catch(() => {});
+    queryClient.invalidateQueries({ queryKey: ['reels'] });
+    queryClient.invalidateQueries({ queryKey: ['upcoming-events'] });
+    queryClient.invalidateQueries({ queryKey: ['active-special-offers'] });
+  });
+
   // Merge DB table results with cached/live reel-backed events & offers for instant responsiveness
   const upcomingEvents = useMemo(() => {
+    void liveTickMs;
+    void exactExpiryTick;
     const merged = new Map<string, EventRow>();
+    const reelList = reelsQuery.data ?? [];
     for (const ev of upcomingEventsQuery.data ?? []) {
-      merged.set(ev.id, ev);
+      const matched =
+        reelList.find(
+          (r) =>
+            r.id === ev.reel_id ||
+            r.event_id === ev.id ||
+            (ev.experience_id &&
+              r.experience_id === ev.experience_id &&
+              resolveReelContentType(r) === 'event'),
+        ) ?? null;
+      const timing = extractEventTiming(ev, matched);
+      if (
+        isEventActive(
+          timing.eventDate,
+          timing.endDate,
+          timing.expiresAt,
+          timing.status,
+          timing.startTime,
+          timing.endTime,
+        )
+      ) {
+        merged.set(ev.id, {
+          ...ev,
+          start_time: ev.start_time ?? timing.startTime ?? null,
+          end_time: ev.end_time ?? timing.endTime ?? null,
+        });
+      }
     }
-    for (const r of reelsQuery.data ?? []) {
+    for (const r of reelList) {
       const ev = extractEventFromReel(r);
       if (ev && !merged.has(ev.id)) {
         merged.set(ev.id, ev);
@@ -147,21 +221,39 @@ export default function AirbnbDiscoverScreen() {
       const tb = b.event_date ? new Date(b.event_date).getTime() : Number.MAX_SAFE_INTEGER;
       return ta - tb;
     });
-  }, [upcomingEventsQuery.data, reelsQuery.data]);
+  }, [upcomingEventsQuery.data, reelsQuery.data, liveTickMs, exactExpiryTick]);
 
   const activeOffers = useMemo(() => {
+    void liveTickMs;
+    void exactExpiryTick;
+    const now = Date.now();
     const merged = new Map<string, SpecialOfferRow>();
     for (const off of activeOffersQuery.data ?? []) {
-      merged.set(off.id, off);
+      if (isOfferActive(off.expires_at, off.status, now)) {
+        merged.set(off.id, off);
+      }
     }
     for (const r of reelsQuery.data ?? []) {
       const off = extractOfferFromReel(r);
-      if (off && !merged.has(off.id)) {
+      if (off && !merged.has(off.id) && isOfferActive(off.expires_at, off.status, now)) {
         merged.set(off.id, off);
       }
     }
     return Array.from(merged.values());
-  }, [activeOffersQuery.data, reelsQuery.data]);
+  }, [activeOffersQuery.data, reelsQuery.data, liveTickMs, exactExpiryTick]);
+
+  useEffect(() => {
+    const hasPromos =
+      upcomingEvents.length > 0 ||
+      activeOffers.length > 0 ||
+      (reelsQuery.data ?? []).some((r) => {
+        const ct = resolveReelContentType(r);
+        return ct === 'event' || ct === 'special_offer';
+      });
+    if (!hasPromos) return;
+    const id = setInterval(() => setLiveTickMs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [upcomingEvents.length, activeOffers.length, reelsQuery.data]);
 
   const findReelForEvent = useCallback(
     (ev: EventRow): ReelRow | null => {
@@ -351,7 +443,9 @@ export default function AirbnbDiscoverScreen() {
     }
 
     // 3. Multi-faceted Smart Filters (Expiry, Price, Subcategory, Rating, Amenities, Host Type, Sorting)
-    return filterService.applyFilters(searchFiltered, filters);
+    void liveTickMs;
+    void exactExpiryTick;
+    return filterActivePromotionalReels(filterService.applyFilters(searchFiltered, filters));
   }, [
     hasServerFilters,
     serverFilteredQuery.data,
@@ -360,6 +454,8 @@ export default function AirbnbDiscoverScreen() {
     activeCategory,
     categoryObj,
     filters,
+    liveTickMs,
+    exactExpiryTick,
   ]);
 
   const cardWidth = (winWidth - 40 - 12) / 2;
@@ -580,15 +676,16 @@ export default function AirbnbDiscoverScreen() {
                   >
                     {upcomingEvents.map((ev) => {
                       const matchedReel = findReelForEvent(ev);
+                      const evTiming = extractEventTiming(ev, matchedReel);
+                      const evLifecycle = getEventLifecycleState(evTiming, liveTickMs);
                       const imageUrl =
                         ev.image_url ||
                         matchedReel?.thumbnail_url ||
                         matchedReel?.experience?.image_url ||
                         null;
-                      const scheduleLabel = formatEventScheduleBadge(
-                        ev.event_date,
-                        ev.start_time,
-                      );
+                      const scheduleLabel = evLifecycle.isLive
+                        ? `LIVE · ${evLifecycle.compactCountdownLabel || 'Happening Now'}`
+                        : formatEventScheduleBadge(ev.event_date, ev.start_time);
                       const evPrice =
                         typeof ev.price === 'number'
                           ? ev.price
@@ -604,7 +701,7 @@ export default function AirbnbDiscoverScreen() {
                             styles.promoCard,
                             {
                               backgroundColor: colors.card,
-                              borderColor: colors.border,
+                              borderColor: evLifecycle.isLive ? '#FECACA' : colors.border,
                               opacity: pressed ? 0.9 : 1,
                             },
                           ]}
@@ -626,8 +723,21 @@ export default function AirbnbDiscoverScreen() {
                                 <Ionicons name="calendar-outline" size={28} color="#F26522" />
                               </View>
                             )}
-                            <View style={[styles.promoPill, { backgroundColor: 'rgba(17, 24, 39, 0.78)' }]}>
-                              <Ionicons name="calendar-outline" size={11} color="#FFFFFF" />
+                            <View
+                              style={[
+                                styles.promoPill,
+                                {
+                                  backgroundColor: evLifecycle.isLive
+                                    ? '#DC2626'
+                                    : 'rgba(17, 24, 39, 0.78)',
+                                },
+                              ]}
+                            >
+                              <Ionicons
+                                name={evLifecycle.isLive ? 'radio' : 'calendar-outline'}
+                                size={11}
+                                color="#FFFFFF"
+                              />
                               <Text style={styles.promoPillText} numberOfLines={1}>
                                 {scheduleLabel}
                               </Text>
@@ -640,15 +750,20 @@ export default function AirbnbDiscoverScreen() {
                             </Text>
                             <View style={styles.promoMetaRow}>
                               <Ionicons
-                                name="location-outline"
+                                name={evLifecycle.isLive ? 'time-outline' : 'location-outline'}
                                 size={12}
-                                color={colors.mutedForeground}
+                                color={evLifecycle.isLive ? '#DC2626' : colors.mutedForeground}
                               />
                               <Text
-                                style={[styles.promoCardSub, { color: colors.mutedForeground }]}
+                                style={[
+                                  styles.promoCardSub,
+                                  { color: evLifecycle.isLive ? '#DC2626' : colors.mutedForeground },
+                                ]}
                                 numberOfLines={1}
                               >
-                                {ev.location || ev.experience?.city || 'Kenya Coast'}
+                                {evLifecycle.isLive && evLifecycle.timeWindowLabel
+                                  ? evLifecycle.timeWindowLabel
+                                  : ev.location || ev.experience?.city || 'Kenya Coast'}
                               </Text>
                             </View>
                             <Text style={[styles.promoPriceText, { color: colors.text }]}>
@@ -696,7 +811,7 @@ export default function AirbnbDiscoverScreen() {
                         matchedReel?.thumbnail_url ||
                         matchedReel?.experience?.image_url ||
                         null;
-                      const countdownLabel = formatExpiryCountdown(off.expires_at);
+                      const countdownLabel = formatExpiryCountdown(off.expires_at, liveTickMs, true);
 
                       return (
                         <Pressable
@@ -901,6 +1016,7 @@ export default function AirbnbDiscoverScreen() {
               ? () => {
                   const target = selectedEventSheet.reel!;
                   setSelectedEventSheet(null);
+                  setBookingInitialStep('event_tickets');
                   setBookingSheetReel(target);
                 }
               : undefined
@@ -921,6 +1037,7 @@ export default function AirbnbDiscoverScreen() {
               ? () => {
                   const target = selectedOfferSheet.reel!;
                   setSelectedOfferSheet(null);
+                  setBookingInitialStep('offer_claim');
                   setBookingSheetReel(target);
                 }
               : undefined
@@ -934,7 +1051,11 @@ export default function AirbnbDiscoverScreen() {
         <BookingSheet
           visible={Boolean(bookingSheetReel)}
           reel={bookingSheetReel}
-          onClose={() => setBookingSheetReel(null)}
+          initialStep={bookingInitialStep}
+          onClose={() => {
+            setBookingSheetReel(null);
+            setBookingInitialStep('details');
+          }}
         />
       ) : null}
 

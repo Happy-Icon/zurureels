@@ -59,6 +59,7 @@ export interface MapCanvasProps {
   routeCoordinates?: LatLng[] | null;
   routeColor?: string;
   onPressMarker?: (id: string) => void;
+  onPressCluster?: (cluster: ComputedClusterItem) => void;
   onPressMap?: () => void;
   onViewportChange?: (event: MapViewportEvent) => void;
   onMapReady?: () => void;

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  ActivityIndicator,
   RefreshControl,
   Platform,
 } from 'react-native';
@@ -18,6 +17,7 @@ import { PersonalDataRequestRow } from '@/lib/supabase';
 import { dataRequestService } from '@/services/dataRequestService';
 import { DataRequestModal } from '@/components/privacy/DataRequestModal';
 import { DataRequestStatusCard } from '@/components/privacy/DataRequestStatusCard';
+import { Skeleton } from '@/components/Skeleton';
 
 export default function DataRequestScreen() {
   const colors = useColors();
@@ -123,11 +123,10 @@ export default function DataRequestScreen() {
         </View>
 
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#F26522" />
-            <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
-              Checking export status...
-            </Text>
+          <View style={{ gap: 14, marginTop: 8 }}>
+            <Skeleton style={{ width: '100%', height: 124, borderRadius: 16 }} />
+            <Skeleton style={{ width: '100%', height: 84, borderRadius: 14 }} />
+            <Skeleton style={{ width: '100%', height: 84, borderRadius: 14 }} />
           </View>
         ) : (
           <>

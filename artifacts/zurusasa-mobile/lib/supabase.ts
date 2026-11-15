@@ -273,6 +273,7 @@ export interface EventRow {
   location?: string | null;
   image_url?: string | null;
   start_time?: string | null;
+  end_time?: string | null;
   organizer_name?: string | null;
   entry_conditions?: string | null;
   booking_instructions?: string | null;
@@ -388,6 +389,13 @@ export interface BookingRow {
   arrival_snapshot?: ArrivalInstructions | null;
   checkout_snapshot?: CheckoutInstructions | null;
   terms_acknowledged_at?: string | null;
+  checked_in_at?: string | null;
+  checked_in_by?: string | null;
+  check_in_method?: string | null;
+  check_in_metadata?: Record<string, unknown> | null;
+  arrival_issue_reported_at?: string | null;
+  arrival_issue_reason?: string | null;
+  arrival_issue_status?: string | null;
   experience?: Pick<
     ExperienceRow,
     | 'id'

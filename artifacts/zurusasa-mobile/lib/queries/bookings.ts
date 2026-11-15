@@ -143,3 +143,74 @@ export function useGuestCancelBooking() {
     },
   });
 }
+
+export function useGuestCheckInCode(bookingId?: string | null, enabled = true) {
+  return useQuery<string | null>({
+    queryKey: ['guest-check-in-code', bookingId],
+    enabled: Boolean(bookingId) && enabled,
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (!bookingId) return null;
+      const { data, error } = await supabase.rpc('get_guest_check_in_code', {
+        p_booking_id: bookingId,
+      });
+      if (error) throw new Error(error.message);
+      return typeof data === 'string' && data.trim().length > 0 ? data.trim() : null;
+    },
+  });
+}
+
+export function useGuestCheckInBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      bookingId,
+      latitude,
+      longitude,
+      distanceMeters,
+    }: {
+      bookingId: string;
+      latitude?: number | null;
+      longitude?: number | null;
+      distanceMeters?: number | null;
+    }) => {
+      const { data, error } = await supabase.rpc('guest_check_in_booking', {
+        p_booking_id: bookingId,
+        p_latitude: latitude ?? null,
+        p_longitude: longitude ?? null,
+        p_distance_meters: distanceMeters ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return data as BookingRow | null;
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['guest-check-in-code', vars.bookingId] });
+    },
+  });
+}
+
+export function useReportArrivalIssue() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ bookingId, reason }: { bookingId: string; reason: string }) => {
+      const { data, error } = await supabase.rpc('report_booking_arrival_issue', {
+        p_booking_id: bookingId,
+        p_reason: reason,
+      });
+      if (error) throw new Error(error.message);
+      return data as BookingRow | null;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-kpis'] });
+    },
+  });
+}

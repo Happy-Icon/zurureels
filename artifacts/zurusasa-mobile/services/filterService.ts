@@ -318,7 +318,9 @@ export const filterService = {
           ev.event_date || r.event?.event_date,
           ev.end_date || r.event?.end_date,
           ev.expires_at || r.expires_at || r.event?.expires_at,
-          r.event?.status,
+          r.event?.status || ev.status,
+          ev.start_time || r.event?.start_time,
+          ev.end_time || r.event?.end_time,
         );
       }
       if (ct === 'special_offer') {

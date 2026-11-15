@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -14,6 +13,7 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { PersonalDataExportFormat } from '@/lib/supabase';
 import { dataRequestService } from '@/services/dataRequestService';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 interface DataRequestModalProps {
   visible: boolean;
@@ -270,7 +270,7 @@ export function DataRequestModal({ visible, onClose, onSuccess }: DataRequestMod
                 ]}
               >
                 {loading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <PremiumLoader size={6} color="#FFFFFF" />
                 ) : (
                   <Text style={styles.primaryBtnText}>Continue to Verification</Text>
                 )}
@@ -335,7 +335,7 @@ export function DataRequestModal({ visible, onClose, onSuccess }: DataRequestMod
                 ]}
               >
                 {loading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <PremiumLoader size={6} color="#FFFFFF" />
                 ) : (
                   <Text style={styles.primaryBtnText}>Verify & Authorize Export</Text>
                 )}

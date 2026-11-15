@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   StyleSheet,
   type StyleProp,
@@ -10,6 +9,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import { ThemedText } from './ThemedText';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
@@ -113,7 +113,7 @@ export function ZuruButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={textColor} size="small" />
+        <PremiumLoader color={textColor} size={5} />
       ) : (
         <>
           {leftIcon}

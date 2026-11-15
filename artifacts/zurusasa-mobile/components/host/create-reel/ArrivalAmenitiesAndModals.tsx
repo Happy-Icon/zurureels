@@ -1,10 +1,11 @@
 import React from 'react';
-import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { useColors } from '@/hooks/useColors';
 import type { CreateReelFormState } from '@/hooks/useCreateReelForm';
 import type { PublishingContentType } from '@/constants/taxonomy';
 import { createReelStyles as styles } from './createReelStyles';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 export interface ArrivalAndAmenitiesSectionProps {
   form: CreateReelFormState;
@@ -353,7 +354,7 @@ export function CreateReelBottomDock({
           >
             {uploading ? (
               <View style={styles.uploadingRow}>
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <PremiumLoader color="#FFFFFF" size={5} />
                 <Text style={styles.publishBtnText}>
                   {uploadStatusText || `Uploading (${uploadProgress}%)...`}
                 </Text>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -21,6 +20,7 @@ import { useColors, useTheme } from '@/hooks/useColors';
 import { supabase, type BookingRow } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { Skeleton } from '@/components/Skeleton';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
 
 interface PayoutMethod {
@@ -959,7 +959,7 @@ export default function HostWalletScreen() {
               style={({ pressed }) => [styles.saveMethodBtn, { opacity: pressed ? 0.88 : 1 }]}
             >
               {savingMethod ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <PremiumLoader color="#FFFFFF" size={6} />
               ) : (
                 <Text style={styles.saveMethodBtnText}>
                   {newMethodType === 'mpesa' ? 'Save M-Pesa Number' : 'Save Bank Account'}

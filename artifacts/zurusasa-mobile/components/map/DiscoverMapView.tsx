@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
   Pressable,
@@ -15,6 +14,7 @@ import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import { MapCanvas } from '@/components/map/MapCanvas';
 import type {
+  ComputedClusterItem,
   MapCanvasRef,
   MapPriceMarker,
   MapViewportEvent,
@@ -22,6 +22,7 @@ import type {
 import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import type { ReelRow } from '@/lib/supabase';
 import type { SearchFilters } from '@/services/filterService';
 import {
@@ -101,6 +102,7 @@ export function DiscoverMapView({
 
   const [visitedIds, setVisitedIds] = useState<Set<string>>(() => new Set());
   const [carouselReels, setCarouselReels] = useState<ReelRow[]>([]);
+  const [carouselTitle, setCarouselTitle] = useState<string | null>(null);
   const [activeMarkerId, setActiveMarkerId] = useState<string | null>(null);
   const [selectedReelId, setSelectedReelId] = useState<string | null>(null);
 
@@ -129,7 +131,7 @@ export function DiscoverMapView({
 
   // Partition into real pinned coordinates vs honest town-level summary groups (ZERO Math.random())
   const { pinnedItems, townGroups } = useMemo(() => {
-    const pinned: Array<{
+    const rawPinned: Array<{
       reel: ReelRow;
       coords: LatLng;
       precision: 'exact' | 'approximate';
@@ -144,7 +146,7 @@ export function DiscoverMapView({
       });
 
       if (resolved.hasPin && resolved.latitude !== null && resolved.longitude !== null) {
-        pinned.push({
+        rawPinned.push({
           reel,
           coords: { latitude: resolved.latitude, longitude: resolved.longitude },
           precision: resolved.precision === 'approximate' ? 'approximate' : 'exact',
@@ -165,6 +167,31 @@ export function DiscoverMapView({
         }
       }
     }
+
+    // Offset co-located pins slightly (~20m) in a deterministic ring so zoomed-in pins don't stack
+    const coordBuckets = new Map<string, number[]>();
+    rawPinned.forEach((item, index) => {
+      const key = `${item.coords.latitude.toFixed(4)}:${item.coords.longitude.toFixed(4)}`;
+      const bucket = coordBuckets.get(key);
+      if (bucket) bucket.push(index);
+      else coordBuckets.set(key, [index]);
+    });
+
+    const pinned = rawPinned.map((item, index) => {
+      const key = `${item.coords.latitude.toFixed(4)}:${item.coords.longitude.toFixed(4)}`;
+      const bucket = coordBuckets.get(key);
+      if (!bucket || bucket.length <= 1) return item;
+      const posInBucket = bucket.indexOf(index);
+      const angle = (2 * Math.PI * posInBucket) / bucket.length;
+      const radius = 0.00018;
+      return {
+        ...item,
+        coords: {
+          latitude: item.coords.latitude + radius * Math.cos(angle),
+          longitude: item.coords.longitude + radius * Math.sin(angle),
+        },
+      };
+    });
 
     return {
       pinnedItems: pinned,
@@ -227,8 +254,13 @@ export function DiscoverMapView({
         setActiveMarkerId(group.id);
         setCarouselReels(group.reels);
         setSelectedReelId(group.reels[0].id);
+        setCarouselTitle(
+          `${group.city} · ${group.reels.length} ${group.reels.length === 1 ? 'Experience' : 'Experiences'}`,
+        );
         setVisitedIds((prev) => new Set(prev).add(group.reels[0].id));
-        carouselRef.current?.scrollToOffset({ offset: 0, animated: false });
+        requestAnimationFrame(() => {
+          carouselRef.current?.scrollToOffset({ offset: 0, animated: false });
+        });
         mapRef.current?.flyTo(group.center, 12.6, 420);
         return;
       }
@@ -237,19 +269,24 @@ export function DiscoverMapView({
       const idx = pinnedItems.findIndex((p) => p.reel.id === reelId);
       if (idx === -1) return;
 
-      const allPinnedReels = pinnedItems.map((p) => p.reel);
       const target = pinnedItems[idx];
+      const orderedReels = [
+        target.reel,
+        ...pinnedItems.map((p) => p.reel).filter((r) => r.id !== reelId),
+      ];
 
       setActiveMarkerId(markerId);
-      setCarouselReels(allPinnedReels);
+      setCarouselReels(orderedReels);
       setSelectedReelId(reelId);
+      setCarouselTitle(
+        target.city
+          ? `${target.city} · ${orderedReels.length} ${orderedReels.length === 1 ? 'Experience' : 'Experiences'}`
+          : `${orderedReels.length} ${orderedReels.length === 1 ? 'Experience' : 'Experiences'}`,
+      );
       setVisitedIds((prev) => new Set(prev).add(reelId));
 
       requestAnimationFrame(() => {
-        carouselRef.current?.scrollToIndex({
-          index: idx,
-          animated: true,
-        });
+        carouselRef.current?.scrollToOffset({ offset: 0, animated: false });
       });
 
       mapRef.current?.flyTo(target.coords, 14.2, 400);
@@ -257,10 +294,43 @@ export function DiscoverMapView({
     [pinnedItems, townGroups],
   );
 
+  const handlePressCluster = useCallback(
+    (cluster: ComputedClusterItem) => {
+      const memberSet = new Set(
+        cluster.memberIds.map((id) => id.replace(/^pin_/, '')),
+      );
+      const clusterReels = pinnedItems
+        .filter((p) => memberSet.has(p.reel.id))
+        .map((p) => p.reel);
+
+      if (clusterReels.length === 0) return;
+
+      const firstItem = clusterReels[0];
+      const firstCity = resolveExperienceCoords(firstItem.experience, {
+        lat: firstItem.lat,
+        lng: firstItem.lng,
+      }).city;
+
+      setActiveMarkerId(cluster.memberIds[0] ?? null);
+      setCarouselReels(clusterReels);
+      setSelectedReelId(firstItem.id);
+      setCarouselTitle(
+        `${firstCity ? `${firstCity} · ` : ''}${clusterReels.length} ${clusterReels.length === 1 ? 'Experience' : 'Experiences'} in this area`,
+      );
+      setVisitedIds((prev) => new Set(prev).add(firstItem.id));
+
+      requestAnimationFrame(() => {
+        carouselRef.current?.scrollToOffset({ offset: 0, animated: false });
+      });
+    },
+    [pinnedItems],
+  );
+
   const handleDismissCarousel = useCallback(() => {
     setActiveMarkerId(null);
     setSelectedReelId(null);
     setCarouselReels([]);
+    setCarouselTitle(null);
   }, []);
 
   const handleViewportChange = useCallback((ev: MapViewportEvent) => {
@@ -374,6 +444,7 @@ export function DiscoverMapView({
         enableClustering
         privacyCircle={selectedPrivacyCircle}
         onPressMarker={handlePressMarker}
+        onPressCluster={handlePressCluster}
         onPressMap={handleDismissCarousel}
         onViewportChange={handleViewportChange}
       />
@@ -389,7 +460,7 @@ export function DiscoverMapView({
           ]}
         >
           {searchingArea ? (
-            <ActivityIndicator size="small" color={ORANGE} />
+            <PremiumLoader size={4} color={ORANGE} />
           ) : (
             <Feather name="refresh-cw" size={13} color={ORANGE} />
           )}
@@ -429,7 +500,7 @@ export function DiscoverMapView({
       <View
         style={[
           styles.controlsColumn,
-          { bottom: carouselReels.length > 0 ? bottomOffset + 158 : bottomOffset + 12 },
+          { bottom: carouselReels.length > 0 ? bottomOffset + 194 : bottomOffset + 12 },
         ]}
       >
         <Pressable
@@ -441,7 +512,7 @@ export function DiscoverMapView({
           ]}
         >
           {locatingUser ? (
-            <ActivityIndicator size="small" color={ORANGE} />
+            <PremiumLoader size={4} color={ORANGE} />
           ) : (
             <Ionicons
               name="locate"
@@ -486,6 +557,40 @@ export function DiscoverMapView({
       {/* Bottom Swipeable Preview Card Carousel */}
       {carouselReels.length > 0 && (
         <View style={[styles.carouselWrap, { bottom: bottomOffset }]}>
+          {carouselTitle && (
+            <View style={styles.carouselHeaderRow}>
+              <View
+                style={[
+                  styles.carouselHeaderPill,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(24,24,27,0.94)'
+                      : 'rgba(255,255,255,0.96)',
+                    borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(17,24,39,0.08)',
+                  },
+                ]}
+              >
+                <Ionicons name="sparkles-outline" size={13} color={ORANGE} />
+                <Text
+                  style={[
+                    styles.carouselHeaderText,
+                    { color: isDark ? '#F9FAFB' : '#111827' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {carouselTitle}
+                </Text>
+                <Pressable
+                  hitSlop={8}
+                  accessibilityLabel="Close experiences list"
+                  onPress={handleDismissCarousel}
+                  style={styles.carouselClosePill}
+                >
+                  <Feather name="x" size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                </Pressable>
+              </View>
+            </View>
+          )}
           <FlatList
             ref={carouselRef}
             data={carouselReels}
@@ -737,6 +842,41 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 30,
+  },
+  carouselHeaderRow: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  carouselHeaderPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+    maxWidth: '92%',
+  },
+  carouselHeaderText: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_700Bold',
+    flexShrink: 1,
+  },
+  carouselClosePill: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 2,
   },
   previewCard: {
     flexDirection: 'row',

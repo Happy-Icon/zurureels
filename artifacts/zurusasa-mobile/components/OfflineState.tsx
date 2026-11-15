@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { useNetworkStatus } from '@/lib/networkManager';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 interface OfflineStateProps {
   title?: string;
@@ -87,7 +87,7 @@ export function OfflineState({
         ]}
       >
         {retrying ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
+          <PremiumLoader size={6} color="#FFFFFF" />
         ) : (
           <>
             <Feather name="refresh-cw" size={16} color="#FFFFFF" />

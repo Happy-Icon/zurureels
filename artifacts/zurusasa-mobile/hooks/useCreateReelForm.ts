@@ -17,6 +17,7 @@ import {
   PRIMARY_EXPERIENCE_CATEGORIES,
   getPrimaryCategoryMeta,
   normalizePrimaryCategory,
+  parseEventTimeParts,
   type PrimaryCategoryId,
   type PublishingContentType,
 } from '@/constants/taxonomy';
@@ -31,17 +32,25 @@ function getFutureDateInput(daysAhead: number): string {
   return `${y}-${m}-${day}`;
 }
 
-function combineDateAndTimeIso(dateStr: string, timeStr?: string | null, defaultEndOfDay = false): string {
+function combineDateAndTimeIso(
+  dateStr: string,
+  timeStr?: string | null,
+  defaultEndOfDay = false,
+  minAfterMs?: number,
+): string {
   const cleanDate = dateStr.trim();
-  const cleanTime = (timeStr || '').trim();
-  const match = cleanTime.match(/^(\d{1,2}):(\d{2})/);
+  const parsedTime = parseEventTimeParts(timeStr);
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
     const [y, m, d] = cleanDate.split('-').map(Number);
-    const hours = match ? Math.min(23, Math.max(0, parseInt(match[1], 10))) : defaultEndOfDay ? 23 : 18;
-    const mins = match ? Math.min(59, Math.max(0, parseInt(match[2], 10))) : defaultEndOfDay ? 59 : 0;
+    const hours = parsedTime ? parsedTime.hours : defaultEndOfDay ? 23 : 18;
+    const mins = parsedTime ? parsedTime.minutes : defaultEndOfDay ? 59 : 0;
     const dt = new Date(y, m - 1, d, hours, mins, 0);
     if (!Number.isNaN(dt.getTime())) {
+      if (typeof minAfterMs === 'number' && dt.getTime() <= minAfterMs) {
+        // Handle overnight events (e.g. 15:00 -> 02:00 next morning)
+        dt.setDate(dt.getDate() + 1);
+      }
       return dt.toISOString();
     }
   }
@@ -105,6 +114,12 @@ export function useCreateReelForm() {
   const [operatingHours, setOperatingHours] = useState('');
   const [whatsIncluded, setWhatsIncluded] = useState('');
   const [meetingPoint, setMeetingPoint] = useState('');
+  const [timeSlots, setTimeSlots] = useState<string[]>([
+    '08:00 Morning Session',
+    '13:30 Afternoon Session',
+    '16:30 Sunset Session',
+  ]);
+  const [customTimeSlot, setCustomTimeSlot] = useState('');
 
   // Event-Specific Fields
   const [eventSubcategory, setEventSubcategory] = useState<string>(EVENT_SUBCATEGORIES[0].id);
@@ -114,6 +129,9 @@ export function useCreateReelForm() {
   const [organizerName, setOrganizerName] = useState('');
   const [entryConditions, setEntryConditions] = useState('');
   const [bookingInstructions, setBookingInstructions] = useState('');
+  const [eventTicketTiers, setEventTicketTiers] = useState<
+    Array<{ id: string; label: string; price: string }>
+  >([]);
 
   // Special Offer Fields
   const [offerType, setOfferType] = useState<string>(OFFER_TYPES[0].id);
@@ -122,6 +140,7 @@ export function useCreateReelForm() {
   const [offerPrice, setOfferPrice] = useState('');
   const [applicableSchedule, setApplicableSchedule] = useState('');
   const [offerExpiryDate, setOfferExpiryDate] = useState<string>(() => getFutureDateInput(14));
+  const [offerExpiryTime, setOfferExpiryTime] = useState<string>('23:59');
   const [termsConditions, setTermsConditions] = useState('');
   const [redemptionInstructions, setRedemptionInstructions] = useState('');
 
@@ -242,7 +261,8 @@ export function useCreateReelForm() {
     if (nextType === 'event') {
       setPriceUnit('ticket');
     } else if (nextType === 'special_offer') {
-      setPriceUnit('offer');
+      setPriceUnit(offerType === 'stay_discount' ? 'night' : 'offer');
+      setMaxGuests((prev) => (prev === '2' || !prev.trim() ? '10' : prev));
     } else {
       const catMeta = getPrimaryCategoryMeta(category);
       setPriceUnit(catMeta.defaultPriceUnit);
@@ -293,10 +313,18 @@ export function useCreateReelForm() {
           return false;
         }
       } else if (stepIndex === 2) {
-        if (!price || isNaN(Number(price)) || Number(price) <= 0) {
+        const allowZeroDining = category === 'food_dining';
+        const numPrice = Number(price);
+        if (
+          price.trim() === '' ||
+          isNaN(numPrice) ||
+          (allowZeroDining ? numPrice < 0 : numPrice <= 0)
+        ) {
           showAlert({
             title: 'Invalid Price',
-            message: 'Please enter a valid numeric price (e.g. 5000).',
+            message: allowZeroDining
+              ? 'Enter 0 for free table reservations or a valid cover/deposit amount.'
+              : 'Please enter a valid numeric price (e.g. 5000).',
           });
           return false;
         }
@@ -377,6 +405,25 @@ export function useCreateReelForm() {
         });
         return false;
       }
+      if (offerExpiryTime.trim() && !parseEventTimeParts(offerExpiryTime)) {
+        showAlert({
+          title: 'Invalid Expiry Time',
+          message: 'Please enter the expiry time in 24-hour HH:MM format (e.g. 23:59).',
+        });
+        return false;
+      }
+      const previewExpiryIso = combineDateAndTimeIso(
+        offerExpiryDate,
+        offerExpiryTime.trim() || '23:59',
+        true,
+      );
+      if (new Date(previewExpiryIso).getTime() <= Date.now()) {
+        showAlert({
+          title: 'Offer Expiry Must Be in the Future',
+          message: 'Please pick a future expiry date and time for this special offer.',
+        });
+        return false;
+      }
       if (!location.trim()) {
         showAlert({
           title: 'Missing Location',
@@ -441,9 +488,54 @@ export function useCreateReelForm() {
     if (contentType === 'experience') {
       setPriceUnit(catMeta.defaultPriceUnit);
     }
-    // Reset default amenity chips cleanly to match the chosen primary category
+    // Reset default amenity & time slot chips cleanly to match the chosen primary category
     const defaults = AMENITIES_BY_CATEGORY[nextCat] ?? [];
     setSelectedAmenities(defaults.slice(0, 4));
+    if (nextCat === 'food_dining') {
+      setTimeSlots(['12:30 Lunch', '17:30 Sunset Drinks', '19:30 Dinner']);
+      if (!price.trim()) setPrice('0');
+    } else if (nextCat === 'water_experience') {
+      setTimeSlots(['08:30 Morning Sail', '13:00 Afternoon Session', '16:30 Sunset Cruise']);
+    } else if (nextCat === 'land_experience') {
+      setTimeSlots(['08:00 Morning Session', '13:30 Afternoon Session', '16:30 Sunset Session']);
+    }
+  };
+
+  const toggleTimeSlot = (slot: string) => {
+    setTimeSlots((prev) =>
+      prev.includes(slot) ? (prev.length > 1 ? prev.filter((s) => s !== slot) : prev) : [...prev, slot],
+    );
+  };
+
+  const addCustomTimeSlot = () => {
+    const clean = customTimeSlot.trim();
+    if (!clean) return;
+    if (!timeSlots.includes(clean)) {
+      setTimeSlots((prev) => [...prev, clean]);
+    }
+    setCustomTimeSlot('');
+  };
+
+  const addEventTicketTier = () => {
+    setEventTicketTiers((prev) => [
+      ...prev,
+      {
+        id: `tier_${Date.now()}_${prev.length + 1}`,
+        label: prev.length === 0 ? 'Early Bird' : prev.length === 1 ? 'VIP Pass' : `Tier ${prev.length + 1}`,
+        price: price.trim() || '1500',
+      },
+    ]);
+  };
+
+  const updateEventTicketTier = (
+    id: string,
+    patch: Partial<{ label: string; price: string }>,
+  ) => {
+    setEventTicketTiers((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  };
+
+  const removeEventTicketTier = (id: string) => {
+    setEventTicketTiers((prev) => prev.filter((t) => t.id !== id));
   };
 
   const handleSelectEstablishment = (expId: string) => {
@@ -635,10 +727,18 @@ export function useCreateReelForm() {
     }
 
     if (contentType === 'experience' && !isAttachingToExistingExp) {
-      if (!price || isNaN(Number(price)) || Number(price) <= 0) {
+      const allowZeroDining = category === 'food_dining';
+      const numPrice = Number(price);
+      if (
+        price.trim() === '' ||
+        isNaN(numPrice) ||
+        (allowZeroDining ? numPrice < 0 : numPrice <= 0)
+      ) {
         showAlert({
           title: 'Invalid Price',
-          message: 'Please enter a valid numeric price (e.g. 5000).',
+          message: allowZeroDining
+            ? 'Enter 0 for free table reservations or a valid numeric deposit.'
+            : 'Please enter a valid numeric price (e.g. 5000).',
         });
         return;
       }
@@ -647,6 +747,20 @@ export function useCreateReelForm() {
         showAlert({
           title: 'Missing Event Date',
           message: 'Please enter the event date (e.g. YYYY-MM-DD).',
+        });
+        return;
+      }
+      const previewStartIso = combineDateAndTimeIso(eventDate, eventStartTime, false);
+      const previewEndIso = combineDateAndTimeIso(
+        eventDate,
+        eventEndTime,
+        true,
+        new Date(previewStartIso).getTime(),
+      );
+      if (new Date(previewEndIso).getTime() <= Date.now()) {
+        showAlert({
+          title: 'Event Already Ended',
+          message: 'Please set an event date and end time in the future.',
         });
         return;
       }
@@ -669,6 +783,25 @@ export function useCreateReelForm() {
         showAlert({
           title: 'Missing Expiry Date',
           message: 'Please specify when this special offer expires (YYYY-MM-DD).',
+        });
+        return;
+      }
+      if (offerExpiryTime.trim() && !parseEventTimeParts(offerExpiryTime)) {
+        showAlert({
+          title: 'Invalid Expiry Time',
+          message: 'Please enter the expiry time in 24-hour HH:MM format (e.g. 23:59).',
+        });
+        return;
+      }
+      const checkedExpiryIso = combineDateAndTimeIso(
+        offerExpiryDate,
+        offerExpiryTime.trim() || '23:59',
+        true,
+      );
+      if (new Date(checkedExpiryIso).getTime() <= Date.now()) {
+        showAlert({
+          title: 'Offer Expiry Must Be in the Future',
+          message: 'Please pick a future expiry date and time before publishing this offer.',
         });
         return;
       }
@@ -771,6 +904,7 @@ export function useCreateReelForm() {
             operating_hours: !isStay ? operatingHours.trim() || null : null,
             whats_included: !isStay ? whatsIncluded.trim() || null : null,
             meeting_point: !isStay ? meetingPoint.trim() || null : null,
+            time_slots: !isStay && timeSlots.length > 0 ? timeSlots : null,
           };
 
           const expPayload: Record<string, unknown> = {
@@ -842,7 +976,12 @@ export function useCreateReelForm() {
         reelCategory = 'events';
         reelSubcategory = eventSubcategory;
         const startIso = combineDateAndTimeIso(eventDate, eventStartTime, false);
-        const endIso = combineDateAndTimeIso(eventDate, eventEndTime, true);
+        const endIso = combineDateAndTimeIso(
+          eventDate,
+          eventEndTime,
+          true,
+          new Date(startIso).getTime(),
+        );
         reelExpiresAtIso = endIso;
 
         const linkedEst = linkedExperienceId !== 'new' ? selectedEstablishment : null;
@@ -871,6 +1010,7 @@ export function useCreateReelForm() {
           experience_id: linkedEst?.id ?? null,
           organizer_name: orgDisplayName,
           start_time: eventStartTime.trim(),
+          end_time: eventEndTime.trim() || null,
           entry_conditions: entryConditions.trim() || null,
           booking_instructions: bookingInstructions.trim() || null,
           expires_at: endIso,
@@ -893,6 +1033,18 @@ export function useCreateReelForm() {
           // Non-fatal: reel + backing experience metadata still carries full event_details
         }
 
+        const parsedTiers = eventTicketTiers
+          .filter((t) => t.label.trim() && t.price.trim() !== '' && !isNaN(Number(t.price)))
+          .map((t) => ({
+            id: t.id,
+            label: t.label.trim(),
+            price: Math.max(0, Number(t.price)),
+          }));
+        const effectiveEventBasePrice =
+          parsedTiers.length > 0 && numericPrice === 0
+            ? Math.min(...parsedTiers.map((t) => t.price))
+            : numericPrice;
+
         const eventBackerPayload: Record<string, unknown> = {
           user_id: user.id,
           category: 'events',
@@ -906,8 +1058,8 @@ export function useCreateReelForm() {
           latitude: resolvedLat,
           longitude: resolvedLng,
           location_precision: pinnedLocation ? pinnedLocation.precision : 'city_only',
-          current_price: numericPrice,
-          price_unit: numericPrice === 0 ? 'entry' : 'ticket',
+          current_price: effectiveEventBasePrice,
+          price_unit: effectiveEventBasePrice === 0 ? 'entry' : 'ticket',
           description: description.trim(),
           max_guests: parsedMaxGuests,
           booking_mode: bookingMode,
@@ -927,6 +1079,7 @@ export function useCreateReelForm() {
               organizer_name: orgDisplayName,
               entry_conditions: entryConditions.trim() || null,
               booking_instructions: bookingInstructions.trim() || null,
+              ticket_tiers: parsedTiers.length > 0 ? parsedTiers : null,
               linked_experience_id: linkedEst?.id ?? null,
               linked_experience_title: linkedEst?.title ?? null,
               expires_at: endIso,
@@ -943,7 +1096,11 @@ export function useCreateReelForm() {
         // Special Offer
         reelCategory = 'special_offer';
         reelSubcategory = offerType;
-        const expiryIso = combineDateAndTimeIso(offerExpiryDate, '23:59', true);
+        const expiryIso = combineDateAndTimeIso(
+          offerExpiryDate,
+          offerExpiryTime.trim() || '23:59',
+          true,
+        );
         reelExpiresAtIso = expiryIso;
 
         const linkedEst = linkedExperienceId !== 'new' ? selectedEstablishment : null;
@@ -986,6 +1143,7 @@ export function useCreateReelForm() {
           // Non-fatal fallback via experiences.metadata below
         }
 
+        const resolvedOfferPriceUnit = offerType === 'stay_discount' ? 'night' : 'offer';
         const offerBackerPayload: Record<string, unknown> = {
           user_id: user.id,
           category: linkedEst?.category ? normalizePrimaryCategory(linkedEst.category) : category,
@@ -1001,7 +1159,7 @@ export function useCreateReelForm() {
           longitude: resolvedLng,
           location_precision: pinnedLocation ? pinnedLocation.precision : 'city_only',
           current_price: Number.isFinite(parsedOffer) ? parsedOffer : 0,
-          price_unit: 'offer',
+          price_unit: resolvedOfferPriceUnit,
           description: description.trim(),
           max_guests: parsedMaxGuests,
           booking_mode: bookingMode,
@@ -1173,6 +1331,12 @@ export function useCreateReelForm() {
     setWhatsIncluded,
     meetingPoint,
     setMeetingPoint,
+    timeSlots,
+    setTimeSlots,
+    customTimeSlot,
+    setCustomTimeSlot,
+    toggleTimeSlot,
+    addCustomTimeSlot,
     eventSubcategory,
     setEventSubcategory,
     eventDate,
@@ -1187,6 +1351,10 @@ export function useCreateReelForm() {
     setEntryConditions,
     bookingInstructions,
     setBookingInstructions,
+    eventTicketTiers,
+    addEventTicketTier,
+    updateEventTicketTier,
+    removeEventTicketTier,
     offerType,
     setOfferType,
     discountLabel,
@@ -1199,6 +1367,8 @@ export function useCreateReelForm() {
     setApplicableSchedule,
     offerExpiryDate,
     setOfferExpiryDate,
+    offerExpiryTime,
+    setOfferExpiryTime,
     termsConditions,
     setTermsConditions,
     redemptionInstructions,

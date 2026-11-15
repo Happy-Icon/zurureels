@@ -11,13 +11,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { useQueryClient } from '@tanstack/react-query';
 import { EnquireModal } from '@/components/EnquireModal';
-import {
-  formatExpiryCountdown,
-  getSubcategoryLabel,
-} from '@/constants/taxonomy';
+import { getSubcategoryLabel } from '@/constants/taxonomy';
 import { useColors } from '@/hooks/useColors';
+import { useOfferCountdown } from '@/hooks/useEventLifecycle';
 import { useTheme } from '@/context/ThemeContext';
+import { invalidateServerCache } from '@/lib/redis';
 import type { ReelRow, SpecialOfferRow } from '@/lib/supabase';
 
 export interface OfferDetailSheetProps {
@@ -42,6 +42,7 @@ export function OfferDetailSheet({
   const colors = useColors();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const [enquireOpen, setEnquireOpen] = useState(false);
 
   const resolved = useMemo(() => {
@@ -76,6 +77,7 @@ export function OfferDetailSheet({
     const termsConditions =
       offer?.terms_conditions || offMeta.terms_conditions || null;
     const expiresAt = offer?.expires_at || offMeta.expires_at || reel?.expires_at || null;
+    const status = offer?.status || offMeta.status || null;
     const location =
       offer?.location ||
       reel?.experience?.city ||
@@ -110,7 +112,8 @@ export function OfferDetailSheet({
       applicableSchedule,
       redemptionInstructions,
       termsConditions,
-      expiryCountdown: formatExpiryCountdown(expiresAt),
+      expiresAt,
+      status,
       location,
       linkedExperienceId,
       linkedExperienceTitle,
@@ -119,6 +122,15 @@ export function OfferDetailSheet({
       hostAvatarUrl,
     };
   }, [offer, reel]);
+
+  const offerCountdown = useOfferCountdown(resolved.expiresAt, resolved.status, {
+    enabled: visible && Boolean(offer || reel),
+    onExpired: () => {
+      invalidateServerCache('invalidate_reels_feed').catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['reels'] });
+      queryClient.invalidateQueries({ queryKey: ['active-special-offers'] });
+    },
+  });
 
   if (!offer && !reel) return null;
 
@@ -159,10 +171,37 @@ export function OfferDetailSheet({
                   <Text style={styles.discountBadgeText}>{resolved.discountLabel}</Text>
                 </View>
 
-                <View style={[styles.expiryChip, { backgroundColor: isDark ? '#27272A' : '#FFF7ED', borderColor: isDark ? '#3F3F46' : '#FED7AA' }]}>
-                  <Ionicons name="alarm-outline" size={13} color={ORANGE} />
-                  <Text style={[styles.expiryChipText, { color: ORANGE }]}>
-                    {resolved.expiryCountdown}
+                <View
+                  style={[
+                    styles.expiryChip,
+                    {
+                      backgroundColor: offerCountdown.isExpired
+                        ? isDark
+                          ? '#27272A'
+                          : '#F3F4F6'
+                        : isDark
+                        ? '#27272A'
+                        : '#FFF7ED',
+                      borderColor: offerCountdown.isExpired
+                        ? colors.border
+                        : isDark
+                        ? '#3F3F46'
+                        : '#FED7AA',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={offerCountdown.isExpired ? 'close-circle-outline' : 'alarm-outline'}
+                    size={13}
+                    color={offerCountdown.isExpired ? colors.mutedForeground : ORANGE}
+                  />
+                  <Text
+                    style={[
+                      styles.expiryChipText,
+                      { color: offerCountdown.isExpired ? colors.mutedForeground : ORANGE },
+                    ]}
+                  >
+                    {offerCountdown.countdownLabel}
                   </Text>
                 </View>
               </View>
@@ -292,7 +331,9 @@ export function OfferDetailSheet({
             ) : null}
 
             <Pressable
+              disabled={offerCountdown.isExpired}
               onPress={() => {
+                if (offerCountdown.isExpired) return;
                 if (onClaimOffer) {
                   onClose();
                   onClaimOffer();
@@ -304,12 +345,30 @@ export function OfferDetailSheet({
               }}
               style={({ pressed }) => [
                 styles.primaryBtn,
-                { backgroundColor: ORANGE, opacity: pressed ? 0.88 : 1 },
+                offerCountdown.isExpired
+                  ? {
+                      backgroundColor: isDark ? '#3F3F46' : '#D1D5DB',
+                      opacity: 0.55,
+                    }
+                  : { backgroundColor: ORANGE, opacity: pressed ? 0.88 : 1 },
               ]}
             >
-              <Ionicons name="gift-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.primaryBtnText}>
-                {onClaimOffer ? 'Claim & Book' : 'Claim Deal'}
+              <Ionicons
+                name={offerCountdown.isExpired ? 'close-circle-outline' : 'gift-outline'}
+                size={18}
+                color={offerCountdown.isExpired ? colors.mutedForeground : '#FFFFFF'}
+              />
+              <Text
+                style={[
+                  styles.primaryBtnText,
+                  offerCountdown.isExpired ? { color: colors.mutedForeground } : null,
+                ]}
+              >
+                {offerCountdown.isExpired
+                  ? 'Offer Expired'
+                  : onClaimOffer
+                  ? 'Claim & Book'
+                  : 'Claim Deal'}
               </Text>
             </Pressable>
           </View>

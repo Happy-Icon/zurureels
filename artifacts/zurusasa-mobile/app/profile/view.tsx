@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -23,6 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
 import { invalidateServerCache } from '@/lib/redis';
 import { supabase } from '@/lib/supabase';
@@ -622,7 +622,7 @@ export default function ViewProfileScreen() {
                 )}
                 {uploadingAvatar && (
                   <View style={styles.avatarLoadingOverlay}>
-                    <ActivityIndicator color="#FFFFFF" />
+                    <PremiumLoader color="#FFFFFF" size={6} />
                   </View>
                 )}
               </Pressable>
@@ -735,7 +735,7 @@ export default function ViewProfileScreen() {
               ]}
             >
               {saving ? (
-                <ActivityIndicator color={colors.background} />
+                <PremiumLoader color={colors.background} size={6} />
               ) : (
                 <Text
                   style={[

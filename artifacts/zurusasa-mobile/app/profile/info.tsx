@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -20,6 +19,8 @@ import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import { personaVerificationService } from '@/services/personaVerificationService';
+import { Skeleton } from '@/components/Skeleton';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 type EditFieldType =
   | 'legal_name'
@@ -229,7 +230,17 @@ export default function PersonalInfoScreen() {
         <Text style={[styles.pageTitle, { color: colors.text }]}>Personal info</Text>
 
         {loading ? (
-          <ActivityIndicator size="small" color={colors.text} style={{ marginTop: 40 }} />
+          <View style={styles.fieldsContainer}>
+            {[115, 145, 195, 110, 120, 135, 140].map((labelW, idx) => (
+              <View key={idx} style={[styles.rowWrapper, { borderBottomColor: colors.border }]}>
+                <View style={styles.rowTop}>
+                  <Skeleton style={{ width: labelW, height: 15, borderRadius: 6 }} />
+                  <Skeleton style={{ width: 34, height: 14, borderRadius: 6 }} />
+                </View>
+                <Skeleton style={{ width: 150 + (idx % 3) * 28, height: 14, borderRadius: 6, marginTop: 8 }} />
+              </View>
+            ))}
+          </View>
         ) : (
           <View style={styles.fieldsContainer}>
             {/* 1. Legal name */}
@@ -739,7 +750,7 @@ export default function PersonalInfoScreen() {
                   ]}
                 >
                   {saving ? (
-                    <ActivityIndicator color="#FFFFFF" />
+                    <PremiumLoader color="#FFFFFF" size={6} />
                   ) : (
                     <Text style={styles.modalSaveBtnText}>Start Persona Verification</Text>
                   )}
@@ -757,7 +768,7 @@ export default function PersonalInfoScreen() {
                 ]}
               >
                 {saving ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <PremiumLoader color="#FFFFFF" size={6} />
                 ) : (
                   <Text style={styles.modalSaveBtnText}>Save</Text>
                 )}

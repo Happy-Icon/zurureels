@@ -7,6 +7,7 @@ import { useTheme } from '@/context/ThemeContext';
 import type { BookingRow } from '@/lib/supabase';
 import { dateRange, ORANGE } from './reservationHelpers';
 import { StatusPill } from './StatusPill';
+import { isCheckInWindowOpen } from './reservationHelpers';
 import { reservationsStyles as styles } from './reservationsStyles';
 
 export interface TripCardProps {
@@ -57,8 +58,17 @@ export function TripCard({
           </View>
         )}
 
-        <View style={styles.cardStatusPosition}>
+        <View style={[styles.cardStatusPosition, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
           <StatusPill status={booking.status} />
+          {booking.arrival_issue_status === 'open' ? (
+            <View style={{ backgroundColor: '#FEF3C7', borderColor: '#F59E0B', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}>
+              <Text style={{ color: '#92400E', fontSize: 11, fontWeight: '700' }}>Issue Reported</Text>
+            </View>
+          ) : booking.checked_in_at ? (
+            <View style={{ backgroundColor: '#D1FAE5', borderColor: '#10B981', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}>
+              <Text style={{ color: '#065F46', fontSize: 11, fontWeight: '700' }}>Checked In ✓</Text>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -119,11 +129,13 @@ export function TripCard({
               ) : null}
               <Pressable
                 onPress={onViewBooking}
-                style={[styles.cardPrimaryBtn, { backgroundColor: colors.text }]}
+                style={[styles.cardPrimaryBtn, { backgroundColor: isCheckInWindowOpen(booking) ? '#059669' : colors.text }]}
                 accessibilityRole="button"
-                accessibilityLabel="View details"
+                accessibilityLabel={isCheckInWindowOpen(booking) ? 'Check In or View Pass' : 'View details'}
               >
-                <Text style={[styles.cardPrimaryBtnText, { color: colors.background }]}>Details</Text>
+                <Text style={[styles.cardPrimaryBtnText, { color: isCheckInWindowOpen(booking) ? '#FFFFFF' : colors.background }]}>
+                  {isCheckInWindowOpen(booking) ? 'Check In' : 'Details'}
+                </Text>
               </Pressable>
             </>
           ) : type === 'past' ? (

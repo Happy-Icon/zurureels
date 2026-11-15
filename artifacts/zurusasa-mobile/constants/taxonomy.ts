@@ -465,7 +465,7 @@ export function getCategoryDisplayMeta(
   };
 }
 
-function parseExpiryTimestamp(value?: string | null): number | null {
+export function parseExpiryTimestamp(value?: string | null): number | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -478,33 +478,290 @@ function parseExpiryTimestamp(value?: string | null): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+export function parseEventTimeParts(
+  timeStr?: string | null,
+): { hours: number; minutes: number; hasMeridiem: boolean } | null {
+  if (!timeStr) return null;
+  const clean = timeStr.trim();
+  if (!clean) return null;
+  const match = clean.match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*([ap]m)?$/i);
+  if (!match) return null;
+
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2] ? parseInt(match[2], 10) : 0;
+  const meridiem = match[3]?.toLowerCase() ?? null;
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  if (meridiem === 'pm') {
+    if (hours < 12) hours += 12;
+  } else if (meridiem === 'am') {
+    if (hours === 12) hours = 0;
+  }
+
+  if (hours < 0 || hours > 23) return null;
+  return { hours, minutes, hasMeridiem: Boolean(meridiem) };
+}
+
+export function formatEventClockTime(
+  timeStr?: string | null,
+  fallbackIso?: string | null,
+): string | null {
+  const parts = parseEventTimeParts(timeStr);
+  let hours: number | null = parts ? parts.hours : null;
+  let minutes: number | null = parts ? parts.minutes : null;
+
+  if (hours === null && fallbackIso) {
+    const trimmed = fallbackIso.trim();
+    if (trimmed && !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const dt = new Date(trimmed);
+      if (!Number.isNaN(dt.getTime())) {
+        hours = dt.getHours();
+        minutes = dt.getMinutes();
+      }
+    }
+  }
+
+  if (hours === null || minutes === null) {
+    return timeStr?.trim() || null;
+  }
+
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const h12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${h12}:${String(minutes).padStart(2, '0')} ${suffix}`;
+}
+
+export function formatCountdownRemaining(ms: number, compact = false): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(totalSec / 86_400);
+  const hours = Math.floor((totalSec % 86_400) / 3_600);
+  const mins = Math.floor((totalSec % 3_600) / 60);
+  const secs = totalSec % 60;
+
+  if (compact) {
+    if (days > 0) return `${days}d ${hours}h left`;
+    if (hours > 0) return `${hours}h ${mins}m left`;
+    if (mins > 0) return `${mins}m left`;
+    return '< 1m left';
+  }
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${String(mins).padStart(2, '0')}m`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${String(mins).padStart(2, '0')}m ${String(secs).padStart(2, '0')}s`;
+  }
+  return `${mins}m ${String(secs).padStart(2, '0')}s`;
+}
+
+function applyTimeOnLocalDate(
+  baseDateStr: string | null | undefined,
+  parts: { hours: number; minutes: number },
+): number | null {
+  if (!baseDateStr) return null;
+  const trimmed = baseDateStr.trim();
+  if (!trimmed) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-').map(Number);
+    return new Date(y, m - 1, d, parts.hours, parts.minutes, 0, 0).getTime();
+  }
+  const dt = new Date(trimmed);
+  if (Number.isNaN(dt.getTime())) return null;
+  return new Date(
+    dt.getFullYear(),
+    dt.getMonth(),
+    dt.getDate(),
+    parts.hours,
+    parts.minutes,
+    0,
+    0,
+  ).getTime();
+}
+
+export type EventLifecyclePhase = 'upcoming' | 'live' | 'ended';
+
+export interface EventLifecycleInput {
+  eventDate?: string | null;
+  endDate?: string | null;
+  expiresAt?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  status?: string | null;
+}
+
+export interface EventLifecycleState {
+  phase: EventLifecyclePhase;
+  isLive: boolean;
+  isEnded: boolean;
+  isUpcoming: boolean;
+  startMs: number | null;
+  endMs: number | null;
+  remainingMs: number | null;
+  timeWindowLabel: string | null;
+  countdownLabel: string | null;
+  compactCountdownLabel: string | null;
+}
+
+export function getEventLifecycleState(
+  input: EventLifecycleInput,
+  nowMs: number = Date.now(),
+): EventLifecycleState {
+  const { eventDate, endDate, expiresAt, startTime, endTime, status } = input;
+  const statusCancelled = Boolean(
+    status && ['cancelled', 'expired', 'draft', 'archived'].includes(status.toLowerCase()),
+  );
+
+  // 1. Resolve authoritative start timestamp
+  let startMs: number | null = null;
+  const startParts = parseEventTimeParts(startTime);
+  if (eventDate) {
+    const trimmed = eventDate.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      startMs = startParts
+        ? applyTimeOnLocalDate(trimmed, startParts)
+        : new Date(
+            ...((trimmed.split('-').map(Number) as [number, number, number]).map((n, i) =>
+              i === 1 ? n - 1 : n,
+            ) as [number, number, number]),
+            0,
+            0,
+            0,
+            0,
+          ).getTime();
+    } else {
+      const parsed = new Date(trimmed);
+      if (!Number.isNaN(parsed.getTime())) {
+        const isIsoMidnight = /T00:00(?::00(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/i.test(trimmed);
+        const meridiemMismatch = Boolean(
+          startParts?.hasMeridiem && parsed.getHours() !== startParts.hours,
+        );
+        startMs =
+          startParts && (isIsoMidnight || meridiemMismatch)
+            ? applyTimeOnLocalDate(trimmed, startParts)
+            : parsed.getTime();
+      }
+    }
+  }
+
+  // 2. Resolve authoritative end timestamp
+  const endParts = parseEventTimeParts(endTime);
+  const rawExpires = parseExpiryTimestamp(expiresAt);
+  const rawEndDate = parseExpiryTimestamp(endDate);
+  let endMs: number | null = rawExpires ?? rawEndDate ?? null;
+
+  if (endParts) {
+    let derivedEnd = applyTimeOnLocalDate(endDate || eventDate, endParts);
+    if (derivedEnd !== null && startMs !== null && derivedEnd <= startMs) {
+      // Overnight event (e.g. 9:00 PM -> 2:00 AM next day)
+      derivedEnd += 86_400_000;
+    }
+    if (derivedEnd !== null) {
+      const shouldPreferDerived =
+        endParts.hasMeridiem ||
+        endMs === null ||
+        (startMs !== null && endMs <= startMs && derivedEnd > startMs);
+      if (shouldPreferDerived) {
+        endMs = derivedEnd;
+      }
+    }
+  } else if (endMs === null && startMs !== null) {
+    // Legacy same-day event without explicit end/expiry stays live until end of that day
+    const startDt = new Date(startMs);
+    endMs = new Date(
+      startDt.getFullYear(),
+      startDt.getMonth(),
+      startDt.getDate(),
+      23,
+      59,
+      59,
+      999,
+    ).getTime();
+  }
+
+  let phase: EventLifecyclePhase = 'upcoming';
+  if (statusCancelled || (endMs !== null && nowMs >= endMs)) {
+    phase = 'ended';
+  } else if (startMs !== null && nowMs >= startMs) {
+    phase = 'live';
+  }
+
+  const startLabel = formatEventClockTime(
+    startTime,
+    startMs !== null ? new Date(startMs).toISOString() : eventDate,
+  );
+  const endLabel = formatEventClockTime(
+    endTime,
+    endMs !== null ? new Date(endMs).toISOString() : endDate || expiresAt,
+  );
+  const timeWindowLabel =
+    startLabel && endLabel ? `${startLabel} – ${endLabel}` : startLabel || endLabel || null;
+
+  let remainingMs: number | null = null;
+  let countdownLabel: string | null = null;
+  let compactCountdownLabel: string | null = null;
+
+  if (phase === 'live') {
+    remainingMs = endMs !== null ? Math.max(0, endMs - nowMs) : null;
+    countdownLabel =
+      remainingMs !== null ? `${formatCountdownRemaining(remainingMs)} remaining` : 'Live now';
+    compactCountdownLabel =
+      remainingMs !== null ? formatCountdownRemaining(remainingMs, true) : 'Live now';
+  } else if (phase === 'upcoming') {
+    remainingMs = startMs !== null ? Math.max(0, startMs - nowMs) : null;
+    countdownLabel =
+      remainingMs !== null ? `Starts in ${formatCountdownRemaining(remainingMs)}` : 'Upcoming';
+    compactCountdownLabel =
+      remainingMs !== null ? `In ${formatCountdownRemaining(remainingMs, true)}` : 'Upcoming';
+  } else {
+    remainingMs = 0;
+    countdownLabel = 'Event ended';
+    compactCountdownLabel = 'Ended';
+  }
+
+  return {
+    phase,
+    isLive: phase === 'live',
+    isEnded: phase === 'ended',
+    isUpcoming: phase === 'upcoming',
+    startMs,
+    endMs,
+    remainingMs,
+    timeWindowLabel,
+    countdownLabel,
+    compactCountdownLabel,
+  };
+}
+
 export function isEventActive(
   eventDate?: string | null,
   endDate?: string | null,
   expiresAt?: string | null,
   status?: string | null,
+  startTime?: string | null,
+  endTime?: string | null,
 ): boolean {
-  if (status && ['cancelled', 'expired', 'draft', 'archived'].includes(status.toLowerCase())) {
-    return false;
-  }
-  const cutoff =
-    parseExpiryTimestamp(expiresAt) ??
-    parseExpiryTimestamp(endDate) ??
-    parseExpiryTimestamp(eventDate);
-  if (cutoff === null) return true;
-  return cutoff >= Date.now();
+  return !getEventLifecycleState({
+    eventDate,
+    endDate,
+    expiresAt,
+    startTime,
+    endTime,
+    status,
+  }).isEnded;
 }
 
 export function isOfferActive(
   expiresAt?: string | null,
   status?: string | null,
+  nowMs: number = Date.now(),
 ): boolean {
   if (status && ['expired', 'inactive', 'draft', 'archived', 'cancelled'].includes(status.toLowerCase())) {
     return false;
   }
   const cutoff = parseExpiryTimestamp(expiresAt);
   if (cutoff === null) return true;
-  return cutoff >= Date.now();
+  return cutoff > nowMs;
 }
 
 export function formatEventScheduleBadge(
@@ -526,31 +783,27 @@ export function formatEventScheduleBadge(
     }
   }
 
-  let timePart = '';
-  if (startTime) {
-    const match = startTime.trim().match(/^(\d{1,2}):(\d{2})/);
-    if (match) {
-      const h = parseInt(match[1], 10);
-      const m = parseInt(match[2], 10);
-      const suffix = h >= 12 ? 'PM' : 'AM';
-      const h12 = h % 12 === 0 ? 12 : h % 12;
-      timePart = m > 0 ? `${h12}:${match[2]} ${suffix}` : `${h12} ${suffix}`;
-    } else {
-      timePart = startTime.trim();
-    }
-  }
+  const timePart = formatEventClockTime(startTime) ?? '';
 
   if (datePart && timePart) return `${datePart}, ${timePart}`;
   return datePart || timePart || 'Upcoming Event';
 }
 
-export function formatExpiryCountdown(expiresAt?: string | null): string {
+export function formatExpiryCountdown(
+  expiresAt?: string | null,
+  nowMs: number = Date.now(),
+  compact = false,
+): string {
   const cutoff = parseExpiryTimestamp(expiresAt);
   if (cutoff === null) return 'Limited-time offer';
-  const diffMs = cutoff - Date.now();
+  const diffMs = cutoff - nowMs;
   if (diffMs <= 0) return 'Expired';
+  if (diffMs < 86_400_000) {
+    return compact
+      ? formatCountdownRemaining(diffMs, true)
+      : `Ends in ${formatCountdownRemaining(diffMs, false)}`;
+  }
   const diffDays = Math.floor(diffMs / 86_400_000);
-  if (diffDays === 0) return 'Ends today';
   if (diffDays === 1) return '1 day left';
   if (diffDays <= 7) return `${diffDays} days left`;
   const d = new Date(cutoff);

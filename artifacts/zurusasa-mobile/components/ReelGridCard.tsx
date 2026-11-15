@@ -11,6 +11,12 @@ import {
   getCategoryDisplayMeta,
   resolveReelContentType,
 } from '@/constants/taxonomy';
+import {
+  extractEventTimingFromReel,
+  extractOfferExpiryFromReel,
+  useEventLifecycle,
+  useOfferCountdown,
+} from '@/hooks/useEventLifecycle';
 
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
@@ -41,17 +47,35 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
   );
   const evDetails = (meta.event_details ?? {}) as Record<string, any>;
   const offDetails = (meta.offer_details ?? {}) as Record<string, any>;
+  const eventLifecycle = useEventLifecycle(extractEventTimingFromReel(reel), {
+    enabled: contentType === 'event',
+    intervalMs: 30_000,
+  });
+  const offerTiming = extractOfferExpiryFromReel(reel);
+  const offerCountdown = useOfferCountdown(offerTiming?.expiresAt, offerTiming?.status, {
+    enabled: contentType === 'special_offer',
+  });
+  const isEventLive = contentType === 'event' && Boolean(eventLifecycle?.isLive);
 
   const badgeLabel =
     contentType === 'event'
-      ? `EVENT · ${formatEventScheduleBadge(
-          evDetails.event_date || reel.event?.event_date,
-          evDetails.start_time || reel.event?.start_time,
-        )}`
+      ? isEventLive
+        ? `LIVE · ${eventLifecycle?.compactCountdownLabel || 'Happening Now'}`
+        : `EVENT · ${formatEventScheduleBadge(
+            evDetails.event_date || reel.event?.event_date,
+            evDetails.start_time || reel.event?.start_time,
+          )}`
       : contentType === 'special_offer'
       ? `OFFER · ${String(
           reel.offer?.discount_label || offDetails.discount_label || 'DEAL',
-        ).toUpperCase()}`
+        ).toUpperCase()}${
+          !offerCountdown.isExpired &&
+          offerCountdown.remainingMs != null &&
+          offerCountdown.remainingMs <= 24 * 60 * 60 * 1000 &&
+          offerCountdown.compactCountdownLabel
+            ? ` · ${offerCountdown.compactCountdownLabel}`
+            : ''
+        }`
       : catMeta.shortLabel.toUpperCase();
 
   const offerOriginalPrice =
@@ -105,8 +129,17 @@ export function ReelGridCard({ reel, width, onOpen }: ReelGridCardProps) {
         )}
 
         {/* Top Left: Format / Category Badge */}
-        <View style={[styles.categoryBadge, { backgroundColor: catMeta.badgeBg }]}>
-          <Ionicons name={catMeta.icon} size={11} color="#FFFFFF" />
+        <View
+          style={[
+            styles.categoryBadge,
+            { backgroundColor: isEventLive ? '#DC2626' : catMeta.badgeBg },
+          ]}
+        >
+          <Ionicons
+            name={isEventLive ? 'radio' : catMeta.icon}
+            size={11}
+            color="#FFFFFF"
+          />
           <Text style={styles.categoryBadgeText} numberOfLines={1}>
             {badgeLabel}
           </Text>

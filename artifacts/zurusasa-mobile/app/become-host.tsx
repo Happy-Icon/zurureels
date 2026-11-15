@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -22,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 
 import { KeyboardScreen } from '@/components/keyboard';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 export default function BecomeHostScreen() {
   const colors = useColors();
@@ -215,7 +215,7 @@ export default function BecomeHostScreen() {
           ]}
         >
           {loading ? (
-            <ActivityIndicator color="#ffffff" size="small" />
+            <PremiumLoader color="#FFFFFF" size={6} />
           ) : (
             <Text style={styles.submitBtnText}>Submit Host Application</Text>
           )}

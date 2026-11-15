@@ -20,7 +20,14 @@ export interface GuestCounts {
   pets: number;
 }
 
-export type Step = 'details' | 'dates' | 'review' | 'payment_method' | 'confirm_pay';
+export type Step =
+  | 'details'
+  | 'dates'
+  | 'event_tickets'
+  | 'offer_claim'
+  | 'review'
+  | 'payment_method'
+  | 'confirm_pay';
 export type PaymentMethod = 'mpesa' | 'card';
 export type Phase = 'idle' | 'submitting' | 'pin' | 'settling' | 'success';
 

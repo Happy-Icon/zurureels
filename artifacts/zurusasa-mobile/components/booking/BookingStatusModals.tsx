@@ -7,6 +7,7 @@ import { PremiumLoader } from '@/components/PremiumLoader';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors, useTheme } from '@/hooks/useColors';
 import type { BookingCheckoutState } from '@/hooks/useBookingCheckout';
+import type { CategoryFlowConfig } from './categoryFlowConfig';
 import { BRAND_ORANGE, addDays, fmtShort, formatPhoneForPrompt } from './bookingHelpers';
 import { bookingStyles as styles } from './bookingStyles';
 
@@ -25,6 +26,14 @@ export function BookingBottomActionBar({ bottomInset, checkout }: BookingBottomA
     exp,
     step,
     setStep,
+    flowConfig,
+    eventLifecycle,
+    eventSalesClosed,
+    offerExpired,
+    isFreeBooking,
+    continueFromReview,
+    continueFromPaymentMethod,
+    savingPaymentMethod,
     reviewCount,
     ratingVal,
     price,
@@ -42,6 +51,23 @@ export function BookingBottomActionBar({ bottomInset, checkout }: BookingBottomA
   const surfaceBg = isDark ? '#18181B' : '#FFFFFF';
   const inactiveSegColor = isDark ? '#27272A' : '#EBEBEB';
 
+  const nextSelectionStep =
+    flowConfig.kind === 'event'
+      ? 'event_tickets'
+      : flowConfig.kind === 'offer'
+      ? 'offer_claim'
+      : 'dates';
+
+  const isSelectionStep =
+    step === 'dates' || step === 'event_tickets' || step === 'offer_claim';
+
+  const promoActionClosed = eventSalesClosed || offerExpired;
+  const promoClosedLabel = offerExpired
+    ? 'Offer Expired'
+    : eventLifecycle?.isLive
+    ? 'Event Live · Closed'
+    : 'Event Ended';
+
   return (
     <View
       style={[
@@ -57,7 +83,15 @@ export function BookingBottomActionBar({ bottomInset, checkout }: BookingBottomA
         /* Step 0: Listing Details Bottom Bar */
         <View style={styles.detailsBottomRow}>
           <View style={styles.detailsBottomPriceCol}>
-            {exp?.current_price != null ? (
+            {isFreeBooking ? (
+              <Text style={[styles.detailsBottomPriceVal, { color: colors.text }]}>
+                {flowConfig.kind === 'event'
+                  ? 'Free Entry'
+                  : flowConfig.kind === 'offer'
+                  ? 'Free Deal Pass'
+                  : 'Free Table Booking'}
+              </Text>
+            ) : exp?.current_price != null ? (
               <Text style={[styles.detailsBottomPriceVal, { color: colors.text }]}>
                 KES {Number(exp.current_price).toLocaleString()}
                 <Text style={[styles.detailsBottomPriceUnit, { color: colors.mutedForeground }]}>
@@ -86,60 +120,166 @@ export function BookingBottomActionBar({ bottomInset, checkout }: BookingBottomA
             </View>
           </View>
 
-          <Pressable onPress={() => setStep('dates')} style={styles.checkAvailabilityBtn}>
-            <Text style={styles.checkAvailabilityBtnText}>Check availability</Text>
+          <Pressable
+            disabled={promoActionClosed}
+            onPress={() => setStep(nextSelectionStep)}
+            style={[
+              styles.checkAvailabilityBtn,
+              promoActionClosed
+                ? {
+                    backgroundColor: isDark ? '#3F3F46' : '#D1D5DB',
+                    opacity: 0.55,
+                  }
+                : null,
+            ]}
+          >
+            <Text
+              style={[
+                styles.checkAvailabilityBtnText,
+                promoActionClosed ? { color: colors.mutedForeground } : null,
+              ]}
+            >
+              {promoActionClosed ? promoClosedLabel : flowConfig.detailsCtaLabel}
+            </Text>
           </Pressable>
         </View>
-      ) : step === 'dates' ? (
-        /* Step 1: Dates Bottom Bar */
+      ) : isSelectionStep ? (
+        /* Step 1: Category Selection Bottom Bar (Dates / Event Tickets / Offer Claim) */
         <View style={styles.datesStickyRow}>
           <View style={styles.datesPriceCol}>
             <Text style={[styles.datesPriceMain, { color: colors.text }]}>
-              KES {Number(price).toLocaleString()}
-              <Text style={[styles.datesPriceUnit, { color: colors.mutedForeground }]}>
-                {' '}
-                / {priceUnit}
-              </Text>
+              {isFreeBooking ? (
+                'Free'
+              ) : (
+                <>
+                  KES {Number(price).toLocaleString()}
+                  <Text style={[styles.datesPriceUnit, { color: colors.mutedForeground }]}>
+                    {' '}
+                    / {flowConfig.kind === 'event' ? 'ticket' : priceUnit}
+                  </Text>
+                </>
+              )}
             </Text>
             <Text style={[styles.datesTotalSub, { color: colors.mutedForeground }]}>
-              {from && to ? `KES ${totalAmount.toLocaleString()} total` : 'Add dates for total'}
+              {isFreeBooking
+                ? flowConfig.kind === 'dining'
+                  ? 'No cover fee required'
+                  : 'Instant confirmation'
+                : flowConfig.isFixedDate || (from && (!flowConfig.isRangePicker || to))
+                ? `KES ${totalAmount.toLocaleString()} total`
+                : 'Pick date for total'}
             </Text>
           </View>
           <Pressable
+            disabled={promoActionClosed}
             onPress={() => {
-              if (!from) {
+              if (promoActionClosed) return;
+              if (!flowConfig.isFixedDate && !from) {
                 showAlert({
-                  title: 'Select Dates',
-                  message: 'Please pick your check-in and checkout dates.',
+                  title: flowConfig.isRangePicker ? 'Select Dates' : 'Select Date',
+                  message: flowConfig.isRangePicker
+                    ? 'Please pick your check-in and checkout dates.'
+                    : 'Please pick a date to continue.',
                   icon: 'calendar',
                   variant: 'warning',
                 });
                 return;
               }
-              if (!to) {
+              if (from && (!to || !flowConfig.isRangePicker)) {
                 setTo(addDays(from, 1));
               }
               setStep('review');
             }}
-            style={styles.orangeDatesReserveBtn}
+            style={[
+              styles.orangeDatesReserveBtn,
+              promoActionClosed
+                ? {
+                    backgroundColor: isDark ? '#3F3F46' : '#D1D5DB',
+                    opacity: 0.55,
+                  }
+                : null,
+            ]}
           >
-            <Text style={styles.orangeDatesReserveBtnText}>Reserve</Text>
+            <Text
+              style={[
+                styles.orangeDatesReserveBtnText,
+                promoActionClosed ? { color: colors.mutedForeground } : null,
+              ]}
+            >
+              {offerExpired
+                ? 'Offer Expired'
+                : eventSalesClosed
+                ? eventLifecycle?.isLive
+                  ? 'Tickets Closed'
+                  : 'Event Ended'
+                : flowConfig.datesCtaLabel}
+            </Text>
           </Pressable>
         </View>
       ) : step === 'review' ? (
-        /* Step 2: Progress Indicator + Orange Next Button */
+        /* Step 2: Progress Indicator + Next (or Instant Confirm Free Booking) */
         <>
           <View style={styles.stepProgressBar}>
             <View style={[styles.stepSegment, styles.stepSegmentActive]} />
             <View style={[styles.stepSegment, styles.stepSegmentActive]} />
-            <View style={[styles.stepSegment, { backgroundColor: inactiveSegColor }]} />
+            {!isFreeBooking ? (
+              <View style={[styles.stepSegment, { backgroundColor: inactiveSegColor }]} />
+            ) : null}
           </View>
-          <Pressable onPress={() => setStep('payment_method')} style={styles.orangePrimaryBtn}>
-            <Text style={styles.orangePrimaryBtnText}>Next</Text>
-          </Pressable>
+          {isFreeBooking ? (
+            <Pressable
+              onPress={startPaymentFlow}
+              disabled={busy || promoActionClosed}
+              style={({ pressed }) => [
+                styles.orangePrimaryBtn,
+                promoActionClosed
+                  ? { backgroundColor: isDark ? '#3F3F46' : '#D1D5DB', opacity: 0.55 }
+                  : { opacity: pressed || busy ? 0.88 : 1 },
+              ]}
+            >
+              {busy ? (
+                <PremiumLoader color="#FFFFFF" size={8} />
+              ) : (
+                <Text
+                  style={[
+                    styles.orangePrimaryBtnText,
+                    promoActionClosed ? { color: colors.mutedForeground } : null,
+                  ]}
+                >
+                  {promoActionClosed
+                    ? promoClosedLabel
+                    : flowConfig.kind === 'event'
+                    ? 'Confirm Free RSVP'
+                    : flowConfig.kind === 'offer'
+                    ? 'Claim Free Voucher'
+                    : 'Confirm Free Table'}
+                </Text>
+              )}
+            </Pressable>
+          ) : (
+            <Pressable
+              disabled={promoActionClosed}
+              onPress={continueFromReview}
+              style={[
+                styles.orangePrimaryBtn,
+                promoActionClosed
+                  ? { backgroundColor: isDark ? '#3F3F46' : '#D1D5DB', opacity: 0.55 }
+                  : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.orangePrimaryBtnText,
+                  promoActionClosed ? { color: colors.mutedForeground } : null,
+                ]}
+              >
+                {promoActionClosed ? promoClosedLabel : 'Next'}
+              </Text>
+            </Pressable>
+          )}
         </>
       ) : step === 'payment_method' ? (
-        /* Step 3: Add Payment Method Bottom Bar (Progress Indicator + Orange Next Button) */
+        /* Step 3: Add / Choose Payment Method Bottom Bar */
         <>
           <View style={styles.stepProgressBar}>
             <View style={[styles.stepSegment, styles.stepSegmentActive]} />
@@ -147,12 +287,17 @@ export function BookingBottomActionBar({ bottomInset, checkout }: BookingBottomA
             <View style={[styles.stepSegment, styles.stepSegmentActive]} />
           </View>
           <Pressable
+            disabled={savingPaymentMethod}
             onPress={() => {
-              setStep('confirm_pay');
+              continueFromPaymentMethod();
             }}
-            style={styles.orangePrimaryBtn}
+            style={[styles.orangePrimaryBtn, savingPaymentMethod ? { opacity: 0.65 } : null]}
           >
-            <Text style={styles.orangePrimaryBtnText}>Next</Text>
+            {savingPaymentMethod ? (
+              <PremiumLoader color="#FFFFFF" size={8} />
+            ) : (
+              <Text style={styles.orangePrimaryBtnText}>Next</Text>
+            )}
           </Pressable>
         </>
       ) : (
@@ -248,6 +393,8 @@ interface BookingSuccessModalProps {
   guestSummary?: string;
   totalAmount?: number;
   paymentMethod?: 'mpesa' | 'card';
+  flowConfig?: CategoryFlowConfig;
+  timeSlot?: string;
   onViewItinerary: () => void;
   onClose: () => void;
 }
@@ -263,6 +410,8 @@ export function BookingSuccessModal({
   guestSummary,
   totalAmount,
   paymentMethod,
+  flowConfig,
+  timeSlot,
   onViewItinerary,
   onClose,
 }: BookingSuccessModalProps) {
@@ -412,12 +561,14 @@ export function BookingSuccessModal({
 
   if (!isRendered) return null;
 
+  const isRange = flowConfig ? flowConfig.isRangePicker : true;
   const datesLabel = checkIn
-    ? checkOut
+    ? isRange && checkOut
       ? `${fmtShort(checkIn)} – ${fmtShort(checkOut)}`
-      : fmtShort(checkIn)
+      : `${fmtShort(checkIn)}${timeSlot ? ` · ${timeSlot}` : ''}`
     : null;
   const hasSummary = Boolean(datesLabel || guestSummary || totalAmount != null);
+  const isFree = totalAmount === 0;
 
   return (
     <Modal
@@ -510,16 +661,16 @@ export function BookingSuccessModal({
                   { color: isDark ? '#34D399' : '#047857' },
                 ]}
               >
-                RESERVATION SECURED
+                {flowConfig?.successStatusPill ?? 'RESERVATION SECURED'}
               </Text>
             </View>
 
             {/* Title & Description */}
             <Text style={[styles.successModalTitle, { color: colors.foreground }]}>
-              Booking Confirmed!
+              {flowConfig?.successHeadline ?? 'Booking Confirmed!'}
             </Text>
             <Text style={[styles.successModalSub, { color: colors.mutedForeground }]}>
-              Your stay at{' '}
+              {flowConfig?.successVerbPhrase ?? 'Your stay at'}{' '}
               <Text style={[styles.successModalListingName, { color: colors.foreground }]}>
                 {title}
               </Text>{' '}
@@ -547,7 +698,7 @@ export function BookingSuccessModal({
                             { color: colors.mutedForeground },
                           ]}
                         >
-                          DATES
+                          {(flowConfig?.scheduleSectionLabel ?? 'DATES').toUpperCase()}
                         </Text>
                         <Text
                           style={[styles.successSummaryValue, { color: colors.foreground }]}
@@ -570,7 +721,7 @@ export function BookingSuccessModal({
                             { color: colors.mutedForeground },
                           ]}
                         >
-                          GUESTS
+                          {(flowConfig?.participantSectionLabel ?? 'GUESTS').toUpperCase()}
                         </Text>
                         <Text
                           style={[styles.successSummaryValue, { color: colors.foreground }]}
@@ -601,12 +752,12 @@ export function BookingSuccessModal({
                             { color: colors.mutedForeground },
                           ]}
                         >
-                          TOTAL PAID
+                          {isFree ? 'TOTAL DUE' : 'TOTAL PAID'}
                         </Text>
                         <Text
                           style={[styles.successSummaryValue, { color: BRAND_ORANGE }]}
                         >
-                          KES {Number(totalAmount).toLocaleString()}
+                          {isFree ? 'FREE' : `KES ${Number(totalAmount).toLocaleString()}`}
                         </Text>
                       </View>
                       {paymentMethod ? (
@@ -622,7 +773,7 @@ export function BookingSuccessModal({
                           <Text
                             style={[styles.successSummaryValue, { color: colors.foreground }]}
                           >
-                            {paymentMethod === 'card' ? 'Card' : 'M-Pesa'}
+                            {isFree ? 'Free Pass' : paymentMethod === 'card' ? 'Card' : 'M-Pesa'}
                           </Text>
                         </View>
                       ) : null}
@@ -645,7 +796,9 @@ export function BookingSuccessModal({
                       { color: isDark ? '#6EE7B7' : '#065F46' },
                     ]}
                   >
-                    Protected in ZuruSasa Escrow until check-in
+                    {isFree
+                      ? 'Instant digital reservation pass added to Trips'
+                      : flowConfig?.escrowText ?? 'Protected in ZuruSasa Escrow until check-in'}
                   </Text>
                 </View>
               </View>

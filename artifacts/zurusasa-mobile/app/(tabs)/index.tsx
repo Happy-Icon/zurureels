@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   PanResponder,
@@ -12,7 +11,6 @@ import {
   View,
   type ViewToken,
 } from 'react-native';
-import * as SplashScreen from 'expo-splash-screen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -36,7 +34,6 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (viewMode === 'host') {
-      SplashScreen.hideAsync().catch(() => {});
       markInteractive();
     }
   }, [viewMode, markInteractive]);
@@ -143,7 +140,6 @@ function ZuruFlowFeed() {
 
   useEffect(() => {
     if (!isLoading) {
-      SplashScreen.hideAsync().catch(() => {});
       markInteractive();
     }
   }, [isLoading, markInteractive]);

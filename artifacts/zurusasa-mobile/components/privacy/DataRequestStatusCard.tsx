@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { PersonalDataRequestRow } from '@/lib/supabase';
 import { dataRequestService } from '@/services/dataRequestService';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 interface DataRequestStatusCardProps {
   request: PersonalDataRequestRow;
@@ -199,7 +200,7 @@ export function DataRequestStatusCard({
       {/* Processing Animation */}
       {request.status === 'processing' && (
         <View style={styles.progressRow}>
-          <ActivityIndicator size="small" color="#3B82F6" />
+          <PremiumLoader size={5} color="#3B82F6" />
           <Text style={[styles.progressText, { color: colors.text }]}>
             Extracting records & compiling files...
           </Text>
@@ -241,7 +242,7 @@ export function DataRequestStatusCard({
             ]}
           >
             {downloading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <PremiumLoader size={5} color="#FFFFFF" />
             ) : (
               <>
                 <Feather name="download" size={15} color="#FFFFFF" />
@@ -271,7 +272,7 @@ export function DataRequestStatusCard({
             style={styles.cancelBtn}
           >
             {cancelling ? (
-              <ActivityIndicator size="small" color={colors.mutedForeground} />
+              <PremiumLoader size={5} color={colors.mutedForeground} />
             ) : (
               <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>
                 Cancel request

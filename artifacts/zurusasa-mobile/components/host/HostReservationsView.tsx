@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -8,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,12 +19,15 @@ import { useCustomAlert } from '@/context/CustomAlertContext';
 import {
   useEnquire,
   useHostBookings,
+  useHostCheckInBooking,
   useHostConfirmBooking,
   useHostDeclineBooking,
 } from '@/lib/queries';
+import { isCheckInWindowOpen } from '../reservations/reservationHelpers';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { Skeleton } from '@/components/Skeleton';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import type { BookingRow } from '@/lib/supabase';
 
 type ReservationTab = 'requests' | 'upcoming' | 'history';
@@ -81,6 +84,42 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
   const [declineModalBooking, setDeclineModalBooking] = useState<BookingRow | null>(null);
   const [selectedDeclineReason, setSelectedDeclineReason] = useState<string>(DECLINE_REASONS[0]);
   const [processingAction, setProcessingAction] = useState<boolean>(false);
+  const hostCheckInMutation = useHostCheckInBooking();
+  const [checkInModalBooking, setCheckInModalBooking] = useState<BookingRow | null>(null);
+  const [checkInPinInput, setCheckInPinInput] = useState<string>('');
+
+  const handleVerifyGuestPin = async () => {
+    if (!checkInModalBooking) return;
+    const cleanPin = checkInPinInput.replace(/\D/g, '');
+    if (cleanPin.length !== 6) {
+      showAlert({
+        title: 'Invalid PIN',
+        message: 'Please enter the 6-digit arrival PIN shown by your guest.',
+        icon: 'alert-circle',
+      });
+      return;
+    }
+    try {
+      await hostCheckInMutation.mutateAsync({
+        bookingId: checkInModalBooking.id,
+        pin: cleanPin,
+      });
+      setCheckInModalBooking(null);
+      setCheckInPinInput('');
+      showAlert({
+        title: 'Guest Checked In ✓',
+        message: 'Arrival verified! Payout is scheduled for 24 hours after check-in unless an arrival issue is reported.',
+        icon: 'check-circle',
+      });
+      refetch();
+    } catch (err: any) {
+      showAlert({
+        title: 'PIN Verification Failed',
+        message: err?.message || 'Incorrect arrival PIN or check-in window is not open yet.',
+        icon: 'alert-circle',
+      });
+    }
+  };
 
   const {
     data: bookings = [],
@@ -490,17 +529,51 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
                         <Text style={styles.amountText}>
                           KES {totalAmount.toLocaleString()}
                         </Text>
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            { backgroundColor: badge.bg, borderColor: badge.border },
-                          ]}
-                        >
-                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>
-                            {badge.label}
-                          </Text>
-                        </View>
+                        {b.arrival_issue_status === 'open' ? (
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' },
+                            ]}
+                          >
+                            <Text style={[styles.statusBadgeText, { color: '#92400E' }]}>
+                              Arrival Issue — Payout On Hold
+                            </Text>
+                          </View>
+                        ) : b.checked_in_at ? (
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: '#D1FAE5', borderColor: '#10B981' },
+                            ]}
+                          >
+                            <Text style={[styles.statusBadgeText, { color: '#065F46' }]}>
+                              Checked In ✓
+                            </Text>
+                          </View>
+                        ) : (
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: badge.bg, borderColor: badge.border },
+                            ]}
+                          >
+                            <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                              {badge.label}
+                            </Text>
+                          </View>
+                        )}
                       </View>
+                      {b.arrival_issue_status === 'open' ? (
+                        <Text style={{ fontSize: 12, color: '#B45309', marginTop: 4 }}>
+                          Issue: {b.arrival_issue_reason || 'Guest reported an arrival issue'} (payout frozen)
+                        </Text>
+                      ) : b.checked_in_at ? (
+                        <Text style={{ fontSize: 12, color: '#047857', marginTop: 4 }}>
+                          Checked in via {b.check_in_method === 'pin_verified' || b.check_in_method === 'pin' ? 'Host PIN Verification' : 'Guest App'}
+                          {b.checked_in_at ? ` • ${new Date(b.checked_in_at).toLocaleString()}` : ''}
+                        </Text>
+                      ) : null}
                     </View>
                   </Pressable>
 
@@ -550,6 +623,22 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
                           KES {Math.round(totalAmount * 0.85).toLocaleString()} (85%)
                         </Text>
                       </View>
+                      {b.checked_in_at ? (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Check-In Verified</Text>
+                          <Text style={[styles.detailValue, { color: '#047857' }]}>
+                            {b.check_in_method === 'pin_verified' || b.check_in_method === 'pin' ? 'Host PIN' : 'Guest App'} · {new Date(b.checked_in_at).toLocaleString()}
+                          </Text>
+                        </View>
+                      ) : null}
+                      {b.arrival_issue_status === 'open' ? (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Arrival Issue</Text>
+                          <Text style={[styles.detailValue, { color: '#B45309' }]}>
+                            On Hold — {b.arrival_issue_reason || 'Under review'}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   ) : null}
 
@@ -566,6 +655,36 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
                       <Ionicons name="chatbubble-outline" size={15} color="#1E1E1E" />
                       <Text style={styles.messageBtnText}>Message Guest</Text>
                     </Pressable>
+
+                    {(b.status ?? '').toLowerCase() === 'confirmed' &&
+                    !b.checked_in_at &&
+                    b.arrival_issue_status !== 'open' ? (
+                      <Pressable
+                        testID={`host-check-in-btn-${b.id}`}
+                        onPress={() => {
+                          setCheckInPinInput('');
+                          setCheckInModalBooking(b);
+                        }}
+                        style={({ pressed }) => [
+                          {
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            backgroundColor: isCheckInWindowOpen(b) ? '#059669' : '#334155',
+                            paddingHorizontal: 14,
+                            paddingVertical: 9,
+                            borderRadius: 10,
+                          },
+                          pressed && { opacity: 0.85 },
+                        ]}
+                      >
+                        <Ionicons name="key-outline" size={15} color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
+                          Check In Guest
+                        </Text>
+                      </Pressable>
+                    ) : null}
 
                     {isPaidPending ? (
                       <View style={styles.actionButtonsGroup}>
@@ -636,9 +755,88 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
                 disabled={processingAction}
               >
                 {processingAction ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <PremiumLoader size={6} color="#FFFFFF" />
                 ) : (
                   <Text style={styles.modalAcceptSubmitBtnText}>Yes, Confirm Booking</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── VERIFY GUEST CHECK-IN PIN MODAL ─────────────────────────── */}
+      <Modal
+        visible={!!checkInModalBooking}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCheckInModalBooking(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconWrapGreen}>
+              <Ionicons name="key-outline" size={26} color="#059669" />
+            </View>
+            <Text style={styles.modalTitle}>Check In Guest</Text>
+            <Text style={styles.modalSub}>
+              {checkInModalBooking && !isCheckInWindowOpen(checkInModalBooking)
+                ? 'Check-in opens at 6:00 AM EAT on the guest arrival date. You can enter their 6-digit arrival PIN once the window opens.'
+                : 'Ask your guest in person for the 6-digit secret PIN shown in their ZuruSasa Trips pass to verify arrival.'}
+            </Text>
+
+            <TextInput
+              testID="host-check-in-pin-input"
+              value={checkInPinInput}
+              onChangeText={(txt) => setCheckInPinInput(txt.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Enter 6-digit PIN"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="number-pad"
+              maxLength={6}
+              style={{
+                width: '100%',
+                borderWidth: 1.5,
+                borderColor: '#D1D5DB',
+                borderRadius: 12,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                fontSize: 22,
+                fontWeight: '800',
+                letterSpacing: 6,
+                textAlign: 'center',
+                color: '#111827',
+                backgroundColor: '#F9FAFB',
+                marginBottom: 16,
+              }}
+            />
+
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => {
+                  setCheckInModalBooking(null);
+                  setCheckInPinInput('');
+                }}
+                style={styles.modalCancelBtn}
+                disabled={hostCheckInMutation.isPending}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                testID="host-verify-pin-submit-btn"
+                onPress={handleVerifyGuestPin}
+                style={[
+                  styles.modalAcceptSubmitBtn,
+                  (hostCheckInMutation.isPending || checkInPinInput.replace(/\D/g, '').length !== 6) && {
+                    opacity: 0.65,
+                  },
+                ]}
+                disabled={
+                  hostCheckInMutation.isPending || checkInPinInput.replace(/\D/g, '').length !== 6
+                }
+              >
+                {hostCheckInMutation.isPending ? (
+                  <PremiumLoader size={6} color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalAcceptSubmitBtnText}>Verify PIN & Check In</Text>
                 )}
               </Pressable>
             </View>
@@ -700,7 +898,7 @@ export function HostReservationsView({ initialTab = 'requests' }: HostReservatio
                 disabled={processingAction}
               >
                 {processingAction ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <PremiumLoader size={6} color="#FFFFFF" />
                 ) : (
                   <Text style={styles.modalDeclineSubmitBtnText}>Decline & Refund</Text>
                 )}

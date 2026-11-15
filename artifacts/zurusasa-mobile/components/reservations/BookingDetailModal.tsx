@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import type { BookingRow } from '@/lib/supabase';
-import { formatDay, ORANGE } from './reservationHelpers';
+import { useGuestCheckInCode } from '@/lib/queries';
+import { Skeleton } from '@/components/Skeleton';
+import { PremiumLoader } from '@/components/PremiumLoader';
+import { canReportArrivalIssue, formatDay, isCheckInWindowOpen, ORANGE } from './reservationHelpers';
 import { StatusPill } from './StatusPill';
 import { reservationsStyles as styles } from './reservationsStyles';
 
@@ -16,7 +19,18 @@ export interface BookingDetailModalProps {
   onCancelBooking?: () => void;
   onWriteReview?: () => void;
   isCancelling?: boolean;
+  onGuestCheckIn?: () => void;
+  isCheckingIn?: boolean;
+  onReportArrivalIssue?: (reason: string) => void;
+  isReportingIssue?: boolean;
 }
+
+const ARRIVAL_ISSUE_REASONS = [
+  'Host unavailable or unreachable',
+  'Cannot access property / keys missing',
+  'Listing does not match description',
+  'Safety or cleanliness issue on arrival',
+];
 
 export function BookingDetailModal({
   booking,
@@ -26,12 +40,28 @@ export function BookingDetailModal({
   onCancelBooking,
   onWriteReview,
   isCancelling,
+  onGuestCheckIn,
+  isCheckingIn,
+  onReportArrivalIssue,
+  isReportingIssue,
 }: BookingDetailModalProps) {
   const colors = useColors();
   const { isDark } = useTheme();
+  const [showIssuePicker, setShowIssuePicker] = useState(false);
+  const [selectedIssueReason, setSelectedIssueReason] = useState(ARRIVAL_ISSUE_REASONS[0]);
+
   const exp = booking.experience;
   const status = (booking.status ?? '').toLowerCase();
-  const canCancel = status === 'pending' || status === 'confirmed' || status === 'paid';
+  const isCheckedIn = Boolean(booking.checked_in_at);
+  const hasArrivalIssue = booking.arrival_issue_status === 'open';
+  const checkInWindowOpen = isCheckInWindowOpen(booking);
+  const canReportIssue = canReportArrivalIssue(booking);
+  const canCancel = !isCheckedIn && (status === 'pending' || status === 'confirmed' || status === 'paid');
+  const { data: checkInPin, isLoading: loadingPin } = useGuestCheckInCode(
+    booking.id,
+    (status === 'confirmed' || status === 'completed') && !hasArrivalIssue
+  );
+  const formattedPin = checkInPin ? checkInPin.replace(/(\d{3})(\d{3})/, '$1 $2') : null;
 
   // Snapshot data with fallbacks
   const houseRules = booking.house_rules_snapshot || exp?.house_rules || (exp?.metadata as any)?.house_rules || {};
@@ -172,6 +202,285 @@ export function BookingDetailModal({
               </View>
             </View>
 
+            {/* Check-In Pass & Escrow Protection (Confirmed Bookings) */}
+            {status === 'confirmed' ? (
+              <View
+                style={[
+                  styles.infoCardBlock,
+                  {
+                    backgroundColor: hasArrivalIssue
+                      ? isDark
+                        ? '#3B2314'
+                        : '#FEF3C7'
+                      : isCheckedIn
+                        ? isDark
+                          ? '#132A20'
+                          : '#ECFDF5'
+                        : isDark
+                          ? '#1E2433'
+                          : '#F8FAFC',
+                    borderColor: hasArrivalIssue
+                      ? '#F59E0B'
+                      : isCheckedIn
+                        ? '#10B981'
+                        : isDark
+                          ? '#334155'
+                          : '#CBD5E1',
+                    gap: 12,
+                  },
+                ]}
+              >
+                <View style={styles.infoCardHeader}>
+                  <Feather
+                    name={hasArrivalIssue ? 'alert-triangle' : isCheckedIn ? 'check-circle' : 'shield'}
+                    size={16}
+                    color={hasArrivalIssue ? '#D97706' : isCheckedIn ? '#059669' : ORANGE}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '700',
+                      color: hasArrivalIssue
+                        ? isDark
+                          ? '#FCD34D'
+                          : '#92400E'
+                        : isCheckedIn
+                          ? isDark
+                            ? '#6EE7B7'
+                            : '#065F46'
+                          : colors.text,
+                    }}
+                  >
+                    {hasArrivalIssue
+                      ? 'Arrival Issue Reported — Payout Frozen'
+                      : isCheckedIn
+                        ? 'Checked In Verified'
+                        : 'Arrival Pass & Escrow Shield'}
+                  </Text>
+                </View>
+
+                {hasArrivalIssue ? (
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ fontSize: 13, lineHeight: 19, color: isDark ? '#FDE68A' : '#78350F' }}>
+                      Host payout is on hold while our support team reviews your report
+                      {booking.arrival_issue_reason ? `: "${booking.arrival_issue_reason}".` : '.'}
+                    </Text>
+                  </View>
+                ) : isCheckedIn ? (
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ fontSize: 13, lineHeight: 19, color: isDark ? '#A7F3D0' : '#065F46' }}>
+                      Checked in via {booking.check_in_method === 'pin_verified' || booking.check_in_method === 'pin' ? 'Host PIN Verification' : 'Guest Arrival Check-In'}
+                      {booking.checked_in_at ? ` on ${formatDay(booking.checked_in_at)}` : ''}. Sensitive Wi-Fi and entry details below are now unlocked.
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    {/* Secret 6-Digit Arrival PIN */}
+                    <View
+                      style={{
+                        backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
+                        borderRadius: 12,
+                        padding: 14,
+                        borderWidth: 1,
+                        borderColor: isDark ? '#334155' : '#E2E8F0',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary }}>
+                        SECRET 6-DIGIT ARRIVAL PIN
+                      </Text>
+                      {loadingPin ? (
+                        <Skeleton style={{ width: 132, height: 32, borderRadius: 8 }} />
+                      ) : formattedPin ? (
+                        <Text
+                          selectable
+                          style={{
+                            fontSize: 26,
+                            fontWeight: '800',
+                            letterSpacing: 4,
+                            color: colors.text,
+                          }}
+                        >
+                          {formattedPin}
+                        </Text>
+                      ) : (
+                        <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                          PIN will appear shortly
+                        </Text>
+                      )}
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          lineHeight: 17,
+                          textAlign: 'center',
+                          color: isDark ? '#FBBF24' : '#B45309',
+                        }}
+                      >
+                        Only share this PIN with your host in person after you arrive and inspect the place.
+                      </Text>
+                    </View>
+
+                    {/* Self Check-In Button */}
+                    {onGuestCheckIn ? (
+                      checkInWindowOpen ? (
+                        <Pressable
+                          testID="guest-check-in-btn"
+                          disabled={Boolean(isCheckingIn)}
+                          onPress={onGuestCheckIn}
+                          style={({ pressed }) => [
+                            {
+                              backgroundColor: '#059669',
+                              borderRadius: 12,
+                              paddingVertical: 13,
+                              paddingHorizontal: 16,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 8,
+                            },
+                            (pressed || isCheckingIn) && { opacity: 0.8 },
+                          ]}
+                        >
+                          {isCheckingIn ? (
+                            <PremiumLoader size={5} color="#FFFFFF" />
+                          ) : (
+                            <Feather name="key" size={16} color="#FFFFFF" />
+                          )}
+                          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>
+                            {isCheckingIn ? 'Checking In...' : "I've Arrived — Check In & Unlock Access"}
+                          </Text>
+                        </Pressable>
+                      ) : (
+                        <View
+                          style={{
+                            backgroundColor: isDark ? '#0F172A' : '#F1F5F9',
+                            borderRadius: 10,
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                        >
+                          <Feather name="clock" size={14} color={colors.textSecondary} />
+                          <Text style={{ fontSize: 12, color: colors.textSecondary, flex: 1 }}>
+                            Check-in opens at 6:00 AM EAT on {formatDay(checkInIso)}.
+                          </Text>
+                        </View>
+                      )
+                    ) : null}
+                  </>
+                )}
+
+                {/* Report Arrival Issue (Freeze Payout within 24h Window) */}
+                {canReportIssue && onReportArrivalIssue ? (
+                  <View style={{ marginTop: 2, gap: 8 }}>
+                    {!showIssuePicker ? (
+                      <Pressable
+                        testID="report-arrival-issue-toggle"
+                        onPress={() => setShowIssuePicker(true)}
+                        style={{
+                          paddingVertical: 8,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <Feather name="alert-circle" size={14} color="#DC2626" />
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#DC2626' }}>
+                          Report Arrival Issue (Freeze Host Payout)
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <View
+                        style={{
+                          backgroundColor: isDark ? '#2A1818' : '#FEF2F2',
+                          borderColor: '#FCA5A5',
+                          borderWidth: 1,
+                          borderRadius: 12,
+                          padding: 12,
+                          gap: 8,
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#FCA5A5' : '#991B1B' }}>
+                          Select what went wrong on arrival:
+                        </Text>
+                        {ARRIVAL_ISSUE_REASONS.map((reason) => {
+                          const active = selectedIssueReason === reason;
+                          return (
+                            <Pressable
+                              key={reason}
+                              onPress={() => setSelectedIssueReason(reason)}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 8,
+                                paddingVertical: 8,
+                                paddingHorizontal: 10,
+                                borderRadius: 8,
+                                backgroundColor: active
+                                  ? isDark
+                                    ? '#7F1D1D'
+                                    : '#FEE2E2'
+                                  : isDark
+                                    ? '#1F2937'
+                                    : '#FFFFFF',
+                                borderWidth: 1,
+                                borderColor: active ? '#EF4444' : isDark ? '#374151' : '#E5E7EB',
+                              }}
+                            >
+                              <Feather
+                                name={active ? 'check-circle' : 'circle'}
+                                size={15}
+                                color={active ? '#DC2626' : colors.textSecondary}
+                              />
+                              <Text style={{ fontSize: 12, flex: 1, color: colors.text }}>{reason}</Text>
+                            </Pressable>
+                          );
+                        })}
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                          <Pressable
+                            onPress={() => setShowIssuePicker(false)}
+                            style={{
+                              flex: 1,
+                              paddingVertical: 10,
+                              borderRadius: 8,
+                              alignItems: 'center',
+                              backgroundColor: isDark ? '#374151' : '#E5E7EB',
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>Cancel</Text>
+                          </Pressable>
+                          <Pressable
+                            testID="submit-arrival-issue-btn"
+                            disabled={Boolean(isReportingIssue)}
+                            onPress={() => {
+                              onReportArrivalIssue(selectedIssueReason);
+                              setShowIssuePicker(false);
+                            }}
+                            style={{
+                              flex: 2,
+                              paddingVertical: 10,
+                              borderRadius: 8,
+                              alignItems: 'center',
+                              backgroundColor: '#DC2626',
+                              opacity: isReportingIssue ? 0.7 : 1,
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>
+                              {isReportingIssue ? 'Submitting...' : 'Submit & Freeze Payout'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
             {/* Arrival Instructions (Revealed for Confirmed Bookings) */}
             {isConfirmed ? (
               <View style={[styles.infoCardBlock, { backgroundColor: isDark ? '#1C2922' : '#ECFDF5', borderColor: isDark ? '#05966940' : '#A7F3D0' }]}>
@@ -188,12 +497,19 @@ export function BookingDetailModal({
                     </Text>
                   </View>
 
-                  {arrival.wifi_name || arrival.wifi_password ? (
+                  {arrival.wifi_name || (arrival as any).wifi_ssid || arrival.wifi_password ? (
                     <View style={styles.infoField}>
                       <Text style={[styles.infoFieldLabel, { color: isDark ? '#A7F3D0' : '#047857' }]}>WI-FI CREDENTIALS</Text>
-                      <Text style={[styles.infoFieldValue, { color: isDark ? '#FFFFFF' : '#064E3B' }]}>
-                        SSID: {arrival.wifi_name || 'Coastal-Villa-Guest'} | Password: {arrival.wifi_password || 'coastalguest2026'}
-                      </Text>
+                      {isCheckedIn || status === 'completed' ? (
+                        <Text style={[styles.infoFieldValue, { color: isDark ? '#FFFFFF' : '#064E3B' }]}>
+                          SSID: {arrival.wifi_name || (arrival as any).wifi_ssid || 'Guest Wi-Fi'}
+                          {arrival.wifi_password ? ` | Password: ${arrival.wifi_password}` : ''}
+                        </Text>
+                      ) : (
+                        <Text style={[styles.infoFieldValue, { color: isDark ? '#A7F3D0' : '#065F46' }]}>
+                          SSID: {arrival.wifi_name || (arrival as any).wifi_ssid || 'Protected'} | Password: Unlocks upon Check-In
+                        </Text>
+                      )}
                     </View>
                   ) : null}
 
@@ -201,7 +517,9 @@ export function BookingDetailModal({
                     <View style={styles.infoField}>
                       <Text style={[styles.infoFieldLabel, { color: isDark ? '#A7F3D0' : '#047857' }]}>ACCESS INSTRUCTIONS</Text>
                       <Text style={[styles.infoFieldValue, { color: isDark ? '#FFFFFF' : '#064E3B' }]}>
-                        {arrival.access_instructions}
+                        {isCheckedIn || status === 'completed'
+                          ? arrival.access_instructions
+                          : 'Door codes, lockbox details, and private entry notes unlock once you tap "I\'ve Arrived — Check In" or your host enters your 6-digit PIN.'}
                       </Text>
                     </View>
                   ) : null}

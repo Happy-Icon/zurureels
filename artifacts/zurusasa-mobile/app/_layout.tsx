@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { AnimatedBootSplash } from '@/components/launch/AnimatedBootSplash';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { CustomAlertProvider } from '@/context/CustomAlertContext';
@@ -207,11 +208,13 @@ function GlobalNotificationSubscriber() {
 
 function RootLayoutInner() {
   const colors = useColors();
+  const { markInteractive } = useObserve();
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <KeyboardProvider>
         <GlobalNotificationSubscriber />
         <RootLayoutNav />
+        <AnimatedBootSplash onAnimationComplete={markInteractive} />
       </KeyboardProvider>
     </GestureHandlerRootView>
   );
@@ -224,14 +227,6 @@ function RootLayout() {
     DMSans_600SemiBold,
     DMSans_700Bold,
   });
-  const { markInteractive } = useObserve();
-
-  useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync().catch(() => {});
-      markInteractive();
-    }
-  }, [fontsLoaded, fontError, markInteractive]);
 
   if (!fontsLoaded && !fontError) {
     return null;

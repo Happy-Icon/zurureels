@@ -25,7 +25,13 @@ import { supabase, type BookingRow } from '@/lib/supabase';
 import { FILTER_CHIPS, type FilterChip, ORANGE } from './reservationHelpers';
 import { FeaturedNextTripCard } from './FeaturedNextTripCard';
 import { TripCard } from './TripCard';
+import * as Location from 'expo-location';
 import { BookingDetailModal } from './BookingDetailModal';
+import {
+  useGuestCheckInBooking,
+  useReportArrivalIssue,
+} from '@/lib/queries';
+import { haversineDistanceKm, mapService, resolveExperienceCoords } from '@/services/mapService';
 import { reservationsStyles as styles } from './reservationsStyles';
 
 export function GuestTripsView() {
@@ -207,6 +213,95 @@ export function GuestTripsView() {
   };
 
   const cancelBookingMutation = useGuestCancelBooking();
+  const guestCheckInMutation = useGuestCheckInBooking();
+  const reportArrivalIssueMutation = useReportArrivalIssue();
+
+  const handleGuestCheckIn = async (booking: BookingRow) => {
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    let distanceMeters: number | null = null;
+
+    try {
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (perm.status !== 'granted') {
+        perm = await Location.requestForegroundPermissionsAsync();
+      }
+      if (perm.status === 'granted') {
+        const pos = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500)),
+        ]);
+        if (pos) {
+          latitude = pos.coords.latitude;
+          longitude = pos.coords.longitude;
+          const exactCoords = await mapService.fetchConfirmedBookingCoords(booking.id).catch(() => null);
+          const resolved = resolveExperienceCoords(booking.experience);
+          const targetLat = exactCoords?.latitude ?? resolved.latitude;
+          const targetLng = exactCoords?.longitude ?? resolved.longitude;
+          if (targetLat != null && targetLng != null) {
+            distanceMeters = Math.round(
+              haversineDistanceKm({ latitude, longitude }, { latitude: targetLat, longitude: targetLng }) * 1000
+            );
+          }
+        }
+      }
+    } catch {
+      // Proceed cleanly with gps_verified = false when location lookup fails
+    }
+
+    try {
+      const updated = await guestCheckInMutation.mutateAsync({
+        bookingId: booking.id,
+        latitude,
+        longitude,
+        distanceMeters,
+      });
+      setSelectedBooking((prev) =>
+        prev && prev.id === booking.id ? { ...prev, ...(updated ?? {}), checked_in_at: updated?.checked_in_at ?? new Date().toISOString() } : prev
+      );
+      showAlert({
+        title: 'Checked In Verified ✓',
+        message: 'Welcome! Your arrival is confirmed and Wi-Fi & access details are now unlocked.',
+        icon: 'check-circle',
+      });
+    } catch (err: any) {
+      showAlert({
+        title: 'Check-In Failed',
+        message: err?.message || 'Unable to complete check-in right now.',
+        icon: 'alert-circle',
+      });
+    }
+  };
+
+  const handleReportArrivalIssue = async (booking: BookingRow, reason: string) => {
+    try {
+      const updated = await reportArrivalIssueMutation.mutateAsync({
+        bookingId: booking.id,
+        reason,
+      });
+      setSelectedBooking((prev) =>
+        prev && prev.id === booking.id
+          ? {
+              ...prev,
+              ...(updated ?? {}),
+              arrival_issue_status: updated?.arrival_issue_status ?? 'open',
+              arrival_issue_reason: updated?.arrival_issue_reason ?? reason,
+            }
+          : prev
+      );
+      showAlert({
+        title: 'Arrival Issue Reported',
+        message: 'Host payout has been paused while our team reviews your issue.',
+        icon: 'alert-triangle',
+      });
+    } catch (err: any) {
+      showAlert({
+        title: 'Report Failed',
+        message: err?.message || 'Unable to report issue right now.',
+        icon: 'alert-circle',
+      });
+    }
+  };
 
   const handleCancelBooking = (b: BookingRow) => {
     showAlert({
@@ -556,6 +651,10 @@ export function GuestTripsView() {
           }}
           onCancelBooking={() => handleCancelBooking(selectedBooking)}
           isCancelling={cancelBookingMutation.isPending}
+          onGuestCheckIn={() => handleGuestCheckIn(selectedBooking)}
+          isCheckingIn={guestCheckInMutation.isPending}
+          onReportArrivalIssue={(reason) => handleReportArrivalIssue(selectedBooking, reason)}
+          isReportingIssue={reportArrivalIssueMutation.isPending}
         />
       ) : null}
 

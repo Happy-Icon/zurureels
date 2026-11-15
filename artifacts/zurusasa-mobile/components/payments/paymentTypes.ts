@@ -10,6 +10,7 @@ export interface PaymentMethodItem {
   type: 'mpesa' | 'card';
   title: string;
   subtitle: string;
+  phoneNumber?: string | null;
   isDefault?: boolean;
 }
 

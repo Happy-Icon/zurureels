@@ -22,6 +22,7 @@ export function BookingDetailsStep({ reel, topInset, checkout }: BookingDetailsS
     primaryCategory,
     primaryCategoryMeta,
     subcategoryLabel,
+    flowConfig,
     durationInfo,
     operatingHours,
     whatsIncluded,
@@ -53,12 +54,13 @@ export function BookingDetailsStep({ reel, topInset, checkout }: BookingDetailsS
     rawAmenities,
     showAllAmenities,
     setShowAllAmenities,
+    setStep,
     handleClose,
     handleSeeAllReviews,
   } = checkout;
 
   const [selectedOffer, setSelectedOffer] = useState<SpecialOfferRow | null>(null);
-  const isAccommodation = primaryCategory === 'accommodation';
+  const isAccommodation = flowConfig.isStay;
 
   const getAmenityIcon = (label: string): React.ComponentProps<typeof Ionicons>['name'] => {
     const lower = label.toLowerCase();
@@ -225,12 +227,14 @@ export function BookingDetailsStep({ reel, topInset, checkout }: BookingDetailsS
                   ? 'Strict cancellation policy'
                   : cancellationPolicy === 'moderate'
                   ? 'Moderate cancellation policy'
-                  : 'Free cancellation before check-in'}
+                  : `Free cancellation before ${flowConfig.cancellationNoun}`}
               </Text>
               <Text style={styles.highlightSub}>
                 {cancellationPolicy === 'strict'
-                  ? 'Full refund if cancelled 7+ days before booking.'
-                  : 'Review the full policy terms before booking.'}
+                  ? `Full refund if cancelled 7+ days before ${flowConfig.cancellationNoun}.`
+                  : cancellationPolicy === 'moderate'
+                  ? `Full refund if cancelled 5+ days before ${flowConfig.cancellationNoun}.`
+                  : `Free cancellation up to 24 hours before ${flowConfig.cancellationNoun}.`}
               </Text>
             </View>
           </View>
@@ -565,7 +569,10 @@ export function BookingDetailsStep({ reel, topInset, checkout }: BookingDetailsS
           offer={selectedOffer}
           reel={reel}
           onClose={() => setSelectedOffer(null)}
-          onClaimOffer={() => setSelectedOffer(null)}
+          onClaimOffer={() => {
+            setSelectedOffer(null);
+            setStep('offer_claim');
+          }}
         />
       ) : null}
     </View>

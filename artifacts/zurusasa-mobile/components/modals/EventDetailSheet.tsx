@@ -17,6 +17,7 @@ import {
   getSubcategoryLabel,
 } from '@/constants/taxonomy';
 import { useColors } from '@/hooks/useColors';
+import { extractEventTiming, useEventLifecycle } from '@/hooks/useEventLifecycle';
 import { useTheme } from '@/context/ThemeContext';
 import type { EventRow, ReelRow } from '@/lib/supabase';
 
@@ -44,6 +45,12 @@ export function EventDetailSheet({
   const insets = useSafeAreaInsets();
   const [enquireOpen, setEnquireOpen] = useState(false);
 
+  const timingInput = useMemo(() => extractEventTiming(event, reel), [event, reel]);
+  const lifecycle = useEventLifecycle(timingInput, {
+    enabled: visible && Boolean(event || reel),
+    intervalMs: 1000,
+  });
+
   const resolved = useMemo(() => {
     const meta = ((reel?.experience?.metadata || {}) as Record<string, any>);
     const evMeta = (meta.event_details || {}) as Record<string, any>;
@@ -57,6 +64,7 @@ export function EventDetailSheet({
     const eventDate = event?.event_date || evMeta.event_date || null;
     const endDate = event?.end_date || evMeta.end_date || null;
     const startTime = event?.start_time || evMeta.start_time || null;
+    const endTime = event?.end_time || evMeta.end_time || null;
     const categoryLabel =
       getSubcategoryLabel(event?.category || meta.subcategory || reel?.subcategory) ||
       'Upcoming Event';
@@ -98,6 +106,7 @@ export function EventDetailSheet({
       eventDate,
       endDate,
       startTime,
+      endTime,
       scheduleBadge: formatEventScheduleBadge(eventDate, startTime),
       categoryLabel,
       location,
@@ -113,22 +122,29 @@ export function EventDetailSheet({
   }, [event, reel]);
 
   const formattedDateLine = useMemo(() => {
-    if (!resolved.eventDate) return resolved.scheduleBadge;
+    const windowStr = lifecycle?.timeWindowLabel;
+    if (!resolved.eventDate) return windowStr || resolved.scheduleBadge;
     const dt = new Date(resolved.eventDate);
-    if (Number.isNaN(dt.getTime())) return resolved.scheduleBadge;
+    if (Number.isNaN(dt.getTime())) return windowStr || resolved.scheduleBadge;
     const datePart = dt.toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'short',
       day: 'numeric',
     });
+    if (windowStr) {
+      return `${datePart} · ${windowStr}`;
+    }
     if (resolved.startTime) {
       return `${datePart} · ${resolved.startTime}`;
     }
     return datePart;
-  }, [resolved.eventDate, resolved.startTime, resolved.scheduleBadge]);
+  }, [resolved.eventDate, resolved.startTime, resolved.scheduleBadge, lifecycle?.timeWindowLabel]);
 
   if (!event && !reel) return null;
 
+  const isLive = Boolean(lifecycle?.isLive);
+  const isEnded = Boolean(lifecycle?.isEnded);
+  const ticketBookingDisabled = Boolean(onBookTicket && (isLive || isEnded));
   const bottomPad = Platform.OS === 'web' ? 20 : Math.max(insets.bottom, 16);
 
   return (
@@ -137,11 +153,19 @@ export function EventDetailSheet({
         <View style={[styles.sheet, { backgroundColor: colors.card }]}>
           {/* Top Bar */}
           <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
-            <View style={[styles.typeBadge, { backgroundColor: isDark ? '#3B2314' : '#FFF8F5' }]}>
-              <Ionicons name="calendar-outline" size={14} color={ORANGE} />
-              <Text style={[styles.typeBadgeText, { color: ORANGE }]}>
-                {resolved.categoryLabel.toUpperCase()}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+              {isLive ? (
+                <View style={styles.liveBadgeTop}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveBadgeTopText}>LIVE NOW</Text>
+                </View>
+              ) : null}
+              <View style={[styles.typeBadge, { backgroundColor: isDark ? '#3B2314' : '#FFF8F5' }]}>
+                <Ionicons name="calendar-outline" size={14} color={ORANGE} />
+                <Text style={[styles.typeBadgeText, { color: ORANGE }]}>
+                  {resolved.categoryLabel.toUpperCase()}
+                </Text>
+              </View>
             </View>
             <Pressable onPress={onClose} hitSlop={10} style={[styles.closeBtn, { backgroundColor: isDark ? '#27272A' : '#F3F4F6' }]}>
               <Ionicons name="close-outline" size={22} color={colors.text} />
@@ -151,7 +175,15 @@ export function EventDetailSheet({
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {/* Hero */}
             {resolved.imageUrl ? (
-              <Image source={{ uri: resolved.imageUrl }} style={styles.heroImage} contentFit="cover" />
+              <View style={{ position: 'relative' }}>
+                <Image source={{ uri: resolved.imageUrl }} style={styles.heroImage} contentFit="cover" />
+                {isLive ? (
+                  <View style={styles.heroLiveBadge}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.heroLiveText}>HAPPENING LIVE</Text>
+                  </View>
+                ) : null}
+              </View>
             ) : (
               <View style={[styles.heroPlaceholder, { backgroundColor: isDark ? '#27272A' : '#F7F7F7' }]}>
                 <Ionicons name="calendar-outline" size={44} color={ORANGE} />
@@ -162,12 +194,21 @@ export function EventDetailSheet({
             <View style={styles.titleBlock}>
               <Text style={[styles.title, { color: colors.text }]}>{resolved.title}</Text>
               <View style={styles.schedulePillRow}>
-                <View style={[styles.scheduleChip, { backgroundColor: isDark ? '#3B2314' : '#FFF8F5' }]}>
-                  <Ionicons name="time-outline" size={14} color={ORANGE} />
-                  <Text style={[styles.scheduleChipText, { color: ORANGE }]}>
-                    {resolved.scheduleBadge}
-                  </Text>
-                </View>
+                {isLive ? (
+                  <View style={styles.liveChip}>
+                    <View style={styles.liveDotRed} />
+                    <Text style={styles.liveChipText}>
+                      Live · {lifecycle?.timeWindowLabel || resolved.scheduleBadge}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.scheduleChip, { backgroundColor: isDark ? '#3B2314' : '#FFF8F5' }]}>
+                    <Ionicons name="time-outline" size={14} color={ORANGE} />
+                    <Text style={[styles.scheduleChipText, { color: ORANGE }]}>
+                      {lifecycle?.timeWindowLabel || resolved.scheduleBadge}
+                    </Text>
+                  </View>
+                )}
                 <View style={[styles.pricePill, { backgroundColor: isDark ? '#27272A' : '#F8FAFC', borderColor: colors.border }]}>
                   <Ionicons name="ticket-outline" size={14} color={ORANGE} />
                   <Text style={[styles.pricePillText, { color: colors.text }]}>
@@ -177,6 +218,70 @@ export function EventDetailSheet({
               </View>
             </View>
 
+            {/* Live Window & Real-Time Countdown Banner */}
+            {lifecycle && lifecycle.countdownLabel ? (
+              <View
+                style={[
+                  styles.countdownBanner,
+                  {
+                    backgroundColor: isLive
+                      ? isDark
+                        ? 'rgba(220, 38, 38, 0.16)'
+                        : '#FEF2F2'
+                      : isEnded
+                      ? isDark
+                        ? '#27272A'
+                        : '#F3F4F6'
+                      : isDark
+                      ? '#3B2314'
+                      : '#FFF8F5',
+                    borderColor: isLive
+                      ? isDark
+                        ? 'rgba(248, 113, 113, 0.35)'
+                        : '#FECACA'
+                      : isEnded
+                      ? colors.border
+                      : isDark
+                      ? '#7C2D12'
+                      : '#FED7AA',
+                  },
+                ]}
+              >
+                <View style={styles.countdownRowTop}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons
+                      name={isLive ? 'radio-outline' : isEnded ? 'time-outline' : 'hourglass-outline'}
+                      size={16}
+                      color={isLive ? '#DC2626' : isEnded ? colors.mutedForeground : ORANGE}
+                    />
+                    <Text
+                      style={[
+                        styles.countdownStatusTitle,
+                        { color: isLive ? '#DC2626' : isEnded ? colors.mutedForeground : ORANGE },
+                      ]}
+                    >
+                      {isLive ? 'EVENT IS LIVE' : isEnded ? 'EVENT ENDED' : 'COUNTDOWN TO START'}
+                    </Text>
+                  </View>
+                  {lifecycle.timeWindowLabel ? (
+                    <Text style={[styles.countdownWindowText, { color: colors.text }]}>
+                      {lifecycle.timeWindowLabel}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <Text style={[styles.countdownTimerText, { color: colors.text }]}>
+                  {lifecycle.countdownLabel}
+                </Text>
+
+                {isLive ? (
+                  <Text style={[styles.countdownSubNote, { color: colors.mutedForeground }]}>
+                    Advance ticket reservations close once an event goes live. Enquire with the organizer for door availability.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
             {/* Key Event Info */}
             <View style={[styles.infoCard, { backgroundColor: isDark ? '#18181B' : '#F8FAFC', borderColor: colors.border }]}>
               <View style={styles.infoRow}>
@@ -184,7 +289,7 @@ export function EventDetailSheet({
                   <Ionicons name="calendar-clear-outline" size={17} color={ORANGE} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Date & Start Time</Text>
+                  <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Date & Schedule</Text>
                   <Text style={[styles.infoValue, { color: colors.text }]}>{formattedDateLine}</Text>
                 </View>
               </View>
@@ -299,7 +404,9 @@ export function EventDetailSheet({
             ) : null}
 
             <Pressable
+              disabled={ticketBookingDisabled}
               onPress={() => {
+                if (ticketBookingDisabled) return;
                 if (onBookTicket) {
                   onClose();
                   onBookTicket();
@@ -311,12 +418,34 @@ export function EventDetailSheet({
               }}
               style={({ pressed }) => [
                 styles.primaryBtn,
-                { backgroundColor: ORANGE, opacity: pressed ? 0.88 : 1 },
+                ticketBookingDisabled
+                  ? {
+                      backgroundColor: isDark ? 'rgba(63, 63, 70, 0.55)' : 'rgba(209, 213, 219, 0.72)',
+                      borderWidth: 1,
+                      borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(156,163,175,0.45)',
+                      opacity: 0.52,
+                    }
+                  : { backgroundColor: ORANGE, opacity: pressed ? 0.88 : 1 },
               ]}
             >
-              <Ionicons name="ticket-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.primaryBtnText}>
-                {onBookTicket ? 'Reserve / Get Tickets' : 'Contact Organizer'}
+              <Ionicons
+                name={ticketBookingDisabled ? 'lock-closed-outline' : 'ticket-outline'}
+                size={18}
+                color={ticketBookingDisabled ? colors.mutedForeground : '#FFFFFF'}
+              />
+              <Text
+                style={[
+                  styles.primaryBtnText,
+                  ticketBookingDisabled ? { color: colors.mutedForeground } : null,
+                ]}
+              >
+                {ticketBookingDisabled
+                  ? isLive
+                    ? 'Event Live · Tickets Closed'
+                    : 'Event Ended'
+                  : onBookTicket
+                  ? 'Reserve / Get Tickets'
+                  : 'Contact Organizer'}
               </Text>
             </Pressable>
           </View>
@@ -559,5 +688,97 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontFamily: 'DMSans_700Bold',
+  },
+  liveBadgeTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
+  },
+  liveBadgeTopText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontFamily: 'DMSans_700Bold',
+    letterSpacing: 0.6,
+  },
+  heroLiveBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(220, 38, 38, 0.92)',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  heroLiveText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontFamily: 'DMSans_700Bold',
+    letterSpacing: 0.5,
+  },
+  liveChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
+  },
+  liveDotRed: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#DC2626',
+  },
+  liveChipText: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_700Bold',
+    color: '#DC2626',
+  },
+  countdownBanner: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    gap: 5,
+  },
+  countdownRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  countdownStatusTitle: {
+    fontSize: 11.5,
+    fontFamily: 'DMSans_700Bold',
+    letterSpacing: 0.5,
+  },
+  countdownWindowText: {
+    fontSize: 12.5,
+    fontFamily: 'DMSans_700Bold',
+  },
+  countdownTimerText: {
+    fontSize: 19,
+    fontFamily: 'DMSans_700Bold',
+    letterSpacing: -0.3,
+  },
+  countdownSubNote: {
+    fontSize: 12,
+    fontFamily: 'DMSans_400Regular',
+    lineHeight: 17,
+    marginTop: 2,
   },
 });

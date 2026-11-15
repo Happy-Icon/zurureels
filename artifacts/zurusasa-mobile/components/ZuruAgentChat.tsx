@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useZuruAI } from '@/lib/zuruAI';
 import { GrowingInput } from '@/components/keyboard';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 const ORANGE = '#F26522';
 
@@ -148,7 +148,7 @@ export function ZuruAgentChat({
           ))}
           {waiting ? (
             <View style={[styles.bubble, styles.aiBubble, styles.thinkingRow]}>
-              <ActivityIndicator size="small" color={ORANGE} />
+              <PremiumLoader size={5} color={ORANGE} />
               <Text style={styles.thinkingText}>
                 {stageStatus.text || 'Zuru Agent is thinking…'}
               </Text>

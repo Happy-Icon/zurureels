@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -11,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 interface PasskeySetupSheetProps {
   visible: boolean;
@@ -138,7 +138,7 @@ export function PasskeySetupSheet({
               accessibilityLabel="Try again"
             >
               {loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <PremiumLoader size={6} color="#FFFFFF" />
               ) : (
                 <Text style={styles.primaryBtnText}>Try again</Text>
               )}

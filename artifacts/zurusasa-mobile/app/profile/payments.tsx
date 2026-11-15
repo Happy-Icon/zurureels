@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +14,12 @@ import { useAuth } from '@/context/AuthContext';
 import { useColors } from '@/hooks/useColors';
 import { supabase } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
+import {
+  useDeleteUserPaymentMethod,
+  useSaveUserPaymentMethod,
+  useSetDefaultUserPaymentMethod,
+  useUserPaymentMethods,
+} from '@/lib/queries';
 
 import {
   CURRENCIES_LIST,
@@ -40,11 +45,33 @@ export default function PaymentsAndPayoutsScreen() {
   const [selectedCurrency, setSelectedCurrency] = useState<CurrencyItem>(CURRENCIES_LIST[0]);
   const [currencyModal, setCurrencyModal] = useState(false);
 
-  // Payment methods
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>([]);
-
   // Past Bookings/Payments
   const [userBookings, setUserBookings] = useState<any[]>([]);
+
+  const {
+    data: savedPaymentMethods = [],
+    isLoading: loadingPaymentMethods,
+  } = useUserPaymentMethods(user?.id);
+  const savePaymentMethodMutation = useSaveUserPaymentMethod(user?.id);
+  const setDefaultPaymentMethodMutation = useSetDefaultUserPaymentMethod(user?.id);
+  const deletePaymentMethodMutation = useDeleteUserPaymentMethod(user?.id);
+
+  const paymentMethods: PaymentMethodItem[] = savedPaymentMethods.map((row) => ({
+    id: row.id,
+    type: row.method_type,
+    title: row.label,
+    subtitle:
+      row.method_type === 'mpesa'
+        ? row.phone_number || 'Safaricom M-Pesa'
+        : 'Paystack Secure 3D-Secure Checkout',
+    phoneNumber: row.phone_number,
+    isDefault: row.is_default,
+  }));
+
+  const paymentMethodBusy =
+    savePaymentMethodMutation.isPending ||
+    setDefaultPaymentMethodMutation.isPending ||
+    deletePaymentMethodMutation.isPending;
 
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 16;
   const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 32;
@@ -65,19 +92,6 @@ export default function PaymentsAndPayoutsScreen() {
         if (bookings) {
           setUserBookings(bookings);
         }
-
-        const phone = profile?.phone || user?.user_metadata?.phone || '';
-        if (phone) {
-          setPaymentMethods([
-            {
-              id: 'default_mpesa',
-              type: 'mpesa',
-              title: 'M-Pesa Express',
-              subtitle: phone,
-              isDefault: true,
-            },
-          ]);
-        }
       } catch (e) {
         console.warn('Error loading payments:', e);
       } finally {
@@ -85,13 +99,28 @@ export default function PaymentsAndPayoutsScreen() {
       }
     };
     fetchPaymentData();
-  }, [user, profile]);
+  }, [user]);
 
   if (currentView === 'payment_methods') {
     return (
       <PaymentMethodsView
         paymentMethods={paymentMethods}
-        onAddMethod={(newMethod) => setPaymentMethods((prev) => [...prev, newMethod])}
+        loading={loadingPaymentMethods}
+        busy={paymentMethodBusy}
+        onAddMethod={async ({ type, phoneNumber, setDefault }) => {
+          await savePaymentMethodMutation.mutateAsync({
+            methodType: type,
+            label: type === 'mpesa' ? 'Safaricom M-Pesa' : 'Visa / Mastercard',
+            phoneNumber: type === 'mpesa' ? phoneNumber ?? null : null,
+            setDefault,
+          });
+        }}
+        onSetDefaultMethod={async (id) => {
+          await setDefaultPaymentMethodMutation.mutateAsync(id);
+        }}
+        onRemoveMethod={async (id) => {
+          await deletePaymentMethodMutation.mutateAsync(id);
+        }}
         onBack={() => setCurrentView('hub')}
         topPad={topPad}
         bottomPad={bottomPad}
@@ -170,7 +199,26 @@ export default function PaymentsAndPayoutsScreen() {
         <Text style={[styles.pageTitle, { color: colors.text }]}>Payments & payouts</Text>
 
         {loading ? (
-          <ActivityIndicator size="small" color={colors.text} style={{ marginTop: 40 }} />
+          <View style={[styles.menuBlock, { gap: 18 }]}>
+            <Skeleton style={{ width: 110, height: 22, borderRadius: 6 }} />
+            {[150, 130, 145].map((rowW, idx) => (
+              <View key={idx} style={[styles.navRow, { paddingVertical: 10 }]}>
+                <View style={styles.navRowLeft}>
+                  <Skeleton style={{ width: 24, height: 24, borderRadius: 6, marginRight: 14 }} />
+                  <Skeleton style={{ width: rowW, height: 16, borderRadius: 6 }} />
+                </View>
+                <Skeleton style={{ width: 18, height: 18, borderRadius: 6 }} />
+              </View>
+            ))}
+            <Skeleton style={{ width: 90, height: 22, borderRadius: 6, marginTop: 12 }} />
+            <View style={[styles.navRow, { paddingVertical: 10 }]}>
+              <View style={styles.navRowLeft}>
+                <Skeleton style={{ width: 24, height: 24, borderRadius: 6, marginRight: 14 }} />
+                <Skeleton style={{ width: 140, height: 16, borderRadius: 6 }} />
+              </View>
+              <Skeleton style={{ width: 18, height: 18, borderRadius: 6 }} />
+            </View>
+          </View>
         ) : (
           <View style={styles.menuBlock}>
             {/* ── SECTION 1: TRAVELLING ─────────────────────────────────────── */}

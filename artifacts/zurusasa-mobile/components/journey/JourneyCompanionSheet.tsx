@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   StyleSheet,
@@ -15,6 +14,7 @@ import * as Location from 'expo-location';
 import type { BookingRow, LocationPrecision } from '@/lib/supabase';
 import { SafeRouteMapView } from '@/components/map/SafeMapView';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { Skeleton } from '@/components/Skeleton';
 import {
   haversineDistanceKm,
   mapService,
@@ -317,7 +317,7 @@ export function JourneyCompanionSheet({
           style={[styles.etaBubble, { top: insets.top + 10 }]}
         >
           {loadingRoute ? (
-            <ActivityIndicator size="small" color={ORANGE} />
+            <Skeleton style={{ width: 96, height: 18, borderRadius: 6 }} />
           ) : routeInfo ? (
             <>
               <View style={styles.etaBubbleInner}>

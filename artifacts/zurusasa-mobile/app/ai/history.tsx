@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -11,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Skeleton } from '@/components/Skeleton';
 import {
   AI_COLORS,
   AI_FONTS,
@@ -174,8 +174,11 @@ export default function AIHistoryScreen() {
 
       {/* ── Content ───────────────────────────────────────── */}
       {loading ? (
-        <View style={styles.centerBox}>
-          <ActivityIndicator size="small" color={AI_COLORS.orange} />
+        <View style={{ padding: 20, gap: 12 }}>
+          <Skeleton style={{ width: '100%', height: 88, borderRadius: 16 }} />
+          <Skeleton style={{ width: '100%', height: 88, borderRadius: 16 }} />
+          <Skeleton style={{ width: '100%', height: 88, borderRadius: 16 }} />
+          <Skeleton style={{ width: '100%', height: 88, borderRadius: 16 }} />
         </View>
       ) : sessions.length === 0 ? (
         <View style={styles.centerBox}>

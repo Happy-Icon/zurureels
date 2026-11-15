@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Keyboard,
   Modal,
   Platform,
@@ -18,6 +17,7 @@ import { MapCanvas } from '@/components/map/MapCanvas';
 import type { MapCanvasRef, MapViewportEvent } from '@/components/map/MapCanvas.types';
 import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import {
   lookupKnownTownCenter,
   mapService,
@@ -272,7 +272,7 @@ export function HostLocationPickerModal({
                 returnKeyType="search"
               />
               {searching ? (
-                <ActivityIndicator size="small" color={ORANGE} />
+                <PremiumLoader size={4} color={ORANGE} />
               ) : searchText.length > 0 ? (
                 <Pressable
                   onPress={() => {
@@ -320,7 +320,7 @@ export function HostLocationPickerModal({
         <View style={[styles.rightControls, { bottom: insets.bottom + 245 }]}>
           <Pressable onPress={handleUseCurrentGps} style={styles.gpsFab}>
             {locatingGps ? (
-              <ActivityIndicator size="small" color={ORANGE} />
+              <PremiumLoader size={4} color={ORANGE} />
             ) : (
               <Ionicons name="locate" size={20} color={ORANGE} />
             )}

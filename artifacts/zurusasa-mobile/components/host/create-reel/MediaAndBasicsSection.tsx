@@ -23,7 +23,14 @@ export interface MediaAndBasicsSectionProps {
 }
 
 const STAY_PRICE_UNITS = ['night', 'stay', 'week'] as const;
-const EXPERIENCE_PRICE_UNITS = ['person', 'group', 'table', 'session'] as const;
+const WATER_PRICE_UNITS = ['person', 'boat', 'charter', 'group', 'trip'] as const;
+const LAND_PRICE_UNITS = ['person', 'group', 'trip', 'vehicle'] as const;
+const DINING_PRICE_UNITS = ['person', 'table', 'booking'] as const;
+const TIME_SLOT_SUGGESTIONS: Record<string, readonly string[]> = {
+  water_experience: ['08:30 Morning Sail', '13:00 Afternoon Session', '16:30 Sunset Cruise'],
+  land_experience: ['08:00 Morning Session', '13:30 Afternoon Session', '16:30 Sunset Session'],
+  food_dining: ['12:30 Lunch', '14:30 Afternoon', '17:30 Sunset Drinks', '19:30 Dinner', '21:00 Late Seating'],
+};
 const OFFER_BADGE_PRESETS = ['20% OFF', '2-for-1', 'Happy Hour', 'Flash Deal'] as const;
 
 export function PublishingFormatChooser({ form, colors, isDark }: MediaAndBasicsSectionProps) {
@@ -682,24 +689,77 @@ export function MediaAndBasicsSection({ form, colors, isDark }: MediaAndBasicsSe
 
     if (form.currentStep === 2) {
       const isStay = form.category === 'accommodation';
-      const unitOptions = isStay ? STAY_PRICE_UNITS : EXPERIENCE_PRICE_UNITS;
+      const isDining = form.category === 'food_dining';
+      const unitOptions = isStay
+        ? STAY_PRICE_UNITS
+        : form.category === 'water_experience'
+        ? WATER_PRICE_UNITS
+        : isDining
+        ? DINING_PRICE_UNITS
+        : LAND_PRICE_UNITS;
+      const presetSlots = TIME_SLOT_SUGGESTIONS[form.category] ?? TIME_SLOT_SUGGESTIONS.land_experience;
+      const allDisplayedSlots = Array.from(new Set([...presetSlots, ...form.timeSlots]));
+      const isFreeDining = isDining && form.price.trim() === '0';
 
       return (
         <View style={styles.sectionBlock}>
           <Text style={[styles.sectionHeading, { color: colors.text }]}>
-            {isStay ? 'Pricing, Capacity & Check-In' : 'Pricing & Experience Schedule'}
+            {isStay
+              ? 'Pricing, Capacity & Check-In'
+              : isDining
+              ? 'Reservations, Seating Slots & Cover'
+              : 'Pricing & Session Schedule'}
           </Text>
           <Text style={[styles.sectionSubText, { color: colors.mutedForeground }]}>
             {isStay
               ? 'Set nightly pricing, guest capacity, and standard check-in hours.'
-              : 'Set pricing, group size, duration, and what guests receive.'}
+              : isDining
+              ? 'Offer free table bookings (KES 0) or paid cover/tasting slots.'
+              : 'Choose per-person or flat boat/group pricing and departure sessions.'}
           </Text>
+
+          {isDining ? (
+            <Pressable
+              onPress={() => {
+                if (isFreeDining) {
+                  form.setPrice('1500');
+                } else {
+                  form.setPrice('0');
+                  form.setPriceUnit('booking');
+                }
+              }}
+              style={[
+                styles.presetChip,
+                {
+                  alignSelf: 'flex-start',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  backgroundColor: isFreeDining ? '#059669' : isDark ? '#27272A' : '#F3F4F6',
+                  borderColor: isFreeDining ? '#059669' : colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name={isFreeDining ? 'checkmark-circle' : 'restaurant-outline'}
+                size={15}
+                color={isFreeDining ? '#FFFFFF' : colors.text}
+              />
+              <Text style={[styles.presetChipText, { color: isFreeDining ? '#FFFFFF' : colors.text }]}>
+                {isFreeDining ? 'Free Table Reservation Enabled (KES 0)' : 'Make Table Reservations Free (KES 0)'}
+              </Text>
+            </Pressable>
+          ) : null}
 
           <View style={styles.rowTwoCol}>
             <View style={[styles.formGroup, { flex: 1 }]}>
-              <Text style={[styles.inputLabel, { color: colors.text }]}>Price (KES) *</Text>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>
+                {isDining ? 'Cover / Deposit (KES, 0 = Free)' : 'Price (KES) *'}
+              </Text>
               <TextInput
-                placeholder="e.g. 15000"
+                placeholder={isDining ? '0' : 'e.g. 15000'}
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="numeric"
                 value={form.price}
@@ -831,6 +891,57 @@ export function MediaAndBasicsSection({ form, colors, isDark }: MediaAndBasicsSe
                   onChangeText={form.setOperatingHours}
                   style={inputStyle}
                 />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  {isDining ? 'Bookable Seating Slots' : 'Bookable Departure / Session Slots'}
+                </Text>
+                <View style={[styles.presetChipsRow, { flexWrap: 'wrap' }]}>
+                  {allDisplayedSlots.map((slot) => {
+                    const sel = form.timeSlots.includes(slot);
+                    return (
+                      <Pressable
+                        key={slot}
+                        onPress={() => form.toggleTimeSlot(slot)}
+                        style={[
+                          styles.presetChip,
+                          {
+                            backgroundColor: sel ? '#F26522' : isDark ? '#27272A' : '#F3F4F6',
+                            borderColor: sel ? '#F26522' : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.presetChipText, { color: sel ? '#FFFFFF' : colors.text }]}>
+                          {slot}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={[styles.rowTwoCol, { marginTop: 8, alignItems: 'center' }]}>
+                  <TextInput
+                    placeholder={isDining ? 'e.g. 18:30 Golden Hour' : 'e.g. 10:30 Mid-Morning'}
+                    placeholderTextColor={colors.mutedForeground}
+                    value={form.customTimeSlot}
+                    onChangeText={form.setCustomTimeSlot}
+                    style={[inputStyle, { flex: 1 }]}
+                  />
+                  <Pressable
+                    onPress={form.addCustomTimeSlot}
+                    style={[
+                      styles.presetChip,
+                      {
+                        backgroundColor: isDark ? '#27272A' : '#111111',
+                        borderColor: isDark ? '#3F3F46' : '#111111',
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.presetChipText, { color: '#FFFFFF' }]}>+ Add</Text>
+                  </Pressable>
+                </View>
               </View>
 
               <View style={styles.formGroup}>
@@ -976,6 +1087,43 @@ export function MediaAndBasicsSection({ form, colors, isDark }: MediaAndBasicsSe
             </View>
           </View>
 
+          <View style={styles.formGroup}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Ticket Tiers (Optional: VIP, Table)</Text>
+              <Pressable onPress={form.addEventTicketTier} hitSlop={8}>
+                <Text style={{ fontSize: 12.5, fontFamily: 'DMSans_700Bold', color: '#F26522' }}>
+                  + Add Tier
+                </Text>
+              </Pressable>
+            </View>
+            {form.eventTicketTiers.length > 0 ? (
+              <View style={{ gap: 8, marginTop: 4 }}>
+                {form.eventTicketTiers.map((tier) => (
+                  <View key={tier.id} style={[styles.rowTwoCol, { alignItems: 'center' }]}>
+                    <TextInput
+                      placeholder="Tier name (e.g. VIP)"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={tier.label}
+                      onChangeText={(txt) => form.updateEventTicketTier(tier.id, { label: txt })}
+                      style={[inputStyle, { flex: 1.3 }]}
+                    />
+                    <TextInput
+                      placeholder="KES"
+                      placeholderTextColor={colors.mutedForeground}
+                      keyboardType="numeric"
+                      value={tier.price}
+                      onChangeText={(txt) => form.updateEventTicketTier(tier.id, { price: txt })}
+                      style={[inputStyle, { flex: 0.9 }]}
+                    />
+                    <Pressable onPress={() => form.removeEventTicketTier(tier.id)} hitSlop={8}>
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+
           <LocationAndPinPicker form={form} colors={colors} isDark={isDark} />
           <DescriptionField form={form} colors={colors} />
         </View>
@@ -1072,6 +1220,19 @@ export function MediaAndBasicsSection({ form, colors, isDark }: MediaAndBasicsSe
               style={inputStyle}
             />
           </View>
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>
+            Expiry Time (24h, optional)
+          </Text>
+          <TextInput
+            placeholder="23:59"
+            placeholderTextColor={colors.mutedForeground}
+            value={form.offerExpiryTime}
+            onChangeText={form.setOfferExpiryTime}
+            style={inputStyle}
+          />
         </View>
 
         <View style={styles.presetChipsRow}>

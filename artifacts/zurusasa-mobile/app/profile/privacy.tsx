@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -20,6 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase, PersonalDataRequestRow } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import { zuruAIService } from '@/services/zuruAIService';
 import { dataRequestService } from '@/services/dataRequestService';
 import { DataRequestStatusCard } from '@/components/privacy/DataRequestStatusCard';
@@ -471,7 +471,7 @@ export default function PrivacySettingsScreen() {
               style={[styles.dangerBtn, deleting && { opacity: 0.6 }]}
             >
               {deleting ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <PremiumLoader color="#FFFFFF" size={6} />
               ) : (
                 <Text style={styles.dangerBtnText}>Permanently delete account</Text>
               )}

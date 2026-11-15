@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -22,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { passkeyService, type PasskeyCredential } from '@/services/passkeyService';
 import { PasskeySetupSheet } from '@/components/passkey/PasskeySetupSheet';
 import { Skeleton } from '@/components/Skeleton';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 export default function LoginAndSecurityScreen() {
   const colors = useColors();
@@ -304,7 +304,7 @@ export default function LoginAndSecurityScreen() {
                 hitSlop={8}
               >
                 {passkeyLoading ? (
-                  <ActivityIndicator size="small" color={colors.text} />
+                  <PremiumLoader size={5} color={colors.text} />
                 ) : (
                   <Text style={[styles.underlinedActionText, { color: colors.text }]}>
                     {passkeyEnabled ? 'Manage' : 'Add'}
@@ -524,7 +524,7 @@ export default function LoginAndSecurityScreen() {
               style={[styles.primaryBtn, passwordLoading && { opacity: 0.6 }]}
             >
               {passwordLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <PremiumLoader color="#FFFFFF" size={6} />
               ) : (
                 <Text style={styles.primaryBtnText}>Save password</Text>
               )}
@@ -561,7 +561,7 @@ export default function LoginAndSecurityScreen() {
               style={[styles.dangerBtn, deactivating && { opacity: 0.6 }]}
             >
               {deactivating ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <PremiumLoader color="#FFFFFF" size={6} />
               ) : (
                 <Text style={styles.dangerBtnText}>Deactivate account</Text>
               )}

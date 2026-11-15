@@ -12,14 +12,30 @@
  */
 
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useReels } from '@/lib/queries';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { filterActivePromotionalReels, useReels } from '@/lib/queries';
+import { invalidateServerCache } from '@/lib/redis';
+import {
+  extractPromoEndTimestampFromReel,
+  useExactExpirySweep,
+} from '@/hooks/useEventLifecycle';
 import { zuruAIService } from '@/services/zuruAIService';
 import type { ReelRow } from '@/lib/supabase';
 
 export function usePersonalizedReels(userId?: string, options?: { aiImprovementOptOut?: boolean }) {
+  const queryClient = useQueryClient();
   const reelsQuery = useReels();
   const isOptedOut = options?.aiImprovementOptOut === true;
+
+  const promoEndTimestamps = useMemo(
+    () => (reelsQuery.data ?? []).map((r) => extractPromoEndTimestampFromReel(r)),
+    [reelsQuery.data],
+  );
+
+  const liveSweepTick = useExactExpirySweep(promoEndTimestamps, () => {
+    invalidateServerCache('invalidate_reels_feed').catch(() => {});
+    queryClient.invalidateQueries({ queryKey: ['reels'] });
+  });
 
   const affinitiesQuery = useQuery({
     queryKey: ['ai-personalization-affinities', userId, isOptedOut],
@@ -34,7 +50,8 @@ export function usePersonalizedReels(userId?: string, options?: { aiImprovementO
   });
 
   const personalizedReels = useMemo<ReelRow[]>(() => {
-    const rawReels = reelsQuery.data ?? [];
+    void liveSweepTick;
+    const rawReels = filterActivePromotionalReels(reelsQuery.data ?? []);
     if (!rawReels.length || isOptedOut) return rawReels;
 
     const affinities = affinitiesQuery.data;
@@ -83,7 +100,7 @@ export function usePersonalizedReels(userId?: string, options?: { aiImprovementO
       const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
     });
-  }, [reelsQuery.data, affinitiesQuery.data, isOptedOut]);
+  }, [reelsQuery.data, affinitiesQuery.data, isOptedOut, liveSweepTick]);
 
   return {
     reels: personalizedReels,

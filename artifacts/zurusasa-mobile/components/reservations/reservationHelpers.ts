@@ -43,6 +43,76 @@ export function daysUntilLabel(iso: string | null): string | null {
   return `Check in in ${num} days`;
 }
 
+const EAT_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+function getCheckInWindowBoundsMs(booking: {
+  check_in?: string | null;
+  check_out?: string | null;
+}): { windowStartMs: number; windowEndMs: number } | null {
+  if (!booking.check_in) return null;
+  const checkInDate = new Date(booking.check_in);
+  if (Number.isNaN(checkInDate.getTime())) return null;
+
+  // Calendar date in Africa/Nairobi (UTC+3), window opens at 06:00 AM EAT (= 03:00 UTC)
+  const checkInEat = new Date(checkInDate.getTime() + EAT_OFFSET_MS);
+  const year = checkInEat.getUTCFullYear();
+  const month = checkInEat.getUTCMonth();
+  const day = checkInEat.getUTCDate();
+  const windowStartMs = Date.UTC(year, month, day, 6, 0, 0) - EAT_OFFSET_MS;
+
+  let windowEndMs = windowStartMs + 36 * 60 * 60 * 1000;
+  if (booking.check_out) {
+    const checkOutMs = new Date(booking.check_out).getTime();
+    if (!Number.isNaN(checkOutMs)) {
+      windowEndMs = checkOutMs + 12 * 60 * 60 * 1000;
+    }
+  }
+
+  return { windowStartMs, windowEndMs };
+}
+
+export function isCheckInWindowOpen(booking: {
+  status?: string | null;
+  check_in?: string | null;
+  check_out?: string | null;
+  checked_in_at?: string | null;
+  arrival_issue_status?: string | null;
+}): boolean {
+  const status = (booking.status ?? '').toLowerCase();
+  if (status !== 'confirmed') return false;
+  if (booking.checked_in_at) return false;
+  if (booking.arrival_issue_status === 'open') return false;
+
+  const bounds = getCheckInWindowBoundsMs(booking);
+  if (!bounds) return false;
+  const now = Date.now();
+  return now >= bounds.windowStartMs && now <= bounds.windowEndMs;
+}
+
+export function canReportArrivalIssue(booking: {
+  status?: string | null;
+  check_in?: string | null;
+  check_out?: string | null;
+  checked_in_at?: string | null;
+  arrival_issue_status?: string | null;
+}): boolean {
+  const status = (booking.status ?? '').toLowerCase();
+  if (status !== 'confirmed') return false;
+  if (booking.arrival_issue_status === 'open') return false;
+
+  const now = Date.now();
+  if (booking.checked_in_at) {
+    const checkedInMs = new Date(booking.checked_in_at).getTime();
+    if (!Number.isNaN(checkedInMs)) {
+      return now <= checkedInMs + 24 * 60 * 60 * 1000;
+    }
+  }
+
+  const bounds = getCheckInWindowBoundsMs(booking);
+  if (!bounds) return false;
+  return now >= bounds.windowStartMs && now <= bounds.windowEndMs;
+}
+
 export type FilterChip = 'all' | 'upcoming' | 'completed' | 'cancelled' | 'refunded';
 
 export const FILTER_CHIPS: { id: FilterChip; label: string }[] = [

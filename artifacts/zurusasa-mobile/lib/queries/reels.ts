@@ -31,6 +31,8 @@ export function filterActivePromotionalReels(reels: ReelRow[]): ReelRow[] {
         reel.event?.end_date ?? (evDetails.end_date as string | undefined),
         reel.event?.expires_at ?? (evDetails.expires_at as string | undefined) ?? reel.expires_at,
         reel.event?.status ?? (evDetails.status as string | undefined),
+        reel.event?.start_time ?? (evDetails.start_time as string | undefined),
+        reel.event?.end_time ?? (evDetails.end_time as string | undefined),
       );
     }
 
@@ -82,12 +84,16 @@ export function extractEventFromReel(reel: ReelRow): EventRow | null {
     (ev.expires_at as string | undefined) ??
     reel.expires_at ??
     null;
+  const startTime =
+    reel.event?.start_time ?? (ev.start_time as string | undefined) ?? null;
+  const endTime =
+    reel.event?.end_time ?? (ev.end_time as string | undefined) ?? null;
   const status =
     reel.event?.status ??
     (ev.status as string | undefined) ??
     'active';
 
-  if (!isEventActive(eventDate, endDate, expiresAt, status)) {
+  if (!isEventActive(eventDate, endDate, expiresAt, status, startTime, endTime)) {
     return null;
   }
 
@@ -107,7 +113,8 @@ export function extractEventFromReel(reel: ReelRow): EventRow | null {
     price: reel.event?.price ?? reel.experience?.current_price ?? 0,
     location: reel.event?.location ?? reel.experience?.location ?? reel.experience?.city ?? 'Kenya Coast',
     image_url: reel.event?.image_url ?? reel.thumbnail_url ?? reel.experience?.image_url ?? null,
-    start_time: reel.event?.start_time ?? (ev.start_time as string | undefined) ?? null,
+    start_time: startTime,
+    end_time: endTime,
     organizer_name:
       reel.event?.organizer_name ??
       (ev.organizer_name as string | undefined) ??
@@ -370,7 +377,7 @@ export function useUpcomingEvents(options?: { city?: string | null; fallbackReel
 
         if (!error && Array.isArray(data)) {
           for (const row of data as unknown as EventRow[]) {
-            if (isEventActive(row.event_date, row.end_date, row.expires_at, row.status)) {
+            if (isEventActive(row.event_date, row.end_date, row.expires_at, row.status, row.start_time, row.end_time)) {
               merged.set(row.id, row);
             }
           }

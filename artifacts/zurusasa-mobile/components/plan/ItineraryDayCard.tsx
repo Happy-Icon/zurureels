@@ -1,10 +1,11 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import type { TripDay } from '@/types/zuruPlan';
 import { ItineraryItemRow } from './ItineraryItemRow';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 export interface ItineraryDayCardProps {
   day: TripDay;
@@ -47,7 +48,7 @@ export function ItineraryDayCard({
           accessibilityLabel={`Regenerate Day ${day.dayNumber} activities`}
         >
           {isRegenerating ? (
-            <ActivityIndicator size="small" color="#F26522" />
+            <PremiumLoader size={5} color="#F26522" />
           ) : (
             <>
               <Feather name="refresh-cw" size={13} color="#F26522" />

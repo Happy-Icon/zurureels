@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Dimensions,
   Platform,
   Pressable,
@@ -23,6 +22,7 @@ import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { zuruPlanService } from '@/services/zuruPlanService';
 import { Skeleton } from '@/components/Skeleton';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import { ItineraryDayCard } from '@/components/plan/ItineraryDayCard';
 import { AgentItinerarySheet } from '@/components/plan/AgentItinerarySheet';
 import { BookingSheet } from '@/components/BookingSheet';
@@ -442,7 +442,7 @@ export default function TripItineraryWorkspaceScreen() {
                 accessibilityLabel="Upgrade Plan with AI"
               >
                 {isUpgradingAi ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <PremiumLoader size={6} color="#FFFFFF" />
                 ) : (
                   <>
                     <Ionicons name="sparkles" size={13} color="#FFFFFF" />

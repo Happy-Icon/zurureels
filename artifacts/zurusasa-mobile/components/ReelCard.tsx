@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   PanResponder,
   Pressable,
@@ -14,6 +13,7 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useIsFocused } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEvent } from 'expo';
 import * as Haptics from 'expo-haptics';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -30,6 +30,7 @@ import {
   useToggleSave,
   type ReelInteractions,
 } from '@/lib/queries';
+import { invalidateServerCache } from '@/lib/redis';
 import { BookingSheet } from '@/components/BookingSheet';
 import { EnquireModal } from '@/components/EnquireModal';
 import { EventDetailSheet } from '@/components/modals/EventDetailSheet';
@@ -39,6 +40,12 @@ import {
   getCategoryDisplayMeta,
   resolveReelContentType,
 } from '@/constants/taxonomy';
+import {
+  extractEventTimingFromReel,
+  extractOfferExpiryFromReel,
+  useEventLifecycle,
+  useOfferCountdown,
+} from '@/hooks/useEventLifecycle';
 import { supabase, type ReelRow } from '@/lib/supabase';
 
 export const ZURU_ORANGE = '#EE7D30';
@@ -150,6 +157,7 @@ function getOptimizedCloudinaryImageUrl(url: string | null | undefined): string 
 function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: ReelCardProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, profile, viewMode } = useAuth();
   const { showAlert } = useCustomAlert();
   const isScreenFocused = useIsFocused();
@@ -160,6 +168,7 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
   const [muted, setMuted] = useState<boolean>(globalMuted);
   const [enquireOpen, setEnquireOpen] = useState<boolean>(false);
   const [bookingOpen, setBookingOpen] = useState<boolean>(false);
+  const [bookingInitialStep, setBookingInitialStep] = useState<'details' | 'event_tickets' | 'offer_claim'>('details');
   const [eventSheetOpen, setEventSheetOpen] = useState<boolean>(false);
   const [offerSheetOpen, setOfferSheetOpen] = useState<boolean>(false);
 
@@ -394,15 +403,48 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
     subcategory,
   );
   const eventDetails = useMemo(() => extractEventFromReel(reel), [reel]);
+  const eventTiming = useMemo(() => extractEventTimingFromReel(reel), [reel]);
+  const eventLifecycle = useEventLifecycle(eventTiming, {
+    enabled: contentType === 'event' && isActive && isScreenFocused,
+    intervalMs: 1000,
+  });
   const offerDetails = useMemo(() => extractOfferFromReel(reel), [reel]);
+  const offerTiming = useMemo(() => extractOfferExpiryFromReel(reel), [reel]);
+  const offerCountdown = useOfferCountdown(offerTiming?.expiresAt, offerTiming?.status, {
+    enabled: contentType === 'special_offer' && isActive && isScreenFocused,
+    onExpired: () => {
+      invalidateServerCache('invalidate_reels_feed').catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['reels'] });
+      queryClient.invalidateQueries({ queryKey: ['active-special-offers'] });
+    },
+  });
+  const isEventLive = contentType === 'event' && Boolean(eventLifecycle?.isLive);
+  const isEventEnded = contentType === 'event' && Boolean(eventLifecycle?.isEnded);
+  const isOfferExpired = contentType === 'special_offer' && offerCountdown.isExpired;
+  const offerCountdownSuffix =
+    contentType === 'special_offer' &&
+    !offerCountdown.isExpired &&
+    offerCountdown.remainingMs != null &&
+    offerCountdown.remainingMs <= 24 * 60 * 60 * 1000 &&
+    offerCountdown.compactCountdownLabel
+      ? ` · ${offerCountdown.compactCountdownLabel}`
+      : '';
   const formatBadgeLabel =
     contentType === 'event'
-      ? `EVENT · ${formatEventScheduleBadge(
-          eventDetails?.event_date,
-          eventDetails?.start_time,
-        ).toUpperCase()}`
+      ? isEventLive
+        ? `LIVE NOW · ${
+            eventLifecycle?.timeWindowLabel ? `${eventLifecycle.timeWindowLabel} · ` : ''
+          }${eventLifecycle?.compactCountdownLabel || 'Happening Now'}`
+        : isEventEnded
+        ? 'EVENT · ENDED'
+        : `EVENT · ${formatEventScheduleBadge(
+            eventDetails?.event_date,
+            eventDetails?.start_time,
+          ).toUpperCase()}`
       : contentType === 'special_offer'
-      ? `SPECIAL OFFER · ${String(offerDetails?.discount_label || 'DEAL').toUpperCase()}`
+      ? `SPECIAL OFFER · ${String(
+          offerDetails?.discount_label || 'DEAL',
+        ).toUpperCase()}${offerCountdownSuffix}`
       : catMeta.label.toUpperCase();
 
   const handlePrimaryAction = () => {
@@ -682,6 +724,14 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
           accessibilityRole="button"
           accessibilityLabel="View experience details and booking"
           onPress={() => {
+            if (contentType === 'event' && eventDetails) {
+              setEventSheetOpen(true);
+              return;
+            }
+            if (contentType === 'special_offer' && offerDetails) {
+              setOfferSheetOpen(true);
+              return;
+            }
             setBookingOpen(true);
           }}
           hitSlop={6}
@@ -739,8 +789,17 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
           style={{ gap: 4 }}
         >
           {/* Format / Category Glass Pill */}
-          <View style={[styles.categoryGlassPill, { backgroundColor: catMeta.badgeBg }]}>
-            <Ionicons name={catMeta.icon} size={12} color="#FFFFFF" />
+          <View
+            style={[
+              styles.categoryGlassPill,
+              { backgroundColor: isEventLive ? '#DC2626' : catMeta.badgeBg },
+            ]}
+          >
+            <Ionicons
+              name={isEventLive ? 'radio' : catMeta.icon}
+              size={12}
+              color="#FFFFFF"
+            />
             <Text style={styles.categoryGlassText}>{formatBadgeLabel}</Text>
           </View>
 
@@ -796,15 +855,18 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
             <Pressable
               testID={`book-button-${reel.id}`}
               onPress={onBook}
-              disabled={bookedOut}
+              disabled={bookedOut || isEventEnded || isOfferExpired}
               style={({ pressed }) => [
                 styles.primaryBookBtn,
                 {
-                  backgroundColor: bookedOut
-                    ? 'rgba(82,76,70,0.85)'
-                    : booked
-                    ? '#008A05'
-                    : '#EE7D30',
+                  backgroundColor:
+                    bookedOut || isEventEnded || isOfferExpired
+                      ? 'rgba(82,76,70,0.85)'
+                      : booked
+                      ? '#008A05'
+                      : isEventLive
+                      ? '#DC2626'
+                      : '#EE7D30',
                   opacity: pressed ? 0.88 : 1,
                 },
               ]}
@@ -812,10 +874,22 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
               <Text
                 style={[
                   styles.primaryBookBtnText,
-                  bookedOut ? { color: 'rgba(255,255,255,0.55)' } : null,
+                  bookedOut || isEventEnded || isOfferExpired
+                    ? { color: 'rgba(255,255,255,0.55)' }
+                    : null,
                 ]}
               >
-                {bookedOut ? 'Fully Booked' : booked ? 'Booked ✓' : catMeta.primaryCtaLabel}
+                {bookedOut
+                  ? 'Fully Booked'
+                  : isEventEnded
+                  ? 'Event Ended'
+                  : isOfferExpired
+                  ? 'Offer Expired'
+                  : booked
+                  ? 'Booked ✓'
+                  : isEventLive
+                  ? 'Live · View Details'
+                  : catMeta.primaryCtaLabel}
               </Text>
             </Pressable>
           ) : null}
@@ -836,8 +910,11 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
       <BookingSheet
         reel={reel}
         visible={bookingOpen}
-        initialStep="details"
-        onClose={() => setBookingOpen(false)}
+        initialStep={bookingInitialStep}
+        onClose={() => {
+          setBookingOpen(false);
+          setBookingInitialStep('details');
+        }}
         onSuccess={() => setBooked(true)}
       />
 
@@ -851,6 +928,7 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
             exp?.id
               ? () => {
                   setEventSheetOpen(false);
+                  setBookingInitialStep('event_tickets');
                   setBookingOpen(true);
                 }
               : undefined
@@ -869,6 +947,7 @@ function ReelCardComponent({ reel, isActive, height, prefetchInteractions }: Ree
             exp?.id
               ? () => {
                   setOfferSheetOpen(false);
+                  setBookingInitialStep('offer_claim');
                   setBookingOpen(true);
                 }
               : undefined

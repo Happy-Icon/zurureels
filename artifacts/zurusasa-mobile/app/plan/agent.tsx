@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -22,6 +21,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { zuruAIService } from '@/services/zuruAIService';
 import { zuruPlanService } from '@/services/zuruPlanService';
 import { distillCardsForHistory } from '@/services/aiConversationService';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import {
   DESTINATIONS,
   type BudgetTier,
@@ -438,7 +438,7 @@ export default function ConversationalPlanAgentScreen() {
         ListFooterComponent={
           isThinking ? (
             <View style={styles.thinkingRow}>
-              <ActivityIndicator size="small" color="#F26522" />
+              <PremiumLoader size={5} color="#F26522" />
               <Text style={[styles.thinkingText, { color: colors.mutedForeground }]}>
                 {aiStatusText || 'Zuru Agent is querying coastal experiences...'}
               </Text>

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
   Modal,
@@ -22,6 +21,7 @@ import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useEnquire, useSendMessage } from '@/lib/queries';
 import { GrowingInput } from '@/components/keyboard';
 import { useColors, useTheme } from '@/hooks/useColors';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 const ORANGE = '#F26522';
 
@@ -389,7 +389,7 @@ export function EnquireModal({
                   ]}
                 >
                   {sending ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <PremiumLoader size={5} color="#FFFFFF" />
                   ) : (
                     <Feather name="send" size={17} color="#FFFFFF" />
                   )}

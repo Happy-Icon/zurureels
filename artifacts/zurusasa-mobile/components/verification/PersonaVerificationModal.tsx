@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -14,6 +13,7 @@ import { useCustomAlert } from '@/context/CustomAlertContext';
 import { personaVerificationService } from '@/services/personaVerificationService';
 import { useColors, useTheme } from '@/hooks/useColors';
 import * as Haptics from 'expo-haptics';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 interface PersonaVerificationModalProps {
   visible: boolean;
@@ -139,7 +139,7 @@ export function PersonaVerificationModal({
             ]}
           >
             {verifying ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <PremiumLoader color="#FFFFFF" size={6} />
             ) : (
               <>
                 <Text style={styles.primaryCtaText}>Verify with Persona</Text>

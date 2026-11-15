@@ -10,6 +10,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import {
   clusterMarkersForZoom,
+  type ClusteredMapItem,
+  type ComputedClusterItem,
   type MapCanvasProps,
   type MapCanvasRef,
   type MapEdgePadding,
@@ -49,6 +51,7 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
     routeCoordinates,
     routeColor = ROUTE_BLUE,
     onPressMarker,
+    onPressCluster,
     onPressMap,
     onViewportChange,
     onMapReady,
@@ -56,8 +59,11 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
   ref,
 ) {
   const nativeML = useMemo(() => getNativeMapLibre(), []);
+  const rootViewRef = useRef<View>(null);
   const mapRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
+  const touchStartRef = useRef<{ pageX: number; pageY: number; time: number } | null>(null);
+  const lastHandledTapRef = useRef<number>(0);
   const [currentZoom, setCurrentZoom] = useState(initialZoom);
 
   const styleUrl = theme === 'dark' ? MAP_STYLE_DARK_URL : MAP_STYLE_LIGHT_URL;
@@ -167,6 +173,120 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
     [currentZoom, onViewportChange],
   );
 
+  const handleClusterTap = useCallback(
+    (item: ComputedClusterItem) => {
+      onPressCluster?.(item);
+      const lngSpan = Math.abs(item.bounds.maxLng - item.bounds.minLng);
+      const latSpan = Math.abs(item.bounds.maxLat - item.bounds.minLat);
+      if (lngSpan < 0.005 && latSpan < 0.005) {
+        const nextZoom = Math.max(currentZoom + 2.2, 14.6);
+        flyTo(item.coordinate, nextZoom, 420);
+      } else {
+        fitBounds(item.bounds, 72, 420);
+        setCurrentZoom((z) => Math.max(z + 1.8, 14.3));
+      }
+    },
+    [currentZoom, fitBounds, flyTo, onPressCluster],
+  );
+
+  const markTapHandled = useCallback(() => {
+    const now = Date.now();
+    if (now - lastHandledTapRef.current < 250) return false;
+    lastHandledTapRef.current = now;
+    return true;
+  }, []);
+
+  const handleTouchStart = useCallback((e: any) => {
+    const { pageX, pageY } = e?.nativeEvent ?? {};
+    if (typeof pageX !== 'number' || typeof pageY !== 'number') return;
+    touchStartRef.current = { pageX, pageY, time: Date.now() };
+  }, []);
+
+  const handleTouchEnd = useCallback(
+    (e: any) => {
+      const start = touchStartRef.current;
+      touchStartRef.current = null;
+      if (!start) return;
+
+      const { pageX, pageY } = e?.nativeEvent ?? {};
+      if (typeof pageX !== 'number' || typeof pageY !== 'number') return;
+
+      const dt = Date.now() - start.time;
+      const dist = Math.hypot(pageX - start.pageX, pageY - start.pageY);
+      if (dt > 500 || dist > 12) return;
+      if (Date.now() - lastHandledTapRef.current < 250) return;
+
+      const projectFn = mapRef.current?.project;
+      const rootNode = rootViewRef.current;
+      if (!projectFn || !rootNode?.measureInWindow) return;
+
+      const itemsSnapshot = clusteredItems;
+      rootNode.measureInWindow(async (winX: number, winY: number) => {
+        if (Date.now() - lastHandledTapRef.current < 250) return;
+        const tapX = pageX - winX;
+        const tapY = pageY - winY;
+
+        try {
+          const projected = await Promise.all(
+            itemsSnapshot.map(async (item) => {
+              const coord =
+                item.type === 'cluster' ? item.coordinate : item.marker.coordinate;
+              const pt = await projectFn([coord.longitude, coord.latitude]);
+              return { item, pt };
+            }),
+          );
+
+          if (Date.now() - lastHandledTapRef.current < 250) return;
+
+          let bestHit: ClusteredMapItem | null = null;
+          let bestScore = Infinity;
+
+          for (const { item, pt } of projected) {
+            if (!Array.isArray(pt) || pt.length < 2) continue;
+            const [ptX, ptY] = pt;
+            if (item.type === 'cluster') {
+              const dx = Math.abs(tapX - ptX);
+              const dy = Math.abs(tapY - ptY);
+              if (dx <= 28 && dy <= 28) {
+                const score = Math.hypot(tapX - ptX, tapY - ptY);
+                if (score < bestScore) {
+                  bestScore = score;
+                  bestHit = item;
+                }
+              }
+            } else {
+              const dx = Math.abs(tapX - ptX);
+              const isTown = item.marker.badgeType === 'town_summary';
+              const halfW = isTown ? 76 : 58;
+              if (dx <= halfW && tapY >= ptY - 46 && tapY <= ptY + 14) {
+                const score = Math.hypot(tapX - ptX, tapY - (ptY - 18));
+                if (score < bestScore) {
+                  bestScore = score;
+                  bestHit = item;
+                }
+              }
+            }
+          }
+
+          if (bestHit) {
+            lastHandledTapRef.current = Date.now();
+            if (bestHit.type === 'cluster') {
+              handleClusterTap(bestHit);
+            } else {
+              onPressMarker?.(bestHit.marker.id);
+            }
+          } else {
+            lastHandledTapRef.current = Date.now();
+            onPressMap?.();
+          }
+        } catch {
+          // Fall back cleanly to native map/marker press events if project fails
+        }
+      });
+    },
+    [clusteredItems, handleClusterTap, onPressMap, onPressMarker],
+  );
+
   // Honest diagnostic fallback ONLY when opened inside plain Expo Go without compiled native MapLibre
   if (!nativeML) {
     const isDark = theme === 'dark';
@@ -240,7 +360,12 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
   const { Map: MLMap, Camera: MLCamera, GeoJSONSource, Layer, Marker } = nativeML;
 
   return (
-    <View style={[styles.root, style]}>
+    <View
+      ref={rootViewRef}
+      style={[styles.root, style]}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <MLMap
         ref={mapRef}
         style={StyleSheet.absoluteFill}
@@ -256,7 +381,10 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
         logo={false}
         attribution={interactive}
         attributionPosition={{ bottom: 8, right: 8 }}
-        onPress={() => onPressMap?.()}
+        onPress={() => {
+          if (!markTapHandled()) return;
+          onPressMap?.();
+        }}
         onRegionDidChange={handleRegionDidChange}
         onDidFinishLoadingMap={() => onMapReady?.()}
       >
@@ -358,15 +486,13 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
                 lngLat={[item.coordinate.longitude, item.coordinate.latitude]}
                 anchor="center"
                 onPress={() => {
-                  fitBounds(item.bounds, 72, 420);
+                  if (!markTapHandled()) return;
+                  handleClusterTap(item);
                 }}
               >
-                <Pressable
-                  onPress={() => fitBounds(item.bounds, 72, 420)}
-                  style={styles.clusterPill}
-                >
+                <View collapsable={false} pointerEvents="none" style={styles.clusterPill}>
                   <Text style={styles.clusterPillText}>{item.count}</Text>
-                </Pressable>
+                </View>
               </Marker>
             );
           }
@@ -383,12 +509,12 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
               lngLat={[m.coordinate.longitude, m.coordinate.latitude]}
               anchor="bottom"
               selected={isSelected}
-              onPress={() => onPressMarker?.(m.id)}
+              onPress={() => {
+                if (!markTapHandled()) return;
+                onPressMarker?.(m.id);
+              }}
             >
-              <Pressable
-                onPress={() => onPressMarker?.(m.id)}
-                style={styles.markerTouchWrap}
-              >
+              <View collapsable={false} pointerEvents="none" style={styles.markerTouchWrap}>
                 <View
                   style={[
                     styles.markerPill,
@@ -439,7 +565,7 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
                     },
                   ]}
                 />
-              </Pressable>
+              </View>
             </Marker>
           );
         })}

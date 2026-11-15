@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -19,6 +18,7 @@ import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { zuruAIService } from '@/services/zuruAIService';
 import { zuruPlanService, extractRating, extractReviewsCount } from '@/services/zuruPlanService';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import type { ExperienceRow, ItineraryItem, TripPlan } from '@/types/zuruPlan';
 
 export interface AgentItinerarySheetProps {
@@ -282,7 +282,7 @@ export function AgentItinerarySheet({
             {/* Thinking Spinner */}
             {isThinking && (
               <View style={styles.thinkingBox}>
-                <ActivityIndicator size="small" color="#F26522" />
+                <PremiumLoader size={5} color="#F26522" />
                 <Text style={[styles.thinkingText, { color: colors.mutedForeground }]}>
                   Finding verified experiences in {trip.destination}...
                 </Text>

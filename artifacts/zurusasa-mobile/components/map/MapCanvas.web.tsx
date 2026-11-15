@@ -60,6 +60,7 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
     routeCoordinates,
     routeColor = ROUTE_BLUE,
     onPressMarker,
+    onPressCluster,
     onPressMap,
     onViewportChange,
     onMapReady,
@@ -78,6 +79,8 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
   onViewportChangeRef.current = onViewportChange;
   const onPressMarkerRef = useRef(onPressMarker);
   onPressMarkerRef.current = onPressMarker;
+  const onPressClusterRef = useRef(onPressCluster);
+  onPressClusterRef.current = onPressCluster;
   const onMapReadyRef = useRef(onMapReady);
   onMapReadyRef.current = onMapReady;
 
@@ -317,7 +320,18 @@ export const MapCanvas = forwardRef<MapCanvasRef, MapCanvasProps>(function MapCa
           'width:38px;height:38px;border-radius:19px;background:#F26522;border:2.5px solid #fff;color:#fff;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,0.25);';
         el.onclick = (ev) => {
           ev.stopPropagation();
-          fitBounds(item.bounds, 72, 420);
+          onPressClusterRef.current?.(item);
+          const lngSpan = Math.abs(item.bounds.maxLng - item.bounds.minLng);
+          const latSpan = Math.abs(item.bounds.maxLat - item.bounds.minLat);
+          if (lngSpan < 0.005 && latSpan < 0.005) {
+            map.flyTo({
+              center: [item.coordinate.longitude, item.coordinate.latitude],
+              zoom: Math.max(map.getZoom() + 2.2, 14.6),
+              duration: 420,
+            });
+          } else {
+            fitBounds(item.bounds, 72, 420);
+          }
         };
         const mk = new maplibregl.Marker({ element: el, anchor: 'center' })
           .setLngLat([item.coordinate.longitude, item.coordinate.latitude])

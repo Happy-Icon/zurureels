@@ -253,6 +253,28 @@ export function useHostDeclineBooking() {
   });
 }
 
+export function useHostCheckInBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ bookingId, pin }: { bookingId: string; pin: string }) => {
+      const cleanPin = pin.replace(/\D/g, '');
+      const { data, error } = await supabase.rpc('host_check_in_booking', {
+        p_booking_id: bookingId,
+        p_pin: cleanPin,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['host-kpis'] });
+    },
+  });
+}
+
 export function useHostBookings(hostId: string | undefined) {
   const queryClient = useQueryClient();
   const query = useQuery<BookingRow[]>({

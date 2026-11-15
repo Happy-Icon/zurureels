@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Dimensions,
   Modal,
   Platform,
@@ -22,6 +21,7 @@ import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { zuruPlanService } from '@/services/zuruPlanService';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import {
   BUDGET_TIERS,
   COASTAL_DESTINATIONS,
@@ -485,7 +485,7 @@ export default function GuidedTripBuilderScreen() {
           accessibilityLabel={step === 4 ? 'Generate complete itinerary' : 'Next step'}
         >
           {isGenerating ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <PremiumLoader size={6} color="#FFFFFF" />
           ) : (
             <>
               <Text style={styles.primaryCtaBtnText}>

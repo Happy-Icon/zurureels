@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -19,6 +18,7 @@ import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { supabase } from '@/lib/supabase';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 type HelpSheetType = 'help_centre' | 'safety' | 'neighbourhood' | 'feedback' | null;
 
@@ -466,7 +466,7 @@ export default function GetHelpScreen() {
                 ]}
               >
                 {submittingTicket ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <PremiumLoader color="#FFFFFF" size={6} />
                 ) : (
                   <Text style={styles.primaryBtnText}>Submit inquiry</Text>
                 )}
@@ -547,7 +547,7 @@ export default function GetHelpScreen() {
               ]}
             >
               {submittingSafety ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <PremiumLoader color="#FFFFFF" size={6} />
               ) : (
                 <Text style={styles.urgentBtnText}>Dispatch urgent safety report</Text>
               )}
@@ -663,7 +663,7 @@ export default function GetHelpScreen() {
               ]}
             >
               {submittingConcern ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <PremiumLoader color="#FFFFFF" size={6} />
               ) : (
                 <Text style={styles.primaryBtnText}>Submit report</Text>
               )}
@@ -764,7 +764,7 @@ export default function GetHelpScreen() {
               ]}
             >
               {submittingFeedback ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <PremiumLoader color="#FFFFFF" size={6} />
               ) : (
                 <Text style={styles.primaryBtnText}>Submit feedback</Text>
               )}

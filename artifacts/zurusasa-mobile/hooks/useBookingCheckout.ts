@@ -6,7 +6,21 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
-import { useActiveSpecialOffers, useExperienceBlockedDates } from '@/lib/queries';
+import {
+  extractEventTimingFromReel,
+  extractOfferExpiryFromReel,
+  useEventLifecycle,
+  useOfferCountdown,
+} from '@/hooks/useEventLifecycle';
+import {
+  useActiveSpecialOffers,
+  useDeleteUserPaymentMethod,
+  useExperienceBlockedDates,
+  useSaveUserPaymentMethod,
+  useSetDefaultUserPaymentMethod,
+  useUserPaymentMethods,
+} from '@/lib/queries';
+import { invalidateServerCache } from '@/lib/redis';
 import { supabase, resolveAvatarUrl, type ReelRow } from '@/lib/supabase';
 import {
   getPrimaryCategoryMeta,
@@ -26,6 +40,12 @@ import {
   type Phase,
   type Step,
 } from '@/components/booking/bookingHelpers';
+import {
+  buildSlotTimestamps,
+  computeBookingUnits,
+  extractEventTiers,
+  resolveCategoryFlowConfig,
+} from '@/components/booking/categoryFlowConfig';
 
 export interface UseBookingCheckoutArgs {
   reel: ReelRow;
@@ -48,7 +68,7 @@ export function useBookingCheckout({
   const queryClient = useQueryClient();
 
   const exp = reel.experience;
-  const meta = (exp?.metadata ?? {}) as Record<string, unknown>;
+  const meta = (exp?.metadata ?? {}) as Record<string, any>;
   const hostMeta = (reel.host?.metadata ?? {}) as Record<string, unknown>;
   const title = exp?.title ?? (reel as any).caption ?? 'Coastal Experience';
   const price = exp?.current_price != null ? Number(exp.current_price) : 0;
@@ -70,15 +90,44 @@ export function useBookingCheckout({
   const whatsIncluded = (meta.whats_included as string | undefined) || null;
   const meetingPoint =
     (meta.meeting_point as string | undefined) || exp?.arrival_instructions?.directions || null;
-  const isNightBased =
-    (contentType === 'experience' && primaryCategory === 'accommodation') ||
-    ['accommodation', 'hotel', 'villa', 'apartment', 'stay', 'stays'].includes(category) ||
-    priceUnit === 'night';
+  const eventDetails = (reel.event ?? (reel as any).event_details ?? meta.event_details ?? {}) as Record<string, any>;
+  const offerDetails = (reel.offer ?? (reel as any).special_offer ?? (reel as any).offer_details ?? meta.offer_details ?? {}) as Record<string, any>;
+  const flowConfig = useMemo(
+    () =>
+      resolveCategoryFlowConfig({
+        contentType,
+        primaryCategory,
+        priceUnit,
+        offerType: (offerDetails?.offer_type as string | undefined) || reel.subcategory,
+        meta,
+        operatingHours,
+        applicableSchedule: offerDetails?.applicable_schedule as string | undefined,
+      }),
+    [contentType, primaryCategory, priceUnit, offerDetails?.offer_type, offerDetails?.applicable_schedule, reel.subcategory, meta, operatingHours],
+  );
+  const isNightBased = flowConfig.isNightUnit;
+  const eventTiming = useMemo(() => extractEventTimingFromReel(reel), [reel]);
+  const eventLifecycle = useEventLifecycle(eventTiming, {
+    enabled: visible && flowConfig.kind === 'event',
+    intervalMs: 1000,
+  });
+  const eventSalesClosed =
+    flowConfig.kind === 'event' && Boolean(eventLifecycle?.isLive || eventLifecycle?.isEnded);
+  const offerTiming = useMemo(() => extractOfferExpiryFromReel(reel), [reel]);
+  const offerCountdown = useOfferCountdown(offerTiming?.expiresAt, offerTiming?.status, {
+    enabled: visible && flowConfig.kind === 'offer',
+    onExpired: () => {
+      invalidateServerCache('invalidate_reels_feed').catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['reels'] });
+      queryClient.invalidateQueries({ queryKey: ['active-special-offers'] });
+    },
+  });
+  const offerExpired = flowConfig.kind === 'offer' && offerCountdown.isExpired;
   const { data: activeOffers = [] } = useActiveSpecialOffers({
     experienceId: exp?.id ?? null,
     fallbackReels: [reel],
   });
-  const maxCapacity = exp?.max_guests || (meta.max_guests as number) || 2;
+  const maxCapacity = exp?.max_guests || (meta.max_guests as number) || (contentType === 'event' ? 50 : 8);
   const cancellationPolicy = (exp?.cancellation_policy || meta.cancellation_policy || 'flexible') as string;
   const checkInTime = exp?.check_in_time || (meta.check_in_time as string) || '14:00';
   const checkOutTime = exp?.check_out_time || (meta.check_out_time as string) || '10:00';
@@ -87,7 +136,7 @@ export function useBookingCheckout({
   const verified = Boolean(reel.host?.is_verified || reel.host?.verification_status === 'verified');
   const hostAvatar = resolveAvatarUrl(reel.host, user);
 
-  const maxGuests = exp?.max_guests || (meta.max_guests as number) || 2;
+  const maxGuests = exp?.max_guests || (meta.max_guests as number) || (contentType === 'event' ? 50 : 8);
   const bedrooms = (meta.bedrooms as number) || 1;
   const beds = (meta.beds as number) || 1;
   const baths = (meta.baths as number) || 1;
@@ -97,7 +146,7 @@ export function useBookingCheckout({
       ? exp.amenities
       : Array.isArray(meta.amenities) && meta.amenities.length > 0
       ? (meta.amenities as string[])
-      : ['Fast Wifi', 'Free parking on premises', 'Air Conditioning', 'Swimming Pool', 'Ocean View', 'Kitchen'];
+      : flowConfig.defaultHighlights;
 
   const [showAllAmenities, setShowAllAmenities] = useState(false);
   const amenities = showAllAmenities ? rawAmenities : rawAmenities.slice(0, 6);
@@ -123,10 +172,27 @@ export function useBookingCheckout({
   const maxDate = useMemo(() => addDays(today, 365), [today]);
 
   const eventDateIso =
-    reel.event?.event_date ||
-    ((reel as any)?.event_details?.event_date as string | undefined) ||
-    ((meta.event_details as Record<string, unknown> | undefined)?.event_date as string | undefined) ||
-    null;
+    (eventDetails?.event_date as string | undefined) || null;
+  const offerExpiryIso =
+    (offerDetails?.expires_at as string | undefined) || reel.expires_at || null;
+
+  const maxSelectableDate = useMemo(() => {
+    if (contentType === 'special_offer' && offerExpiryIso) {
+      const expDt = new Date(offerExpiryIso);
+      if (!Number.isNaN(expDt.getTime())) {
+        const expDay = startOfDay(expDt);
+        if (expDay.getTime() >= today.getTime() && expDay.getTime() < maxDate.getTime()) {
+          return expDay;
+        }
+      }
+    }
+    return maxDate;
+  }, [contentType, offerExpiryIso, today, maxDate]);
+
+  const eventTiers = useMemo(
+    () => (contentType === 'event' ? extractEventTiers(meta, price) : []),
+    [contentType, meta, price],
+  );
 
   const { defaultFrom, defaultTo } = useMemo(() => {
     if (contentType === 'event' && eventDateIso) {
@@ -149,7 +215,7 @@ export function useBookingCheckout({
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [step, setStep] = useState<Step>(initialStep);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mpesa');
+  const [paymentMethod, setPaymentMethodState] = useState<PaymentMethod>('mpesa');
   const [from, setFrom] = useState<Date | undefined>(defaultFrom);
   const [to, setTo] = useState<Date | undefined>(defaultTo);
   const [activeDateTab, setActiveDateTab] = useState<'checkin' | 'checkout'>('checkin');
@@ -162,10 +228,103 @@ export function useBookingCheckout({
     infants: 0,
     pets: 0,
   });
-  const [mpesaPhone, setMpesaPhone] = useState('');
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>(
+    () => flowConfig.defaultTimeSlots[0] ?? '',
+  );
+  const [seatingPreference, setSeatingPreference] = useState<string>(
+    () => flowConfig.seatingOptions[0] ?? '',
+  );
+  const [specialRequests, setSpecialRequests] = useState<string>('');
+  const [selectedTierId, setSelectedTierId] = useState<string>(
+    () => eventTiers[0]?.id ?? 'general',
+  );
+  const [voucherQty, setVoucherQty] = useState<number>(1);
+  const [mpesaPhone, setMpesaPhoneState] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
   const [cardModalVisible, setCardModalVisible] = useState<boolean>(false);
   const [cardMethodConfirmed, setCardMethodConfirmed] = useState<boolean>(false);
+  const [saveAsDefault, setSaveAsDefault] = useState<boolean>(true);
+  const [visitedPaymentStep, setVisitedPaymentStep] = useState<boolean>(false);
+  const hasCustomizedPaymentRef = useRef(false);
+
+  const {
+    data: savedPaymentMethods = [],
+    isLoading: loadingPaymentMethods,
+  } = useUserPaymentMethods(user?.id);
+  const savePaymentMethodMutation = useSaveUserPaymentMethod(user?.id);
+  const setDefaultPaymentMethodMutation = useSetDefaultUserPaymentMethod(user?.id);
+  const deletePaymentMethodMutation = useDeleteUserPaymentMethod(user?.id);
+
+  const defaultSavedMethod = useMemo(
+    () => savedPaymentMethods.find((m) => m.is_default) ?? savedPaymentMethods[0] ?? null,
+    [savedPaymentMethods],
+  );
+
+  const hasConfiguredDefaultMethod = useMemo(() => {
+    if (!defaultSavedMethod) return false;
+    if (defaultSavedMethod.method_type === 'card') return true;
+    const digits = (defaultSavedMethod.phone_number || '').replace(/[^0-9]/g, '');
+    return digits.length >= 9;
+  }, [defaultSavedMethod]);
+
+  const setPaymentMethod = useCallback((nextMethod: PaymentMethod) => {
+    hasCustomizedPaymentRef.current = true;
+    setPaymentMethodState(nextMethod);
+  }, []);
+
+  const setMpesaPhone = useCallback((nextPhone: string) => {
+    hasCustomizedPaymentRef.current = true;
+    setMpesaPhoneState(nextPhone);
+  }, []);
+
+  const selectSavedPaymentMethod = useCallback(
+    async (methodRow: (typeof savedPaymentMethods)[number]) => {
+      hasCustomizedPaymentRef.current = true;
+      setPaymentMethodState(methodRow.method_type);
+      if (methodRow.method_type === 'mpesa') {
+        setMpesaPhoneState(methodRow.phone_number || '');
+        setCardMethodConfirmed(false);
+      } else {
+        setCardMethodConfirmed(true);
+      }
+      if (!methodRow.is_default) {
+        try {
+          await setDefaultPaymentMethodMutation.mutateAsync(methodRow.id);
+        } catch (err) {
+          console.warn('[PAYMENT_METHODS] failed to set default:', err);
+        }
+      }
+    },
+    [setDefaultPaymentMethodMutation],
+  );
+
+  const removeSavedPaymentMethod = useCallback(
+    async (methodId: string) => {
+      await deletePaymentMethodMutation.mutateAsync(methodId);
+    },
+    [deletePaymentMethodMutation],
+  );
+
+  const isUsingDefaultMethod = useMemo(() => {
+    if (!defaultSavedMethod) return false;
+    if (defaultSavedMethod.method_type !== paymentMethod) return false;
+    if (paymentMethod === 'card') return true;
+    const activeDigits = mpesaPhone.replace(/[^0-9]/g, '');
+    const defaultDigits = (defaultSavedMethod.phone_number || '').replace(/[^0-9]/g, '');
+    return Boolean(activeDigits && defaultDigits && activeDigits === defaultDigits);
+  }, [defaultSavedMethod, paymentMethod, mpesaPhone]);
+
+  // Apply the guest's default saved payment method whenever checkout opens
+  useEffect(() => {
+    if (!visible || hasCustomizedPaymentRef.current || !defaultSavedMethod) return;
+    setPaymentMethodState(defaultSavedMethod.method_type);
+    if (defaultSavedMethod.method_type === 'mpesa') {
+      setMpesaPhoneState(defaultSavedMethod.phone_number || '');
+      setCardMethodConfirmed(false);
+    } else {
+      setCardMethodConfirmed(true);
+    }
+  }, [visible, defaultSavedMethod]);
 
   const [reviewsSummary, setReviewsSummary] = useState<ReviewSummaryData | null>(null);
   const [reviewsList, setReviewsList] = useState<any[]>([]);
@@ -176,6 +335,7 @@ export function useBookingCheckout({
     checkInStr: string;
     checkOutStr: string;
     guestCount: number;
+    metaSignature: string;
     expiresAtMs: number;
   } | null>(null);
 
@@ -186,13 +346,18 @@ export function useBookingCheckout({
     }
   }, [visible, initialStep]);
 
-  // Synchronize default dates and clear stale cached quote when listing/reel changes
+  // Synchronize defaults and clear stale cached quote when listing/reel changes
   useEffect(() => {
     activeQuoteRef.current = null;
     setFrom(defaultFrom);
     setTo(defaultTo);
     setViewMonth(new Date(defaultFrom.getFullYear(), defaultFrom.getMonth(), 1));
-  }, [reel.id, defaultFrom, defaultTo]);
+    setSelectedTimeSlot(flowConfig.defaultTimeSlots[0] ?? '');
+    setSeatingPreference(flowConfig.seatingOptions[0] ?? '');
+    setSpecialRequests('');
+    setSelectedTierId(eventTiers[0]?.id ?? 'general');
+    setVoucherQty(1);
+  }, [reel.id, defaultFrom, defaultTo, flowConfig.defaultTimeSlots, flowConfig.seatingOptions, eventTiers]);
 
   // ── Load Real Reviews & Rating From Database ───────────────────────────────
   useEffect(() => {
@@ -234,20 +399,66 @@ export function useBookingCheckout({
 
   // ── Derived Calculations ───────────────────────────────────────────────────
   const totalGuests = guests.adults + guests.children;
+
+  const selectedTier = useMemo(
+    () => eventTiers.find((t) => t.id === selectedTierId) ?? eventTiers[0] ?? null,
+    [eventTiers, selectedTierId],
+  );
+
+  const effectiveUnitPrice = useMemo(() => {
+    if (flowConfig.kind === 'event' && selectedTier) {
+      return selectedTier.price;
+    }
+    if (flowConfig.kind === 'offer' && typeof offerDetails?.offer_price === 'number') {
+      return Math.max(0, Number(offerDetails.offer_price));
+    }
+    return Math.max(0, price);
+  }, [flowConfig.kind, selectedTier, offerDetails?.offer_price, price]);
+
+  const originalOfferPrice =
+    typeof offerDetails?.original_price === 'number' && Number(offerDetails.original_price) > 0
+      ? Number(offerDetails.original_price)
+      : null;
+
   const guestSummary = useMemo(() => {
+    if (flowConfig.kind === 'event') {
+      const base = `${totalGuests} ticket${totalGuests !== 1 ? 's' : ''}`;
+      return selectedTier ? `${base} · ${selectedTier.label}` : base;
+    }
+    if (flowConfig.kind === 'dining') {
+      const base = `${totalGuests} guest${totalGuests !== 1 ? 's' : ''}`;
+      return seatingPreference ? `${base} · ${seatingPreference}` : base;
+    }
+    if (flowConfig.kind === 'offer' && !flowConfig.isRangePicker) {
+      const vLabel = `${voucherQty} voucher${voucherQty !== 1 ? 's' : ''}`;
+      return totalGuests > 1 ? `${vLabel} · ${totalGuests} guests` : vLabel;
+    }
+    if (flowConfig.kind === 'activity') {
+      const parts = [];
+      if (guests.adults > 0) parts.push(`${guests.adults} adult${guests.adults !== 1 ? 's' : ''}`);
+      if (guests.children > 0) parts.push(`${guests.children} child${guests.children !== 1 ? 'ren' : ''}`);
+      return parts.join(', ') || '1 adult';
+    }
     const parts = [];
     if (guests.adults > 0) parts.push(`${guests.adults} adult${guests.adults !== 1 ? 's' : ''}`);
     if (guests.children > 0) parts.push(`${guests.children} child${guests.children !== 1 ? 'ren' : ''}`);
     if (guests.infants > 0) parts.push(`${guests.infants} infant${guests.infants !== 1 ? 's' : ''}`);
     if (guests.pets > 0) parts.push(`${guests.pets} pet${guests.pets !== 1 ? 's' : ''}`);
     return parts.join(', ') || '1 adult';
-  }, [guests]);
+  }, [flowConfig.kind, flowConfig.isRangePicker, totalGuests, selectedTier, seatingPreference, voucherQty, guests]);
 
   const nights =
     from && to ? Math.max(1, Math.round((to.getTime() - from.getTime()) / DAY_MS)) : 1;
 
-  const units = isNightBased ? nights : totalGuests;
-  const totalAmount = price * units;
+  const units = computeBookingUnits({
+    kind: flowConfig.kind,
+    priceUnit,
+    nights,
+    totalGuests,
+    voucherQty,
+  });
+  const totalAmount = effectiveUnitPrice * units;
+  const isFreeBooking = totalAmount <= 0;
 
   const busy = phase === 'submitting' || phase === 'pin' || phase === 'settling';
   const { data: blockedDateRows = [] } = useExperienceBlockedDates(exp?.id);
@@ -289,19 +500,30 @@ export function useBookingCheckout({
 
   const resetState = useCallback(() => {
     activeQuoteRef.current = null;
+    hasCustomizedPaymentRef.current = false;
+    setVisitedPaymentStep(false);
+    setSaveAsDefault(true);
     setStep(initialStep);
-    setPaymentMethod('mpesa');
+    if (defaultSavedMethod) {
+      setPaymentMethodState(defaultSavedMethod.method_type);
+      setMpesaPhoneState(
+        defaultSavedMethod.method_type === 'mpesa' ? defaultSavedMethod.phone_number || '' : '',
+      );
+      setCardMethodConfirmed(defaultSavedMethod.method_type === 'card');
+    } else {
+      setPaymentMethodState('mpesa');
+      setMpesaPhoneState('');
+      setCardMethodConfirmed(false);
+    }
     setFrom(defaultFrom);
     setTo(defaultTo);
     setViewMonth(new Date(defaultFrom.getFullYear(), defaultFrom.getMonth(), 1));
     setGuests({ adults: 1, children: 0, infants: 0, pets: 0 });
-    setMpesaPhone('');
-    setCardMethodConfirmed(false);
     setPhase('idle');
     setCreatedBookingId(null);
     setSuccessModalVisible(false);
     hasHandledSuccessRef.current = false;
-  }, [initialStep, defaultFrom, defaultTo]);
+  }, [initialStep, defaultFrom, defaultTo, defaultSavedMethod]);
 
   const handleClose = useCallback(() => {
     cleanupPaymentListeners();
@@ -360,8 +582,16 @@ export function useBookingCheckout({
 
   const handleDayPress = useCallback(
     (dayDate: Date) => {
-      if (dayDate < today || dayDate > maxDate) return;
+      if (dayDate < today || dayDate > maxSelectableDate) return;
       if (isDateBlocked(dayDate)) return;
+
+      // Single-date categories (Tours, Boat Cruises, Dining, Non-stay Offers)
+      if (!flowConfig.isRangePicker) {
+        setFrom(dayDate);
+        setTo(addDays(dayDate, 1));
+        setActiveDateTab('checkin');
+        return;
+      }
 
       if (!from || (from && to)) {
         setFrom(dayDate);
@@ -381,7 +611,7 @@ export function useBookingCheckout({
         }
       }
     },
-    [today, maxDate, isDateBlocked, from, to],
+    [today, maxSelectableDate, isDateBlocked, flowConfig.isRangePicker, from, to],
   );
 
   // ── Authoritative Booking & Settlement Checker ──────────────────────────────
@@ -516,6 +746,31 @@ export function useBookingCheckout({
       return;
     }
 
+    if (eventSalesClosed) {
+      showAlert({
+        title: eventLifecycle?.isLive ? 'Event Already Live' : 'Event Ended',
+        message: eventLifecycle?.isLive
+          ? 'Ticket reservations close once the event starts. Please enquire directly with the organizer for door availability.'
+          : 'This event has already ended and tickets are no longer available.',
+        icon: 'lock',
+        variant: 'warning',
+      });
+      return;
+    }
+
+    if (offerExpired) {
+      invalidateServerCache('invalidate_reels_feed').catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['reels'] });
+      queryClient.invalidateQueries({ queryKey: ['active-special-offers'] });
+      showAlert({
+        title: 'Offer Expired',
+        message: 'This special offer has expired and can no longer be claimed.',
+        icon: 'lock',
+        variant: 'warning',
+      });
+      return;
+    }
+
     if (!from) {
       showAlert({
         title: 'Select Dates',
@@ -544,8 +799,38 @@ export function useBookingCheckout({
       }
     }
 
-    const checkInStr = from.toISOString();
-    const checkOutStr = (to ?? addDays(from, 1)).toISOString();
+    let checkInDate = from;
+    let checkOutDate = to ?? addDays(from, 1);
+
+    if (flowConfig.kind === 'event' && eventDateIso) {
+      const evStart = new Date(eventDateIso);
+      if (!Number.isNaN(evStart.getTime())) {
+        checkInDate = evStart;
+        const evEndRaw = (eventDetails?.end_date as string | undefined) || null;
+        const evEnd = evEndRaw ? new Date(evEndRaw) : null;
+        checkOutDate =
+          evEnd && !Number.isNaN(evEnd.getTime()) && evEnd > evStart
+            ? evEnd
+            : new Date(evStart.getTime() + 4 * 3_600_000);
+      }
+    } else if (!flowConfig.isRangePicker && flowConfig.requiresTimeSlot) {
+      const slotRange = buildSlotTimestamps(from, selectedTimeSlot, durationInfo, 3);
+      checkInDate = slotRange.checkIn;
+      checkOutDate = slotRange.checkOut;
+    }
+
+    const checkInStr = checkInDate.toISOString();
+    const checkOutStr = checkOutDate.toISOString();
+
+    const bookingMeta: Record<string, any> = {
+      time_slot: flowConfig.requiresTimeSlot ? selectedTimeSlot || null : null,
+      seating_preference: flowConfig.kind === 'dining' ? seatingPreference || null : null,
+      special_requests: specialRequests.trim() || null,
+      ticket_tier_id: flowConfig.kind === 'event' ? selectedTier?.id || null : null,
+      ticket_tier_label: flowConfig.kind === 'event' ? selectedTier?.label || null : null,
+      voucher_qty: flowConfig.kind === 'offer' ? voucherQty : null,
+    };
+    const metaSignature = JSON.stringify(bookingMeta);
 
     try {
       setPhase('submitting');
@@ -566,6 +851,7 @@ export function useBookingCheckout({
         cached.checkInStr === checkInStr &&
         cached.checkOutStr === checkOutStr &&
         cached.guestCount === totalGuests &&
+        cached.metaSignature === metaSignature &&
         cached.expiresAtMs > nowMs + 30_000
       ) {
         quote = cached.quote;
@@ -577,6 +863,7 @@ export function useBookingCheckout({
           p_check_out: checkOutStr,
           p_guest_count: totalGuests,
           p_idempotency_key: quoteIdempotencyKey,
+          p_booking_meta: bookingMeta,
         });
 
         if (quoteErr || !createdQuote) {
@@ -601,6 +888,7 @@ export function useBookingCheckout({
           checkInStr,
           checkOutStr,
           guestCount: totalGuests,
+          metaSignature,
           expiresAtMs: Number.isFinite(parsedExpiry) ? parsedExpiry : nowMs + 14 * 60_000,
         };
       }
@@ -655,7 +943,12 @@ export function useBookingCheckout({
         });
       }
 
-      // 3. Fast-path: Check Authoritative State immediately
+      // 3. Fast-path: Zero-amount or synchronous settlement
+      if (payData?.status === 'succeeded' && payData?.bookingId) {
+        handleSettlementSuccess(payData.bookingId);
+        return;
+      }
+
       const immediateCheck = await checkAuthoritativeSettlement(quote.id, attemptId);
       if (immediateCheck.settled) {
         handleSettlementSuccess(immediateCheck.booking?.id);
@@ -811,11 +1104,86 @@ export function useBookingCheckout({
     }
   };
 
-  const handleCardConfirmed = useCallback(() => {
-    setCardMethodConfirmed(true);
-    setPaymentMethod('card');
-    setCardModalVisible(false);
+  const savingPaymentMethod =
+    savePaymentMethodMutation.isPending ||
+    setDefaultPaymentMethodMutation.isPending ||
+    deletePaymentMethodMutation.isPending;
+
+  const openPaymentMethodStep = useCallback(() => {
+    setVisitedPaymentStep(true);
+    setStep('payment_method');
   }, []);
+
+  const continueFromReview = useCallback(() => {
+    if (hasConfiguredDefaultMethod) {
+      setVisitedPaymentStep(false);
+      setStep('confirm_pay');
+    } else {
+      setVisitedPaymentStep(true);
+      setStep('payment_method');
+    }
+  }, [hasConfiguredDefaultMethod]);
+
+  const continueFromPaymentMethod = useCallback(async () => {
+    if (paymentMethod === 'mpesa') {
+      const digits = mpesaPhone.replace(/[^0-9]/g, '');
+      if (!digits || digits.length < 9) {
+        showAlert({
+          title: 'M-Pesa Phone Required',
+          message: 'Please enter a valid Safaricom M-Pesa phone number (e.g. 0712 345 678).',
+          icon: 'smartphone',
+          variant: 'warning',
+        });
+        return;
+      }
+    }
+
+    if (user && (saveAsDefault || !hasConfiguredDefaultMethod)) {
+      try {
+        await savePaymentMethodMutation.mutateAsync({
+          methodType: paymentMethod,
+          label: paymentMethod === 'mpesa' ? 'Safaricom M-Pesa' : 'Visa / Mastercard',
+          phoneNumber: paymentMethod === 'mpesa' ? mpesaPhone.trim() : null,
+          setDefault: true,
+        });
+      } catch (err: any) {
+        showAlert({
+          title: 'Could Not Save Default',
+          message: err?.message || 'Unable to save default payment method.',
+          icon: 'alert-circle',
+          variant: 'warning',
+        });
+        return;
+      }
+    }
+
+    setStep('confirm_pay');
+  }, [
+    paymentMethod,
+    mpesaPhone,
+    user,
+    saveAsDefault,
+    hasConfiguredDefaultMethod,
+    savePaymentMethodMutation,
+    showAlert,
+  ]);
+
+  const handleCardConfirmed = useCallback(() => {
+    hasCustomizedPaymentRef.current = true;
+    setCardMethodConfirmed(true);
+    setPaymentMethodState('card');
+    setCardModalVisible(false);
+    if (user && (saveAsDefault || !hasConfiguredDefaultMethod)) {
+      savePaymentMethodMutation
+        .mutateAsync({
+          methodType: 'card',
+          label: 'Visa / Mastercard',
+          phoneNumber: null,
+          setDefault: true,
+        })
+        .catch(() => {});
+    }
+  }, [user, saveAsDefault, hasConfiguredDefaultMethod, savePaymentMethodMutation]);
 
   const handleSeeAllReviews = useCallback(() => {
     handleClose();
@@ -835,13 +1203,35 @@ export function useBookingCheckout({
     primaryCategory,
     primaryCategoryMeta,
     subcategoryLabel,
+    flowConfig,
+    eventDetails,
+    eventLifecycle,
+    eventSalesClosed,
+    offerDetails,
+    offerCountdown,
+    offerExpired,
+    eventTiers,
+    selectedTier,
+    selectedTierId,
+    setSelectedTierId,
+    selectedTimeSlot,
+    setSelectedTimeSlot,
+    seatingPreference,
+    setSeatingPreference,
+    specialRequests,
+    setSpecialRequests,
+    voucherQty,
+    setVoucherQty,
     durationInfo,
     operatingHours,
     whatsIncluded,
     meetingPoint,
     activeOffers,
     title,
-    price,
+    price: effectiveUnitPrice,
+    rawListingPrice: price,
+    originalOfferPrice,
+    isFreeBooking,
     priceUnit,
     maxCapacity,
     cancellationPolicy,
@@ -863,10 +1253,25 @@ export function useBookingCheckout({
     thumbnail,
     today,
     maxDate,
+    maxSelectableDate,
     step,
     setStep,
     paymentMethod,
     setPaymentMethod,
+    savedPaymentMethods,
+    loadingPaymentMethods,
+    defaultSavedMethod,
+    hasConfiguredDefaultMethod,
+    isUsingDefaultMethod,
+    saveAsDefault,
+    setSaveAsDefault,
+    visitedPaymentStep,
+    savingPaymentMethod,
+    selectSavedPaymentMethod,
+    removeSavedPaymentMethod,
+    openPaymentMethodStep,
+    continueFromReview,
+    continueFromPaymentMethod,
     from,
     setFrom,
     to,
@@ -907,6 +1312,7 @@ export function useBookingCheckout({
     handleCardConfirmed,
     handleSeeAllReviews,
     startPaymentFlow,
+    executePayment,
   };
 }
 

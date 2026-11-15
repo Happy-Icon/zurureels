@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -18,6 +17,7 @@ import { useCustomAlert } from '@/context/CustomAlertContext';
 import { PersonaVerificationModal } from '@/components/verification/PersonaVerificationModal';
 import { personaVerificationService } from '@/services/personaVerificationService';
 import { useColors, useTheme } from '@/hooks/useColors';
+import { PremiumLoader } from '@/components/PremiumLoader';
 
 export default function HostVerificationScreen() {
   const colors = useColors();
@@ -139,7 +139,7 @@ export default function HostVerificationScreen() {
               ]}
             >
               {loading ? (
-                <ActivityIndicator size="small" color="#64748B" />
+                <PremiumLoader size={5} color="#64748B" />
               ) : (
                 <Text style={styles.resetBtnText}>Re-verify / Test Again</Text>
               )}
@@ -204,7 +204,7 @@ export default function HostVerificationScreen() {
               ]}
             >
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <PremiumLoader color="#FFFFFF" size={6} />
               ) : (
                 <Text style={styles.verifyBtnText}>Verify Identity Now</Text>
               )}

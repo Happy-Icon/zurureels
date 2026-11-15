@@ -20,6 +20,7 @@ interface AuthContextValue {
   user: User | null;
   profile: ProfileRow | null;
   loading: boolean;
+  isBootReady: boolean;
   role: 'guest' | 'host' | 'admin' | null;
   viewMode: 'guest' | 'host';
   switchViewMode: (mode: 'guest' | 'host') => void;
@@ -36,15 +37,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [viewModeLoaded, setViewModeLoaded] = useState<boolean>(false);
+  const [bootTimedOut, setBootTimedOut] = useState<boolean>(false);
   const [viewMode, setViewModeState] = useState<'guest' | 'host'>('guest');
 
   useEffect(() => {
-    AsyncStorage.getItem('viewMode').then((stored) => {
-      if (stored === 'host' || stored === 'guest') {
-        setViewModeState(stored);
-      }
-    });
+    let isMounted = true;
+    const bootTimer = setTimeout(() => {
+      if (isMounted) setBootTimedOut(true);
+    }, 900);
+
+    AsyncStorage.getItem('viewMode')
+      .then((stored) => {
+        if (isMounted && (stored === 'host' || stored === 'guest')) {
+          setViewModeState(stored);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setViewModeLoaded(true);
+      });
+
+    return () => {
+      isMounted = false;
+      clearTimeout(bootTimer);
+    };
   }, []);
+
+  const isBootReady = bootTimedOut || (viewModeLoaded && !loading);
 
   const [hasListings, setHasListings] = useState<boolean>(false);
 
@@ -267,6 +287,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       profile,
       loading,
+      isBootReady,
       role,
       viewMode,
       switchViewMode,
@@ -281,6 +302,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       profile,
       loading,
+      isBootReady,
       role,
       viewMode,
       switchViewMode,

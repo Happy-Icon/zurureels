@@ -78,6 +78,15 @@
           "defaultChannel": "default"
         }
       ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#000000",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain"
+        }
+      ],
       "expo-font",
       "expo-web-browser",
       "expo-video",

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -22,6 +21,7 @@ import { supabase, type MessageRow } from '@/lib/supabase';
 import { useMessages, useSendMessage, useMarkMessagesRead } from '@/lib/queries';
 import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
 import { Skeleton } from '@/components/Skeleton';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import { GrowingInput } from '@/components/keyboard';
 
 function formatTime(iso: string) {
@@ -458,7 +458,7 @@ export default function NativeChatScreen() {
 
         {uploadingPhoto ? (
           <View style={styles.uploadingBar}>
-            <ActivityIndicator size="small" color="#EE7D30" />
+            <PremiumLoader size={5} color="#EE7D30" />
             <Text style={styles.uploadingText}>Uploading photo...</Text>
           </View>
         ) : null}

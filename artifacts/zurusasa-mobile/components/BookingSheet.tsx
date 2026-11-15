@@ -2,12 +2,15 @@ import React from 'react';
 import { Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 
 import { CardPaymentModal } from '@/components/CardPaymentModal';
 import { useBookingCheckout } from '@/hooks/useBookingCheckout';
-import { BookingDatesStep } from '@/components/booking/BookingDatesStep';
+import {
+  BookingDatesStep,
+  BookingEventTicketsStep,
+  BookingOfferClaimStep,
+} from '@/components/booking/BookingDatesStep';
 import { BookingDetailsStep } from '@/components/booking/BookingDetailsStep';
 import {
   BookingConfirmPayStep,
@@ -37,7 +40,6 @@ export function BookingSheet({
   onSuccess,
 }: BookingSheetProps) {
   const insets = useSafeAreaInsets();
-  const colors = useColors();
   const { isDark } = useTheme();
   const checkout = useBookingCheckout({
     reel,
@@ -50,6 +52,9 @@ export function BookingSheet({
   const {
     step,
     setStep,
+    flowConfig,
+    visitedPaymentStep,
+    selectedTimeSlot,
     setFrom,
     setTo,
     title,
@@ -63,6 +68,37 @@ export function BookingSheet({
     handleSuccessClose,
   } = checkout;
 
+  const handleBack = () => {
+    if (step === 'confirm_pay') {
+      setStep(visitedPaymentStep ? 'payment_method' : 'review');
+    } else if (step === 'payment_method') {
+      setStep('review');
+    } else if (step === 'review') {
+      setStep(
+        flowConfig.kind === 'event'
+          ? 'event_tickets'
+          : flowConfig.kind === 'offer'
+          ? 'offer_claim'
+          : 'dates',
+      );
+    } else if (step === initialStep && initialStep !== 'details') {
+      handleClose();
+    } else {
+      setStep('details');
+    }
+  };
+
+  const headerTitle =
+    step === 'dates'
+      ? flowConfig.datesStepHeader
+      : step === 'event_tickets'
+      ? 'Select tickets'
+      : step === 'offer_claim'
+      ? 'Claim offer'
+      : step === 'review'
+      ? 'Review and continue'
+      : 'Confirm and pay';
+
   return (
     <Modal
       visible={visible}
@@ -71,35 +107,20 @@ export function BookingSheet({
       onRequestClose={handleClose}
     >
       <View style={[styles.root, { backgroundColor: isDark ? '#18181B' : '#FFFFFF' }]}>
-        {/* ── TOP HEADER NAV (Visible on Steps: dates, review, payment_method, confirm_pay) ── */}
+        {/* ── TOP HEADER NAV ── */}
         {step !== 'details' ? (
           <View style={[styles.headerNav, { paddingTop: Platform.OS === 'ios' ? insets.top + 6 : 16 }]}>
-            <Pressable
-              onPress={() => {
-                if (step === 'confirm_pay') setStep('payment_method');
-                else if (step === 'payment_method') setStep('review');
-                else if (step === 'review') setStep('dates');
-                else if (step === 'dates') setStep('details');
-              }}
-              style={styles.headerBackBtn}
-              hitSlop={12}
-            >
+            <Pressable onPress={handleBack} style={styles.headerBackBtn} hitSlop={12}>
               <Feather name="arrow-left" size={22} color="#111111" />
             </Pressable>
 
             {step === 'payment_method' ? (
               <View style={{ flex: 1 }} />
             ) : (
-              <Text style={styles.headerTitle}>
-                {step === 'dates'
-                  ? 'Select dates & guests'
-                  : step === 'review'
-                  ? 'Review and continue'
-                  : 'Confirm and pay'}
-              </Text>
+              <Text style={styles.headerTitle}>{headerTitle}</Text>
             )}
 
-            {step === 'dates' ? (
+            {step === 'dates' || step === 'offer_claim' ? (
               <Pressable
                 onPress={() => {
                   setFrom(undefined);
@@ -130,6 +151,8 @@ export function BookingSheet({
             <BookingDetailsStep reel={reel} topInset={insets.top} checkout={checkout} />
           ) : null}
           {step === 'dates' ? <BookingDatesStep checkout={checkout} /> : null}
+          {step === 'event_tickets' ? <BookingEventTicketsStep checkout={checkout} /> : null}
+          {step === 'offer_claim' ? <BookingOfferClaimStep checkout={checkout} /> : null}
           {step === 'review' ? <BookingReviewStep checkout={checkout} /> : null}
           {step === 'payment_method' ? <BookingPaymentMethodStep checkout={checkout} /> : null}
           {step === 'confirm_pay' ? <BookingConfirmPayStep checkout={checkout} /> : null}
@@ -158,6 +181,8 @@ export function BookingSheet({
         guestSummary={checkout.guestSummary}
         totalAmount={checkout.totalAmount}
         paymentMethod={checkout.paymentMethod}
+        flowConfig={flowConfig}
+        timeSlot={selectedTimeSlot}
         onViewItinerary={handleViewItinerary}
         onClose={handleSuccessClose}
       />
