@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -41,12 +42,16 @@ interface TransactionItem {
 }
 
 const KENYAN_BANKS = [
-  { code: '744', name: 'Safaricom M-PESA' },
+  { code: '013', name: 'Equity Bank Kenya' },
+  { code: '015', name: 'KCB Bank Kenya' },
   { code: '011', name: 'Co-operative Bank of Kenya' },
-  { code: '013', name: 'Equity Bank' },
-  { code: '015', name: 'KCB Bank' },
   { code: '020', name: 'Absa Bank Kenya' },
-  { code: '023', name: 'NCBA Bank' },
+  { code: '023', name: 'NCBA Bank Kenya' },
+  { code: '031', name: 'Stanbic Bank Kenya' },
+  { code: '057', name: 'I&M Bank' },
+  { code: '063', name: 'Diamond Trust Bank (DTB)' },
+  { code: '002', name: 'Standard Chartered Bank' },
+  { code: '070', name: 'Family Bank' },
 ];
 
 export default function HostWalletScreen() {
@@ -74,10 +79,12 @@ export default function HostWalletScreen() {
   // Payout Methods State
   const [payoutMethods, setPayoutMethods] = useState<PayoutMethod[]>([]);
 
-  // Form states for adding new payout method
+  // Independent form states for M-Pesa vs Bank Account
   const [newMethodType, setNewMethodType] = useState<'mpesa' | 'bank'>('mpesa');
-  const [newNumber, setNewNumber] = useState('');
-  const [newBankCode, setNewBankCode] = useState('744');
+  const [mpesaNumber, setMpesaNumber] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankAccountName, setBankAccountName] = useState('');
+  const [selectedBankCode, setSelectedBankCode] = useState(KENYAN_BANKS[0].code);
   const [savingMethod, setSavingMethod] = useState(false);
 
   // Real Database Transactions & Payout Logs
@@ -103,28 +110,48 @@ export default function HostWalletScreen() {
 
       if (recData && recData.length > 0) {
         setPayoutMethods(
-          recData.map((r, i) => ({
-            id: r.id,
-            type: r.bank_code === 'MPESA' ? 'mpesa' : 'bank',
-            name: r.bank_code === 'MPESA' ? 'M-Pesa Payout Account' : 'Bank Account',
-            details: r.account_number ? (r.account_number.length > 6 ? `••••${r.account_number.slice(-4)}` : r.account_number) : 'Configured',
-            isDefault: i === 0,
-            verified: true,
-          }))
+          recData.map((r, i) => {
+            const isMpesaRec =
+              !r.bank_code || r.bank_code.toUpperCase() === 'MPESA' || r.bank_code === '744';
+            const bankObj = KENYAN_BANKS.find((b) => b.code === r.bank_code);
+            return {
+              id: r.id,
+              type: isMpesaRec ? 'mpesa' : 'bank',
+              name: isMpesaRec ? 'Safaricom M-Pesa' : bankObj?.name || 'Bank Account',
+              details: r.account_number
+                ? r.account_number.length > 6
+                  ? `••••${r.account_number.slice(-4)}`
+                  : r.account_number
+                : 'Configured',
+              isDefault: i === 0,
+              verified: true,
+            };
+          }),
         );
       } else {
         setPayoutMethods([]);
       }
 
-      // 2. Fetch host experiences
-      const expRes = await supabase
-        .from('experiences')
-        .select('id')
-        .eq('metadata->>host_id', user.id);
+      // 2. Fetch host experiences (user_id + metadata->>host_id) and booking_quotes
+      const [expRes, quotesRes] = await Promise.all([
+        supabase
+          .from('experiences')
+          .select('id')
+          .or(`user_id.eq.${user.id},metadata->>host_id.eq.${user.id}`),
+        supabase
+          .from('booking_quotes')
+          .select('id, experience_id')
+          .eq('host_id', user.id),
+      ]);
 
       const expIds = (expRes.data ?? []).map((e) => e.id as string);
+      const quoteIds = (quotesRes.data ?? []).map((q) => q.id as string);
+      const quoteExpIds = (quotesRes.data ?? [])
+        .map((q) => q.experience_id as string)
+        .filter(Boolean);
+      const allExpIds = Array.from(new Set([...expIds, ...quoteExpIds]));
 
-      if (expIds.length === 0) {
+      if (allExpIds.length === 0 && quoteIds.length === 0) {
         setAvailableBalance(0);
         setPendingRelease(0);
         setLifetimeEarnings(0);
@@ -136,11 +163,22 @@ export default function HostWalletScreen() {
       }
 
       // 3. Fetch real bookings from Supabase
-      const { data: bData, error } = await supabase
+      let bookingsQuery = supabase
         .from('bookings')
         .select('*, experience:experiences(id, title, location)')
-        .in('experience_id', expIds)
         .order('created_at', { ascending: false });
+
+      if (allExpIds.length > 0 && quoteIds.length > 0) {
+        bookingsQuery = bookingsQuery.or(
+          `experience_id.in.(${allExpIds.join(',')}),quote_id.in.(${quoteIds.join(',')})`,
+        );
+      } else if (allExpIds.length > 0) {
+        bookingsQuery = bookingsQuery.in('experience_id', allExpIds);
+      } else {
+        bookingsQuery = bookingsQuery.in('quote_id', quoteIds);
+      }
+
+      const { data: bData, error } = await bookingsQuery;
 
       if (error) throw error;
 
@@ -192,7 +230,11 @@ export default function HostWalletScreen() {
             date: dateStr,
             status: 'processed',
           });
-        } else if (b.status === 'confirmed' || b.status === 'paid') {
+        } else if (
+          b.status === 'confirmed' ||
+          b.status === 'paid' ||
+          (b.status === 'pending' && Boolean(b.payment_attempt_id))
+        ) {
           pending += netEarnings;
           lifetime += netEarnings;
           if (isThisMonth) {
@@ -259,29 +301,52 @@ export default function HostWalletScreen() {
 
   // Add new payout method & register with Paystack Transfer Recipient Edge Function
   const handleAddPayoutMethod = async () => {
-    const isVerified = profile?.verification_status === 'verified' || user?.user_metadata?.verification_status === 'verified';
+    const isVerified =
+      profile?.verification_status === 'verified' ||
+      user?.user_metadata?.verification_status === 'verified';
     if (!isVerified) {
       setShowVerificationModal(true);
       return;
     }
 
-    if (!newNumber.trim()) {
+    const activeMethodType = newMethodType;
+
+    if (activeMethodType === 'mpesa' && !mpesaNumber.trim()) {
       showAlert({
-        title: 'Missing Details',
-        message: 'Please enter your phone or bank account number.',
+        title: 'Missing M-Pesa Number',
+        message: 'Please enter your M-Pesa phone number.',
+      });
+      return;
+    }
+
+    if (activeMethodType === 'bank' && (!selectedBankCode || !bankAccountNumber.trim())) {
+      showAlert({
+        title: 'Missing Bank Details',
+        message: 'Please select your bank and enter your account number.',
       });
       return;
     }
 
     setSavingMethod(true);
     try {
+      const payload =
+        activeMethodType === 'mpesa'
+          ? {
+              methodType: 'mpesa' as const,
+              accountName: profile?.full_name || user?.email || 'Zuru Host',
+              accountNumber: mpesaNumber.trim(),
+              bankCode: 'MPESA',
+            }
+          : {
+              methodType: 'bank' as const,
+              accountName: bankAccountName.trim() || profile?.full_name || user?.email || 'Zuru Host',
+              accountNumber: bankAccountNumber.trim(),
+              bankCode: selectedBankCode,
+            };
+
       // Call create-host-recipient Edge Function to onboard host payout account securely with Paystack
       const { data, error } = await supabase.functions.invoke('create-host-recipient', {
-        body: {
-          accountName: profile?.full_name || user?.email || 'Zuru Host',
-          accountNumber: newNumber.trim(),
-          bankCode: newBankCode || 'MPESA',
-        },
+        body: payload,
       });
 
       if (error) {
@@ -300,19 +365,26 @@ export default function HostWalletScreen() {
       }
 
       const rec = data?.recipient;
-      const bankObj = KENYAN_BANKS.find((b) => b.code === (rec?.bank_code || newBankCode)) || KENYAN_BANKS[0];
+      const resolvedBankCode = rec?.bank_code || payload.bankCode;
+      const bankObj = KENYAN_BANKS.find((b) => b.code === resolvedBankCode);
+      const rawAccountStr = payload.accountNumber;
 
       const newMethod: PayoutMethod = {
         id: rec?.id || Date.now().toString(),
-        type: newMethodType,
-        name: newMethodType === 'mpesa' ? 'Safaricom M-PESA' : bankObj.name,
-        details: newNumber.length > 6 ? `••••${newNumber.slice(-4)}` : newNumber,
+        type: activeMethodType,
+        name: activeMethodType === 'mpesa' ? 'Safaricom M-Pesa' : bankObj?.name || 'Bank Account',
+        details: rawAccountStr.length > 6 ? `••••${rawAccountStr.slice(-4)}` : rawAccountStr,
         isDefault: true,
         verified: true,
       };
 
       setPayoutMethods([newMethod]);
-      setNewNumber('');
+      if (activeMethodType === 'mpesa') {
+        setMpesaNumber('');
+      } else {
+        setBankAccountNumber('');
+        setBankAccountName('');
+      }
       setShowManageModal(false);
       fetchWalletData();
       showAlert({
@@ -699,9 +771,17 @@ export default function HostWalletScreen() {
         animationType="slide"
         onRequestClose={() => setShowManageModal(false)}
       >
-        <View style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]}
+        >
           <Pressable style={styles.backdropTouch} onPress={() => setShowManageModal(false)} />
-          <View style={[styles.modalSheet, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+          <View
+            style={[
+              styles.modalSheet,
+              { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 16) + 12 },
+            ]}
+          >
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: colors.text }]}>Add Payout Method</Text>
               <Pressable onPress={() => setShowManageModal(false)} hitSlop={10}>
@@ -709,17 +789,18 @@ export default function HostWalletScreen() {
               </Pressable>
             </View>
 
-            {/* Type Switcher */}
+            {/* Independent Type Switcher */}
             <View style={styles.typeSelectorRow}>
               <Pressable
-                onPress={() => {
-                  setNewMethodType('mpesa');
-                  setNewBankCode('744');
-                }}
+                testID="payout-type-mpesa"
+                onPress={() => setNewMethodType('mpesa')}
                 style={[
                   styles.typeTile,
                   { backgroundColor: isDark ? '#27272A' : '#F8FAFC', borderColor: colors.border },
-                  newMethodType === 'mpesa' && [styles.typeTileSelected, { backgroundColor: isDark ? '#3D2010' : '#FFF7ED', borderColor: '#F26522' }],
+                  newMethodType === 'mpesa' && [
+                    styles.typeTileSelected,
+                    { backgroundColor: isDark ? '#3D2010' : '#FFF7ED', borderColor: '#F26522' },
+                  ],
                 ]}
               >
                 <Feather
@@ -727,20 +808,27 @@ export default function HostWalletScreen() {
                   size={16}
                   color={newMethodType === 'mpesa' ? '#F26522' : colors.mutedForeground}
                 />
-                <Text style={[styles.typeTileText, { color: colors.text }, newMethodType === 'mpesa' && styles.typeTileTextSelected]}>
+                <Text
+                  style={[
+                    styles.typeTileText,
+                    { color: colors.text },
+                    newMethodType === 'mpesa' && styles.typeTileTextSelected,
+                  ]}
+                >
                   M-Pesa
                 </Text>
               </Pressable>
 
               <Pressable
-                onPress={() => {
-                  setNewMethodType('bank');
-                  setNewBankCode('013');
-                }}
+                testID="payout-type-bank"
+                onPress={() => setNewMethodType('bank')}
                 style={[
                   styles.typeTile,
                   { backgroundColor: isDark ? '#27272A' : '#F8FAFC', borderColor: colors.border },
-                  newMethodType === 'bank' && [styles.typeTileSelected, { backgroundColor: isDark ? '#3D2010' : '#FFF7ED', borderColor: '#F26522' }],
+                  newMethodType === 'bank' && [
+                    styles.typeTileSelected,
+                    { backgroundColor: isDark ? '#3D2010' : '#FFF7ED', borderColor: '#F26522' },
+                  ],
                 ]}
               >
                 <Feather
@@ -748,40 +836,124 @@ export default function HostWalletScreen() {
                   size={16}
                   color={newMethodType === 'bank' ? '#F26522' : colors.mutedForeground}
                 />
-                <Text style={[styles.typeTileText, { color: colors.text }, newMethodType === 'bank' && styles.typeTileTextSelected]}>
+                <Text
+                  style={[
+                    styles.typeTileText,
+                    { color: colors.text },
+                    newMethodType === 'bank' && styles.typeTileTextSelected,
+                  ]}
+                >
                   Bank Account
                 </Text>
               </Pressable>
             </View>
 
-            {/* Form Inputs */}
+            {/* Independent Form Inputs */}
             {newMethodType === 'mpesa' ? (
               <View style={styles.inputStack}>
                 <Text style={[styles.inputLabel, { color: colors.text }]}>M-Pesa Phone Number</Text>
                 <TextInput
-                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                  testID="payout-mpesa-input"
+                  style={[
+                    styles.textInput,
+                    { backgroundColor: colors.card, borderColor: colors.border, color: colors.text },
+                  ]}
                   placeholder="0712345678 or +254..."
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="phone-pad"
-                  value={newNumber}
-                  onChangeText={setNewNumber}
+                  value={mpesaNumber}
+                  onChangeText={setMpesaNumber}
                 />
+                <Text style={[styles.inputHint, { color: colors.mutedForeground }]}>
+                  Payouts will be sent directly to this M-Pesa number.
+                </Text>
               </View>
             ) : (
-              <View style={styles.inputStack}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>Bank Account Number</Text>
-                <TextInput
-                  style={[styles.textInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-                  placeholder="Account Number"
-                  placeholderTextColor={colors.mutedForeground}
-                  keyboardType="number-pad"
-                  value={newNumber}
-                  onChangeText={setNewNumber}
-                />
-              </View>
+              <ScrollView
+                style={{ maxHeight: 280 }}
+                contentContainerStyle={{ gap: 12 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.inputStack}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Select Bank</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.bankListRow}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {KENYAN_BANKS.map((bank) => {
+                      const isSelected = selectedBankCode === bank.code;
+                      return (
+                        <Pressable
+                          key={bank.code}
+                          onPress={() => setSelectedBankCode(bank.code)}
+                          style={[
+                            styles.bankChip,
+                            {
+                              backgroundColor: isDark ? '#27272A' : '#F8FAFC',
+                              borderColor: colors.border,
+                            },
+                            isSelected && [
+                              styles.bankChipSelected,
+                              {
+                                backgroundColor: isDark ? '#3D2010' : '#FFF7ED',
+                                borderColor: '#F26522',
+                              },
+                            ],
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.bankChipText,
+                              { color: colors.text },
+                              isSelected && styles.bankChipTextSelected,
+                            ]}
+                          >
+                            {bank.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+
+                <View style={styles.inputStack}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Account Holder Name</Text>
+                  <TextInput
+                    testID="payout-bank-name-input"
+                    style={[
+                      styles.textInput,
+                      { backgroundColor: colors.card, borderColor: colors.border, color: colors.text },
+                    ]}
+                    placeholder={profile?.full_name || 'Full Name on Bank Account'}
+                    placeholderTextColor={colors.mutedForeground}
+                    value={bankAccountName}
+                    onChangeText={setBankAccountName}
+                  />
+                </View>
+
+                <View style={styles.inputStack}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Bank Account Number</Text>
+                  <TextInput
+                    testID="payout-bank-account-input"
+                    style={[
+                      styles.textInput,
+                      { backgroundColor: colors.card, borderColor: colors.border, color: colors.text },
+                    ]}
+                    placeholder="Account Number"
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType="number-pad"
+                    value={bankAccountNumber}
+                    onChangeText={setBankAccountNumber}
+                  />
+                </View>
+              </ScrollView>
             )}
 
             <Pressable
+              testID="save-payout-method-btn"
               disabled={savingMethod}
               onPress={handleAddPayoutMethod}
               style={({ pressed }) => [styles.saveMethodBtn, { opacity: pressed ? 0.88 : 1 }]}
@@ -789,11 +961,13 @@ export default function HostWalletScreen() {
               {savingMethod ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.saveMethodBtnText}>Save Payout Method</Text>
+                <Text style={styles.saveMethodBtnText}>
+                  {newMethodType === 'mpesa' ? 'Save M-Pesa Number' : 'Save Bank Account'}
+                </Text>
               )}
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <PersonaVerificationModal
@@ -1052,6 +1226,19 @@ const styles = StyleSheet.create({
   typeTileTextSelected: { fontFamily: 'DMSans_700Bold', color: '#F26522' },
   inputStack: { gap: 6 },
   inputLabel: { fontSize: 12, fontFamily: 'DMSans_600SemiBold', color: '#334155' },
+  inputHint: { fontSize: 11, fontFamily: 'DMSans_400Regular', color: '#64748B', marginTop: 2 },
+  bankListRow: { gap: 8, paddingVertical: 2 },
+  bankChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  bankChipSelected: { backgroundColor: '#FFF7ED', borderColor: '#F26522' },
+  bankChipText: { fontSize: 12, fontFamily: 'DMSans_500Medium', color: '#334155' },
+  bankChipTextSelected: { fontFamily: 'DMSans_700Bold', color: '#F26522' },
   textInput: {
     backgroundColor: '#F8FAFC',
     borderRadius: 12,

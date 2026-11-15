@@ -106,6 +106,7 @@ export function HostDashboard() {
 
   // Live Activity Timeline Feed
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [hasActiveRecipient, setHasActiveRecipient] = useState(false);
 
   const topPad = Platform.OS === 'web' ? 60 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 100 : 90;
@@ -113,6 +114,14 @@ export function HostDashboard() {
   const loadData = useCallback(async () => {
     if (!user) return;
     try {
+      const recRes = await supabase
+        .from('host_payout_recipients')
+        .select('id')
+        .eq('host_id', user.id)
+        .eq('is_active', true)
+        .limit(1);
+      setHasActiveRecipient((recRes.data?.length ?? 0) > 0);
+
       const reelsRes = await supabase
         .from('reels')
         .select('id')
@@ -298,7 +307,8 @@ export function HostDashboard() {
   };
 
   const hasPayout = Boolean(
-    (profile?.metadata as { paystack_subaccount_code?: string } | null)?.paystack_subaccount_code,
+    hasActiveRecipient ||
+      (profile?.metadata as { paystack_subaccount_code?: string } | null)?.paystack_subaccount_code,
   );
 
   const filteredBookings = bookings.filter((b) => {

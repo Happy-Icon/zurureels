@@ -29,6 +29,26 @@ function normalizeKenyanPhone(raw: string) {
   return normalized;
 }
 
+async function createPaystackRecipient(
+  paystackSecret: string,
+  payload: Record<string, unknown>,
+): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
+  const response = await fetch('https://api.paystack.co/transferrecipient', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${paystackSecret}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  return {
+    ok: response.ok && body.status === true,
+    status: response.status,
+    body,
+  };
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -54,7 +74,12 @@ Deno.serve(async (request) => {
     return json({ error: 'Too many payout configuration attempts. Please wait a moment.' }, 429);
   }
 
-  let input: { accountName?: string; accountNumber?: string; bankCode?: string };
+  let input: {
+    methodType?: 'mpesa' | 'bank';
+    accountName?: string;
+    accountNumber?: string;
+    bankCode?: string;
+  };
   try {
     input = await request.json();
   } catch {
@@ -65,41 +90,87 @@ Deno.serve(async (request) => {
     return json({ error: 'accountName and accountNumber are required' }, 400);
   }
 
+  const rawBankCode = (input.bankCode ?? '').trim();
+  const isMpesa =
+    input.methodType === 'mpesa' ||
+    (!input.methodType &&
+      (!rawBankCode || rawBankCode.toUpperCase() === 'MPESA' || rawBankCode === '744'));
+
   let accountNumber: string;
-  try {
-    accountNumber = normalizeKenyanPhone(input.accountNumber);
-  } catch (err) {
-    return json({ error: err instanceof Error ? err.message : 'Invalid phone number' }, 400);
-  }
+  let bankCode: string;
+  let result: { ok: boolean; status: number; body: Record<string, unknown> };
 
-  const bankCode = input.bankCode ?? 'MPESA';
+  if (isMpesa) {
+    let normalizedPhone: string;
+    try {
+      normalizedPhone = normalizeKenyanPhone(input.accountNumber);
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : 'Invalid phone number' }, 400);
+    }
 
-  // Call Paystack Transfer Recipient API
-  const paystackResponse = await fetch('https://api.paystack.co/transferrecipient', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${paystackSecret}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+    const localPhone = '0' + normalizedPhone.slice(3);
+    accountNumber = normalizedPhone;
+    bankCode = 'MPESA';
+
+    const basePayload = {
       type: 'mobile_money',
       name: input.accountName.trim(),
-      account_number: accountNumber,
-      bank_code: bankCode,
+      bank_code: 'MPESA',
       currency: 'KES',
-      metadata: { host_id: user.id },
-    }),
-  });
+      metadata: { host_id: user.id, method_type: 'mpesa' },
+    };
 
-  const providerResponse = await paystackResponse.json().catch(() => ({}));
-  if (!paystackResponse.ok || providerResponse.status !== true) {
-    console.error('Paystack transfer recipient creation failed:', paystackResponse.status, providerResponse);
+    result = await createPaystackRecipient(paystackSecret, {
+      ...basePayload,
+      account_number: localPhone,
+    });
+    if (!result.ok) {
+      result = await createPaystackRecipient(paystackSecret, {
+        ...basePayload,
+        account_number: normalizedPhone,
+      });
+    }
+  } else {
+    const cleanedAccount = input.accountNumber.replace(/[^0-9A-Za-z]/g, '');
+    if (cleanedAccount.length < 6 || cleanedAccount.length > 24) {
+      return json({ error: 'Enter a valid bank account number.' }, 400);
+    }
+    if (!rawBankCode || rawBankCode.toUpperCase() === 'MPESA' || rawBankCode === '744') {
+      return json({ error: 'Please select a bank.' }, 400);
+    }
+
+    accountNumber = cleanedAccount;
+    bankCode = rawBankCode;
+
+    const basePayload = {
+      name: input.accountName.trim(),
+      account_number: cleanedAccount,
+      bank_code: rawBankCode,
+      currency: 'KES',
+      metadata: { host_id: user.id, method_type: 'bank' },
+    };
+
+    result = await createPaystackRecipient(paystackSecret, {
+      ...basePayload,
+      type: 'kepss',
+    });
+    if (!result.ok) {
+      result = await createPaystackRecipient(paystackSecret, {
+        ...basePayload,
+        type: 'nuban',
+      });
+    }
+  }
+
+  const providerResponse = result.body;
+  if (!result.ok) {
+    console.error('Paystack transfer recipient creation failed:', result.status, providerResponse);
     return json({
-      error: providerResponse.message ?? 'Could not register payout recipient with Paystack'
+      error: (providerResponse.message as string | undefined) ?? 'Could not register payout recipient with Paystack'
     }, 400);
   }
 
-  const data = providerResponse.data ?? {};
+  const data = (providerResponse.data ?? {}) as Record<string, unknown>;
   const recipientCode = String(data.recipient_code);
 
   const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
@@ -148,6 +219,8 @@ Deno.serve(async (request) => {
     backfilledPayoutsCount: backfilledCount,
     message: backfilledCount > 0
       ? `Payout account configured and ${backfilledCount} pending booking payout(s) scheduled.`
-      : 'Payout M-Pesa account configured successfully.',
+      : isMpesa
+        ? 'Payout M-Pesa account configured successfully.'
+        : 'Payout bank account configured successfully.',
   });
 });
