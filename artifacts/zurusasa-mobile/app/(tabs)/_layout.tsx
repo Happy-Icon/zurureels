@@ -247,7 +247,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: user ? 'Profile' : 'Log In',
+          title: user ? (isHostMode ? 'Menu' : 'Profile') : 'Log In',
           tabBarIcon: ({ color, focused }) => {
             if (user) {
               if (userAvatarUrl) {

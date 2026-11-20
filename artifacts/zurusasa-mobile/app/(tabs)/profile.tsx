@@ -41,6 +41,10 @@ interface ProfileMenuItem {
   route?: Href;
   action?: () => void;
   showChevron?: boolean;
+  badge?: {
+    label: string;
+    tone?: 'success' | 'warning' | 'neutral';
+  };
 }
 
 export default function ProfileScreen() {
@@ -274,8 +278,45 @@ export default function ProfileScreen() {
     }, 1500);
   };
 
-  /* Exact menu items matching user screenshot */
-  const block1Items: ProfileMenuItem[] = [
+  const hostToolsItems: ProfileMenuItem[] = [
+    {
+      id: 'payouts',
+      title: 'Payout settings',
+      iconFamily: 'material',
+      iconName: 'bank-outline',
+      route: '/host/payouts',
+      showChevron: true,
+    },
+    {
+      id: 'create_reel',
+      title: 'Publish a reel',
+      iconFamily: 'material',
+      iconName: 'video-plus-outline',
+      route: '/host/create-reel',
+      showChevron: true,
+    },
+    {
+      id: 'host_verification',
+      title: 'Host verification',
+      iconFamily: 'material',
+      iconName: 'shield-check-outline',
+      route: '/host/verification',
+      showChevron: true,
+      badge: isVerified
+        ? { label: 'Verified', tone: 'success' }
+        : { label: 'Verify now', tone: 'warning' },
+    },
+    {
+      id: 'refer_host',
+      title: 'Refer a host',
+      iconFamily: 'material',
+      iconName: 'account-multiple-outline',
+      route: '/profile/refer',
+      showChevron: true,
+    },
+  ];
+
+  const hostAccountItems: ProfileMenuItem[] = [
     {
       id: 'settings',
       title: 'Account settings',
@@ -293,30 +334,11 @@ export default function ProfileScreen() {
       showChevron: true,
     },
     {
-      id: 'view_profile',
-      title: 'View profile',
-      iconFamily: 'feather',
-      iconName: 'user',
-      route: '/profile/view',
-      showChevron: true,
-    },
-    {
       id: 'privacy',
       title: 'Privacy',
       iconFamily: 'ionicons',
       iconName: 'hand-right-outline',
       route: '/profile/privacy',
-      showChevron: true,
-    },
-  ];
-
-  const block2Items: ProfileMenuItem[] = [
-    {
-      id: 'refer_host',
-      title: 'Refer a host',
-      iconFamily: 'material',
-      iconName: 'account-multiple-outline',
-      route: '/profile/refer',
       showChevron: true,
     },
     {
@@ -337,6 +359,124 @@ export default function ProfileScreen() {
     },
   ];
 
+  const guestBlock1Items: ProfileMenuItem[] = [
+    {
+      id: 'payments',
+      title: 'Payment methods',
+      iconFamily: 'feather',
+      iconName: 'credit-card',
+      route: '/profile/payments',
+      showChevron: true,
+    },
+    {
+      id: 'settings',
+      title: 'Account settings',
+      iconFamily: 'material',
+      iconName: 'cog-outline',
+      route: '/profile/settings',
+      showChevron: true,
+    },
+    {
+      id: 'view_profile',
+      title: 'View profile',
+      iconFamily: 'feather',
+      iconName: 'user',
+      route: '/profile/view',
+      showChevron: true,
+    },
+    {
+      id: 'privacy',
+      title: 'Privacy',
+      iconFamily: 'ionicons',
+      iconName: 'hand-right-outline',
+      route: '/profile/privacy',
+      showChevron: true,
+    },
+  ];
+
+  const guestBlock2Items: ProfileMenuItem[] = [
+    {
+      id: 'get_help',
+      title: 'Get help',
+      iconFamily: 'feather',
+      iconName: 'help-circle',
+      route: '/profile/support',
+      showChevron: true,
+    },
+    {
+      id: 'legal',
+      title: 'Legal',
+      iconFamily: 'material',
+      iconName: 'book-open-outline',
+      route: '/profile/legal',
+      showChevron: true,
+    },
+    {
+      id: 'logout',
+      title: 'Log out',
+      iconFamily: 'material',
+      iconName: 'door-open',
+      action: handleSignOut,
+      showChevron: false,
+    },
+  ];
+
+  const primaryMenuItems = isHostMode ? hostToolsItems : guestBlock1Items;
+  const secondaryMenuItems = isHostMode ? hostAccountItems : guestBlock2Items;
+  const canSwitchMode = isHostMode || role === 'host';
+  const heroTargetRoute: Href = isHostMode ? (`/profile/${user.id}` as Href) : '/profile/view';
+
+  const renderMenuRow = (item: ProfileMenuItem) => (
+    <Pressable
+      key={item.id}
+      testID={`profile-menu-${item.id}`}
+      onPress={() => {
+        if (item.action) item.action();
+        else if (item.route) router.push(item.route);
+      }}
+      style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+    >
+      <View style={styles.menuIconWrap}>
+        {item.iconFamily === 'feather' && (
+          <Feather name={item.iconName as any} size={22} color={colors.text} />
+        )}
+        {item.iconFamily === 'ionicons' && (
+          <Ionicons name={item.iconName as any} size={22} color={colors.text} />
+        )}
+        {item.iconFamily === 'material' && (
+          <MaterialCommunityIcons name={item.iconName as any} size={24} color={colors.text} />
+        )}
+      </View>
+      <Text style={[styles.menuTitle, { color: colors.text }]}>{item.title}</Text>
+      {item.badge ? (
+        <View
+          style={[
+            styles.menuStatusBadge,
+            item.badge.tone === 'success'
+              ? { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.16)' : '#ECFDF5' }
+              : item.badge.tone === 'warning'
+                ? { backgroundColor: isDark ? 'rgba(242, 101, 34, 0.18)' : '#FFF7ED' }
+                : { backgroundColor: isDark ? '#27272A' : '#F3F4F6' },
+          ]}
+        >
+          <Text
+            style={[
+              styles.menuStatusBadgeText,
+              item.badge.tone === 'success'
+                ? { color: isDark ? '#34D399' : '#059669' }
+                : item.badge.tone === 'warning'
+                  ? { color: '#F26522' }
+                  : { color: colors.mutedForeground },
+            ]}
+          >
+            {item.badge.label}
+          </Text>
+        </View>
+      ) : null}
+      {item.showChevron && <Feather name="chevron-right" size={20} color={colors.mutedForeground} />}
+    </Pressable>
+  );
+
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -350,7 +490,9 @@ export default function ProfileScreen() {
       >
         {/* ── HEADER ───────────────────────────────────────────────────────────── */}
         <View style={styles.headerRow}>
-          <Text style={[styles.pageTitle, { color: colors.text }]}>Profile</Text>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>
+            {isHostMode ? 'Menu' : 'Profile'}
+          </Text>
           <Pressable
             testID="notification-bell-btn"
             onPress={() => router.push('/notifications')}
@@ -369,7 +511,7 @@ export default function ProfileScreen() {
         {/* ── PROFILE HERO CARD ────────────────────────────────────────────────── */}
         <Pressable
           testID="profile-hero-card"
-          onPress={() => router.push('/profile/view')}
+          onPress={() => router.push(heroTargetRoute)}
           style={({ pressed }) => [
             styles.profileCard,
             {
@@ -443,13 +585,47 @@ export default function ProfileScreen() {
           ) : null}
 
           <View style={[styles.showProfilePill, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
-            <Text style={styles.showProfilePillText}>Show profile</Text>
+            <Text style={styles.showProfilePillText}>
+              {isHostMode ? 'View host storefront' : 'Show profile'}
+            </Text>
             <Feather name="chevron-right" size={14} color="#F26522" />
           </View>
         </Pressable>
 
-        {/* ── QUICK CARDS (Bookings & History — Guest Mode Only) ────────────────── */}
-        {!isHostMode ? (
+        {/* ── MODE-SPECIFIC QUICK CARDS ─────────────────────────────────────────── */}
+        {isHostMode ? (
+          <View style={styles.quickCardsRow}>
+            <Pressable
+              testID="host-quick-wallet"
+              onPress={() => router.push('/host/wallet')}
+              style={({ pressed }) => [
+                styles.quickCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <View style={[styles.quickCardIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
+                <MaterialCommunityIcons name="wallet-outline" size={32} color="#F26522" />
+              </View>
+              <Text style={[styles.quickCardText, { color: colors.text }]}>Wallet & Earnings</Text>
+            </Pressable>
+
+            <Pressable
+              testID="host-quick-calendar"
+              onPress={() => router.push('/host/calendar')}
+              style={({ pressed }) => [
+                styles.quickCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <View style={[styles.quickCardIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
+                <Feather name="calendar" size={30} color="#F26522" />
+              </View>
+              <Text style={[styles.quickCardText, { color: colors.text }]}>Calendar</Text>
+            </Pressable>
+          </View>
+        ) : (
           <View style={styles.quickCardsRow}>
             <Pressable
               testID="profile-quick-bookings"
@@ -457,11 +633,11 @@ export default function ProfileScreen() {
               style={({ pressed }) => [
                 styles.quickCard,
                 { backgroundColor: colors.card, borderColor: colors.border },
-                pressed && styles.quickCardPressed,
+                pressed && { opacity: 0.85 },
               ]}
             >
               <View style={[styles.quickCardIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
-                <Feather name="briefcase" size={36} color="#F26522" />
+                <Feather name="briefcase" size={30} color="#F26522" />
               </View>
               <Text style={[styles.quickCardText, { color: colors.text }]}>Bookings</Text>
             </Pressable>
@@ -472,18 +648,18 @@ export default function ProfileScreen() {
               style={({ pressed }) => [
                 styles.quickCard,
                 { backgroundColor: colors.card, borderColor: colors.border },
-                pressed && styles.quickCardPressed,
+                pressed && { opacity: 0.85 },
               ]}
             >
               <View style={[styles.quickCardIconWrap, { backgroundColor: isDark ? '#27272A' : '#FFF5EF' }]}>
-                <MaterialCommunityIcons name="history" size={38} color="#F26522" />
+                <MaterialCommunityIcons name="history" size={32} color="#F26522" />
               </View>
               <Text style={[styles.quickCardText, { color: colors.text }]}>History</Text>
             </Pressable>
           </View>
-        ) : null}
+        )}
 
-        {/* ── BECOME A HOST CARD ──────────────────────────────────────────────── */}
+        {/* ── BECOME A HOST CARD (NON-HOST GUESTS ONLY) ────────────────────────── */}
         {!isHostMode && role !== 'host' && (
           <Pressable
             onPress={() => router.push('/become-host')}
@@ -505,94 +681,63 @@ export default function ProfileScreen() {
           </Pressable>
         )}
 
-        {/* ── EXACT MENU LIST (MATCHING SCREENSHOT) ────────────────────────────── */}
+        {/* ── MODE-SPECIFIC MENU SECTIONS ──────────────────────────────────────── */}
         <View style={styles.menuListBlock}>
-          {/* Block 1 */}
-          {block1Items.map((item) => (
-            <Pressable
-              key={item.id}
-              testID={`profile-menu-${item.id}`}
-              onPress={() => {
-                if (item.action) item.action();
-                else if (item.route) router.push(item.route);
-              }}
-              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
-            >
-              <View style={styles.menuIconWrap}>
-                {item.iconFamily === 'feather' && (
-                  <Feather name={item.iconName as any} size={22} color={colors.text} />
-                )}
-                {item.iconFamily === 'ionicons' && (
-                  <Ionicons name={item.iconName as any} size={22} color={colors.text} />
-                )}
-                {item.iconFamily === 'material' && (
-                  <MaterialCommunityIcons name={item.iconName as any} size={24} color={colors.text} />
-                )}
-              </View>
-              <Text style={[styles.menuTitle, { color: colors.text }]}>{item.title}</Text>
-              {item.showChevron && <Feather name="chevron-right" size={20} color={colors.mutedForeground} />}
-            </Pressable>
-          ))}
+          {isHostMode ? (
+            <Text style={[styles.menuSectionLabel, { color: colors.mutedForeground }]}>
+              HOSTING TOOLS
+            </Text>
+          ) : null}
+
+          {primaryMenuItems.map(renderMenuRow)}
 
           {/* Subtle Divider Line */}
           <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
-          {/* Block 2 */}
-          {block2Items.map((item) => (
-            <Pressable
-              key={item.id}
-              testID={`profile-menu-${item.id}`}
-              onPress={() => {
-                if (item.action) item.action();
-                else if (item.route) router.push(item.route);
-              }}
-              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+          {isHostMode ? (
+            <Text
+              style={[
+                styles.menuSectionLabel,
+                { color: colors.mutedForeground, marginTop: 10 },
+              ]}
             >
-              <View style={styles.menuIconWrap}>
-                {item.iconFamily === 'feather' && (
-                  <Feather name={item.iconName as any} size={22} color={colors.text} />
-                )}
-                {item.iconFamily === 'ionicons' && (
-                  <Ionicons name={item.iconName as any} size={22} color={colors.text} />
-                )}
-                {item.iconFamily === 'material' && (
-                  <MaterialCommunityIcons name={item.iconName as any} size={24} color={colors.text} />
-                )}
-              </View>
-              <Text style={[styles.menuTitle, { color: colors.text }]}>{item.title}</Text>
-              {item.showChevron && <Feather name="chevron-right" size={20} color={colors.mutedForeground} />}
-            </Pressable>
-          ))}
+              ACCOUNT & SUPPORT
+            </Text>
+          ) : null}
+
+          {secondaryMenuItems.map(renderMenuRow)}
         </View>
       </ScrollView>
 
-      {/* ── FLOATING SWITCH BUTTON (ORANGE PILL - PROMINENTLY FLOATING ABOVE TAB BAR) ── */}
-      <View
-        pointerEvents="box-none"
-        style={[
-          styles.floatingButtonContainer,
-          { bottom: Platform.OS === 'web' ? 30 : insets.bottom + 84 },
-        ]}
-      >
-        <Pressable
-          testID="floating-switch-mode-btn"
-          onPress={handleSwitchMode}
-          style={({ pressed }) => [
-            styles.floatingSwitchBtn,
-            pressed && styles.floatingSwitchBtnPressed,
+      {/* ── FLOATING SWITCH BUTTON (SHOWN FOR HOSTS ONLY) ─────────────────────── */}
+      {canSwitchMode ? (
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.floatingButtonContainer,
+            { bottom: Platform.OS === 'web' ? 30 : insets.bottom + 84 },
           ]}
         >
-          <MaterialCommunityIcons
-            name="swap-horizontal-bold"
-            size={20}
-            color="#FFFFFF"
-            style={styles.switchIcon}
-          />
-          <Text style={styles.floatingSwitchText}>
-            {isHostMode ? 'Switch to travelling' : 'Switch to hosting'}
-          </Text>
-        </Pressable>
-      </View>
+          <Pressable
+            testID="floating-switch-mode-btn"
+            onPress={handleSwitchMode}
+            style={({ pressed }) => [
+              styles.floatingSwitchBtn,
+              pressed && styles.floatingSwitchBtnPressed,
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="swap-horizontal-bold"
+              size={20}
+              color="#FFFFFF"
+              style={styles.switchIcon}
+            />
+            <Text style={styles.floatingSwitchText}>
+              {isHostMode ? 'Switch to travelling' : 'Switch to hosting'}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* ── FULL-SCREEN MODE SWITCHING TRANSITION (USING ASSETS/IMAGES/SWITCHLOGO.PNG) ── */}
       <Modal
@@ -883,12 +1028,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   quickCardIconWrap: {
-    marginTop: 12,
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    marginTop: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
   quickCardText: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'DMSans_700Bold',
     color: '#000000',
     marginBottom: 4,
@@ -905,8 +1053,9 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   becomeHostIconWrap: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -931,10 +1080,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 24,
   },
+  menuSectionLabel: {
+    fontSize: 11.5,
+    fontFamily: 'DMSans_700Bold',
+    letterSpacing: 0.9,
+    marginBottom: 4,
+  },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 18,
+    paddingVertical: 16,
   },
   menuRowPressed: {
     opacity: 0.6,
@@ -950,6 +1105,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1E1E1E',
     fontFamily: 'DMSans_500Medium',
+  },
+  menuStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginRight: 8,
+  },
+  menuStatusBadgeText: {
+    fontSize: 11.5,
+    fontFamily: 'DMSans_700Bold',
   },
   menuDivider: {
     height: 1,

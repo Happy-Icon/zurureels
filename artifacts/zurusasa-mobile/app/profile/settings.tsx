@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
@@ -38,6 +39,8 @@ export default function AccountSettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const colors = useColors();
+  const { viewMode } = useAuth();
+  const isHostMode = viewMode === 'host';
   const { appearanceMode, isDark } = useTheme();
   const { showAlert } = useCustomAlert();
 
@@ -260,42 +263,46 @@ export default function AccountSettingsScreen() {
           ))}
         </View>
 
-        {/* Section 3: Hosting */}
-        <Text style={[styles.sectionHeader, { color: colors.mutedForeground, marginTop: 24 }]}>HOSTING & OPERATIONS</Text>
-        <View style={[styles.menuBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {hostingMenuItems.map((item, idx) => (
-            <Pressable
-              key={item.id}
-              testID={`settings-item-${item.id}`}
-              onPress={item.onPress}
-              style={({ pressed }) => [
-                styles.rowItem,
-                idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-                pressed && { opacity: 0.6 },
-              ]}
-            >
-              {/* Left Icon */}
-              <View style={styles.iconWrapper}>
-                {item.iconFamily === 'material' && (
-                  <MaterialCommunityIcons name={item.iconName as any} size={22} color={colors.text} />
-                )}
-              </View>
-
-              {/* Title & Badge */}
-              <View style={styles.titleWrapper}>
-                <Text style={[styles.rowTitle, { color: colors.text }]}>{item.title}</Text>
-                {item.badge && (
-                  <View style={styles.badgePill}>
-                    <Text style={styles.badgeText}>{item.badge}</Text>
+        {/* Section 3: Hosting (Host Mode Only) */}
+        {isHostMode ? (
+          <>
+            <Text style={[styles.sectionHeader, { color: colors.mutedForeground, marginTop: 24 }]}>HOSTING & OPERATIONS</Text>
+            <View style={[styles.menuBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {hostingMenuItems.map((item, idx) => (
+                <Pressable
+                  key={item.id}
+                  testID={`settings-item-${item.id}`}
+                  onPress={item.onPress}
+                  style={({ pressed }) => [
+                    styles.rowItem,
+                    idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+                    pressed && { opacity: 0.6 },
+                  ]}
+                >
+                  {/* Left Icon */}
+                  <View style={styles.iconWrapper}>
+                    {item.iconFamily === 'material' && (
+                      <MaterialCommunityIcons name={item.iconName as any} size={22} color={colors.text} />
+                    )}
                   </View>
-                )}
-              </View>
 
-              {/* Right Chevron */}
-              <Feather name="chevron-right" size={18} color={colors.mutedForeground} style={styles.chevron} />
-            </Pressable>
-          ))}
-        </View>
+                  {/* Title & Badge */}
+                  <View style={styles.titleWrapper}>
+                    <Text style={[styles.rowTitle, { color: colors.text }]}>{item.title}</Text>
+                    {item.badge && (
+                      <View style={styles.badgePill}>
+                        <Text style={styles.badgeText}>{item.badge}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Right Chevron */}
+                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} style={styles.chevron} />
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : null}
 
         {/* App Version Footer */}
         <Text style={[styles.versionFooter, { color: colors.mutedForeground }]}>ZuruSasa Mobile · Version 0.1.0</Text>
