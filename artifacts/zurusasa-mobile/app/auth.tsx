@@ -24,6 +24,7 @@ import { EmailStep } from '@/components/auth/EmailStep';
 import { OtpStep } from '@/components/auth/OtpStep';
 import { PhoneStep } from '@/components/auth/PhoneStep';
 import { ProfileFlowScreen } from '@/components/auth/ProfileFlowScreen';
+import { PremiumLoader } from '@/components/PremiumLoader';
 import { DESTINATIONS, INK } from '@/components/auth/authConstants';
 import { authStyles as styles } from '@/components/auth/authStyles';
 import { useAuthScreenFlow } from '@/hooks/useAuthScreenFlow';
@@ -41,6 +42,8 @@ export default function AuthScreen() {
     step,
     setStep,
     loading,
+    activeAuthProvider,
+    authStatusMessage,
     countryPickerOpen,
     setCountryPickerOpen,
     phone,
@@ -239,6 +242,14 @@ export default function AuthScreen() {
                       onPress={() => handleOAuth('google')}
                       icon={<GoogleLogo />}
                       label="Continue with Google"
+                      loading={activeAuthProvider === 'google'}
+                      loadingLabel={authStatusMessage || 'Connecting to Google...'}
+                      loadingSublabel={
+                        authStatusMessage === 'Signing you in...'
+                          ? 'Preparing your account'
+                          : 'Opening account picker'
+                      }
+                      disabled={loading || activeAuthProvider !== null}
                       animValue={btn1Anim}
                     />
                     <AuthButton
@@ -252,6 +263,9 @@ export default function AuthScreen() {
                       }
                       label="Continue with Passkey"
                       sublabel="Face ID · Touch ID"
+                      loading={activeAuthProvider === 'passkey'}
+                      loadingLabel={authStatusMessage || 'Verifying passkey...'}
+                      disabled={loading || activeAuthProvider !== null}
                       animValue={btn2Anim}
                     />
                     <AuthButton
@@ -261,6 +275,7 @@ export default function AuthScreen() {
                       }}
                       icon={<Feather name="mail" size={20} color={INK} />}
                       label="Continue with Email"
+                      disabled={loading || activeAuthProvider !== null}
                       animValue={btn3Anim}
                     />
                     <AuthButton
@@ -271,9 +286,17 @@ export default function AuthScreen() {
                       icon={<Feather name="phone" size={20} color={INK} />}
                       label="Continue with Phone"
                       sublabel="SMS verification"
+                      disabled={loading || activeAuthProvider !== null}
                       animValue={btn4Anim}
                     />
                   </View>
+
+                  {activeAuthProvider && authStatusMessage ? (
+                    <View style={styles.signingInBanner}>
+                      <PremiumLoader size={5} color="#F26522" />
+                      <Text style={styles.signingInBannerText}>{authStatusMessage}</Text>
+                    </View>
+                  ) : null}
 
                   {/* Error message */}
                   {error ? (

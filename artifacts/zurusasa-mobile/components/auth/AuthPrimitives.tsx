@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 
-import { MUTED } from './authConstants';
+import { MUTED, ORANGE } from './authConstants';
 import { authStyles as styles } from './authStyles';
 
 // ── Google SVG Logo ───────────────────────────────────────────────────────────
@@ -36,6 +36,9 @@ export interface AuthButtonProps {
   icon: React.ReactNode;
   label: string;
   sublabel?: string;
+  loading?: boolean;
+  loadingLabel?: string;
+  loadingSublabel?: string;
   disabled?: boolean;
   delay?: number;
   animValue: Animated.Value;
@@ -46,12 +49,19 @@ export function AuthButton({
   icon,
   label,
   sublabel,
+  loading = false,
+  loadingLabel,
+  loadingSublabel,
   disabled,
   animValue,
 }: AuthButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
+  const isDisabled = Boolean(disabled || loading);
+  const displayLabel = loading && loadingLabel ? loadingLabel : label;
+  const displaySublabel = loading && loadingSublabel ? loadingSublabel : sublabel;
 
   const handlePressIn = () => {
+    if (isDisabled) return;
     Animated.spring(scale, {
       toValue: 0.97,
       useNativeDriver: true,
@@ -83,28 +93,36 @@ export function AuthButton({
     <Animated.View style={{ opacity, transform: [{ translateY }, { scale }] }}>
       <Pressable
         onPress={() => {
-          onPress();
+          if (!isDisabled) onPress();
         }}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        disabled={disabled}
-        style={styles.authButton}
+        disabled={isDisabled}
+        style={[
+          styles.authButton,
+          disabled && !loading && styles.authButtonDimmed,
+        ]}
         accessibilityRole="button"
-        accessibilityLabel={label}
+        accessibilityLabel={displayLabel}
+        accessibilityState={{ disabled: isDisabled, busy: loading }}
       >
         {/* Left icon */}
         <View style={styles.authButtonIcon}>{icon}</View>
 
         {/* Labels */}
         <View style={styles.authButtonLabels}>
-          <Text style={styles.authButtonLabel}>{label}</Text>
-          {sublabel ? (
-            <Text style={styles.authButtonSublabel}>{sublabel}</Text>
+          <Text style={styles.authButtonLabel}>{displayLabel}</Text>
+          {displaySublabel ? (
+            <Text style={styles.authButtonSublabel}>{displaySublabel}</Text>
           ) : null}
         </View>
 
-        {/* Right chevron */}
-        <Feather name="chevron-right" size={18} color={MUTED} />
+        {/* Right chevron or active loading indicator */}
+        {loading ? (
+          <ActivityIndicator size="small" color={ORANGE} />
+        ) : (
+          <Feather name="chevron-right" size={18} color={MUTED} />
+        )}
       </Pressable>
     </Animated.View>
   );

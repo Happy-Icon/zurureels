@@ -23,9 +23,13 @@ export type NativeGoogleResult =
   | { status: 'cancelled' }
   | { status: 'unavailable'; configError: boolean; reason: string };
 
-export async function signInWithGoogleNatively(): Promise<NativeGoogleResult> {
+let configuredWebClientId: string | null = null;
+
+function resolveGoogleSigninModule():
+  | { ok: true; lib: typeof import('@react-native-google-signin/google-signin') }
+  | { ok: false; reason: string } {
   if (Platform.OS === 'web') {
-    return { status: 'unavailable', configError: false, reason: 'web platform' };
+    return { ok: false, reason: 'web platform' };
   }
 
   try {
@@ -37,27 +41,46 @@ export async function signInWithGoogleNatively(): Promise<NativeGoogleResult> {
 
     if (!hasNativeModule) {
       return {
-        status: 'unavailable',
-        configError: false,
+        ok: false,
         reason: 'RNGoogleSignin native module is not registered in Expo Go sandbox',
       };
     }
   } catch {
-    return {
-      status: 'unavailable',
-      configError: false,
-      reason: 'failed to query native module registry',
-    };
+    return { ok: false, reason: 'failed to query native module registry' };
   }
 
-  let lib: typeof import('@react-native-google-signin/google-signin');
   try {
-    lib = require('@react-native-google-signin/google-signin');
+    const lib = require('@react-native-google-signin/google-signin');
+    return { ok: true, lib };
   } catch {
+    return { ok: false, reason: 'native module not in this build' };
+  }
+}
+
+/**
+ * Pre-configures GoogleSignin once (e.g., when Auth screen mounts) to eliminate
+ * first-tap configuration overhead before opening the native account picker.
+ */
+export function preconfigureGoogleSignIn(): void {
+  const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  if (!webClientId || configuredWebClientId === webClientId) return;
+
+  const resolved = resolveGoogleSigninModule();
+  if (!resolved.ok) return;
+
+  try {
+    resolved.lib.GoogleSignin.configure({ webClientId });
+    configuredWebClientId = webClientId;
+  } catch {}
+}
+
+export async function signInWithGoogleNatively(): Promise<NativeGoogleResult> {
+  const resolved = resolveGoogleSigninModule();
+  if (!resolved.ok) {
     return {
       status: 'unavailable',
       configError: false,
-      reason: 'native module not in this build',
+      reason: resolved.reason,
     };
   }
 
@@ -71,10 +94,13 @@ export async function signInWithGoogleNatively(): Promise<NativeGoogleResult> {
     };
   }
 
-  const { GoogleSignin, statusCodes, isSuccessResponse, isErrorWithCode } = lib;
+  const { GoogleSignin, statusCodes, isSuccessResponse, isErrorWithCode } = resolved.lib;
 
   try {
-    GoogleSignin.configure({ webClientId });
+    if (configuredWebClientId !== webClientId) {
+      GoogleSignin.configure({ webClientId });
+      configuredWebClientId = webClientId;
+    }
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
     // Always show the account picker — without this, a previously used
     // account is silently reused.

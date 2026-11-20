@@ -194,6 +194,28 @@ export const authStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
+  authButtonDimmed: {
+    opacity: 0.55,
+  },
+  signingInBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(242, 101, 34, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(242, 101, 34, 0.32)',
+  },
+  signingInBannerText: {
+    fontSize: 13.5,
+    fontFamily: 'DMSans_600SemiBold',
+    color: '#FFFFFF',
+    letterSpacing: -0.1,
+  },
   authButtonIcon: {
     width: 36,
     height: 36,

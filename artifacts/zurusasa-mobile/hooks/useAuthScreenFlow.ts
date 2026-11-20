@@ -5,7 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
 import { useAuth } from '@/context/AuthContext';
-import { signInWithGoogleNatively } from '@/lib/googleNative';
+import { preconfigureGoogleSignIn, signInWithGoogleNatively } from '@/lib/googleNative';
 import { supabase } from '@/lib/supabase';
 import { passkeyService } from '@/services/passkeyService';
 import { queryClient } from '@/lib/queryClient';
@@ -46,8 +46,17 @@ export function useAuthScreenFlow() {
 
   const [step, setStep] = useState<AuthStep>('landing');
   const [loading, setLoading] = useState(false);
+  const [activeAuthProvider, setActiveAuthProvider] = useState<'google' | 'passkey' | null>(null);
+  const [authStatusMessage, setAuthStatusMessage] = useState<string | null>(null);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
+
+  const authInFlightRef = useRef(false);
+  const hasNavigatedHomeRef = useRef(false);
+
+  useEffect(() => {
+    preconfigureGoogleSignIn();
+  }, []);
 
   const [phone, setPhone] = useState('');
   const [countryCode, setCountryCode] = useState('+254');
@@ -127,6 +136,8 @@ export function useAuthScreenFlow() {
 
   // ── Auth logic ──────────────────────────────────────────────────────────────
   const goHome = useCallback(() => {
+    if (hasNavigatedHomeRef.current) return;
+    hasNavigatedHomeRef.current = true;
     if (router.canGoBack()) router.back();
     else router.replace('/');
   }, [router]);
@@ -134,6 +145,8 @@ export function useAuthScreenFlow() {
   useEffect(() => {
     const checkRedirect = async () => {
       if (
+        authInFlightRef.current ||
+        hasNavigatedHomeRef.current ||
         step === 'profile' ||
         step === 'commitment' ||
         step === 'email_sent' ||
@@ -145,7 +158,8 @@ export function useAuthScreenFlow() {
         .from('profiles')
         .select('full_name')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
+      if (authInFlightRef.current || hasNavigatedHomeRef.current) return;
       const profileData = data as { full_name: string | null } | null;
       if (!profileData?.full_name) {
         setStep('profile');
@@ -161,78 +175,100 @@ export function useAuthScreenFlow() {
     setNotice(null);
   };
 
-  const syncUserGoogleAvatar = async (authUser: any) => {
+  const syncUserGoogleAvatar = async (
+    authUser: any,
+    existingProfile?: { metadata?: Record<string, any> | null } | null,
+  ) => {
     try {
       const gAvatar = extractAvatarFromUser(authUser);
-      if (gAvatar) {
-        const { data: pRow } = await supabase
-          .from('profiles')
-          .select('metadata')
-          .eq('id', authUser.id)
-          .maybeSingle();
+      if (!gAvatar) return;
 
-        if (pRow) {
-          const pMeta = ((pRow as any)?.metadata ?? {}) as Record<string, any>;
-          if (!pMeta.avatar_url || pMeta.avatar_url !== gAvatar || !pMeta.picture) {
-            await (supabase.from('profiles').update as any)({
-              metadata: {
-                ...pMeta,
-                avatar_url: gAvatar,
-                picture: gAvatar,
-              },
-            }).eq('id', authUser.id);
-            queryClient.invalidateQueries({ queryKey: ['reels'] });
-            queryClient.invalidateQueries({ queryKey: ['host-profile', authUser.id] });
-            invalidateServerCache('invalidate_reels_feed').catch(() => {});
-          }
-        } else {
-          const uMeta = (authUser.user_metadata ?? {}) as Record<string, any>;
-          const fullName =
-            uMeta.full_name ||
-            uMeta.name ||
-            authUser.email?.split('@')[0] ||
-            'Traveler';
-          await (supabase.from('profiles').insert as any)([
-            {
-              id: authUser.id,
-              full_name: fullName,
-              email: authUser.email || null,
-              role: 'guest',
-              metadata: {
-                avatar_url: gAvatar,
-                picture: gAvatar,
-              },
+      const pRow =
+        existingProfile !== undefined
+          ? existingProfile
+          : (
+              await supabase
+                .from('profiles')
+                .select('metadata')
+                .eq('id', authUser.id)
+                .maybeSingle()
+            ).data;
+
+      if (pRow) {
+        const pMeta = ((pRow as any)?.metadata ?? {}) as Record<string, any>;
+        if (!pMeta.avatar_url || pMeta.avatar_url !== gAvatar || !pMeta.picture) {
+          await (supabase.from('profiles').update as any)({
+            metadata: {
+              ...pMeta,
+              avatar_url: gAvatar,
+              picture: gAvatar,
             },
-          ]);
+          }).eq('id', authUser.id);
           queryClient.invalidateQueries({ queryKey: ['reels'] });
           queryClient.invalidateQueries({ queryKey: ['host-profile', authUser.id] });
           invalidateServerCache('invalidate_reels_feed').catch(() => {});
         }
+      } else {
+        const uMeta = (authUser.user_metadata ?? {}) as Record<string, any>;
+        const fullName =
+          uMeta.full_name ||
+          uMeta.name ||
+          authUser.email?.split('@')[0] ||
+          'Traveler';
+        await (supabase.from('profiles').insert as any)([
+          {
+            id: authUser.id,
+            full_name: fullName,
+            email: authUser.email || null,
+            role: 'guest',
+            metadata: {
+              avatar_url: gAvatar,
+              picture: gAvatar,
+            },
+          },
+        ]);
+        queryClient.invalidateQueries({ queryKey: ['reels'] });
+        queryClient.invalidateQueries({ queryKey: ['host-profile', authUser.id] });
+        invalidateServerCache('invalidate_reels_feed').catch(() => {});
       }
     } catch (e) {
       console.warn('Sync avatar note:', e);
     }
   };
 
-  const routeAfterLogin = async (userId: string) => {
-    try {
-      const { data: authData } = await supabase.auth.getUser();
-      if (authData?.user) {
-        await syncUserGoogleAvatar(authData.user);
-      }
-    } catch {}
-
+  const routeAfterLogin = async (userId: string, knownAuthUser?: any): Promise<'home' | 'profile'> => {
     const { data } = await supabase
       .from('profiles')
-      .select('full_name')
+      .select('full_name, metadata')
       .eq('id', userId)
-      .single();
-    const pData = data as { full_name: string | null } | null;
-    if (!pData?.full_name) {
-      setStep('profile');
+      .maybeSingle();
+
+    const pData = data as { full_name: string | null; metadata?: Record<string, any> | null } | null;
+
+    // Sync Google avatar in the background so navigation is never stalled
+    if (knownAuthUser) {
+      void syncUserGoogleAvatar(knownAuthUser, pData);
     } else {
-      goHome();
+      supabase.auth
+        .getUser()
+        .then(({ data: authData }) => {
+          if (authData?.user) {
+            void syncUserGoogleAvatar(authData.user, pData);
+          }
+        })
+        .catch(() => {});
     }
+
+    const metaName =
+      (knownAuthUser?.user_metadata?.full_name as string | undefined) ||
+      (knownAuthUser?.user_metadata?.name as string | undefined);
+
+    if (!pData?.full_name && !metaName) {
+      setStep('profile');
+      return 'profile';
+    }
+    goHome();
+    return 'home';
   };
 
   const handleSendOtp = async () => {
@@ -379,8 +415,24 @@ export function useAuthScreenFlow() {
     }
   };
 
+  const clearProviderLoading = () => {
+    authInFlightRef.current = false;
+    setLoading(false);
+    setActiveAuthProvider(null);
+    setAuthStatusMessage(null);
+  };
+
   const handleOAuth = async (provider: 'google' | 'facebook') => {
+    if (authInFlightRef.current) return;
+    authInFlightRef.current = true;
     resetMessages();
+    setLoading(true);
+    if (provider === 'google') {
+      setActiveAuthProvider('google');
+      setAuthStatusMessage('Opening Google...');
+    }
+
+    let navigatedHome = false;
     try {
       if (Platform.OS === 'web') {
         const { error: err } = await supabase.auth.signInWithOAuth({
@@ -396,14 +448,15 @@ export function useAuthScreenFlow() {
       if (provider === 'google') {
         const native = await signInWithGoogleNatively();
         if (native.status === 'success') {
+          setAuthStatusMessage('Signing you in...');
           const { data, error: err } = await supabase.auth.signInWithIdToken({
             provider: 'google',
             token: native.idToken,
           });
           if (err) throw err;
           if (data.user) {
-            await syncUserGoogleAvatar(data.user);
-            await routeAfterLogin(data.user.id);
+            const dest = await routeAfterLogin(data.user.id, data.user);
+            navigatedHome = dest === 'home';
           }
           return;
         }
@@ -413,6 +466,7 @@ export function useAuthScreenFlow() {
           return;
         }
       }
+      setAuthStatusMessage('Opening browser...');
       const redirectTo = Linking.createURL('/auth');
       const { data, error: err } = await supabase.auth.signInWithOAuth({
         provider,
@@ -422,6 +476,7 @@ export function useAuthScreenFlow() {
       if (!data?.url) throw new Error('Could not start sign-in.');
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type === 'success' && result.url) {
+        setAuthStatusMessage('Signing you in...');
         const fragment = result.url.split('#')[1];
         const query = result.url.split('?')[1]?.split('#')[0];
         const hashParams = new URLSearchParams(fragment || '');
@@ -436,16 +491,16 @@ export function useAuthScreenFlow() {
           });
           if (sessionErr) throw sessionErr;
           if (sData?.user) {
-            await syncUserGoogleAvatar(sData.user);
-            await routeAfterLogin(sData.user.id);
+            const dest = await routeAfterLogin(sData.user.id, sData.user);
+            navigatedHome = dest === 'home';
           }
         } else if (code) {
           const { data: exData, error: exchangeErr } =
             await supabase.auth.exchangeCodeForSession(code);
           if (exchangeErr) throw exchangeErr;
           if (exData?.user) {
-            await syncUserGoogleAvatar(exData.user);
-            await routeAfterLogin(exData.user.id);
+            const dest = await routeAfterLogin(exData.user.id, exData.user);
+            navigatedHome = dest === 'home';
           }
         } else {
           throw new Error('Sign-in was not completed.');
@@ -456,33 +511,45 @@ export function useAuthScreenFlow() {
         e.message ||
           `Couldn't complete ${provider === 'google' ? 'Google' : 'Facebook'} sign-in. Try the email option.`,
       );
+    } finally {
+      if (!navigatedHome) {
+        clearProviderLoading();
+      }
     }
   };
 
   const handlePasskeyLogin = async () => {
+    if (authInFlightRef.current) return;
+    authInFlightRef.current = true;
     resetMessages();
     setLoading(true);
+    setActiveAuthProvider('passkey');
+    setAuthStatusMessage('Verifying passkey...');
+
+    let navigatedHome = false;
     try {
       const result = await passkeyService.signIn();
 
       if (result.cancelled) {
-        setLoading(false);
         return;
       }
 
       if (!result.success) {
-        setLoading(false);
         setError(result.error || 'Failed to authenticate with passkey.');
         return;
       }
 
       if (result.user) {
-        await routeAfterLogin(result.user.id);
+        setAuthStatusMessage('Signing you in...');
+        const dest = await routeAfterLogin(result.user.id, result.user);
+        navigatedHome = dest === 'home';
       }
     } catch (e: any) {
       setError(e?.message || 'Failed to log in with passkey.');
     } finally {
-      setLoading(false);
+      if (!navigatedHome) {
+        clearProviderLoading();
+      }
     }
   };
 
@@ -524,6 +591,8 @@ export function useAuthScreenFlow() {
     step,
     setStep,
     loading,
+    activeAuthProvider,
+    authStatusMessage,
     showMoreOptions,
     countryPickerOpen,
     setCountryPickerOpen,
