@@ -24,7 +24,6 @@ import { EmailStep } from '@/components/auth/EmailStep';
 import { OtpStep } from '@/components/auth/OtpStep';
 import { PhoneStep } from '@/components/auth/PhoneStep';
 import { ProfileFlowScreen } from '@/components/auth/ProfileFlowScreen';
-import { PremiumLoader } from '@/components/PremiumLoader';
 import { DESTINATIONS, INK } from '@/components/auth/authConstants';
 import { authStyles as styles } from '@/components/auth/authStyles';
 import { useAuthScreenFlow } from '@/hooks/useAuthScreenFlow';
@@ -290,13 +289,6 @@ export default function AuthScreen() {
                       animValue={btn4Anim}
                     />
                   </View>
-
-                  {activeAuthProvider && authStatusMessage ? (
-                    <View style={styles.signingInBanner}>
-                      <PremiumLoader size={5} color="#F26522" />
-                      <Text style={styles.signingInBannerText}>{authStatusMessage}</Text>
-                    </View>
-                  ) : null}
 
                   {/* Error message */}
                   {error ? (
