@@ -2,19 +2,22 @@ import { useEffect, useState } from 'react';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
 import { focusManager, onlineManager } from '@tanstack/react-query';
+import { realtimeManager } from '@/lib/realtimeManager';
+import { supabase } from '@/lib/supabase';
 
 let isNetworkSetup = false;
 
 /**
- * Connects React Native NetInfo and AppState to TanStack React Query.
+ * Connects React Native NetInfo and AppState to TanStack React Query,
+ * Supabase auth auto-refresh, and the centralized Realtime subscription manager.
  * Guarantees that when internet connectivity is restored or the app returns to
- * the foreground, all active queries automatically resume and refetch.
+ * the foreground, active queries and Realtime subscriptions recover cleanly.
  */
 export function setupNetworkAndFocusManagers() {
   if (isNetworkSetup) return;
   isNetworkSetup = true;
 
-  // 1. Hook React Query's onlineManager to NetInfo
+  // 1. Hook React Query's onlineManager & RealtimeManager to NetInfo
   try {
     onlineManager.setEventListener((setOnline) => {
       try {
@@ -23,6 +26,7 @@ export function setupNetworkAndFocusManagers() {
             state.isConnected && state.isInternetReachable !== false,
           );
           setOnline(isOnline);
+          realtimeManager.setOnline(isOnline);
         });
       } catch (err) {
         console.warn('[NetworkManager] NetInfo listener setup fallback:', err);
@@ -33,11 +37,16 @@ export function setupNetworkAndFocusManagers() {
     console.warn('[NetworkManager] NetInfo module not in binary:', err);
   }
 
-  // 2. Hook React Query's focusManager to AppState (foreground / background)
+  // 2. Hook React Query's focusManager, Supabase auth refresh, and RealtimeManager to AppState
   if (Platform.OS !== 'web') {
     AppState.addEventListener('change', (status: AppStateStatus) => {
-      focusManager.setFocused(status === 'active');
-      if (status === 'active') {
+      const isForeground = status === 'active';
+      focusManager.setFocused(isForeground);
+
+      if (isForeground) {
+        supabase.auth.startAutoRefresh();
+        realtimeManager.setForeground(true);
+
         // Re-check network connectivity when user returns to the app
         try {
           NetInfo.fetch()
@@ -46,9 +55,13 @@ export function setupNetworkAndFocusManagers() {
                 state.isConnected && state.isInternetReachable !== false,
               );
               onlineManager.setOnline(isOnline);
+              realtimeManager.setOnline(isOnline);
             })
             .catch(() => {});
         } catch {}
+      } else {
+        supabase.auth.stopAutoRefresh();
+        realtimeManager.setForeground(false);
       }
     });
   }

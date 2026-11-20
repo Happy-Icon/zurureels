@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { realtimeManager } from '@/lib/realtimeManager';
 import {
   supabase,
   type BookingRow,
@@ -38,27 +39,36 @@ export function useMyBookings(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId) return;
-    const channelName = `guest_bookings_${userId}_${Math.random().toString(36).substring(2, 7)}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings' },
-        (payload) => {
+
+    const invalidateBookings = () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings', userId] });
+    };
+
+    return realtimeManager.subscribe(
+      {
+        key: `guest_bookings:${userId}`,
+        topicPrefix: `guest_bookings_${userId}`,
+        bindings: [
+          { event: '*', schema: 'public', table: 'bookings' },
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${userId}`,
+          },
+        ],
+      },
+      (payload, bindingIndex) => {
+        if (bindingIndex === 0) {
           const newUserId = (payload.new as any)?.user_id;
           const oldUserId = (payload.old as any)?.user_id;
           if (!newUserId && !oldUserId) {
             // General update without full replica identity - invalidate to ensure sync
-            queryClient.invalidateQueries({ queryKey: ['bookings', userId] });
+            invalidateBookings();
           } else if (newUserId === userId || oldUserId === userId) {
-            queryClient.invalidateQueries({ queryKey: ['bookings', userId] });
+            invalidateBookings();
           }
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-        (payload) => {
+        } else if (bindingIndex === 1) {
           const notif = payload.new as any;
           if (
             notif?.action_type === 'booking' ||
@@ -67,15 +77,14 @@ export function useMyBookings(userId: string | undefined) {
             notif?.type === 'payment_success' ||
             notif?.type === 'refund_processed'
           ) {
-            queryClient.invalidateQueries({ queryKey: ['bookings', userId] });
+            invalidateBookings();
           }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+        }
+      },
+      {
+        onReconnect: invalidateBookings,
+      },
+    );
   }, [queryClient, userId]);
 
   return query;

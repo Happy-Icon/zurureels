@@ -20,7 +20,8 @@ import { Skeleton } from '@/components/Skeleton';
 import { OfflineState } from '@/components/OfflineState';
 import { useNetworkStatus } from '@/lib/networkManager';
 import { useColors } from '@/hooks/useColors';
-import { supabase, type ConversationRow } from '@/lib/supabase';
+import { realtimeManager } from '@/lib/realtimeManager';
+import type { ConversationRow } from '@/lib/supabase';
 
 function timeAgo(iso: string | null) {
   if (!iso) return '';
@@ -51,27 +52,35 @@ export default function InboxScreen() {
 
   // Realtime subscription for instant inbox updates when conversations receive messages
   useEffect(() => {
-    if (!user?.id) return;
+    const userId = user?.id;
+    if (!userId) return;
 
-    const channel = supabase
-      .channel(`inbox_${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'conversations',
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['conversations', user.id] });
-          queryClient.invalidateQueries({ queryKey: ['unread-messages-count', user.id] });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
+    const invalidateInbox = () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations', userId] });
+      queryClient.invalidateQueries({ queryKey: ['unread-messages-count', userId] });
     };
+
+    const unsubscribe = realtimeManager.subscribe(
+      {
+        key: `inbox:${userId}`,
+        topicPrefix: `inbox_${userId}`,
+        bindings: [
+          {
+            event: '*',
+            schema: 'public',
+            table: 'conversations',
+          },
+        ],
+      },
+      () => {
+        invalidateInbox();
+      },
+      {
+        onReconnect: invalidateInbox,
+      },
+    );
+
+    return unsubscribe;
   }, [user?.id, queryClient]);
 
   // Refresh on tab focus

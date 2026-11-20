@@ -16,6 +16,19 @@ export type ColorSchemeName = 'light' | 'dark';
 
 const STORAGE_KEY = '@zurusasa_appearance_mode';
 
+let preloadedAppearanceMode: AppearanceMode | null = null;
+const appearancePreloadPromise: Promise<AppearanceMode> = AsyncStorage.getItem(STORAGE_KEY)
+  .then((saved) => {
+    const resolved: AppearanceMode =
+      saved === 'system' || saved === 'light' || saved === 'dark' ? saved : 'system';
+    preloadedAppearanceMode = resolved;
+    return resolved;
+  })
+  .catch(() => {
+    preloadedAppearanceMode = 'system';
+    return 'system';
+  });
+
 export interface ThemeContextValue {
   appearanceMode: AppearanceMode;
   setAppearanceMode: (mode: AppearanceMode) => Promise<void>;
@@ -38,8 +51,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const initial = Appearance.getColorScheme();
     return initial === 'dark' || initial === 'light' ? initial : (rnColorScheme === 'dark' ? 'dark' : 'light');
   });
-  const [appearanceMode, setAppearanceModeState] = useState<AppearanceMode>('system');
-  const [isReady, setIsReady] = useState(false);
+  const [appearanceMode, setAppearanceModeState] = useState<AppearanceMode>(
+    () => preloadedAppearanceMode ?? 'system',
+  );
+  const [isReady, setIsReady] = useState(() => preloadedAppearanceMode !== null);
 
   // Active listener for OS appearance mode changes
   useEffect(() => {
@@ -58,23 +73,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, [rnColorScheme]);
 
-  // Load persisted theme preference on app start
+  // Load persisted theme preference on app start (resolves immediately if preloaded)
   useEffect(() => {
+    if (preloadedAppearanceMode !== null) {
+      setAppearanceModeState(preloadedAppearanceMode);
+      setIsReady(true);
+      return;
+    }
     let isMounted = true;
-    (async () => {
-      try {
-        const savedMode = await AsyncStorage.getItem(STORAGE_KEY);
-        if (isMounted && savedMode && (savedMode === 'system' || savedMode === 'light' || savedMode === 'dark')) {
-          setAppearanceModeState(savedMode as AppearanceMode);
-        }
-      } catch (err) {
-        console.warn('[ThemeContext] Failed to load appearance preference:', err);
-      } finally {
+    appearancePreloadPromise
+      .then((resolved) => {
         if (isMounted) {
+          setAppearanceModeState(resolved);
           setIsReady(true);
         }
-      }
-    })();
+      })
+      .catch(() => {
+        if (isMounted) setIsReady(true);
+      });
     return () => {
       isMounted = false;
     };

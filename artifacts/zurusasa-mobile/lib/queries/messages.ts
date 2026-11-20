@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { resolveAvatarUrl } from '@/lib/avatar';
+import { realtimeManager } from '@/lib/realtimeManager';
 import { notificationService } from '@/services/notificationService';
 import {
   supabase,
@@ -124,22 +125,25 @@ export function useUnreadMessageCount(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId) return;
-    const channelName = `unread_messages_${userId}_${Math.random().toString(36).slice(2, 7)}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'messages' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['unread-messages-count', userId] });
-          queryClient.invalidateQueries({ queryKey: ['conversations', userId] });
-        },
-      )
-      .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
+    const invalidateUnread = () => {
+      queryClient.invalidateQueries({ queryKey: ['unread-messages-count', userId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations', userId] });
     };
+
+    return realtimeManager.subscribe(
+      {
+        key: `unread_messages:${userId}`,
+        topicPrefix: `unread_messages_${userId}`,
+        bindings: [{ event: '*', schema: 'public', table: 'messages' }],
+      },
+      () => {
+        invalidateUnread();
+      },
+      {
+        onReconnect: invalidateUnread,
+      },
+    );
   }, [userId, queryClient]);
 
   return useQuery<number>({

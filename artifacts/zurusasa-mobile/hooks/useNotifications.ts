@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import { supabase, type NotificationRow } from '@/lib/supabase';
+import { realtimeManager } from '@/lib/realtimeManager';
+import type { NotificationRow } from '@/lib/supabase';
 import { notificationService } from '@/services/notificationService';
 
 export const GUEST_NOTIFICATION_TYPES = new Set([
@@ -30,13 +31,14 @@ export const HOST_NOTIFICATION_TYPES = new Set([
 export function useNotifications(modeOverride?: 'guest' | 'host') {
   const queryClient = useQueryClient();
   const { user, viewMode } = useAuth();
+  const userId = user?.id;
   const activeMode = modeOverride || viewMode || 'guest';
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const loadNotifications = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       setNotifications([]);
       setTotalUnreadCount(0);
       setIsLoading(false);
@@ -45,8 +47,8 @@ export function useNotifications(modeOverride?: 'guest' | 'host') {
 
     try {
       const [list, count] = await Promise.all([
-        notificationService.fetchNotifications(user.id),
-        notificationService.fetchUnreadCount(user.id),
+        notificationService.fetchNotifications(userId),
+        notificationService.fetchUnreadCount(userId),
       ]);
       setNotifications(list);
       setTotalUnreadCount(count);
@@ -55,84 +57,84 @@ export function useNotifications(modeOverride?: 'guest' | 'host') {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
+    let isActive = true;
     loadNotifications();
 
-    if (!user) return;
+    if (!userId) return;
 
-    // Create unique topic instance to avoid duplicate realtime callback registration
-    const channelName = `notif_user_${user.id}_${Math.random().toString(36).substring(2, 7)}`;
-    const channel = supabase.channel(channelName);
+    // Shares the single managed notifications channel per user with GlobalNotificationSubscriber
+    // (native local heads-up banners are presented once by GlobalNotificationSubscriber).
+    const unsubscribe = realtimeManager.subscribe(
+      {
+        key: `notifications:${userId}`,
+        topicPrefix: `notifs_${userId}`,
+        bindings: [
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${userId}`,
+          },
+        ],
+      },
+      (payload) => {
+        if (!isActive) return;
 
-    channel
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newNotif = payload.new as NotificationRow;
-            setNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
-            if (!newNotif.is_read) {
-              setTotalUnreadCount((c) => c + 1);
-            }
+        if (payload.eventType === 'INSERT') {
+          const newNotif = payload.new as NotificationRow;
+          setNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
+          if (!newNotif.is_read) {
+            setTotalUnreadCount((c) => c + 1);
+          }
 
-            // Immediately trigger native notification banner and alert on device
-            notificationService.presentLocalNotification({
-              title: newNotif.title,
-              body: newNotif.message,
-              data: {
-                id: newNotif.id,
-                type: newNotif.type,
-                actionType: newNotif.action_type,
-                actionId: newNotif.action_id,
-              },
-            });
-
-            // Immediately invalidate React Query caches when a booking notification arrives
-            if (
-              newNotif.action_type === 'booking' ||
-              newNotif.type === 'booking_confirmed' ||
-              newNotif.type === 'booking_cancelled' ||
-              newNotif.type === 'payment_success' ||
-              newNotif.type === 'refund_processed' ||
-              newNotif.type === 'booking_request'
-            ) {
-              queryClient.invalidateQueries({ queryKey: ['bookings'] });
-              queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
-              queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            const updated = payload.new as NotificationRow;
+          // Immediately invalidate React Query caches when a booking notification arrives
+          if (
+            newNotif.action_type === 'booking' ||
+            newNotif.type === 'booking_confirmed' ||
+            newNotif.type === 'booking_cancelled' ||
+            newNotif.type === 'payment_success' ||
+            newNotif.type === 'refund_processed' ||
+            newNotif.type === 'booking_request'
+          ) {
+            queryClient.invalidateQueries({ queryKey: ['bookings'] });
+            queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+            queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
+          }
+        } else if (payload.eventType === 'UPDATE') {
+          const updated = payload.new as NotificationRow;
+          setNotifications((prev) => {
+            const next = prev.map((n) => (n.id === updated.id ? updated : n));
+            setTotalUnreadCount(next.filter((n) => !n.is_read).length);
+            return next;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as { id: string })?.id;
+          if (deletedId) {
             setNotifications((prev) => {
-              const next = prev.map((n) => (n.id === updated.id ? updated : n));
+              const next = prev.filter((n) => n.id !== deletedId);
               setTotalUnreadCount(next.filter((n) => !n.is_read).length);
               return next;
             });
-          } else if (payload.eventType === 'DELETE') {
-            const deletedId = (payload.old as { id: string })?.id;
-            if (deletedId) {
-              setNotifications((prev) => {
-                const next = prev.filter((n) => n.id !== deletedId);
-                setTotalUnreadCount(next.filter((n) => !n.is_read).length);
-                return next;
-              });
-            }
+          }
+        }
+      },
+      {
+        onReconnect: () => {
+          if (isActive) {
+            void loadNotifications();
           }
         },
-      )
-      .subscribe();
+      },
+    );
 
     return () => {
-      supabase.removeChannel(channel);
+      isActive = false;
+      unsubscribe();
     };
-  }, [user, loadNotifications]);
+  }, [userId, loadNotifications, queryClient]);
 
   const allowedTypes = activeMode === 'host' ? HOST_NOTIFICATION_TYPES : GUEST_NOTIFICATION_TYPES;
   const filteredNotifications = useMemo(

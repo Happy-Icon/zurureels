@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { realtimeManager } from '@/lib/realtimeManager';
 import { emailService } from '@/services/emailService';
 import { notificationService } from '@/services/notificationService';
 import {
@@ -394,20 +395,29 @@ export function useHostBookings(hostId: string | undefined) {
 
   useEffect(() => {
     if (!hostId) return;
-    const channelName = `host_bookings_${hostId}_${Math.random().toString(36).substring(2, 7)}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['host-bookings', hostId] });
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${hostId}` },
-        (payload) => {
+
+    const invalidateHostBookings = () => {
+      queryClient.invalidateQueries({ queryKey: ['host-bookings', hostId] });
+    };
+
+    return realtimeManager.subscribe(
+      {
+        key: `host_bookings:${hostId}`,
+        topicPrefix: `host_bookings_${hostId}`,
+        bindings: [
+          { event: '*', schema: 'public', table: 'bookings' },
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${hostId}`,
+          },
+        ],
+      },
+      (payload, bindingIndex) => {
+        if (bindingIndex === 0) {
+          invalidateHostBookings();
+        } else if (bindingIndex === 1) {
           const notif = payload.new as any;
           if (
             notif?.action_type === 'booking' ||
@@ -415,15 +425,14 @@ export function useHostBookings(hostId: string | undefined) {
             notif?.type === 'booking_confirmed' ||
             notif?.type === 'booking_cancelled'
           ) {
-            queryClient.invalidateQueries({ queryKey: ['host-bookings', hostId] });
+            invalidateHostBookings();
           }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+        }
+      },
+      {
+        onReconnect: invalidateHostBookings,
+      },
+    );
   }, [queryClient, hostId]);
 
   return query;

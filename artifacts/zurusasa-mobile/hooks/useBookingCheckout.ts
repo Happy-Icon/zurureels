@@ -21,6 +21,7 @@ import {
   useUserPaymentMethods,
 } from '@/lib/queries';
 import { invalidateServerCache } from '@/lib/redis';
+import { realtimeManager } from '@/lib/realtimeManager';
 import { supabase, resolveAvatarUrl, type ReelRow } from '@/lib/supabase';
 import {
   getPrimaryCategoryMeta,
@@ -473,16 +474,16 @@ export function useBookingCheckout({
 
   const isMountedRef = useRef(true);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const realtimeChannelRef = useRef<any>(null);
+  const realtimeUnsubscribeRef = useRef<(() => void) | null>(null);
 
   const cleanupPaymentListeners = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
-    if (realtimeChannelRef.current) {
-      supabase.removeChannel(realtimeChannelRef.current);
-      realtimeChannelRef.current = null;
+    if (realtimeUnsubscribeRef.current) {
+      realtimeUnsubscribeRef.current();
+      realtimeUnsubscribeRef.current = null;
     }
   }, []);
 
@@ -955,55 +956,64 @@ export function useBookingCheckout({
         return;
       }
 
+      // Guard against unmount or prior settlement completing while awaiting immediateCheck
+      if (!isMountedRef.current || hasHandledSuccessRef.current) {
+        return;
+      }
+
+      // Ensure any previous settlement channel/poller is cleaned up before starting a new one
+      cleanupPaymentListeners();
+
       // Update Phase to active user prompt
       setPhase(method === 'mpesa' ? 'pin' : 'settling');
 
       // 4. Realtime Listener for Instant Responsiveness (subscribed BEFORE opening Hosted Checkout)
-      const channelName = `booking_settle_${quote.id}_${Date.now()}`;
-      const channel = supabase
-        .channel(channelName)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'bookings',
-            filter: `user_id=eq.${user.id}`,
-          },
-          async () => {
-            const check = await checkAuthoritativeSettlement(quote.id, attemptId);
-            if (check.settled) {
-              handleSettlementSuccess(check.booking?.id);
-            }
-          },
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'payment_attempts',
-            filter: `guest_id=eq.${user.id}`,
-          },
-          async () => {
-            const check = await checkAuthoritativeSettlement(quote.id, attemptId);
-            if (check.settled) {
-              handleSettlementSuccess(check.booking?.id);
-            } else if (check.failed) {
-              cleanupPaymentListeners();
-              setPhase('idle');
-              showAlert({
-                title: 'Payment Failed',
-                message: check.reason || 'Payment was declined.',
-                icon: 'alert-circle',
-                variant: 'error',
-              });
-            }
-          },
-        )
-        .subscribe();
+      const checkAndHandleSettlement = async (handleFailures: boolean) => {
+        if (!isMountedRef.current || hasHandledSuccessRef.current) return;
+        const check = await checkAuthoritativeSettlement(quote.id, attemptId);
+        if (!isMountedRef.current || hasHandledSuccessRef.current) return;
+        if (check.settled) {
+          handleSettlementSuccess(check.booking?.id);
+        } else if (handleFailures && check.failed) {
+          cleanupPaymentListeners();
+          setPhase('idle');
+          showAlert({
+            title: 'Payment Failed',
+            message: check.reason || 'Payment was declined.',
+            icon: 'alert-circle',
+            variant: 'error',
+          });
+        }
+      };
 
-      realtimeChannelRef.current = channel;
+      realtimeUnsubscribeRef.current = realtimeManager.subscribe(
+        {
+          key: `booking_settle:${quote.id}:${attemptId ?? 'pending'}`,
+          topicPrefix: `booking_settle_${quote.id}`,
+          bindings: [
+            {
+              event: '*',
+              schema: 'public',
+              table: 'bookings',
+              filter: `user_id=eq.${user.id}`,
+            },
+            {
+              event: '*',
+              schema: 'public',
+              table: 'payment_attempts',
+              filter: `guest_id=eq.${user.id}`,
+            },
+          ],
+        },
+        (_payload, bindingIndex) => {
+          void checkAndHandleSettlement(bindingIndex === 1);
+        },
+        {
+          onReconnect: () => {
+            void checkAndHandleSettlement(true);
+          },
+        },
+      );
 
       // 5. Bounded Polling Loop (Authoritative Source of Truth)
       let pollCount = 0;

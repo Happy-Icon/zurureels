@@ -1,17 +1,16 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { AnimatedBootSplash } from '@/components/launch/AnimatedBootSplash';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { CustomAlertProvider } from '@/context/CustomAlertContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useColors } from '@/hooks/useColors';
-import { supabase } from '@/lib/supabase';
+import { realtimeManager } from '@/lib/realtimeManager';
 import { notificationService } from '@/services/notificationService';
 import {
   DMSans_400Regular,
@@ -30,6 +29,9 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+try {
+  SplashScreen.setOptions({ duration: 220, fade: true });
+} catch {}
 import { StatusBar } from 'expo-status-bar';
 import { initSentry, Sentry } from '@/lib/sentry';
 import { Observe, ObserveRoot, useObserve } from '@/lib/observe';
@@ -142,79 +144,114 @@ function RootLayoutNav() {
 
 function GlobalNotificationSubscriber() {
   const { user } = useAuth();
+  const userId = user?.id;
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     // 1. Configure Android channel and push token registration
-    notificationService.registerPushToken(user.id).catch((e) => {
+    notificationService.registerPushToken(userId).catch((e) => {
       console.log('[Push] Global token registration note:', e);
     });
 
-    // 2. Global Realtime subscription for incoming notifications to drop local banners on device
-    const channelName = `global_notifs_${user.id}_${Math.random().toString(36).substring(2, 6)}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const newNotif = payload.new as any;
-          if (newNotif) {
-            // Trigger native notification heads-up banner on device immediately
-            notificationService.presentLocalNotification({
-              title: newNotif.title || 'ZuruSasa Notification',
-              body: newNotif.message || '',
-              data: {
-                id: newNotif.id,
-                type: newNotif.type,
-                actionType: newNotif.action_type,
-                actionId: newNotif.action_id,
-              },
-            });
+    // 2. Global shared Realtime subscription for incoming notifications (ref-counted with useNotifications)
+    const unsubscribe = realtimeManager.subscribe(
+      {
+        key: `notifications:${userId}`,
+        topicPrefix: `notifs_${userId}`,
+        bindings: [
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${userId}`,
+          },
+        ],
+      },
+      (payload) => {
+        if (payload.eventType !== 'INSERT') return;
+        const newNotif = payload.new as any;
+        if (newNotif) {
+          // Trigger native notification heads-up banner on device immediately (single owner)
+          notificationService.presentLocalNotification({
+            title: newNotif.title || 'ZuruSasa Notification',
+            body: newNotif.message || '',
+            data: {
+              id: newNotif.id,
+              type: newNotif.type,
+              actionType: newNotif.action_type,
+              actionId: newNotif.action_id,
+            },
+          });
 
-            // Invalidate React Query caches so all screens update seamlessly
-            queryClient.invalidateQueries({ queryKey: ['notifications'] });
-            queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
-            if (
-              newNotif.action_type === 'booking' ||
-              newNotif.type?.startsWith('booking_') ||
-              newNotif.type === 'payment_success' ||
-              newNotif.type === 'refund_processed'
-            ) {
-              queryClient.invalidateQueries({ queryKey: ['bookings'] });
-              queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
-              queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
-              queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
-            }
+          // Invalidate React Query caches so all screens update seamlessly
+          queryClient.invalidateQueries({ queryKey: ['notifications'] });
+          queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
+          if (
+            newNotif.action_type === 'booking' ||
+            newNotif.type?.startsWith('booking_') ||
+            newNotif.type === 'payment_success' ||
+            newNotif.type === 'refund_processed'
+          ) {
+            queryClient.invalidateQueries({ queryKey: ['bookings'] });
+            queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+            queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
+            queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
           }
+        }
+      },
+      {
+        onReconnect: () => {
+          queryClient.invalidateQueries({ queryKey: ['notifications'] });
+          queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
         },
-      )
-      .subscribe();
+      },
+    );
 
-    return () => {
-      supabase.removeChannel(channel).catch(() => {});
-    };
-  }, [user, queryClient]);
+    return unsubscribe;
+  }, [userId, queryClient]);
 
   return null;
 }
 
 function RootLayoutInner() {
   const colors = useColors();
+  const { isReady: themeReady } = useTheme();
+  const { isBootReady } = useAuth();
   const { markInteractive } = useObserve();
+  const hasHiddenSplashRef = useRef(false);
+  const appReady = isBootReady && themeReady;
+
+  const hideNativeSplashOnce = useCallback(() => {
+    if (hasHiddenSplashRef.current || !appReady) return;
+    hasHiddenSplashRef.current = true;
+    requestAnimationFrame(() => {
+      SplashScreen.hideAsync().catch(() => {});
+      markInteractive();
+    });
+  }, [appReady, markInteractive]);
+
+  // Safety fallback in case layout already occurred before appReady transitioned to true
+  useEffect(() => {
+    if (appReady) {
+      hideNativeSplashOnce();
+    }
+  }, [appReady, hideNativeSplashOnce]);
+
+  if (!appReady) {
+    // Keep the single native OS splash screen visible until local auth + theme are hydrated
+    return <View style={{ flex: 1, backgroundColor: '#000000' }} />;
+  }
+
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
+    <GestureHandlerRootView
+      onLayout={hideNativeSplashOnce}
+      style={{ flex: 1, backgroundColor: colors.background }}
+    >
       <KeyboardProvider>
         <GlobalNotificationSubscriber />
         <RootLayoutNav />
-        <AnimatedBootSplash onAnimationComplete={markInteractive} />
       </KeyboardProvider>
     </GestureHandlerRootView>
   );

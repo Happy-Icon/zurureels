@@ -12,11 +12,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/context/AuthContext';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
+import { realtimeManager } from '@/lib/realtimeManager';
 import { supabase, type MessageRow } from '@/lib/supabase';
 import { useMessages, useSendMessage, useMarkMessagesRead } from '@/lib/queries';
 import { uploadToCloudinaryMobile } from '@/lib/cloudinaryUpload';
@@ -39,6 +41,7 @@ export default function NativeChatScreen() {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { showAlert } = useCustomAlert();
   const { id, name, avatar, otherId } = useLocalSearchParams<{
@@ -85,52 +88,72 @@ export default function NativeChatScreen() {
     }
   }, [serverMessages]);
 
+  const markReadMutationRef = useRef(markReadMutation);
+  markReadMutationRef.current = markReadMutation;
+
   // Mark incoming messages as read when opening conversation
   useEffect(() => {
-    if (!id || !user) return;
-    markReadMutation.mutate({ conversationId: id, userId: user.id });
+    const userId = user?.id;
+    if (!id || !userId) return;
+    markReadMutationRef.current.mutate({ conversationId: id, userId });
   }, [id, user?.id]);
 
   // Realtime subscription for INSERT and UPDATE (read receipts)
   useEffect(() => {
-    if (!id || !user) return;
+    const userId = user?.id;
+    if (!id || !userId) return;
 
-    const channel = supabase
-      .channel(`conv_${id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${id}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newMsg = payload.new as MessageRow;
-            setMessages((prev) => {
-              const withoutTemp = prev.filter((m) => !m.id.startsWith('temp-'));
-              return withoutTemp.some((m) => m.id === newMsg.id) ? withoutTemp : [...withoutTemp, newMsg];
-            });
+    let isActive = true;
 
-            // If incoming message is from the other user, mark as read immediately
-            if (newMsg.sender_id !== user.id) {
-              markReadMutation.mutate({ conversationId: id, userId: user.id });
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedMsg = payload.new as MessageRow;
-            setMessages((prev) =>
-              prev.map((m) => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m)),
-            );
+    const unsubscribe = realtimeManager.subscribe(
+      {
+        key: `chat:${id}`,
+        topicPrefix: `conv_${id}`,
+        bindings: [
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages',
+            filter: `conversation_id=eq.${id}`,
+          },
+        ],
+      },
+      (payload) => {
+        if (!isActive) return;
+
+        if (payload.eventType === 'INSERT') {
+          const newMsg = payload.new as MessageRow;
+          setMessages((prev) => {
+            const withoutTemp = prev.filter((m) => !m.id.startsWith('temp-'));
+            return withoutTemp.some((m) => m.id === newMsg.id)
+              ? withoutTemp
+              : [...withoutTemp, newMsg];
+          });
+
+          // If incoming message is from the other user, mark as read immediately
+          if (newMsg.sender_id !== userId) {
+            markReadMutationRef.current.mutate({ conversationId: id, userId });
           }
+        } else if (payload.eventType === 'UPDATE') {
+          const updatedMsg = payload.new as MessageRow;
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m)),
+          );
+        }
+      },
+      {
+        onReconnect: () => {
+          if (!isActive) return;
+          queryClient.invalidateQueries({ queryKey: ['messages', id] });
         },
-      )
-      .subscribe();
+      },
+    );
 
     return () => {
-      supabase.removeChannel(channel);
+      isActive = false;
+      unsubscribe();
     };
-  }, [id, user?.id]);
+  }, [id, user?.id, queryClient]);
 
   const goBack = () => {
     if (router.canGoBack()) router.back();

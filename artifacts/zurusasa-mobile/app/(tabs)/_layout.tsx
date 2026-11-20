@@ -146,10 +146,14 @@ export default function TabLayout() {
   const { user, profile, viewMode } = useAuth();
   const isHostMode = viewMode === 'host';
   const userAvatarUrl = resolveAvatarUrl(profile, user, profile);
+  const renderTabBar = React.useCallback(
+    (props: TabsTabBarProps) => <CustomBottomTabBar {...props} />,
+    [],
+  );
 
   return (
     <Tabs
-      tabBar={(props) => <CustomBottomTabBar {...props} />}
+      tabBar={renderTabBar}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: ACTIVE_COLOR,
