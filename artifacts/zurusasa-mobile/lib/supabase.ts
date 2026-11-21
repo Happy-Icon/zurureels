@@ -437,11 +437,20 @@ export interface HostBlockedDateRow {
   updated_at: string;
 }
 
+export interface ConversationLastMessage {
+  content: string;
+  sender_id: string;
+  created_at: string;
+  is_image: boolean;
+}
+
 export interface ConversationRow {
   id: string;
   participant_one: string;
   participant_two: string;
   last_message_at: string | null;
+  last_message?: ConversationLastMessage | null;
+  unread_count?: number;
   other: {
     id: string;
     full_name: string;

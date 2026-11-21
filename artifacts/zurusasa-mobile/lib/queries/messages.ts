@@ -5,9 +5,21 @@ import { realtimeManager } from '@/lib/realtimeManager';
 import { notificationService } from '@/services/notificationService';
 import {
   supabase,
+  type ConversationLastMessage,
   type ConversationRow,
   type MessageRow,
 } from '@/lib/supabase';
+
+function isImageMessageContent(content: unknown): boolean {
+  return (
+    typeof content === 'string' &&
+    (content.startsWith('https://res.cloudinary.com') ||
+      (content.startsWith('http') &&
+        (content.includes('/image/') ||
+          content.includes('/upload/') ||
+          /\.(jpg|jpeg|png|webp|gif)/i.test(content))))
+  );
+}
 
 // ---- Enquire: find or create the buyer<->host conversation (mirrors web handleEnquire) ----
 
@@ -83,6 +95,7 @@ export function useConversations(userId: string | undefined) {
       }[];
       if (rows.length === 0) return [];
 
+      const convIds = rows.map((c) => c.id);
       const otherIds = Array.from(
         new Set(
           rows.map((c) =>
@@ -90,23 +103,113 @@ export function useConversations(userId: string | undefined) {
           ),
         ),
       );
-      const profs = await supabase
-        .from('profiles')
-        .select('id, full_name, username, role, metadata')
-        .in('id', otherIds);
+
+      const latestBatchLimit = Math.min(Math.max(convIds.length * 15, 100), 500);
+
+      const [profs, latestMsgsRes, unreadMsgsRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, full_name, username, role, metadata')
+          .in('id', otherIds),
+        supabase
+          .from('messages')
+          .select('conversation_id, sender_id, content, created_at')
+          .in('conversation_id', convIds)
+          .order('created_at', { ascending: false })
+          .limit(latestBatchLimit),
+        supabase
+          .from('messages')
+          .select('conversation_id')
+          .in('conversation_id', convIds)
+          .neq('sender_id', userId!)
+          .eq('is_read', false),
+      ]);
+
       if (profs.error) throw new Error(profs.error.message);
       const profById = new Map(
         (profs.data ?? []).map((p: Record<string, unknown>) => [p.id as string, p]),
       );
+
+      const latestByConv = new Map<string, ConversationLastMessage>();
+      if (!latestMsgsRes.error && latestMsgsRes.data) {
+        for (const m of latestMsgsRes.data as {
+          conversation_id: string;
+          sender_id: string;
+          content: string | null;
+          created_at: string;
+        }[]) {
+          if (!latestByConv.has(m.conversation_id)) {
+            const rawContent = typeof m.content === 'string' ? m.content : '';
+            latestByConv.set(m.conversation_id, {
+              content: rawContent,
+              sender_id: m.sender_id,
+              created_at: m.created_at,
+              is_image: isImageMessageContent(rawContent),
+            });
+          }
+        }
+
+        // If the batch hit the cap and some conversations weren't covered, fetch their latest message individually
+        if (latestMsgsRes.data.length >= latestBatchLimit) {
+          const missingConvIds = convIds.filter((id) => !latestByConv.has(id));
+          if (missingConvIds.length > 0) {
+            const fallbackResults = await Promise.all(
+              missingConvIds.map((convId) =>
+                supabase
+                  .from('messages')
+                  .select('conversation_id, sender_id, content, created_at')
+                  .eq('conversation_id', convId)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle(),
+              ),
+            );
+            for (const res of fallbackResults) {
+              const m = res.data as {
+                conversation_id: string;
+                sender_id: string;
+                content: string | null;
+                created_at: string;
+              } | null;
+              if (!res.error && m && !latestByConv.has(m.conversation_id)) {
+                const rawContent = typeof m.content === 'string' ? m.content : '';
+                latestByConv.set(m.conversation_id, {
+                  content: rawContent,
+                  sender_id: m.sender_id,
+                  created_at: m.created_at,
+                  is_image: isImageMessageContent(rawContent),
+                });
+              }
+            }
+          }
+        }
+      }
+
+      const unreadByConv = new Map<string, number>();
+      if (!unreadMsgsRes.error && unreadMsgsRes.data) {
+        for (const row of unreadMsgsRes.data as { conversation_id: string }[]) {
+          unreadByConv.set(
+            row.conversation_id,
+            (unreadByConv.get(row.conversation_id) ?? 0) + 1,
+          );
+        }
+      }
 
       return rows.map((c) => {
         const otherId =
           c.participant_one === userId ? c.participant_two : c.participant_one;
         const p = profById.get(otherId);
         const metadata = (p?.metadata ?? null) as { avatar_url?: string } | null;
+        const lastMessage = latestByConv.get(c.id) ?? null;
         return {
           ...c,
-          last_message_at: c.last_message_at || c.created_at || new Date().toISOString(),
+          last_message_at:
+            lastMessage?.created_at ||
+            c.last_message_at ||
+            c.created_at ||
+            new Date().toISOString(),
+          last_message: lastMessage,
+          unread_count: unreadByConv.get(c.id) ?? 0,
           other: {
             id: otherId,
             full_name: (p?.full_name as string) || 'Zuru User',
