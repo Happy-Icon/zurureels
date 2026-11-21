@@ -49,7 +49,12 @@ export function useMyBookings(userId: string | undefined) {
         key: `guest_bookings:${userId}`,
         topicPrefix: `guest_bookings_${userId}`,
         bindings: [
-          { event: '*', schema: 'public', table: 'bookings' },
+          {
+            event: '*',
+            schema: 'public',
+            table: 'bookings',
+            filter: `user_id=eq.${userId}`,
+          },
           {
             event: 'INSERT',
             schema: 'public',

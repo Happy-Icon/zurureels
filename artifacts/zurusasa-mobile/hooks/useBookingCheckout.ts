@@ -42,6 +42,10 @@ import {
   type Step,
 } from '@/components/booking/bookingHelpers';
 import {
+  buildStayTimestampIso,
+  DEFAULT_LISTING_TIMEZONE,
+} from '@/lib/bookingTimezones';
+import {
   buildSlotTimestamps,
   computeBookingUnits,
   extractEventTiers,
@@ -800,28 +804,35 @@ export function useBookingCheckout({
       }
     }
 
-    let checkInDate = from;
-    let checkOutDate = to ?? addDays(from, 1);
+    const listingTimezone = exp?.timezone || DEFAULT_LISTING_TIMEZONE;
+    let checkInStr: string;
+    let checkOutStr: string;
 
     if (flowConfig.kind === 'event' && eventDateIso) {
       const evStart = new Date(eventDateIso);
       if (!Number.isNaN(evStart.getTime())) {
-        checkInDate = evStart;
         const evEndRaw = (eventDetails?.end_date as string | undefined) || null;
         const evEnd = evEndRaw ? new Date(evEndRaw) : null;
-        checkOutDate =
+        const evCheckOut =
           evEnd && !Number.isNaN(evEnd.getTime()) && evEnd > evStart
             ? evEnd
             : new Date(evStart.getTime() + 4 * 3_600_000);
+        checkInStr = evStart.toISOString();
+        checkOutStr = evCheckOut.toISOString();
+      } else {
+        checkInStr = buildStayTimestampIso(from, exp?.check_in_time, 14, listingTimezone);
+        checkOutStr = buildStayTimestampIso(to ?? addDays(from, 1), exp?.check_out_time, 10, listingTimezone);
       }
     } else if (!flowConfig.isRangePicker && flowConfig.requiresTimeSlot) {
       const slotRange = buildSlotTimestamps(from, selectedTimeSlot, durationInfo, 3);
-      checkInDate = slotRange.checkIn;
-      checkOutDate = slotRange.checkOut;
+      checkInStr = slotRange.checkIn.toISOString();
+      checkOutStr = slotRange.checkOut.toISOString();
+    } else {
+      // Combine calendar dates with listing check-in/check-out clock times in the listing's IANA timezone
+      // to eliminate UTC -1 day date shifts and enable accurate 24h / 1h pre-arrival reminders.
+      checkInStr = buildStayTimestampIso(from, exp?.check_in_time, 14, listingTimezone);
+      checkOutStr = buildStayTimestampIso(to ?? addDays(from, 1), exp?.check_out_time, 10, listingTimezone);
     }
-
-    const checkInStr = checkInDate.toISOString();
-    const checkOutStr = checkOutDate.toISOString();
 
     const bookingMeta: Record<string, any> = {
       time_slot: flowConfig.requiresTimeSlot ? selectedTimeSlot || null : null,

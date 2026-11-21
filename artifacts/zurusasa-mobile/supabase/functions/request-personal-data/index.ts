@@ -1,6 +1,7 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
+import { renderNotificationTemplate } from '../_shared/templates/index.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,35 +46,11 @@ async function sendVerificationEmail(
   emailFrom: string,
 ) {
   if (!resendApiKey) {
-    console.warn('[request-personal-data] RESEND_API_KEY not configured, logging OTP for test:', otp);
+    console.warn('[request-personal-data] RESEND_API_KEY not configured; verification email skipped (OTP redacted).');
     return;
   }
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>ZuruSasa Personal Data Verification</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0B0F19; color: #FFFFFF; padding: 24px;">
-  <div style="max-width: 520px; margin: 0 auto; background-color: #111827; border: 1px solid #1F2937; border-radius: 12px; padding: 32px;">
-    <div style="font-size: 18px; font-weight: 800; color: #F26522; margin-bottom: 16px;">ZURUSASA PRIVACY</div>
-    <h2 style="margin: 0 0 12px; color: #FFFFFF;">Personal Data Access Verification</h2>
-    <p style="color: #9CA3AF; font-size: 14px; line-height: 1.5;">
-      A request to export your personal data was initiated on your ZuruSasa account. Use the 6-digit verification code below to authorize the export:
-    </p>
-    <div style="background-color: #1F2937; border-radius: 8px; padding: 18px; text-align: center; margin: 24px 0;">
-      <span style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #F26522; font-family: monospace;">${otp}</span>
-    </div>
-    <p style="color: #9CA3AF; font-size: 13px; line-height: 1.5;">
-      This code is valid for <strong>10 minutes</strong>. If you did not make this request, someone may be attempting to access your account. Please change your password or passkey and contact support immediately.
-    </p>
-    <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #1F2937; font-size: 12px; color: #6B7280;">
-      ZuruSasa Privacy & Data Protection Team • Kenya DPA 2019 / GDPR Art. 15
-    </div>
-  </div>
-</body>
-</html>`;
+  const rendered = renderNotificationTemplate('data_export_otp', { otp });
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -84,8 +61,9 @@ async function sendVerificationEmail(
     body: JSON.stringify({
       from: emailFrom || 'ZuruSasa Privacy <privacy@zurusasa.com>',
       to: [toEmail],
-      subject: `Your ZuruSasa Data Request Verification Code: ${otp}`,
-      html,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
     }),
   });
 

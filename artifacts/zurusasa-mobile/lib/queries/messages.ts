@@ -359,17 +359,19 @@ export function useSendMessage() {
         }
       }
 
-      // 4. Trigger In-App + Push notification (non-blocking)
+      // 4. Trigger In-App + Push notification (deduplicated against server AFTER INSERT trigger via dedupeKey)
       if (recipientId && recipientId !== input.senderId) {
         const senderName = input.senderName || 'Someone';
+        const messageId = (data as any)?.id;
         notificationService
           .createNotification({
             userId: recipientId,
             type: 'message',
             title: `New message from ${senderName}`,
-            message: input.imageUrl ? '📷 Sent a photo' : input.content,
+            message: input.imageUrl ? 'Sent a photo' : input.content,
             actionType: 'chat',
             actionId: input.conversationId,
+            dedupeKey: messageId ? `message:${messageId}:${recipientId}` : null,
             metadata: {
               conversation_id: input.conversationId,
               sender_id: input.senderId,
@@ -416,6 +418,7 @@ export function useMarkMessagesRead() {
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['messages', vars.conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
       queryClient.invalidateQueries({ queryKey: ['unread-messages-count'] });
     },
   });

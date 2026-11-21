@@ -1,6 +1,7 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
+import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -165,6 +166,74 @@ Deno.serve(async (request) => {
         p_paystack_response: { error: freeSettleError.message },
       });
       return json({ error: freeSettleError.message || 'Could not confirm reservation' }, 500);
+    }
+
+    if (bookingId) {
+      try {
+        const { data: bData } = await admin
+          .from('bookings')
+          .select('id, user_id, trip_title, status, check_in, check_out, experience:experiences(user_id, title, timezone)')
+          .eq('id', String(bookingId))
+          .maybeSingle();
+
+        if (bData) {
+          const exp = Array.isArray(bData.experience) ? bData.experience[0] : bData.experience;
+          const tripTitle = bData.trip_title || (exp as any)?.title || 'Free Event';
+          const timezone = (exp as any)?.timezone || 'Africa/Nairobi';
+          const isConfirmed = bData.status === 'confirmed';
+
+          if (bData.user_id) {
+            await enqueueNotificationEvent(admin, {
+              userId: bData.user_id,
+              type: isConfirmed ? 'booking_confirmed' : 'booking_created',
+              templateKey: 'booking_confirmed',
+              title: isConfirmed ? 'Reservation Confirmed!' : 'Reservation Received!',
+              message: `Your free reservation for "${tripTitle}" is ${isConfirmed ? 'confirmed' : 'recorded'}.`,
+              dedupeKey: `free_booking:${bData.id}:${bData.user_id}`,
+              priority: 'critical',
+              channels: ['in_app', 'push', 'email'],
+              actionType: 'booking',
+              actionId: bData.id,
+              payload: {
+                booking_id: bData.id,
+                trip_title: tripTitle,
+                check_in: bData.check_in,
+                check_out: bData.check_out,
+                booking_mode: isConfirmed ? 'instant' : 'approval_required',
+                booking_status: bData.status,
+                timezone,
+              },
+            });
+          }
+
+          const hostId = (exp as any)?.user_id;
+          if (hostId && hostId !== bData.user_id) {
+            await enqueueNotificationEvent(admin, {
+              userId: hostId,
+              type: 'booking_request',
+              templateKey: 'booking_request',
+              title: isConfirmed ? 'New Free Reservation!' : 'New Reservation Request',
+              message: `A guest reserved "${tripTitle}" (Free Entry).`,
+              dedupeKey: `free_booking:${bData.id}:${hostId}`,
+              priority: 'critical',
+              channels: ['in_app', 'push', 'email'],
+              actionType: 'booking',
+              actionId: bData.id,
+              payload: {
+                booking_id: bData.id,
+                trip_title: tripTitle,
+                check_in: bData.check_in,
+                check_out: bData.check_out,
+                booking_mode: isConfirmed ? 'instant' : 'approval_required',
+                booking_status: bData.status,
+                timezone,
+              },
+            });
+          }
+        }
+      } catch (freeNotifErr) {
+        console.warn('[create-booking-payment] Free entry notification warning:', freeNotifErr);
+      }
     }
 
     return json({

@@ -1,10 +1,13 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { PDFDocument, StandardFonts, rgb } from 'https://esm.sh/pdf-lib@1.17.1';
+import { authorizeWorkerOrAdmin } from '../_shared/workerAuth.ts';
+import { renderNotificationTemplate } from '../_shared/templates/index.ts';
+import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-cron-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -191,31 +194,9 @@ async function sendReadyEmail(
 ) {
   if (!resendApiKey) return;
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Your ZuruSasa Data Export is Ready</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0B0F19; color: #FFFFFF; padding: 24px;">
-  <div style="max-width: 520px; margin: 0 auto; background-color: #111827; border: 1px solid #1F2937; border-radius: 12px; padding: 32px;">
-    <div style="font-size: 18px; font-weight: 800; color: #F26522; margin-bottom: 16px;">ZURUSASA PRIVACY</div>
-    <h2 style="margin: 0 0 12px; color: #FFFFFF;">Your Personal Data Export is Ready</h2>
-    <p style="color: #9CA3AF; font-size: 14px; line-height: 1.5;">
-      Your requested ZuruSasa personal data archive has been compiled. You can download your archive directly from the mobile app under:
-    </p>
-    <div style="background-color: #1F2937; border-radius: 8px; padding: 14px; margin: 18px 0; font-size: 14px; color: #F26522; font-weight: 600;">
-      Settings → Privacy & Data → Request My Personal Data
-    </div>
-    <p style="color: #9CA3AF; font-size: 13px; line-height: 1.5;">
-      In accordance with our data retention policy, this download will be available for <strong>7 days</strong>, after which all export files will be permanently purged.
-    </p>
-    <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #1F2937; font-size: 12px; color: #6B7280;">
-      Request ID: ${requestId} • ZuruSasa Privacy Team
-    </div>
-  </div>
-</body>
-</html>`;
+  const rendered = renderNotificationTemplate('data_export_ready', {
+    request_id: requestId,
+  });
 
   await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -226,8 +207,9 @@ async function sendReadyEmail(
     body: JSON.stringify({
       from: emailFrom || 'ZuruSasa Privacy <privacy@zurusasa.com>',
       to: [toEmail],
-      subject: 'Your ZuruSasa Personal Data Archive is Ready for Download',
-      html,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
     }),
   }).catch((err) => console.error('[process-personal-data-export] Ready email error:', err));
 }
@@ -242,11 +224,17 @@ Deno.serve(async (request) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const resendApiKey = Deno.env.get('RESEND_API_KEY') ?? '';
   const emailFrom = Deno.env.get('EMAIL_FROM') ?? Deno.env.get('RESEND_FROM_EMAIL') ?? 'ZuruSasa Privacy <privacy@zurusasa.com>';
 
-  const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+  const auth = await authorizeWorkerOrAdmin(request, supabaseUrl, supabaseAnonKey, supabaseServiceKey);
+  if (!auth.authorized) {
+    return json({ error: auth.error || 'Unauthorized' }, auth.status);
+  }
+
+  const serviceClient = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
 
   let body: any = {};
   try {
@@ -391,10 +379,24 @@ Deno.serve(async (request) => {
       },
     });
 
-    // 8. Send Email Alert via Resend
+    // 8. Send Email Alert via Resend & persist in-app notification
     if (userEmail) {
       await sendReadyEmail(userEmail, requestId, resendApiKey, emailFrom);
     }
+
+    await enqueueNotificationEvent(serviceClient, {
+      userId,
+      type: 'data_export_ready',
+      templateKey: 'data_export_ready',
+      title: 'Personal Data Export Ready',
+      message: 'Your personal data archive is compiled and available for download for 7 days.',
+      dedupeKey: `data_export_ready:${requestId}:${userId}`,
+      priority: 'critical',
+      channels: ['in_app', 'push'],
+      actionType: 'profile',
+      actionId: requestId,
+      payload: { request_id: requestId },
+    });
 
     return json({
       success: true,

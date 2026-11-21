@@ -1,6 +1,7 @@
 /// <reference path="../deno.d.ts" />
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
+import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,20 +51,11 @@ async function computeSha256(content: string): Promise<string> {
 
 async function dispatchPostSettlementNotifications(admin: SupabaseClient, bookingId: string) {
   try {
-    // Deduplicate in case both browser callback verification and webhook run near-simultaneously
-    const { count: existingCount } = await admin
-      .from('notifications')
-      .select('id', { count: 'exact', head: true })
-      .eq('action_id', bookingId)
-      .eq('type', 'payment_success');
-
-    if (existingCount && existingCount > 0) {
-      return;
-    }
-
     const { data: bData } = await admin
       .from('bookings')
-      .select('id, user_id, experience_id, trip_title, amount, experience:experiences(user_id, title)')
+      .select(
+        'id, user_id, experience_id, trip_title, amount, status, check_in, check_out, terms_snapshot, experience:experiences(user_id, title, booking_mode, timezone)',
+      )
       .eq('id', bookingId)
       .single();
 
@@ -74,28 +66,62 @@ async function dispatchPostSettlementNotifications(admin: SupabaseClient, bookin
     const hostId = (exp as any)?.user_id;
     const tripTitle = bData.trip_title || (exp as any)?.title || 'Stay';
     const amountStr = `KES ${Number(bData.amount || 0).toLocaleString()}`;
+    const bookingMode =
+      (bData.terms_snapshot as any)?.booking_mode || (exp as any)?.booking_mode || 'approval_required';
+    const isInstantConfirmed = bData.status === 'confirmed' || bookingMode === 'instant';
+    const timezone = (bData.terms_snapshot as any)?.timezone || (exp as any)?.timezone || 'Africa/Nairobi';
 
     if (guestId) {
-      await admin.from('notifications').insert({
-        user_id: guestId,
-        type: 'payment_success',
-        title: 'Payment Confirmed! 💳',
-        message: `Your payment of ${amountStr} for "${tripTitle}" was received. The host will confirm your reservation shortly.`,
-        action_type: 'booking',
-        action_id: bookingId,
-        is_read: false,
+      await enqueueNotificationEvent(admin, {
+        userId: guestId,
+        type: isInstantConfirmed ? 'booking_confirmed' : 'payment_success',
+        templateKey: 'payment_receipt',
+        title: isInstantConfirmed ? 'Booking Confirmed & Paid!' : 'Payment Confirmed!',
+        message: isInstantConfirmed
+          ? `Your payment of ${amountStr} for "${tripTitle}" is complete and your reservation is confirmed.`
+          : `Your payment of ${amountStr} for "${tripTitle}" was received. The host will confirm your reservation shortly.`,
+        dedupeKey: `payment_success:${bookingId}:${guestId}`,
+        priority: 'critical',
+        channels: ['in_app', 'push', 'email'],
+        actionType: 'booking',
+        actionId: bookingId,
+        payload: {
+          booking_id: bookingId,
+          trip_title: tripTitle,
+          amount: bData.amount,
+          check_in: bData.check_in,
+          check_out: bData.check_out,
+          booking_mode: isInstantConfirmed ? 'instant' : 'approval_required',
+          booking_status: bData.status,
+          timezone,
+        },
       });
     }
 
     if (hostId && hostId !== guestId) {
-      await admin.from('notifications').insert({
-        user_id: hostId,
+      await enqueueNotificationEvent(admin, {
+        userId: hostId,
         type: 'booking_request',
-        title: 'Payment Received — Review Booking',
-        message: `A guest paid ${amountStr} for "${tripTitle}". Review and confirm the reservation in your Host Dashboard.`,
-        action_type: 'booking',
-        action_id: bookingId,
-        is_read: false,
+        templateKey: 'booking_request',
+        title: isInstantConfirmed ? 'New Confirmed Booking!' : 'Payment Received — Review Booking',
+        message: isInstantConfirmed
+          ? `A guest booked "${tripTitle}" (${amountStr}). View details in your Host Dashboard.`
+          : `A guest paid ${amountStr} for "${tripTitle}". Review and confirm the reservation in your Host Dashboard.`,
+        dedupeKey: `booking_request:${bookingId}:${hostId}`,
+        priority: 'critical',
+        channels: ['in_app', 'push', 'email'],
+        actionType: 'booking',
+        actionId: bookingId,
+        payload: {
+          booking_id: bookingId,
+          trip_title: tripTitle,
+          amount: bData.amount,
+          check_in: bData.check_in,
+          check_out: bData.check_out,
+          booking_mode: isInstantConfirmed ? 'instant' : 'approval_required',
+          booking_status: bData.status,
+          timezone,
+        },
       });
     }
   } catch (notifErr) {
@@ -350,12 +376,53 @@ Deno.serve(async (request) => {
       return json({ status: 'settled', bookingId }, 200);
     } else if (eventType === 'charge.failed') {
       if (providerReference) {
+        const failureMsg = String(data.gateway_response || data.message || 'Charge failed');
         await admin.rpc('settle_paystack_failure', {
           p_provider_reference: providerReference,
           p_failure_code: String(data.gateway_response || data.status || 'charge_failed'),
-          p_failure_message: String(data.message || 'Charge failed'),
+          p_failure_message: failureMsg,
           p_paystack_response: payload,
         });
+
+        try {
+          const { data: failedAttempt } = await admin
+            .from('payment_attempts')
+            .select('id, guest_id, quote_id, amount')
+            .eq('provider_reference', providerReference)
+            .maybeSingle();
+
+          if (failedAttempt?.guest_id) {
+            let tripTitle = 'your reservation';
+            if (failedAttempt.quote_id) {
+              const { data: qRow } = await admin
+                .from('booking_quotes')
+                .select('terms_snapshot')
+                .eq('id', failedAttempt.quote_id)
+                .maybeSingle();
+              tripTitle = (qRow?.terms_snapshot as any)?.title || tripTitle;
+            }
+
+            await enqueueNotificationEvent(admin, {
+              userId: failedAttempt.guest_id,
+              type: 'payment_failed',
+              templateKey: 'payment_failed',
+              title: 'Payment Unsuccessful',
+              message: `Your payment for "${tripTitle}" could not be completed (${failureMsg}). You can retry checkout anytime.`,
+              dedupeKey: `payment_failed:${providerReference}:${failedAttempt.guest_id}`,
+              priority: 'critical',
+              channels: ['in_app', 'push', 'email'],
+              actionType: 'booking',
+              actionId: failedAttempt.quote_id || failedAttempt.id,
+              payload: {
+                trip_title: tripTitle,
+                amount_minor: failedAttempt.amount,
+                failure_message: failureMsg,
+              },
+            });
+          }
+        } catch (failNotifErr) {
+          console.warn('[paystack-webhook] charge.failed notification warning:', failNotifErr);
+        }
       }
 
       await admin
@@ -378,7 +445,7 @@ Deno.serve(async (request) => {
         if (pa) {
           const { data: bRow } = await admin
             .from('bookings')
-            .select('id, user_id, trip_title')
+            .select('id, user_id, trip_title, amount')
             .eq('payment_attempt_id', pa.id)
             .maybeSingle();
 
@@ -407,16 +474,26 @@ Deno.serve(async (request) => {
                 reason: 'Paystack refund confirmed',
               });
 
-            // Notify Guest
-            await admin.from('notifications').insert({
-              user_id: bRow.user_id,
-              type: 'refund_processed',
-              title: 'Refund Completed! 💳',
-              message: `Your refund for "${bRow.trip_title || 'your reservation'}" has been processed successfully.`,
-              action_type: 'booking',
-              action_id: bRow.id,
-              is_read: false,
-            });
+            // Deduplicated multi-channel refund notification (shares dedupeKey with process-booking-refund)
+            if (bRow.user_id) {
+              await enqueueNotificationEvent(admin, {
+                userId: bRow.user_id,
+                type: 'refund_processed',
+                templateKey: 'refund_processed',
+                title: 'Refund Completed!',
+                message: `Your refund for "${bRow.trip_title || 'your reservation'}" has been processed successfully.`,
+                dedupeKey: `refund_processed:${bRow.id}:${bRow.user_id}`,
+                priority: 'critical',
+                channels: ['in_app', 'push', 'email'],
+                actionType: 'booking',
+                actionId: bRow.id,
+                payload: {
+                  booking_id: bRow.id,
+                  trip_title: bRow.trip_title || 'your reservation',
+                  amount: bRow.amount,
+                },
+              });
+            }
           }
         }
       }

@@ -1,10 +1,10 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { requireWorkerAuth } from '../_shared/workerAuth.ts';
+import { authorizeWorkerOrAdmin } from '../_shared/workerAuth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-cron-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -24,14 +24,16 @@ Deno.serve(async (request) => {
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  const authError = requireWorkerAuth(request);
-  if (authError) {
-    return authError;
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+  const auth = await authorizeWorkerOrAdmin(request, supabaseUrl, supabaseAnonKey, supabaseServiceKey);
+  if (!auth.authorized) {
+    return json({ error: auth.error || 'Unauthorized' }, auth.status);
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+  const serviceClient = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
 
   const now = new Date().toISOString();
 

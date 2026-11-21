@@ -11,7 +11,7 @@ import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import type { BookingRow, LocationPrecision } from '@/lib/supabase';
+import { supabase, type BookingRow, type LocationPrecision } from '@/lib/supabase';
 import { SafeRouteMapView } from '@/components/map/SafeMapView';
 import { useCustomAlert } from '@/context/CustomAlertContext';
 import { Skeleton } from '@/components/Skeleton';
@@ -277,15 +277,64 @@ export function JourneyCompanionSheet({
     [destLocation, propertyTitle, showAlert],
   );
 
-  const handleShareETA = useCallback(() => {
+  const handleShareETA = useCallback(async () => {
     const etaText = travelTimeMin > 0 ? `~${travelTimeMin} min away` : 'on the way';
+    const guestId = booking.user_id;
+    const hostId = booking.experience?.user_id;
+
+    if (guestId && hostId && guestId !== hostId) {
+      try {
+        const [p1, p2] = [guestId, hostId].sort();
+        const { data: existingConv } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('participant_one', p1)
+          .eq('participant_two', p2)
+          .maybeSingle();
+
+        let convId = existingConv?.id as string | undefined;
+        const nowIso = new Date().toISOString();
+
+        if (!convId) {
+          const { data: created } = await supabase
+            .from('conversations')
+            .insert({ participant_one: p1, participant_two: p2, last_message_at: nowIso })
+            .select('id')
+            .single();
+          convId = created?.id as string | undefined;
+        } else {
+          await supabase.from('conversations').update({ last_message_at: nowIso }).eq('id', convId);
+        }
+
+        if (convId) {
+          const etaMessage = `Hi ${hostName}, I'm on my way to ${propertyTitle} — ETA ${etaText}.`;
+          const { error: msgErr } = await supabase.from('messages').insert({
+            conversation_id: convId,
+            sender_id: guestId,
+            content: etaMessage,
+          });
+          if (!msgErr) {
+            showAlert({
+              title: 'ETA Sent to Host',
+              message: `We sent your arrival update (${etaText}) to ${hostName} in Inbox.`,
+              variant: 'success',
+              icon: 'navigation',
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('[JourneyCompanion] ETA message dispatch note:', err);
+      }
+    }
+
     showAlert({
-      title: 'ETA Shared',
-      message: `Your arrival update (${etaText}) has been prepared for ${hostName}.`,
-      variant: 'success',
+      title: 'ETA Ready',
+      message: `Could not send automatically. Tap Message Host to share your ETA (${etaText}) with ${hostName}.`,
+      variant: 'info',
       icon: 'navigation',
     });
-  }, [hostName, travelTimeMin, showAlert]);
+  }, [booking.user_id, booking.experience?.user_id, hostName, propertyTitle, travelTimeMin, showAlert]);
 
   if (!visible) return null;
 

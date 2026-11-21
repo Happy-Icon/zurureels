@@ -349,10 +349,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Register Expo push token into user_devices canonical store
-      notificationService.registerPushToken(userId).catch((err) => {
-        console.warn('Push token registration note:', err);
-      });
+      // Push token registration & rotation listening are handled centrally by GlobalNotificationSubscriber.
 
       // Also check if user has created any listings
       const { count } = await supabase

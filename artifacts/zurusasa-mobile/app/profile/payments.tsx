@@ -277,7 +277,7 @@ export default function PaymentsAndPayoutsScreen() {
             {/* Payout methods */}
             <Pressable
               testID="menu-payout-methods"
-              onPress={() => setCurrentView('earnings')}
+              onPress={() => router.push('/host/wallet')}
               style={styles.navRow}
               accessibilityRole="button"
               accessibilityLabel="Payout methods"
@@ -292,7 +292,7 @@ export default function PaymentsAndPayoutsScreen() {
             {/* Transaction history */}
             <Pressable
               testID="menu-transaction-history"
-              onPress={() => setCurrentView('earnings')}
+              onPress={() => router.push('/host/wallet')}
               style={styles.navRow}
               accessibilityRole="button"
               accessibilityLabel="Transaction history"

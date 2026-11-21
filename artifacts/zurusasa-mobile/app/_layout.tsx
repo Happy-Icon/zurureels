@@ -73,41 +73,54 @@ function RootLayoutNav() {
     };
   }, [isDark, colors]);
 
+  const navigateFromNotificationData = useCallback(
+    (data: Record<string, any> | undefined | null) => {
+      if (!data) return;
+      const actionType = data.actionType || data.action_type || data.type;
+      const actionId = data.actionId || data.action_id;
+      const conversationId = data.conversationId || data.conversation_id || (actionType === 'chat' ? actionId : null);
+      const bookingId = data.bookingId || data.booking_id || (actionType === 'booking' ? actionId : null);
+
+      if (conversationId) {
+        router.push(`/chat/${conversationId}`);
+      } else if (actionType === 'chat') {
+        router.push('/(tabs)/inbox');
+      } else if (bookingId || actionType === 'booking') {
+        router.push('/(tabs)/reservations');
+      } else if (actionType === 'payout') {
+        router.push('/host/wallet');
+      } else if (actionType === 'listing') {
+        router.push('/(tabs)/listings');
+      } else if (actionType === 'discover') {
+        router.push('/(tabs)/discover');
+      } else if (actionType === 'profile') {
+        router.push('/(tabs)/profile');
+      } else if (actionType === 'support') {
+        router.push('/profile/support');
+      }
+    },
+    [router],
+  );
+
   useEffect(() => {
     let sub: any = null;
     try {
       const Notifs = require('expo-notifications');
       if (Notifs?.addNotificationResponseReceivedListener) {
         sub = Notifs.addNotificationResponseReceivedListener((response: any) => {
-          const data = response?.notification?.request?.content?.data;
-          const actionType = data?.actionType || data?.type;
-          const conversationId = data?.conversationId || (actionType === 'chat' ? data?.actionId : null);
-          const bookingId = data?.bookingId || (actionType === 'booking' ? data?.actionId : null);
-
-          if (conversationId) {
-            router.push(`/chat/${conversationId}`);
-          } else if (bookingId || actionType === 'booking') {
-            router.push('/reservations');
-          }
+          navigateFromNotificationData(response?.notification?.request?.content?.data);
         });
       }
 
       // Cold-start notification tap deep-linking
       if (Notifs?.getLastNotificationResponseAsync) {
-        Notifs.getLastNotificationResponseAsync().then((response: any) => {
-          if (response) {
-            const data = response?.notification?.request?.content?.data;
-            const actionType = data?.actionType || data?.type;
-            const conversationId = data?.conversationId || (actionType === 'chat' ? data?.actionId : null);
-            const bookingId = data?.bookingId || (actionType === 'booking' ? data?.actionId : null);
-
-            if (conversationId) {
-              router.push(`/chat/${conversationId}`);
-            } else if (bookingId || actionType === 'booking') {
-              router.push('/reservations');
+        Notifs.getLastNotificationResponseAsync()
+          .then((response: any) => {
+            if (response) {
+              navigateFromNotificationData(response?.notification?.request?.content?.data);
             }
-          }
-        }).catch((e: any) => console.log('[Push] Cold start notification note:', e));
+          })
+          .catch((e: any) => console.log('[Push] Cold start notification note:', e));
       }
     } catch (e) {
       console.warn('[Push] Tap listener setup note:', e);
@@ -116,7 +129,7 @@ function RootLayoutNav() {
     return () => {
       if (sub?.remove) sub.remove();
     };
-  }, [router]);
+  }, [navigateFromNotificationData]);
 
   return (
     <NavThemeProvider value={navTheme}>
@@ -150,10 +163,12 @@ function GlobalNotificationSubscriber() {
   useEffect(() => {
     if (!userId) return;
 
-    // 1. Configure Android channel and push token registration
+    // 1. Configure Android channel, push token registration & OS token rotation listener (single owner)
     notificationService.registerPushToken(userId).catch((e) => {
       console.log('[Push] Global token registration note:', e);
     });
+    const stopTokenRefresh = notificationService.startPushTokenRefreshListener(userId);
+    const stopForegroundDedupe = notificationService.startForegroundPushListener();
 
     // 2. Global shared Realtime subscription for incoming notifications (ref-counted with useNotifications)
     const unsubscribe = realtimeManager.subscribe(
@@ -173,17 +188,22 @@ function GlobalNotificationSubscriber() {
         if (payload.eventType !== 'INSERT') return;
         const newNotif = payload.new as any;
         if (newNotif) {
-          // Trigger native notification heads-up banner on device immediately (single owner)
-          notificationService.presentLocalNotification({
-            title: newNotif.title || 'ZuruSasa Notification',
-            body: newNotif.message || '',
-            data: {
-              id: newNotif.id,
-              type: newNotif.type,
-              actionType: newNotif.action_type,
-              actionId: newNotif.action_id,
-            },
-          });
+          // Deduplicate against remote Expo push already shown in foreground
+          const fallbackKey =
+            newNotif.type && newNotif.action_id ? `${newNotif.type}:${newNotif.action_id}` : null;
+          if (!notificationService.wasRecentlyPresentedByRemotePush(newNotif.id, fallbackKey)) {
+            notificationService.presentLocalNotification({
+              title: newNotif.title || 'ZuruSasa Notification',
+              body: newNotif.message || '',
+              data: {
+                id: newNotif.id,
+                notificationId: newNotif.id,
+                type: newNotif.type,
+                actionType: newNotif.action_type,
+                actionId: newNotif.action_id,
+              },
+            });
+          }
 
           // Invalidate React Query caches so all screens update seamlessly
           queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -191,8 +211,9 @@ function GlobalNotificationSubscriber() {
           if (
             newNotif.action_type === 'booking' ||
             newNotif.type?.startsWith('booking_') ||
-            newNotif.type === 'payment_success' ||
-            newNotif.type === 'refund_processed'
+            newNotif.type?.startsWith('payment_') ||
+            newNotif.type === 'refund_processed' ||
+            newNotif.type === 'arrival_issue_reported'
           ) {
             queryClient.invalidateQueries({ queryKey: ['bookings'] });
             queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
@@ -209,7 +230,11 @@ function GlobalNotificationSubscriber() {
       },
     );
 
-    return unsubscribe;
+    return () => {
+      stopTokenRefresh();
+      stopForegroundDedupe();
+      unsubscribe();
+    };
   }, [userId, queryClient]);
 
   return null;

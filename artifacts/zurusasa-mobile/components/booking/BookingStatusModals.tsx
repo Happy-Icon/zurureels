@@ -393,6 +393,7 @@ interface BookingSuccessModalProps {
   guestSummary?: string;
   totalAmount?: number;
   paymentMethod?: 'mpesa' | 'card';
+  bookingMode?: 'instant' | 'approval_required' | null;
   flowConfig?: CategoryFlowConfig;
   timeSlot?: string;
   onViewItinerary: () => void;
@@ -410,6 +411,7 @@ export function BookingSuccessModal({
   guestSummary,
   totalAmount,
   paymentMethod,
+  bookingMode,
   flowConfig,
   timeSlot,
   onViewItinerary,
@@ -661,20 +663,26 @@ export function BookingSuccessModal({
                   { color: isDark ? '#34D399' : '#047857' },
                 ]}
               >
-                {flowConfig?.successStatusPill ?? 'RESERVATION SECURED'}
+                {bookingMode === 'approval_required'
+                  ? 'PAYMENT RECEIVED · AWAITING HOST'
+                  : (flowConfig?.successStatusPill ?? 'RESERVATION SECURED')}
               </Text>
             </View>
 
             {/* Title & Description */}
             <Text style={[styles.successModalTitle, { color: colors.foreground }]}>
-              {flowConfig?.successHeadline ?? 'Booking Confirmed!'}
+              {bookingMode === 'approval_required'
+                ? 'Request Sent & Paid!'
+                : (flowConfig?.successHeadline ?? 'Booking Confirmed!')}
             </Text>
             <Text style={[styles.successModalSub, { color: colors.mutedForeground }]}>
               {flowConfig?.successVerbPhrase ?? 'Your stay at'}{' '}
               <Text style={[styles.successModalListingName, { color: colors.foreground }]}>
                 {title}
               </Text>{' '}
-              is confirmed and locked in.
+              {bookingMode === 'approval_required'
+                ? 'has been paid and sent to the host for confirmation.'
+                : 'is confirmed and locked in.'}
             </Text>
 
             {/* Structured Reservation Summary Card */}

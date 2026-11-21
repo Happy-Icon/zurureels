@@ -24,6 +24,7 @@ import {
   useHostListings,
   useUnblockHostDates,
 } from '@/lib/queries';
+import { extractListingDateIso } from '@/lib/bookingTimezones';
 import type { BookingRow, ExperienceRow, HostBlockedDateRow } from '@/lib/supabase';
 import { Skeleton } from '@/components/Skeleton';
 import { PremiumLoader } from '@/components/PremiumLoader';
@@ -207,8 +208,9 @@ export default function HostCalendarScreen() {
 
       (bookings ?? []).forEach((b) => {
         if (!b.check_in || !b.check_out) return;
-        const checkInISO = b.check_in.split('T')[0];
-        const checkOutISO = b.check_out.split('T')[0];
+        const tz = b.experience?.timezone || 'Africa/Nairobi';
+        const checkInISO = extractListingDateIso(b.check_in, tz);
+        const checkOutISO = extractListingDateIso(b.check_out, tz);
 
         if (isSameDay(isoDate, checkInISO)) {
           isCheckIn = true;

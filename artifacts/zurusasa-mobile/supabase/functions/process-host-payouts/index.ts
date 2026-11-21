@@ -1,6 +1,7 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { authorizeWorkerOrAdmin } from '../_shared/workerAuth.ts';
+import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,20 +68,59 @@ Deno.serve(async (request) => {
     try {
       const { data: booking, error: bookingError } = await admin
         .from('bookings')
-        .select('status')
+        .select('status, check_out, arrival_issue_status')
         .eq('id', payout.booking_id)
         .maybeSingle();
 
-      if (bookingError || booking?.status !== 'completed') {
+      if (bookingError || !booking) {
+        results.push({ payoutId: payout.id, status: 'skipped_lookup_error', error: 'Booking lookup failed' });
+        continue;
+      }
+
+      if (booking.arrival_issue_status === 'open') {
+        await admin
+          .from('host_payouts')
+          .update({
+            status: 'on_hold',
+            failure_reason: 'Paused due to open arrival issue',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', payout.id)
+          .eq('status', 'scheduled');
+        results.push({ payoutId: payout.id, status: 'on_hold', error: 'Arrival issue open' });
+        continue;
+      }
+
+      if (booking.status === 'confirmed') {
+        // Stay is active (e.g. checked-in mid-stay before check_out): defer payout until check_out + 24h instead of cancelling!
+        const checkOutMs = booking.check_out ? new Date(booking.check_out).getTime() : NaN;
+        const deferredIso = !Number.isNaN(checkOutMs)
+          ? new Date(Math.max(Date.now() + 3600_000, checkOutMs + 24 * 3600_000)).toISOString()
+          : new Date(Date.now() + 24 * 3600_000).toISOString();
+
+        await admin
+          .from('host_payouts')
+          .update({
+            scheduled_for: deferredIso,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', payout.id)
+          .eq('status', 'scheduled');
+        results.push({ payoutId: payout.id, status: 'deferred_until_checkout' });
+        continue;
+      }
+
+      if (booking.status !== 'completed') {
         await admin
           .from('host_payouts')
           .update({
             status: 'cancelled',
-            failure_reason: 'Payout requires a completed confirmed booking',
+            failure_reason: `Booking status is ${booking.status}; payout cancelled`,
+            updated_at: new Date().toISOString(),
           })
           .eq('id', payout.id)
           .eq('status', 'scheduled');
-        results.push({ payoutId: payout.id, status: 'cancelled', error: 'Booking is not completed' });
+        results.push({ payoutId: payout.id, status: 'cancelled', error: `Booking status is ${booking.status}` });
         continue;
       }
 
@@ -150,6 +190,29 @@ Deno.serve(async (request) => {
             })
             .eq('id', payout.id);
 
+          try {
+            await enqueueNotificationEvent(admin, {
+              userId: payout.host_id,
+              type: 'payout_failed',
+              templateKey: 'payout_failed',
+              title: 'Action Needed: Host Payout Failed',
+              message: `We could not complete your payout after ${maxRetries} attempts (${failureReason}). Please check your payout details in Host Wallet.`,
+              dedupeKey: `payout_failed:${payout.id}:${payout.host_id}`,
+              priority: 'critical',
+              channels: ['in_app', 'push', 'email'],
+              actionType: 'payout',
+              actionId: payout.id,
+              payload: {
+                payout_id: payout.id,
+                booking_id: payout.booking_id,
+                amount_minor: payout.amount,
+                failure_reason: failureReason,
+              },
+            });
+          } catch (failNotifErr) {
+            console.warn('Payout failure notification warning:', failNotifErr);
+          }
+
           results.push({ payoutId: payout.id, status: 'failed', error: failureReason });
         }
         continue;
@@ -181,14 +244,23 @@ Deno.serve(async (request) => {
       try {
         const payoutAmountKES = (Number(payout.amount) / 100).toLocaleString();
         const refId = payout.booking_id ? payout.booking_id.slice(0, 8).toUpperCase() : payout.id.slice(0, 8).toUpperCase();
-        await admin.from('notifications').insert({
-          user_id: payout.host_id,
+        await enqueueNotificationEvent(admin, {
+          userId: payout.host_id,
           type: 'payout_completed',
-          title: 'Payout Sent! 💰',
+          templateKey: 'payout_completed',
+          title: 'Payout Sent!',
           message: `KES ${payoutAmountKES} has been transferred to your payout account for booking #${refId}.`,
-          action_type: 'payout',
-          action_id: payout.id,
-          is_read: false,
+          dedupeKey: `payout_completed:${payout.id}:${payout.host_id}`,
+          priority: 'critical',
+          channels: ['in_app', 'push', 'email'],
+          actionType: 'payout',
+          actionId: payout.id,
+          payload: {
+            payout_id: payout.id,
+            booking_id: payout.booking_id,
+            amount_minor: payout.amount,
+            transfer_code: transferCode,
+          },
         });
       } catch (notifEx) {
         console.warn('Payout notification dispatch warning:', notifEx);

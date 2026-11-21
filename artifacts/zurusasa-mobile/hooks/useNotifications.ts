@@ -5,27 +5,50 @@ import { realtimeManager } from '@/lib/realtimeManager';
 import type { NotificationRow } from '@/lib/supabase';
 import { notificationService } from '@/services/notificationService';
 
-export const GUEST_NOTIFICATION_TYPES = new Set([
+export const GUEST_NOTIFICATION_TYPES = new Set<string>([
   'booking_created',
   'booking_confirmed',
   'booking_cancelled',
+  'booking_declined',
+  'booking_checked_in',
+  'booking_rescheduled',
+  'booking_reminder_24h',
+  'booking_reminder_1h',
   'payment_success',
+  'payment_failed',
   'refund_processed',
   'message',
   'review_reminder',
   'promotion',
   'wishlist_available',
+  'zuruplan_reminder',
+  'verification',
+  'verification_approved',
+  'verification_declined',
+  'data_export_ready',
 ]);
 
-export const HOST_NOTIFICATION_TYPES = new Set([
+export const HOST_NOTIFICATION_TYPES = new Set<string>([
   'booking_request',
+  'booking_confirmed',
   'booking_cancelled',
+  'booking_declined',
+  'booking_checked_in',
+  'booking_rescheduled',
+  'booking_reminder_24h',
+  'booking_reminder_1h',
+  'arrival_issue_reported',
   'payout_completed',
+  'payout_failed',
   'verification',
+  'verification_approved',
+  'verification_declined',
   'listing_approved',
   'listing_rejected',
+  'new_review',
   'performance',
   'message',
+  'data_export_ready',
 ]);
 
 export function useNotifications(modeOverride?: 'guest' | 'host') {

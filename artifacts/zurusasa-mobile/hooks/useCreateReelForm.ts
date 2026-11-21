@@ -1234,7 +1234,7 @@ export function useCreateReelForm() {
 
       notificationService.createNotification({
         userId: user.id,
-        type: 'booking_request',
+        type: 'listing_approved',
         title: notifHeading,
         message: `"${notifLabel}" is now live on ZuruFlow and Discover.`,
         actionType: 'discover',

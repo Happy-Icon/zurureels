@@ -51,3 +51,9 @@ verify_jwt = false
 
 [functions.cleanup-personal-data-exports]
 verify_jwt = false
+
+[functions.process-notification-queue]
+verify_jwt = false
+
+[functions.process-booking-reminders]
+verify_jwt = false

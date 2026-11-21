@@ -1,6 +1,15 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
+import {
+  evaluateChannelEligibility,
+  resolvePolicy,
+  type NotificationSettingsMap,
+} from '../_shared/notificationPolicy.ts';
+import {
+  ALLOWED_CLIENT_EMAIL_TEMPLATES,
+  renderNotificationTemplate,
+} from '../_shared/templates/index.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,44 +24,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
-}
-
-function escapeHtml(raw: string): string {
-  return raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function buildHostWelcomeHtml(hostName: string): string {
-  const safeName = escapeHtml(hostName || 'Zuru Host');
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to ZuruSasa Hosting</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0B0F19; margin: 0; padding: 24px 12px; color: #FFFFFF;">
-  <div style="max-width: 560px; margin: 0 auto; background-color: #111827; border-radius: 16px; border: 1px solid #1F2937; overflow: hidden;">
-    <div style="padding: 32px 28px 24px; border-bottom: 1px solid #1F2937; text-align: center;">
-      <div style="font-size: 18px; font-weight: 800; color: #F26522; letter-spacing: 0.5px; margin-bottom: 10px;">ZURUSASA COASTAL</div>
-      <h1 style="font-size: 23px; font-weight: 700; color: #FFFFFF; margin: 0 0 8px;">Welcome to Hosting, ${safeName}!</h1>
-      <p style="font-size: 14px; color: #9CA3AF; margin: 0;">Your ZuruSasa Host Dashboard is now active.</p>
-    </div>
-    <div style="padding: 28px;">
-      <p style="font-size: 15px; line-height: 1.6; color: #E5E7EB; margin-top: 0;">
-        You can now publish video reels, configure availability calendars, complete identity verification, and receive escrow-protected bookings across the Kenyan coast.
-      </p>
-    </div>
-    <div style="text-align: center; padding: 20px 28px; border-top: 1px solid #1F2937; font-size: 12px; color: #6B7280;">
-      ZuruSasa Ltd • Kenyan Coastal Escapes
-    </div>
-  </div>
-</body>
-</html>`;
 }
 
 Deno.serve(async (request) => {
@@ -108,7 +79,7 @@ Deno.serve(async (request) => {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  // Never trust client-supplied 'from' address — enforce authoritative server sender
+  // Authoritative server sender (never trust client-supplied 'from')
   const fromAddress =
     Deno.env.get('RESEND_FROM_EMAIL') ||
     Deno.env.get('EMAIL_FROM') ||
@@ -123,30 +94,48 @@ Deno.serve(async (request) => {
     .maybeSingle();
   const isAdmin = callerProfile?.role === 'admin';
 
-  let targetUserId = '';
-  let subject = '';
-  let html = '';
+  const rawTemplateKey =
+    typeof body.templateKey === 'string' && body.templateKey.trim()
+      ? body.templateKey.trim().toLowerCase()
+      : typeof body.type === 'string' && body.type.trim()
+        ? body.type.trim().toLowerCase()
+        : '';
 
-  if (body.type === 'host_application') {
+  // Lock non-admin clients to server-side templates only (prevents raw HTML phishing/spoofing)
+  if (!isAdmin && (!rawTemplateKey || !ALLOWED_CLIENT_EMAIL_TEMPLATES.has(rawTemplateKey))) {
+    return json(
+      {
+        error:
+          'Raw HTML emails are prohibited. Provide an allowed server-side templateKey.',
+      },
+      403,
+    );
+  }
+
+  let targetUserId = '';
+  let templatePayload: Record<string, unknown> =
+    body.data && typeof body.data === 'object' && !Array.isArray(body.data)
+      ? { ...(body.data as Record<string, unknown>) }
+      : {};
+
+  if (rawTemplateKey === 'host_application' || rawTemplateKey === 'host_welcome') {
     targetUserId = user.id;
-    const dataObj =
-      body.data && typeof body.data === 'object' ? (body.data as Record<string, unknown>) : {};
-    const hostName =
-      (typeof dataObj.name === 'string' && dataObj.name.trim()) ||
-      callerProfile?.full_name ||
-      'Zuru Host';
-    subject = 'Welcome to ZuruSasa Hosting!';
-    html = buildHostWelcomeHtml(hostName);
+    templatePayload = {
+      ...templatePayload,
+      host_name:
+        (typeof templatePayload.name === 'string' && templatePayload.name.trim()) ||
+        callerProfile?.full_name ||
+        'Zuru Host',
+    };
   } else {
     const recipientUserId =
       typeof body.recipientUserId === 'string' ? body.recipientUserId.trim() : '';
-    const bookingId = typeof body.bookingId === 'string' ? body.bookingId.trim() : '';
-    subject = typeof body.subject === 'string' ? body.subject.trim().slice(0, 250) : '';
-    html = typeof body.html === 'string' ? body.html.trim() : '';
-
-    if (!subject || !html) {
-      return json({ error: 'Missing required fields: subject and html' }, 400);
-    }
+    const bookingId =
+      typeof body.bookingId === 'string'
+        ? body.bookingId.trim()
+        : typeof templatePayload.booking_id === 'string'
+          ? templatePayload.booking_id.trim()
+          : '';
 
     if (recipientUserId) {
       if (!UUID_RE.test(recipientUserId)) {
@@ -160,7 +149,7 @@ Deno.serve(async (request) => {
 
         const { data: bookingRow } = await admin
           .from('bookings')
-          .select('id, user_id, experience:experiences!inner(user_id)')
+          .select('id, user_id, trip_title, amount, check_in, check_out, experience:experiences!inner(user_id, title, timezone)')
           .eq('id', bookingId)
           .maybeSingle();
 
@@ -181,16 +170,21 @@ Deno.serve(async (request) => {
         if (!validCounterparty) {
           return json({ error: 'Not authorized to email this booking participant' }, 403);
         }
+
+        // Enrich template payload with authoritative server-side booking fields
+        templatePayload = {
+          ...templatePayload,
+          booking_id: bookingRow.id,
+          trip_title: bookingRow.trip_title || (exp as any)?.title || 'Coastal Stay',
+          amount: bookingRow.amount,
+          check_in: bookingRow.check_in,
+          check_out: bookingRow.check_out,
+          timezone: (exp as any)?.timezone || 'Africa/Nairobi',
+        };
       }
 
       targetUserId = recipientUserId;
-    } else if (typeof body.to === 'string' && body.to.trim()) {
-      // Strictly disallow sending to arbitrary external addresses unless matching caller's own verified email
-      const requestedTo = body.to.trim().toLowerCase();
-      const callerEmail = (user.email || callerProfile?.email || '').trim().toLowerCase();
-      if (!isAdmin && (!callerEmail || requestedTo !== callerEmail)) {
-        return json({ error: 'Arbitrary external email recipients are not permitted' }, 403);
-      }
+    } else if (isAdmin && typeof body.to === 'string' && body.to.trim()) {
       targetUserId = user.id;
     } else {
       return json({ error: 'recipientUserId is required' }, 400);
@@ -200,24 +194,28 @@ Deno.serve(async (request) => {
   // Resolve authoritative recipient email & preferences on the server
   const { data: recipientProfile } = await admin
     .from('profiles')
-    .select('email, metadata, notification_settings')
+    .select('email, full_name, metadata, notification_settings, timezone, marketing_opt_in')
     .eq('id', targetUserId)
     .maybeSingle();
 
-  const notifMeta = ((recipientProfile?.metadata ?? {}) as Record<string, unknown>);
-  const notifSettings = ((recipientProfile?.notification_settings ?? {}) as Record<
-    string,
-    { email?: boolean }
-  >);
+  const notifMeta = (recipientProfile?.metadata ?? {}) as Record<string, unknown>;
+  const notifSettings = (recipientProfile?.notification_settings ?? {}) as NotificationSettingsMap;
+  const policy = resolvePolicy(rawTemplateKey || 'account_activity');
 
-  if (
-    notifMeta.notifications_enabled === false ||
-    notifSettings.account_activity?.email === false
-  ) {
+  const eligibility = evaluateChannelEligibility({
+    priority: policy.priority,
+    category: policy.category,
+    channel: 'email',
+    masterEnabled: notifMeta.notifications_enabled !== false,
+    settings: notifSettings,
+    marketingOptIn: recipientProfile?.marketing_opt_in === true,
+  });
+
+  if (!eligibility.allowed) {
     return json({
       success: true,
       skipped: true,
-      reason: 'Recipient disabled email notifications',
+      reason: eligibility.reason || 'Recipient disabled email notifications',
     });
   }
 
@@ -241,7 +239,41 @@ Deno.serve(async (request) => {
     return json({ error: 'Recipient does not have a deliverable email address on file' }, 422);
   }
 
+  let subject = '';
+  let html = '';
+  let text = '';
+
+  if (rawTemplateKey) {
+    const rendered = renderNotificationTemplate(rawTemplateKey, {
+      ...templatePayload,
+      recipient_name:
+        templatePayload.recipient_name ||
+        recipientProfile?.full_name ||
+        'Traveler',
+      timezone:
+        templatePayload.timezone ||
+        recipientProfile?.timezone ||
+        'Africa/Nairobi',
+    });
+    subject = rendered.subject;
+    html = rendered.html;
+    text = rendered.text;
+  } else {
+    // Admin-only custom HTML path
+    subject = typeof body.subject === 'string' ? body.subject.trim().slice(0, 250) : '';
+    html = typeof body.html === 'string' ? body.html.trim() : '';
+    text = typeof body.text === 'string' ? body.text.trim() : html.replace(/<[^>]+>/g, '');
+    if (!subject || !html) {
+      return json({ error: 'Missing required fields: subject and html' }, 400);
+    }
+  }
+
   try {
+    const headers: Record<string, string> = {};
+    if (policy.priority === 'promotional') {
+      headers['List-Unsubscribe'] = '<https://zurusasa.com/profile/notifications>';
+    }
+
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -253,6 +285,8 @@ Deno.serve(async (request) => {
         to: [resolvedEmail],
         subject,
         html,
+        text,
+        ...(Object.keys(headers).length > 0 ? { headers } : {}),
       }),
     });
 
@@ -266,7 +300,7 @@ Deno.serve(async (request) => {
       );
     }
 
-    console.log(`[SendEmail] Successfully dispatched email. Message ID: ${data?.id}`);
+    console.log(`[SendEmail] Successfully dispatched email (${rawTemplateKey || 'admin'}). Message ID: ${data?.id}`);
     return json({ success: true, id: data?.id });
   } catch (err: any) {
     console.error('[SendEmail] Exception calling Resend API:', err);

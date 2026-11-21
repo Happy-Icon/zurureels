@@ -1,6 +1,7 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { authorizeWorkerOrAdmin } from '../_shared/workerAuth.ts';
+import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -238,15 +239,25 @@ Deno.serve(async (request) => {
 
       try {
         const refundAmountKES = (Number(refund.amount) / 100).toLocaleString();
-        await admin.from('notifications').insert({
-          user_id: refund.guest_id,
-          type: 'refund_processed',
-          title: 'Refund Processed! 💳',
-          message: `KES ${refundAmountKES} has been refunded to your original payment account for booking #${refund.booking_id.slice(0, 8).toUpperCase()}.`,
-          action_type: 'booking',
-          action_id: refund.booking_id,
-          is_read: false,
-        });
+        if (refund.guest_id) {
+          await enqueueNotificationEvent(admin, {
+            userId: refund.guest_id,
+            type: 'refund_processed',
+            templateKey: 'refund_processed',
+            title: 'Refund Processed!',
+            message: `KES ${refundAmountKES} has been refunded to your original payment account for booking #${refund.booking_id.slice(0, 8).toUpperCase()}.`,
+            dedupeKey: `refund_processed:${refund.booking_id}:${refund.guest_id}`,
+            priority: 'critical',
+            channels: ['in_app', 'push', 'email'],
+            actionType: 'booking',
+            actionId: refund.booking_id,
+            payload: {
+              booking_id: refund.booking_id,
+              amount_minor: refund.amount,
+              provider_refund_id: providerRefundId,
+            },
+          });
+        }
       } catch (notifErr) {
         console.warn('Refund notification warning:', notifErr);
       }

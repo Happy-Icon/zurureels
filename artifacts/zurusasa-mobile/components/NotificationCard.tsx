@@ -18,28 +18,43 @@ function getNotificationTypeConfig(type: NotificationType): {
 } {
   switch (type) {
     case 'booking_created':
+    case 'booking_rescheduled':
       return { icon: 'calendar', color: '#3B82F6', bgColor: 'rgba(59, 130, 246, 0.1)' };
     case 'booking_confirmed':
+    case 'booking_checked_in':
     case 'listing_approved':
+    case 'verification_approved':
       return { icon: 'check-circle', color: '#10B981', bgColor: 'rgba(16, 185, 129, 0.1)' };
     case 'booking_cancelled':
     case 'booking_declined':
     case 'listing_rejected':
+    case 'payment_failed':
+    case 'payout_failed':
+    case 'verification_declined':
       return { icon: 'x-circle', color: '#EF4444', bgColor: 'rgba(239, 68, 68, 0.1)' };
+    case 'arrival_issue_reported':
+      return { icon: 'alert-triangle', color: '#F59E0B', bgColor: 'rgba(245, 158, 11, 0.12)' };
     case 'payment_success':
     case 'promotion':
       return { icon: 'credit-card', color: '#F26522', bgColor: 'rgba(242, 101, 34, 0.1)' };
+    case 'refund_processed':
+      return { icon: 'rotate-ccw', color: '#10B981', bgColor: 'rgba(16, 185, 129, 0.1)' };
     case 'payout_completed':
       return { icon: 'dollar-sign', color: '#10B981', bgColor: 'rgba(16, 185, 129, 0.1)' };
     case 'message':
       return { icon: 'message-square', color: '#8B5CF6', bgColor: 'rgba(139, 92, 246, 0.1)' };
     case 'review_reminder':
+    case 'new_review':
       return { icon: 'star', color: '#F59E0B', bgColor: 'rgba(245, 158, 11, 0.1)' };
     case 'wishlist_available':
       return { icon: 'heart', color: '#EC4899', bgColor: 'rgba(236, 72, 153, 0.1)' };
     case 'booking_request':
+    case 'booking_reminder_24h':
+    case 'booking_reminder_1h':
+    case 'zuruplan_reminder':
       return { icon: 'clock', color: '#F26522', bgColor: 'rgba(242, 101, 34, 0.1)' };
     case 'verification':
+    case 'data_export_ready':
       return { icon: 'shield', color: '#14B8A6', bgColor: 'rgba(20, 184, 166, 0.1)' };
     default:
       return { icon: 'bell', color: '#F26522', bgColor: 'rgba(242, 101, 34, 0.1)' };
@@ -80,6 +95,10 @@ export function NotificationCard({
         return 'Manage Listing';
       case 'discover':
         return 'Explore';
+      case 'profile':
+        return 'View Profile';
+      case 'support':
+        return 'Contact Support';
       default:
         return null;
     }
@@ -113,6 +132,17 @@ export function NotificationCard({
             <View style={styles.metaRow}>
               {!notification.is_read ? <View style={styles.unreadDot} /> : null}
               <Text style={[styles.timeText, { color: colors.mutedForeground }]}>{timeText}</Text>
+              {onDelete ? (
+                <Pressable
+                  onPress={() => onDelete(notification.id)}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss notification"
+                  style={({ pressed }) => [{ padding: 2, opacity: pressed ? 0.5 : 0.7 }]}
+                >
+                  <Feather name="x" size={14} color={colors.mutedForeground} />
+                </Pressable>
+              ) : null}
             </View>
           </View>
 

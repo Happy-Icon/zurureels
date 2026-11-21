@@ -181,6 +181,7 @@ export function BookingSheet({
         guestSummary={checkout.guestSummary}
         totalAmount={checkout.totalAmount}
         paymentMethod={checkout.paymentMethod}
+        bookingMode={reel.experience?.booking_mode ?? 'approval_required'}
         flowConfig={flowConfig}
         timeSlot={selectedTimeSlot}
         onViewItinerary={handleViewItinerary}

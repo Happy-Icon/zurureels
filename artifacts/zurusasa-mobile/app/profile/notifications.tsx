@@ -49,6 +49,20 @@ function getChannelsSummary(prefs?: ChannelPrefs): string {
   return `On: ${active[0]}, ${active[1]}, ${active[2]}, and ${active[3]}`;
 }
 
+const OFFER_CHILD_KEYS = [
+  'recognition',
+  'insights',
+  'pricing',
+  'hosting_perks',
+  'news_updates',
+  'local_laws',
+  'inspiration',
+  'trip_planning',
+  'zurusasa_news',
+  'feedback',
+  'travel_regulations',
+] as const;
+
 const DEFAULT_OFF: ChannelPrefs = {
   email: false,
   push: false,
@@ -151,17 +165,47 @@ export default function NotificationPreferencesScreen() {
   const updateChannelPref = async (itemId: string, channel: keyof ChannelPrefs, val: boolean) => {
     const current = prefsMap[itemId] || { ...DEFAULT_OFF };
     const updatedItem = { ...current, [channel]: val };
-    const updatedMap = { ...prefsMap, [itemId]: updatedItem };
+    const updatedMap: Record<string, ChannelPrefs> = { ...prefsMap, [itemId]: updatedItem };
+
+    // Cascade master "All offers and updates" switch across all 11 child offer categories
+    if (itemId === 'all_offers') {
+      for (const childKey of OFFER_CHILD_KEYS) {
+        const childCur = updatedMap[childKey] || { ...DEFAULT_OFF };
+        updatedMap[childKey] = { ...childCur, [channel]: val };
+      }
+    }
+
     setPrefsMap(updatedMap);
+
+    // Derive explicit promotional opt-in consent across all offer categories
+    const anyOfferEnabled = [...OFFER_CHILD_KEYS, 'all_offers'].some((k) => {
+      const p = updatedMap[k];
+      return Boolean(p?.email || p?.push || p?.sms || p?.phone_calls);
+    });
 
     if (user?.id) {
       try {
+        const nowIso = new Date().toISOString();
         await supabase
           .from('profiles')
-          .update({ notification_settings: updatedMap })
+          .update({
+            notification_settings: updatedMap,
+            marketing_opt_in: anyOfferEnabled,
+            ...(anyOfferEnabled
+              ? { marketing_opt_in_at: nowIso }
+              : { marketing_opt_out_at: nowIso }),
+          })
           .eq('id', user.id);
       } catch (e) {
-        console.warn('Error saving notification pref:', e);
+        // Fallback if marketing_opt_in columns have not yet been migrated
+        try {
+          await supabase
+            .from('profiles')
+            .update({ notification_settings: updatedMap })
+            .eq('id', user.id);
+        } catch (fallbackErr) {
+          console.warn('Error saving notification pref:', fallbackErr);
+        }
       }
     }
   };
@@ -193,28 +237,30 @@ export default function NotificationPreferencesScreen() {
         {/* Title */}
         <Text style={[styles.pageTitle, { color: colors.text }]}>Notifications</Text>
 
-        {/* Device Push Notification Test Banner */}
-        <View style={[styles.testPushCard, { backgroundColor: isDark ? '#1F1F23' : '#FFF7F2', borderColor: isDark ? '#333338' : '#FCE5D8' }]}>
-          <View style={{ flex: 1, paddingRight: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-              <Feather name="bell" size={16} color="#F26522" style={{ marginRight: 6 }} />
-              <Text style={[styles.testPushTitle, { color: colors.text }]}>Test Push Banner</Text>
+        {/* Device Push Notification Test Banner (Development builds only) */}
+        {__DEV__ ? (
+          <View style={[styles.testPushCard, { backgroundColor: isDark ? '#1F1F23' : '#FFF7F2', borderColor: isDark ? '#333338' : '#FCE5D8' }]}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <Feather name="bell" size={16} color="#F26522" style={{ marginRight: 6 }} />
+                <Text style={[styles.testPushTitle, { color: colors.text }]}>Test Push Banner</Text>
+              </View>
+              <Text style={[styles.testPushSub, { color: colors.mutedForeground }]}>
+                Send a test notification to verify that heads-up banners, sound, and vibration are active on this build.
+              </Text>
             </View>
-            <Text style={[styles.testPushSub, { color: colors.mutedForeground }]}>
-              Send a test notification to verify that heads-up banners, sound, and vibration are active on this APK.
-            </Text>
+            <Pressable
+              testID="test-push-btn"
+              onPress={handleTestPush}
+              disabled={testingPush}
+              style={({ pressed }) => [styles.testPushActionBtn, pressed && { opacity: 0.85 }]}
+            >
+              <Text style={styles.testPushActionBtnText}>
+                {testingPush ? 'Testing…' : 'Test Now'}
+              </Text>
+            </Pressable>
           </View>
-          <Pressable
-            testID="test-push-btn"
-            onPress={handleTestPush}
-            disabled={testingPush}
-            style={({ pressed }) => [styles.testPushActionBtn, pressed && { opacity: 0.85 }]}
-          >
-            <Text style={styles.testPushActionBtnText}>
-              {testingPush ? 'Testing…' : 'Test Now'}
-            </Text>
-          </Pressable>
-        </View>
+        ) : null}
 
         {/* Tab Bar */}
         <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
@@ -307,11 +353,11 @@ export default function NotificationPreferencesScreen() {
               }
             />
 
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
 
             {/* Section 2: Hosting updates */}
-            <Text style={styles.sectionHeader}>Hosting updates</Text>
-            <Text style={styles.sectionSubtitle}>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>Hosting updates</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               Get updates about programs, features, and regulations.
             </Text>
 
@@ -341,11 +387,11 @@ export default function NotificationPreferencesScreen() {
               }
             />
 
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
 
             {/* Section 3: Travel tips and offers */}
-            <Text style={styles.sectionHeader}>Travel tips and offers</Text>
-            <Text style={styles.sectionSubtitle}>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>Travel tips and offers</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               Inspire your next trip with personalized recommendations and special offers.
             </Text>
 
@@ -375,11 +421,11 @@ export default function NotificationPreferencesScreen() {
               }
             />
 
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
 
             {/* Section 4: ZuruSasa updates */}
-            <Text style={styles.sectionHeader}>ZuruSasa updates</Text>
-            <Text style={styles.sectionSubtitle}>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>ZuruSasa updates</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               Stay up to date on the latest news from ZuruSasa, and let us know how we can improve.
             </Text>
 
@@ -422,11 +468,11 @@ export default function NotificationPreferencesScreen() {
               }
             />
 
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
 
             {/* Section 5: Unsubscribe */}
-            <Text style={styles.sectionHeader}>Unsubscribe from all offers and updates</Text>
-            <Text style={styles.sectionSubtitle}>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>Unsubscribe from all offers and updates</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
               You'll continue to get notifications about your account activity.
             </Text>
 

@@ -130,20 +130,22 @@ export default function HostVerificationScreen() {
             <Text style={[styles.statusSubVerified, { color: isDark ? '#A7F3D0' : '#166534' }]}>
               Your host profile has earned the Verified badge. Guests can now book your stays and tours with total confidence.
             </Text>
-            <Pressable
-              onPress={handleResetVerification}
-              disabled={loading}
-              style={({ pressed }) => [
-                styles.resetBtn,
-                { opacity: pressed || loading ? 0.8 : 1 },
-              ]}
-            >
-              {loading ? (
-                <PremiumLoader size={5} color="#64748B" />
-              ) : (
-                <Text style={styles.resetBtnText}>Re-verify / Test Again</Text>
-              )}
-            </Pressable>
+            {__DEV__ ? (
+              <Pressable
+                onPress={handleResetVerification}
+                disabled={loading}
+                style={({ pressed }) => [
+                  styles.resetBtn,
+                  { opacity: pressed || loading ? 0.8 : 1 },
+                ]}
+              >
+                {loading ? (
+                  <PremiumLoader size={5} color="#64748B" />
+                ) : (
+                  <Text style={styles.resetBtnText}>Re-verify / Test Again</Text>
+                )}
+              </Pressable>
+            ) : null}
           </View>
         ) : status === 'pending' ? (
           <View style={[styles.statusCardPending, { backgroundColor: isDark ? '#2A1810' : '#FFF7ED', borderColor: isDark ? '#5C2D16' : '#FFEDD5' }]}>

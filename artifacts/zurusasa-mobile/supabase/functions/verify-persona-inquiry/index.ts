@@ -1,5 +1,6 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
 
 const PERSONA_API_BASE = 'https://api.withpersona.com/api/v1';
 
@@ -164,6 +165,34 @@ Deno.serve(async (request) => {
   if (updateErr) {
     console.error('[verify-persona-inquiry] Error updating profile:', updateErr);
     return json({ error: 'Failed to persist verification status', code: 'PROFILE_UPDATE_FAILED' }, 500);
+  }
+
+  // Enqueue deduplicated multi-channel KYC decision alert (shares dedupeKey with persona-webhook)
+  if (finalStatus === 'verified' || finalStatus === 'failed') {
+    const isApproved = finalStatus === 'verified';
+    const templateKey = isApproved ? 'verification_approved' : 'verification_declined';
+    try {
+      await enqueueNotificationEvent(adminClient, {
+        userId: user.id,
+        type: templateKey,
+        templateKey,
+        title: isApproved ? 'Identity Verified!' : 'Verification Needs Attention',
+        message: isApproved
+          ? 'Your identity verification is approved and your Verified badge is now active.'
+          : 'We could not approve your recent identity verification. Please review and try again.',
+        dedupeKey: `${templateKey}:${inquiryId}:${user.id}`,
+        priority: 'critical',
+        channels: ['in_app', 'push', 'email'],
+        actionType: 'profile',
+        actionId: inquiryId,
+        payload: {
+          inquiry_id: inquiryId,
+          verification_status: finalStatus,
+        },
+      });
+    } catch (kycNotifErr) {
+      console.warn('[verify-persona-inquiry] KYC notification warning:', kycNotifErr);
+    }
   }
 
   return json({

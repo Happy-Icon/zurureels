@@ -94,11 +94,11 @@ export default function BecomeHostScreen() {
 
       if (authError) throw authError;
 
-      // 3. Trigger send-email Edge Function
+      // 3. Trigger send-email Edge Function using server-side template
       supabase.functions.invoke('send-email', {
         body: {
+          templateKey: 'host_application',
           type: 'host_application',
-          email: user.email,
           data: {
             name: user.user_metadata?.full_name || user.email?.split('@')[0],
           },

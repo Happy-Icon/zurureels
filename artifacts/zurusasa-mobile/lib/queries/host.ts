@@ -1,8 +1,6 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { realtimeManager } from '@/lib/realtimeManager';
-import { emailService } from '@/services/emailService';
-import { notificationService } from '@/services/notificationService';
 import {
   supabase,
   type BookingRow,
@@ -161,40 +159,12 @@ export function useHostConfirmBooking() {
 
       return data;
     },
-    onSuccess: (data: any) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
-
-      // Multi-channel dispatch: Push notification & Email to guest
-      if (data?.user_id) {
-        const tripTitle = data.trip_title || 'Coastal Stay';
-        notificationService
-          .sendPushNotificationForUser(
-            data.user_id,
-            'Reservation Confirmed! 🎉',
-            `Your reservation for "${tripTitle}" was confirmed by the host.`,
-            {
-              type: 'booking_confirmed',
-              actionType: 'booking',
-              actionId: data.id,
-              bookingId: data.id,
-            },
-          )
-          .catch((err) => console.warn('[Push] Error dispatching confirm push:', err));
-
-        emailService
-          .sendBookingConfirmedEmail({
-            userId: data.user_id,
-            bookingId: data.id,
-            tripTitle,
-            amount: data.amount,
-            startDate: data.start_date,
-            endDate: data.end_date,
-          })
-          .catch((err) => console.warn('[Email] Error dispatching confirm email:', err));
-      }
+      // Multi-channel in-app, push & email notifications are enqueued authoritatively server-side by host_confirm_booking.
     },
   });
 }
@@ -218,38 +188,12 @@ export function useHostDeclineBooking() {
         .catch((err) => console.warn('[Refund] Scoped decline refund trigger note:', err));
       return data;
     },
-    onSuccess: (data: any, vars) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['host-calendar-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
-
-      // Multi-channel dispatch: Push notification & Email to guest
-      if (data?.user_id) {
-        const tripTitle = data.trip_title || 'Coastal Stay';
-        notificationService
-          .sendPushNotificationForUser(
-            data.user_id,
-            'Reservation Request Declined',
-            `Your reservation for "${tripTitle}" could not be accommodated by the host. Refund processing initiated.`,
-            {
-              type: 'booking_cancelled',
-              actionType: 'booking',
-              actionId: data.id,
-              bookingId: data.id,
-            },
-          )
-          .catch((err) => console.warn('[Push] Error dispatching decline push:', err));
-
-        emailService
-          .sendBookingCancelledEmail({
-            userId: data.user_id,
-            bookingId: data.id,
-            tripTitle,
-            reason: vars?.reason,
-          })
-          .catch((err) => console.warn('[Email] Error dispatching decline email:', err));
-      }
+      // Multi-channel in-app, push & email notifications are enqueued authoritatively server-side by host_decline_booking.
     },
   });
 }

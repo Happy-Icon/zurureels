@@ -181,6 +181,7 @@ export interface ExperienceRow {
   arrival_instructions?: ArrivalInstructions | null;
   checkout_instructions?: CheckoutInstructions | null;
   amenities?: string[] | null;
+  timezone?: string | null;
   metadata: Record<string, unknown> | null;
   image_url?: string | null;
 }
@@ -193,6 +194,8 @@ export interface ProfileRow {
   role: string | null;
   verification_status: string | null;
   is_verified?: boolean;
+  timezone?: string | null;
+  marketing_opt_in?: boolean;
   metadata: Record<string, unknown> | null;
   avatar_url?: string | null;
   created_at?: string | null;
@@ -360,6 +363,7 @@ export interface ReelRow {
     | 'amenities'
     | 'metadata'
     | 'image_url'
+    | 'timezone'
   > | null;
   host?: Pick<
     ProfileRow,
@@ -421,6 +425,7 @@ export interface BookingRow {
     | 'checkout_instructions'
     | 'amenities'
     | 'metadata'
+    | 'timezone'
   > | null;
   guest?: ProfileRow | null;
   host?: ProfileRow | null;
@@ -476,18 +481,30 @@ export type NotificationType =
   | 'booking_confirmed'
   | 'booking_cancelled'
   | 'booking_declined'
+  | 'booking_checked_in'
+  | 'booking_rescheduled'
+  | 'booking_reminder_24h'
+  | 'booking_reminder_1h'
+  | 'arrival_issue_reported'
   | 'payment_success'
+  | 'payment_failed'
   | 'refund_processed'
   | 'message'
   | 'review_reminder'
+  | 'new_review'
   | 'promotion'
   | 'wishlist_available'
   | 'booking_request'
   | 'payout_completed'
+  | 'payout_failed'
   | 'verification'
+  | 'verification_approved'
+  | 'verification_declined'
   | 'listing_approved'
   | 'listing_rejected'
-  | 'performance';
+  | 'performance'
+  | 'zuruplan_reminder'
+  | 'data_export_ready';
 
 export type NotificationActionType =
   | 'booking'
@@ -509,6 +526,8 @@ export interface NotificationRow {
   action_type?: NotificationActionType | null;
   action_id?: string | null;
   metadata?: Record<string, unknown> | null;
+  priority?: 'critical' | 'normal' | 'promotional';
+  dedupe_key?: string | null;
   is_read: boolean;
   created_at: string;
   updated_at?: string;

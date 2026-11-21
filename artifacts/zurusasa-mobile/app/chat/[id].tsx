@@ -42,7 +42,8 @@ export default function NativeChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const readReceiptsEnabled = ((profile as any)?.privacy_settings?.read_receipts ?? true) !== false;
   const { showAlert } = useCustomAlert();
   const { id, name, avatar, otherId } = useLocalSearchParams<{
     id: string;
@@ -91,12 +92,12 @@ export default function NativeChatScreen() {
   const markReadMutationRef = useRef(markReadMutation);
   markReadMutationRef.current = markReadMutation;
 
-  // Mark incoming messages as read when opening conversation
+  // Mark incoming messages as read when opening conversation (respecting read_receipts privacy setting)
   useEffect(() => {
     const userId = user?.id;
-    if (!id || !userId) return;
+    if (!id || !userId || !readReceiptsEnabled) return;
     markReadMutationRef.current.mutate({ conversationId: id, userId });
-  }, [id, user?.id]);
+  }, [id, user?.id, readReceiptsEnabled]);
 
   // Realtime subscription for INSERT and UPDATE (read receipts)
   useEffect(() => {
@@ -124,14 +125,22 @@ export default function NativeChatScreen() {
         if (payload.eventType === 'INSERT') {
           const newMsg = payload.new as MessageRow;
           setMessages((prev) => {
-            const withoutTemp = prev.filter((m) => !m.id.startsWith('temp-'));
-            return withoutTemp.some((m) => m.id === newMsg.id)
-              ? withoutTemp
-              : [...withoutTemp, newMsg];
+            // Only remove the specific matching optimistic temp message (preserve any other in-flight sends)
+            const withoutMatchingTemp = prev.filter(
+              (m) =>
+                !(
+                  m.id.startsWith('temp-') &&
+                  m.sender_id === newMsg.sender_id &&
+                  m.content === newMsg.content
+                ),
+            );
+            return withoutMatchingTemp.some((m) => m.id === newMsg.id)
+              ? withoutMatchingTemp
+              : [...withoutMatchingTemp, newMsg];
           });
 
-          // If incoming message is from the other user, mark as read immediately
-          if (newMsg.sender_id !== userId) {
+          // If incoming message is from the other user and read receipts are enabled, mark as read immediately
+          if (newMsg.sender_id !== userId && readReceiptsEnabled) {
             markReadMutationRef.current.mutate({ conversationId: id, userId });
           }
         } else if (payload.eventType === 'UPDATE') {
@@ -153,7 +162,7 @@ export default function NativeChatScreen() {
       isActive = false;
       unsubscribe();
     };
-  }, [id, user?.id, queryClient]);
+  }, [id, user?.id, queryClient, readReceiptsEnabled]);
 
   const goBack = () => {
     if (router.canGoBack()) router.back();

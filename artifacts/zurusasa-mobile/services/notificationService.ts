@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import {
   supabase,
@@ -8,12 +9,13 @@ import {
 } from '@/lib/supabase';
 
 const EAS_PROJECT_ID = '7288bdeb-4a70-4035-9563-587a72f32534';
+const DEVICE_TOKEN_STORAGE_KEY = '@zurusasa_active_push_token';
+const REMOTE_DEDUPE_TTL_MS = 15_000;
 
 let Notifications: any = null;
 try {
   Notifications = require('expo-notifications');
 
-  // 1. Configure foreground notification display behavior (SDK 52+ format)
   Notifications?.setNotificationHandler?.({
     handleNotification: async () => ({
       shouldPlaySound: true,
@@ -23,7 +25,6 @@ try {
     }),
   });
 
-  // 2. Configure Android high-importance notification channel
   if (Platform.OS === 'android' && Notifications?.setNotificationChannelAsync) {
     Notifications.setNotificationChannelAsync('default', {
       name: 'Default Channel',
@@ -39,6 +40,19 @@ try {
   console.log('[Push] expo-notifications initialization note:', e);
 }
 
+let inFlightRegistration: { userId: string; promise: Promise<string | null> } | null = null;
+let cachedDeviceToken: string | null = null;
+const recentRemoteNotificationIds = new Map<string, number>();
+
+function pruneRemoteDedupeCache() {
+  const cutoff = Date.now() - REMOTE_DEDUPE_TTL_MS;
+  for (const [key, ts] of recentRemoteNotificationIds.entries()) {
+    if (ts < cutoff) {
+      recentRemoteNotificationIds.delete(key);
+    }
+  }
+}
+
 export interface CreateNotificationParams {
   userId: string;
   type: NotificationType;
@@ -48,12 +62,80 @@ export interface CreateNotificationParams {
   actionType?: NotificationActionType | null;
   actionId?: string | null;
   metadata?: Record<string, unknown> | null;
+  dedupeKey?: string | null;
 }
 
 export const notificationService = {
-  /**
-   * Fetch all in-app notifications for a user
-   */
+  markRemotePushReceived(notificationId?: string | null, fallbackKey?: string | null): void {
+    pruneRemoteDedupeCache();
+    const now = Date.now();
+    if (notificationId) {
+      recentRemoteNotificationIds.set(`id:${notificationId}`, now);
+    }
+    if (fallbackKey) {
+      recentRemoteNotificationIds.set(`key:${fallbackKey}`, now);
+    }
+  },
+
+  wasRecentlyPresentedByRemotePush(notificationId?: string | null, fallbackKey?: string | null): boolean {
+    pruneRemoteDedupeCache();
+    if (notificationId && recentRemoteNotificationIds.has(`id:${notificationId}`)) {
+      return true;
+    }
+    if (fallbackKey && recentRemoteNotificationIds.has(`key:${fallbackKey}`)) {
+      return true;
+    }
+    return false;
+  },
+
+  startForegroundPushListener(): () => void {
+    if (Platform.OS === 'web' || !Notifications?.addNotificationReceivedListener) {
+      return () => {};
+    }
+    const sub = Notifications.addNotificationReceivedListener((notification: any) => {
+      const data = notification?.request?.content?.data ?? {};
+      const notifId =
+        typeof data.notificationId === 'string'
+          ? data.notificationId
+          : typeof data.id === 'string'
+            ? data.id
+            : null;
+      const fallbackKey =
+        data.type && (data.actionId || data.bookingId || data.conversationId)
+          ? `${data.type}:${data.actionId || data.bookingId || data.conversationId}`
+          : null;
+      this.markRemotePushReceived(notifId, fallbackKey);
+    });
+    return () => {
+      sub?.remove?.();
+    };
+  },
+
+  startPushTokenRefreshListener(userId: string): () => void {
+    if (Platform.OS === 'web' || !userId || !Notifications?.addPushTokenListener) {
+      return () => {};
+    }
+    const sub = Notifications.addPushTokenListener(async (tokenObj: any) => {
+      const rawToken = typeof tokenObj?.data === 'string' ? tokenObj.data.trim() : '';
+      if (!rawToken) return;
+      cachedDeviceToken = rawToken;
+      AsyncStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, rawToken).catch(() => {});
+      const appVersion = Constants.expoConfig?.version ?? null;
+      try {
+        await supabase.rpc('register_device_push_token', {
+          p_push_token: rawToken,
+          p_device_type: Platform.OS,
+          p_app_version: appVersion,
+        });
+      } catch (err) {
+        console.warn('[Push] Token rotation persistence note:', err);
+      }
+    });
+    return () => {
+      sub?.remove?.();
+    };
+  },
+
   async fetchNotifications(userId: string): Promise<NotificationRow[]> {
     try {
       const { data, error } = await supabase
@@ -70,9 +152,6 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Fetch unread notification count
-   */
   async fetchUnreadCount(userId: string): Promise<number> {
     try {
       const { count, error } = await supabase
@@ -89,9 +168,6 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Mark a single notification as read
-   */
   async markAsRead(notificationId: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -107,9 +183,6 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Mark all notifications for user as read
-   */
   async markAllAsRead(userId: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -126,9 +199,6 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Delete a notification
-   */
   async deleteNotification(notificationId: string): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -144,10 +214,6 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Create a new in-app notification entry and trigger server-side Expo Push dispatch
-   * via the authenticated 'dispatch-notification' Edge Function.
-   */
   async createNotification(params: CreateNotificationParams): Promise<NotificationRow | null> {
     try {
       const metadataPayload: Record<string, unknown> = {
@@ -168,12 +234,13 @@ export const notificationService = {
             imageUrl: params.imageUrl ?? null,
             actionType: params.actionType ?? null,
             actionId: params.actionId ?? null,
+            dedupeKey: params.dedupeKey ?? null,
             metadata: metadataPayload,
             data: {
               type: params.type,
               actionType: params.actionType,
               actionId: params.actionId,
-              conversationId: params.actionId,
+              conversationId: params.actionType === 'chat' ? params.actionId : undefined,
             },
             createInApp: true,
             sendPush: true,
@@ -189,7 +256,6 @@ export const notificationService = {
         console.warn('[Push] dispatch-notification invoke note:', edgeErr.message || edgeErr);
       }
 
-      // Fallback for in-app record persistence via relationship-checked Security Definer RPC
       const { data: rpcRes, error: rpcErr } = await supabase.rpc('send_notification', {
         p_user_id: params.userId,
         p_type: params.type,
@@ -217,11 +283,6 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Dispatch push notification to all registered active devices for a recipient via
-   * the server-side 'dispatch-notification' Edge Function (respects user_devices RLS
-   * without exposing recipient device tokens to the client).
-   */
   async sendPushNotificationForUser(
     recipientId: string,
     title: string,
@@ -260,136 +321,129 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Register or refresh Expo push token in canonical user_devices table
-   */
   async registerPushToken(userId: string): Promise<string | null> {
-    if (Platform.OS === 'web' || !Notifications) return null;
+    if (Platform.OS === 'web' || !Notifications || !userId) return null;
 
-    try {
-      // 1. Permission request & detection
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
+    if (inFlightRegistration && inFlightRegistration.userId === userId) {
+      return inFlightRegistration.promise;
+    }
 
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-
-      if (finalStatus !== 'granted') {
-        console.log('[Push] Permission: denied');
-        return null;
-      }
-      console.log('[Push] Permission: granted');
-
-      // 2. Configure Android channel if on Android
-      if (Platform.OS === 'android' && Notifications?.setNotificationChannelAsync) {
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'Default Channel',
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#F26522',
-          sound: 'default',
-          enableVibrate: true,
-          showBadge: true,
-        });
-      }
-
-      // 3. Fetch Expo Push Token with EAS Project ID
-      const isExpoGo =
-        Constants.appOwnership === 'expo' ||
-        (Constants as any).executionEnvironment === 'storeClient';
-
-      if (isExpoGo && Platform.OS === 'android') {
-        console.log(
-          '[Push] Running in Expo Go on Android: Remote push notifications were removed in Expo SDK 53+. Use an EAS Development Build for remote push. Local notifications remain active.',
-        );
-        return null;
-      }
-
-      const projectId =
-        Constants.expoConfig?.extra?.eas?.projectId ??
-        (Constants as any).easConfig?.projectId ??
-        EAS_PROJECT_ID;
-
-      let token: string | null = null;
+    const promise = (async (): Promise<string | null> => {
       try {
-        const tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId,
-        });
-        token = tokenData?.data ?? null;
-      } catch (tokenErr: any) {
-        console.warn('[Push] getExpoPushTokenAsync with projectId error:', tokenErr?.message || tokenErr);
         try {
-          const fallbackToken = await Notifications.getExpoPushTokenAsync();
-          token = fallbackToken?.data ?? null;
-        } catch (fallbackErr: any) {
-          console.warn(
-            '[Push] Push token generation error. Note: Standalone APKs require Firebase Cloud Messaging (google-services.json & FCM V1) configured in EAS to generate remote push tokens:',
-            fallbackErr?.message || fallbackErr,
-          );
-          token = null;
+          const Device = require('expo-device');
+          if (Device && Device.isDevice === false) {
+            return null;
+          }
+        } catch {
+          // expo-device optional
         }
-      }
 
-      if (!token) {
-        console.log('[Push] Token received: NO');
-        return null;
-      }
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
 
-      const fingerprint = token.length > 10 ? `...${token.slice(-6)}` : token;
-      console.log(`[Push] Token received: YES (fingerprint: ${fingerprint})`);
-
-      // 4. Save token into user_devices table via RPC first
-      let saved = false;
-      try {
-        const { data: rpcData, error: rpcErr } = await supabase.rpc('register_device_push_token', {
-          p_push_token: token,
-          p_device_type: Platform.OS,
-        });
-
-        if (!rpcErr && (rpcData as any)?.success) {
-          console.log(`[Push] Token registration: SUCCESS (deviceId: ${(rpcData as any)?.id || 'registered'})`);
-          saved = true;
-        } else if (rpcErr) {
-          console.warn('[Push] register_device_push_token RPC note:', rpcErr.message || rpcErr);
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
         }
-      } catch (rpcEx) {
-        console.warn('[Push] register_device_push_token RPC call exception:', rpcEx);
-      }
 
-      if (!saved) {
-        // Fallback: Direct select & insert/update on own user_devices row
+        if (finalStatus !== 'granted') {
+          return null;
+        }
+
+        if (Platform.OS === 'android' && Notifications?.setNotificationChannelAsync) {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Default Channel',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#F26522',
+            sound: 'default',
+            enableVibrate: true,
+            showBadge: true,
+          });
+        }
+
+        const isExpoGo =
+          Constants.appOwnership === 'expo' ||
+          (Constants as any).executionEnvironment === 'storeClient';
+
+        if (isExpoGo && Platform.OS === 'android') {
+          return null;
+        }
+
+        const projectId =
+          Constants.expoConfig?.extra?.eas?.projectId ??
+          (Constants as any).easConfig?.projectId ??
+          EAS_PROJECT_ID;
+
+        let token: string | null = null;
         try {
-          const { data: existingDevice } = await supabase
-            .from('user_devices')
-            .select('id')
-            .eq('user_id', userId)
-            .or(`push_token.eq.${token},device_token.eq.${token}`)
-            .maybeSingle();
+          const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+          token = tokenData?.data ?? null;
+        } catch {
+          try {
+            const fallbackToken = await Notifications.getExpoPushTokenAsync();
+            token = fallbackToken?.data ?? null;
+          } catch {
+            token = null;
+          }
+        }
 
-          if (existingDevice?.id) {
-            const { error: updateErr } = await supabase
-              .from('user_devices')
-              .update({
-                is_active: true,
-                push_token: token,
-                device_token: token,
-                device_type: Platform.OS,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', existingDevice.id);
+        if (!token) return null;
 
-            if (updateErr) {
-              console.warn('[Push] Direct device update note:', updateErr.message);
-            } else {
-              console.log('[Push] Token registration: SUCCESS (updated existing device)');
+        cachedDeviceToken = token;
+        AsyncStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, token).catch(() => {});
+
+        const appVersion = Constants.expoConfig?.version ?? null;
+        let saved = false;
+
+        try {
+          const { data: rpcData, error: rpcErr } = await supabase.rpc('register_device_push_token', {
+            p_push_token: token,
+            p_device_type: Platform.OS,
+            p_app_version: appVersion,
+          });
+
+          if (!rpcErr && (rpcData as any)?.success) {
+            saved = true;
+          } else if (rpcErr) {
+            const { data: legacyRpc, error: legacyErr } = await supabase.rpc(
+              'register_device_push_token',
+              {
+                p_push_token: token,
+                p_device_type: Platform.OS,
+              },
+            );
+            if (!legacyErr && (legacyRpc as any)?.success) {
               saved = true;
             }
-          } else {
-            const { error: insertErr } = await supabase
+          }
+        } catch (rpcEx) {
+          console.warn('[Push] register_device_push_token RPC call exception:', rpcEx);
+        }
+
+        if (!saved) {
+          try {
+            const { data: existingDevice } = await supabase
               .from('user_devices')
-              .insert({
+              .select('id')
+              .eq('user_id', userId)
+              .or(`push_token.eq.${token},device_token.eq.${token}`)
+              .maybeSingle();
+
+            if (existingDevice?.id) {
+              await supabase
+                .from('user_devices')
+                .update({
+                  is_active: true,
+                  push_token: token,
+                  device_token: token,
+                  device_type: Platform.OS,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', existingDevice.id);
+            } else {
+              await supabase.from('user_devices').insert({
                 user_id: userId,
                 push_token: token,
                 device_token: token,
@@ -397,42 +451,54 @@ export const notificationService = {
                 is_active: true,
                 updated_at: new Date().toISOString(),
               });
-
-            if (insertErr) {
-              console.warn('[Push] Direct device insert note:', insertErr.message);
-            } else {
-              console.log('[Push] Token registration: SUCCESS (new device inserted)');
-              saved = true;
             }
+          } catch (directErr) {
+            console.warn('[Push] Direct device registration note:', directErr);
           }
-        } catch (directErr) {
-          console.warn('[Push] Direct device registration note:', directErr);
+        }
+
+        return token;
+      } catch (err: any) {
+        console.warn('[Push] Error registering push token:', err?.message || err);
+        return null;
+      } finally {
+        if (inFlightRegistration?.userId === userId) {
+          inFlightRegistration = null;
         }
       }
+    })();
 
-      return token;
-    } catch (err: any) {
-      console.warn('[Push] Error registering push token:', err?.message || err);
-      return null;
-    }
+    inFlightRegistration = { userId, promise };
+    return promise;
   },
 
-  /**
-   * Deactivate device push token on logout to prevent cross-account push bleeding
-   */
   async deactivatePushToken(userId: string): Promise<boolean> {
     try {
       if (!userId) return false;
-      const { error } = await supabase
-        .from('user_devices')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('user_id', userId);
+      const currentToken =
+        cachedDeviceToken || (await AsyncStorage.getItem(DEVICE_TOKEN_STORAGE_KEY).catch(() => null));
 
-      if (error) {
-        console.warn('[Push] Deactivate token note:', error.message);
-        return false;
+      if (currentToken) {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('deactivate_device_push_token', {
+          p_push_token: currentToken,
+        });
+        if (!rpcErr && (rpcData as any)?.success) {
+          cachedDeviceToken = null;
+          AsyncStorage.removeItem(DEVICE_TOKEN_STORAGE_KEY).catch(() => {});
+          return true;
+        }
+
+        const { error } = await supabase
+          .from('user_devices')
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq('user_id', userId)
+          .or(`push_token.eq.${currentToken},device_token.eq.${currentToken}`);
+
+        cachedDeviceToken = null;
+        AsyncStorage.removeItem(DEVICE_TOKEN_STORAGE_KEY).catch(() => {});
+        return !error;
       }
-      console.log(`[Push] Push token deactivated for user ${userId.slice(0, 8)}...`);
+
       return true;
     } catch (err) {
       console.warn('[Push] Error deactivating push token:', err);
@@ -440,48 +506,31 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Triggers a test push notification locally & creates server-dispatched notification
-   */
   async triggerTestPush(userId: string): Promise<{ success: boolean; error?: string }> {
+    if (!__DEV__) {
+      return { success: false, error: 'Test push is restricted to development builds.' };
+    }
     try {
       if (Notifications?.scheduleNotificationAsync) {
-        try {
-          const { status: existingStatus } = await Notifications.getPermissionsAsync();
-          let finalStatus = existingStatus;
-
-          if (existingStatus !== 'granted') {
-            const { status } = await Notifications.requestPermissionsAsync();
-            finalStatus = status;
-          }
-
-          if (finalStatus === 'granted') {
-            await Notifications.scheduleNotificationAsync({
-              content: {
-                title: '🌴 ZuruSasa Coastal Alert',
-                body: 'Test Push Notification: Your booking alerts and trip reminders are working correctly!',
-                sound: 'default',
-                channelId: 'default',
-                data: { type: 'test_push', timestamp: new Date().toISOString() },
-              },
-              trigger: null,
-            });
-          }
-        } catch (e) {
-          console.warn('[Push] Local push scheduling note:', e);
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
+        if (finalStatus === 'granted') {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'ZuruSasa Coastal Alert (Dev)',
+              body: 'Test Push Notification: Heads-up banners, sound, and vibration are active.',
+              sound: 'default',
+              channelId: 'default',
+              data: { type: 'test_push', userId, timestamp: new Date().toISOString() },
+            },
+            trigger: null,
+          });
         }
       }
-
-      if (userId) {
-        await this.createNotification({
-          userId,
-          type: 'booking_confirmed',
-          title: '🌴 ZuruSasa Test Push Notification',
-          message: 'Your push notification channel is active and receiving travel alerts.',
-          actionType: 'booking',
-        });
-      }
-
       return { success: true };
     } catch (err: any) {
       console.warn('[Push] Error triggering test push:', err);
@@ -492,9 +541,6 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Immediately displays a native local notification banner on the device
-   */
   async presentLocalNotification(params: {
     title: string;
     body: string;

@@ -1,6 +1,13 @@
 /// <reference path="../deno.d.ts" />
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
+import {
+  PRIVILEGED_SERVER_ONLY_TYPES,
+  chunkArray,
+  evaluateChannelEligibility,
+  resolvePolicy,
+  type NotificationSettingsMap,
+} from '../_shared/notificationPolicy.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,12 +16,6 @@ const corsHeaders = {
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PRIVILEGED_ONLY_TYPES = new Set([
-  'payment_success',
-  'payout_completed',
-  'refund_processed',
-  'verification',
-]);
 const SOCIAL_TYPES = new Set([
   'like',
   'comment',
@@ -119,11 +120,11 @@ async function verifyCallerRecipientRelationship(
     .maybeSingle();
   if (quote?.id) return true;
 
-  // 4. Social interactions (follow, like, comment, listing inquiry)
+  // 4. Social interactions (follow, like, comment, listing inquiry) — requires verified record
   if (SOCIAL_TYPES.has(notifType)) {
     if (notifType === 'follow') {
       const { data: followRow } = await admin
-        .from('follows')
+        .from('user_follows')
         .select('id')
         .eq('follower_id', callerId)
         .eq('following_id', recipientId)
@@ -139,7 +140,19 @@ async function verifyCallerRecipientRelationship(
         .eq('id', actionId)
         .eq('user_id', recipientId)
         .maybeSingle();
-      if (reel?.id) return true;
+      if (reel?.id) {
+        if (notifType === 'like') {
+          const { data: likeRow } = await admin
+            .from('reel_likes')
+            .select('id')
+            .eq('reel_id', actionId)
+            .eq('user_id', callerId)
+            .maybeSingle();
+          if (likeRow?.id) return true;
+        } else {
+          return true;
+        }
+      }
 
       const { data: exp } = await admin
         .from('experiences')
@@ -149,14 +162,6 @@ async function verifyCallerRecipientRelationship(
         .maybeSingle();
       if (exp?.id) return true;
     }
-
-    const { data: recipientContent } = await admin
-      .from('reels')
-      .select('id')
-      .eq('user_id', recipientId)
-      .limit(1)
-      .maybeSingle();
-    if (recipientContent?.id) return true;
   }
 
   return false;
@@ -321,7 +326,7 @@ Deno.serve(async (request) => {
     .maybeSingle();
   const isAdmin = callerProfile?.role === 'admin';
 
-  if (!isAdmin && PRIVILEGED_ONLY_TYPES.has(notifType)) {
+  if (!isAdmin && PRIVILEGED_SERVER_ONLY_TYPES.has(notifType)) {
     return json({ error: `Notification type "${notifType}" is restricted to server workflows` }, 403);
   }
 
@@ -339,22 +344,37 @@ Deno.serve(async (request) => {
 
   const { data: recipientProfile } = await admin
     .from('profiles')
-    .select('phone, metadata, notification_settings')
+    .select('phone, metadata, notification_settings, marketing_opt_in')
     .eq('id', recipientId)
     .maybeSingle();
 
   const notifMeta = ((recipientProfile?.metadata ?? {}) as Record<string, unknown>);
   const masterEnabled = notifMeta.notifications_enabled !== false;
-  const settings = ((recipientProfile?.notification_settings ?? {}) as Record<
-    string,
-    { push?: boolean; email?: boolean; sms?: boolean }
-  >);
-  const categoryKey = resolveNotificationCategory(notifType);
+  const marketingOptIn = recipientProfile?.marketing_opt_in === true;
+  const settings = ((recipientProfile?.notification_settings ?? {}) as NotificationSettingsMap);
+  const policy = resolvePolicy(notifType);
+  const categoryKey = resolveNotificationCategory(notifType) || policy.category;
 
   let insertedNotification: Record<string, unknown> | null = null;
 
-  // 1. Optional In-App Notification Record
-  if (createInApp) {
+  // 1. Optional In-App Notification Record (idempotent when dedupeKey already inserted by DB trigger)
+  const dedupeKey = typeof body.dedupeKey === 'string' && body.dedupeKey.trim() ? body.dedupeKey.trim() : null;
+  let alreadyHandledByServerTrigger = false;
+
+  if (dedupeKey) {
+    const { data: existingRow } = await admin
+      .from('notifications')
+      .select('id, user_id, type, title, message, image_url, action_type, action_id, is_read, created_at')
+      .eq('dedupe_key', dedupeKey)
+      .maybeSingle();
+
+    if (existingRow?.id) {
+      insertedNotification = existingRow as Record<string, unknown>;
+      alreadyHandledByServerTrigger = true;
+    }
+  }
+
+  if (createInApp && !alreadyHandledByServerTrigger) {
     const mergedMetadata: Record<string, unknown> = {
       ...metadata,
       ...(imageUrl ? { image_url: imageUrl } : {}),
@@ -374,6 +394,7 @@ Deno.serve(async (request) => {
         action_type: actionType,
         action_id: actionId,
         metadata: mergedMetadata,
+        ...(dedupeKey ? { dedupe_key: dedupeKey } : {}),
         is_read: false,
       })
       .select('id, user_id, type, title, message, image_url, action_type, action_id, is_read, created_at')
@@ -386,14 +407,20 @@ Deno.serve(async (request) => {
     }
   }
 
-  // 2. Server-Side Expo Push Dispatch (never leaks device tokens to caller)
+  // 2. Server-Side Expo Push Dispatch (skip if server DB trigger already enqueued push for this dedupeKey)
   let pushSummary: { dispatched: number; skippedReason?: string } = { dispatched: 0 };
-  if (sendPush) {
-    const pushAllowedForCategory =
-      masterEnabled && !(categoryKey && settings[categoryKey]?.push === false);
+  if (sendPush && !alreadyHandledByServerTrigger) {
+    const pushEligibility = evaluateChannelEligibility({
+      priority: policy.priority,
+      category: categoryKey,
+      channel: 'push',
+      masterEnabled,
+      settings,
+      marketingOptIn,
+    });
 
-    if (!pushAllowedForCategory) {
-      pushSummary = { dispatched: 0, skippedReason: 'disabled_by_recipient_preferences' };
+    if (!pushEligibility.allowed) {
+      pushSummary = { dispatched: 0, skippedReason: pushEligibility.reason || 'disabled_by_recipient_preferences' };
     } else {
       const { data: devices, error: devErr } = await admin
         .from('user_devices')
@@ -424,6 +451,7 @@ Deno.serve(async (request) => {
           title,
           body: message,
           data: {
+            notificationId: insertedNotification?.id ?? undefined,
             type: notifType,
             ...(actionType ? { actionType } : {}),
             ...(actionId ? { actionId } : {}),
@@ -435,38 +463,40 @@ Deno.serve(async (request) => {
         }));
 
         try {
-          const expoRes = await fetch('https://exp.host/--/api/v2/push/send', {
-            method: 'POST',
-            headers: {
-              Accept: 'application/json',
-              'Accept-encoding': 'gzip, deflate',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(pushMessages),
-          });
-
-          const expoJson = await expoRes.json().catch(() => ({}));
-          const tickets: any[] = Array.isArray(expoJson?.data)
-            ? expoJson.data
-            : expoJson?.data
-              ? [expoJson.data]
-              : [];
-
           let okCount = 0;
           const staleTokens: string[] = [];
 
-          tickets.forEach((ticket, idx) => {
-            if (ticket?.status === 'ok') {
-              okCount++;
-            } else if (
-              ticket?.status === 'error' &&
-              (ticket?.details?.error === 'DeviceNotRegistered' ||
-                ticket?.details?.error === 'InvalidCredentials')
-            ) {
-              const badToken = uniqueTokens[idx];
-              if (badToken) staleTokens.push(badToken);
-            }
-          });
+          for (const msgChunk of chunkArray(pushMessages, 100)) {
+            const expoRes = await fetch('https://exp.host/--/api/v2/push/send', {
+              method: 'POST',
+              headers: {
+                Accept: 'application/json',
+                'Accept-encoding': 'gzip, deflate',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(msgChunk),
+            });
+
+            const expoJson = await expoRes.json().catch(() => ({}));
+            const tickets: any[] = Array.isArray(expoJson?.data)
+              ? expoJson.data
+              : expoJson?.data
+                ? [expoJson.data]
+                : [];
+
+            tickets.forEach((ticket, idx) => {
+              if (ticket?.status === 'ok') {
+                okCount++;
+              } else if (
+                ticket?.status === 'error' &&
+                (ticket?.details?.error === 'DeviceNotRegistered' ||
+                  ticket?.details?.error === 'InvalidCredentials')
+              ) {
+                const badToken = String(msgChunk[idx]?.to || '');
+                if (badToken) staleTokens.push(badToken);
+              }
+            });
+          }
 
           for (const staleToken of staleTokens) {
             await admin
@@ -497,8 +527,15 @@ Deno.serve(async (request) => {
 
   if (sendSms) {
     const isSelfTestSms = recipientId === user.id && notifType === 'test_sms';
-    const smsAllowedForCategory =
-      isSelfTestSms || (masterEnabled && !(categoryKey && settings[categoryKey]?.sms === false));
+    const smsEligibility = evaluateChannelEligibility({
+      priority: policy.priority,
+      category: categoryKey,
+      channel: 'sms',
+      masterEnabled,
+      settings,
+      marketingOptIn,
+    });
+    const smsAllowedForCategory = isSelfTestSms || smsEligibility.allowed;
 
     if (!smsAllowedForCategory) {
       smsSummary = {

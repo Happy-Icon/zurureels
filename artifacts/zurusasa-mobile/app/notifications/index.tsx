@@ -29,41 +29,16 @@ function isSameDay(d1: Date, d2: Date) {
   );
 }
 
-const GUEST_NOTIFICATION_TYPES = new Set([
-  'booking_created',
-  'booking_confirmed',
-  'booking_cancelled',
-  'booking_declined',
-  'payment_success',
-  'refund_processed',
-  'message',
-  'review_reminder',
-  'promotion',
-  'wishlist_available',
-]);
-
-const HOST_NOTIFICATION_TYPES = new Set([
-  'booking_request',
-  'booking_cancelled',
-  'booking_declined',
-  'payout_completed',
-  'verification',
-  'listing_approved',
-  'listing_rejected',
-  'performance',
-  'message',
-]);
-
 export default function NotificationCenterScreen() {
   const colors = useColors();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { viewMode, user } = useAuth();
+  const { user } = useAuth();
   const [isTestingPush, setIsTestingPush] = useState(false);
 
   const handleTestPush = async () => {
-    if (!user) return;
+    if (!__DEV__ || !user) return;
     setIsTestingPush(true);
     try {
       await notificationService.triggerTestPush(user.id);
@@ -75,7 +50,8 @@ export default function NotificationCenterScreen() {
   };
 
   const {
-    notifications: rawNotifications,
+    notifications,
+    unreadCount,
     isLoading,
     markAsRead,
     markAllAsRead,
@@ -84,17 +60,6 @@ export default function NotificationCenterScreen() {
   } = useNotifications();
 
   const [refreshing, setRefreshing] = useState(false);
-
-  // Strictly filter notifications by active view mode (Guest vs Host)
-  const notifications = useMemo(() => {
-    const isHostMode = viewMode === 'host';
-    const allowedTypes = isHostMode ? HOST_NOTIFICATION_TYPES : GUEST_NOTIFICATION_TYPES;
-    return rawNotifications.filter((n) => allowedTypes.has(n.type));
-  }, [rawNotifications, viewMode]);
-
-  const unreadCount = useMemo(() => {
-    return notifications.filter((n) => !n.is_read).length;
-  }, [notifications]);
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 12;
   const bottomPad = Platform.OS === 'web' ? 40 : insets.bottom + 24;
@@ -113,23 +78,23 @@ export default function NotificationCenterScreen() {
     if (item.action_type) {
       switch (item.action_type) {
         case 'booking':
-          router.push('/reservations');
+          router.push('/(tabs)/reservations');
           break;
         case 'chat':
           if (item.action_id) {
             router.push(`/chat/${item.action_id}`);
           } else {
-            router.push('/inbox');
+            router.push('/(tabs)/inbox');
           }
           break;
         case 'payout':
-          router.push('/profile/payments');
+          router.push('/host/wallet');
           break;
         case 'listing':
-          router.push('/become-host');
+          router.push('/(tabs)/listings');
           break;
         case 'discover':
-          router.push('/discover');
+          router.push('/(tabs)/discover');
           break;
         case 'profile':
           router.push('/(tabs)/profile');
@@ -191,16 +156,18 @@ export default function NotificationCenterScreen() {
         </Pressable>
 
         <View style={styles.headerRightActions}>
-          <Pressable
-            onPress={handleTestPush}
-            disabled={isTestingPush}
-            style={({ pressed }) => [styles.testBannerBtn, pressed && { opacity: 0.7 }]}
-          >
-            <Feather name="bell" size={14} color="#F26522" style={{ marginRight: 4 }} />
-            <Text style={styles.testBannerText}>
-              {isTestingPush ? 'Testing...' : 'Test Banner'}
-            </Text>
-          </Pressable>
+          {__DEV__ ? (
+            <Pressable
+              onPress={handleTestPush}
+              disabled={isTestingPush}
+              style={({ pressed }) => [styles.testBannerBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Feather name="bell" size={14} color="#F26522" style={{ marginRight: 4 }} />
+              <Text style={styles.testBannerText}>
+                {isTestingPush ? 'Testing...' : 'Test Banner'}
+              </Text>
+            </Pressable>
+          ) : null}
 
           {unreadCount > 0 && (
             <Pressable

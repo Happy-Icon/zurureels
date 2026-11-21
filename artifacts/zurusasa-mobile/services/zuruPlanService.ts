@@ -240,6 +240,43 @@ export const zuruPlanService = {
           .from('profiles')
           .update({ metadata: updatedMetadata })
           .eq('id', userId);
+
+        // 3. Sync 24h & 1h ZuruPlan reminders into public.trip_reminders for server-side delivery
+        if (updatedTrip.startDate) {
+          const tripStartMs = new Date(updatedTrip.startDate).getTime();
+          const nowMs = Date.now();
+          if (!Number.isNaN(tripStartMs) && tripStartMs > nowMs) {
+            const reminderRows = [
+              {
+                window_type: '24h' as const,
+                remind_at: new Date(tripStartMs - 24 * 3_600_000).toISOString(),
+                due: tripStartMs - 24 * 3_600_000 > nowMs,
+              },
+              {
+                window_type: '1h' as const,
+                remind_at: new Date(tripStartMs - 3_600_000).toISOString(),
+                due: tripStartMs - 3_600_000 > nowMs,
+              },
+            ]
+              .filter((r) => r.due)
+              .map((r) => ({
+                user_id: userId,
+                trip_id: updatedTrip.id,
+                title: updatedTrip.title || 'Coastal Trip',
+                destination: updatedTrip.destination || null,
+                remind_at: r.remind_at,
+                window_type: r.window_type,
+                cancelled_at: null,
+                updated_at: new Date().toISOString(),
+              }));
+
+            if (reminderRows.length > 0) {
+              await supabase
+                .from('trip_reminders')
+                .upsert(reminderRows, { onConflict: 'user_id,trip_id,window_type' });
+            }
+          }
+        }
       } catch (err) {
         console.warn('Failed to sync trip to Supabase metadata:', err);
       }
@@ -272,6 +309,12 @@ export const zuruPlanService = {
             },
           })
           .eq('id', userId);
+
+        await supabase
+          .from('trip_reminders')
+          .update({ cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('user_id', userId)
+          .eq('trip_id', tripId);
       } catch (err) {
         console.warn('Failed to sync trip deletion:', err);
       }
