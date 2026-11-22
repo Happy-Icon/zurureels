@@ -1,7 +1,10 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { authorizeWorkerOrAdmin } from '../_shared/workerAuth.ts';
-import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
+import {
+  enqueueNotificationEvent,
+  kickNotificationQueueAsync,
+} from '../_shared/notificationOrchestrator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -199,7 +202,7 @@ Deno.serve(async (request) => {
               message: `We could not complete your payout after ${maxRetries} attempts (${failureReason}). Please check your payout details in Host Wallet.`,
               dedupeKey: `payout_failed:${payout.id}:${payout.host_id}`,
               priority: 'critical',
-              channels: ['in_app', 'push', 'email'],
+              channels: ['in_app', 'push', 'email', 'sms'],
               actionType: 'payout',
               actionId: payout.id,
               payload: {
@@ -209,6 +212,7 @@ Deno.serve(async (request) => {
                 failure_reason: failureReason,
               },
             });
+            kickNotificationQueueAsync();
           } catch (failNotifErr) {
             console.warn('Payout failure notification warning:', failNotifErr);
           }
@@ -220,53 +224,71 @@ Deno.serve(async (request) => {
 
       const data = providerResult.data ?? {};
       const transferCode = String(data.transfer_code || reference);
+      const transferStatus = String(data.status || '').trim().toLowerCase();
+      const settledImmediately = transferStatus === 'success';
 
-      await admin
-        .from('host_payouts')
-        .update({
-          status: 'success',
-          provider_transfer_code: transferCode,
-          provider_response: providerResult,
-          processed_at: new Date().toISOString(),
-        })
-        .eq('id', payout.id);
+      if (settledImmediately) {
+        await admin
+          .from('host_payouts')
+          .update({
+            status: 'success',
+            provider_transfer_code: transferCode,
+            provider_response: providerResult,
+            processed_at: new Date().toISOString(),
+          })
+          .eq('id', payout.id);
 
-      await admin.from('financial_ledger').insert({
-        booking_id: payout.booking_id,
-        entry_type: 'host_payout_debit',
-        debit_account: 'HOST_ESCROW_PAYABLE',
-        credit_account: 'PAYSTACK_BANK_OUTFLOW',
-        amount: payout.amount,
-        currency: payout.currency,
-        metadata: { payout_id: payout.id, transfer_code: transferCode, host_id: payout.host_id },
-      });
-
-      try {
-        const payoutAmountKES = (Number(payout.amount) / 100).toLocaleString();
-        const refId = payout.booking_id ? payout.booking_id.slice(0, 8).toUpperCase() : payout.id.slice(0, 8).toUpperCase();
-        await enqueueNotificationEvent(admin, {
-          userId: payout.host_id,
-          type: 'payout_completed',
-          templateKey: 'payout_completed',
-          title: 'Payout Sent!',
-          message: `KES ${payoutAmountKES} has been transferred to your payout account for booking #${refId}.`,
-          dedupeKey: `payout_completed:${payout.id}:${payout.host_id}`,
-          priority: 'critical',
-          channels: ['in_app', 'push', 'email'],
-          actionType: 'payout',
-          actionId: payout.id,
-          payload: {
-            payout_id: payout.id,
-            booking_id: payout.booking_id,
-            amount_minor: payout.amount,
-            transfer_code: transferCode,
-          },
+        await admin.from('financial_ledger').insert({
+          booking_id: payout.booking_id,
+          entry_type: 'host_payout_debit',
+          debit_account: 'HOST_ESCROW_PAYABLE',
+          credit_account: 'PAYSTACK_BANK_OUTFLOW',
+          amount: payout.amount,
+          currency: payout.currency,
+          metadata: { payout_id: payout.id, transfer_code: transferCode, host_id: payout.host_id },
         });
-      } catch (notifEx) {
-        console.warn('Payout notification dispatch warning:', notifEx);
-      }
 
-      results.push({ payoutId: payout.id, status: 'success', transferCode });
+        try {
+          const payoutAmountKES = (Number(payout.amount) / 100).toLocaleString();
+          const refId = payout.booking_id ? payout.booking_id.slice(0, 8).toUpperCase() : payout.id.slice(0, 8).toUpperCase();
+          await enqueueNotificationEvent(admin, {
+            userId: payout.host_id,
+            type: 'payout_completed',
+            templateKey: 'payout_completed',
+            title: 'Payout Sent!',
+            message: `KES ${payoutAmountKES} has been transferred to your payout account for booking #${refId}.`,
+            dedupeKey: `payout_completed:${payout.id}:${payout.host_id}`,
+            priority: 'critical',
+            channels: ['in_app', 'push', 'email', 'sms'],
+            actionType: 'payout',
+            actionId: payout.id,
+            payload: {
+              payout_id: payout.id,
+              booking_id: payout.booking_id,
+              amount_minor: payout.amount,
+              transfer_code: transferCode,
+            },
+          });
+          kickNotificationQueueAsync();
+        } catch (notifEx) {
+          console.warn('Payout notification dispatch warning:', notifEx);
+        }
+
+        results.push({ payoutId: payout.id, status: 'success', transferCode });
+      } else {
+        // Keep status as 'processing' until Paystack confirms via transfer.success / transfer.failed webhook
+        await admin
+          .from('host_payouts')
+          .update({
+            status: 'processing',
+            provider_transfer_code: transferCode,
+            provider_response: providerResult,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', payout.id);
+
+        results.push({ payoutId: payout.id, status: 'processing', transferCode });
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error(`Error executing payout ${payout.id}:`, errorMessage);

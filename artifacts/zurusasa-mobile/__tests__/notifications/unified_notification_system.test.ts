@@ -6,11 +6,16 @@ interface PolicyMod {
   evaluateChannelEligibility: (input: {
     priority: 'critical' | 'normal' | 'promotional';
     category: string;
-    channel: 'in_app' | 'push' | 'email';
+    channel: 'in_app' | 'push' | 'email' | 'sms';
     masterEnabled?: boolean | null;
     settings?: Record<string, { email?: boolean; push?: boolean; sms?: boolean }> | null;
     marketingOptIn?: boolean | null;
   }) => { allowed: boolean; reason?: string };
+  resolvePolicy: (templateOrType: string) => {
+    priority: 'critical' | 'normal' | 'promotional';
+    category: string;
+    defaultChannels: Array<'in_app' | 'push' | 'email' | 'sms'>;
+  };
   chunkArray: <T>(items: T[], chunkSize?: number) => T[][];
   computeNextRetryIso: (attempts: number, nowMs?: number) => string;
 }
@@ -25,6 +30,7 @@ interface TemplatesMod {
     text: string;
     pushTitle: string;
     pushBody: string;
+    smsBody: string;
   };
 }
 
@@ -191,7 +197,27 @@ describe('Centralized Server Notification Templates', () => {
       assert.ok(rendered.subject.length > 0, `Missing subject in ${key}`);
       assert.ok(rendered.text.length > 0, `Missing plain-text body in ${key}`);
       assert.ok(rendered.pushTitle.length > 0, `Missing pushTitle in ${key}`);
+      assert.ok(rendered.smsBody.length > 0 && rendered.smsBody.length <= 160, `smsBody invalid length in ${key}: ${rendered.smsBody.length}`);
     }
+  });
+
+  test('SMS policy enables high-value booking/reminder events, disables chat/promo by default, and respects explicit SMS opt-out', () => {
+    assert.ok(policy.resolvePolicy('booking_request').defaultChannels.includes('sms'));
+    assert.ok(policy.resolvePolicy('booking_confirmed').defaultChannels.includes('sms'));
+    assert.ok(policy.resolvePolicy('booking_reminder_1h').defaultChannels.includes('sms'));
+    assert.ok(!policy.resolvePolicy('new_message').defaultChannels.includes('sms'));
+    assert.ok(!policy.resolvePolicy('promotional_offer').defaultChannels.includes('sms'));
+
+    const criticalOptOut = policy.evaluateChannelEligibility({
+      priority: 'critical',
+      category: 'account_activity',
+      channel: 'sms',
+      masterEnabled: true,
+      settings: { account_activity: { sms: false } },
+      marketingOptIn: false,
+    });
+    assert.strictEqual(criticalOptOut.allowed, false);
+    assert.strictEqual(criticalOptOut.reason, 'sms_disabled_by_user');
   });
 });
 

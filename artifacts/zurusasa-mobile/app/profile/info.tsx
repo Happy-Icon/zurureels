@@ -18,6 +18,7 @@ import { useCustomAlert } from '@/context/CustomAlertContext';
 import { useColors } from '@/hooks/useColors';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
+import { formatToE164 } from '@/services/smsService';
 import { personaVerificationService } from '@/services/personaVerificationService';
 import { Skeleton } from '@/components/Skeleton';
 import { PremiumLoader } from '@/components/PremiumLoader';
@@ -114,13 +115,29 @@ export default function PersonalInfoScreen() {
 
   const handleSaveField = async () => {
     if (!user) return;
+    const rawPhone = phone.trim();
+    let normalizedPhone: string | null = null;
+    if (rawPhone) {
+      const phoneCheck = formatToE164(rawPhone);
+      if (!phoneCheck.valid) {
+        showAlert({
+          title: 'Invalid Phone Number',
+          message: phoneCheck.error || 'Please enter a valid mobile number (e.g. 0712345678 or +254712345678).',
+          icon: 'alert-circle',
+        });
+        return;
+      }
+      normalizedPhone = phoneCheck.e164;
+      setPhone(normalizedPhone);
+    }
+
     setSaving(true);
     try {
       const updates: Record<string, any> = {
         full_name: legalName.trim(),
         preferred_name: preferredName.trim() || null,
         host_display_name: hostDisplayName,
-        phone: phone.trim() || null,
+        phone: normalizedPhone,
         residential_address: residentialAddress.trim() || null,
         postal_address: postalAddress.trim() || null,
         emergency_contact: emergencyName.trim()
@@ -136,7 +153,7 @@ export default function PersonalInfoScreen() {
       await supabase.auth.updateUser({
         data: {
           full_name: legalName.trim(),
-          phone: phone.trim(),
+          phone: normalizedPhone || '',
         },
       });
 

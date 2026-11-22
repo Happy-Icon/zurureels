@@ -10,6 +10,9 @@ import {
   type NotificationSettingsMap,
 } from './notificationPolicy.ts';
 import { renderNotificationTemplate } from './templates/index.ts';
+import { formatToE164, maskPhoneForLogs } from './sms/phone.ts';
+import { sanitizeSmsText } from './sms/gsm7.ts';
+import { getSmsProviderAdapter, sendSmsViaGateway } from './sms/smsGateway.ts';
 
 export interface EnqueueEventParams {
   userId: string;
@@ -40,15 +43,63 @@ export interface DeliveryRow {
   attempt_count: number;
   max_attempts: number;
   expo_ticket_id?: string | null;
+  provider?: string | null;
+  provider_message_id?: string | null;
+  tracking_id?: string | null;
+  last_error?: string | null;
 }
 
 interface RecipientContext {
   email: string | null;
+  phone: string | null;
   fullName: string;
   timezone: string;
   masterEnabled: boolean;
   marketingOptIn: boolean;
   settings: NotificationSettingsMap;
+}
+
+/**
+ * Triggers a non-blocking fast-path kick to `process-notification-queue` so critical
+ * host/guest booking alerts dispatch in ~2-3s rather than waiting up to 60s for pg_cron.
+ * Safe against races because `claim_notification_deliveries` uses `FOR UPDATE SKIP LOCKED`.
+ */
+export function kickNotificationQueueAsync(): void {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')?.trim();
+  const cronSecret = Deno.env.get('CRON_SECRET')?.trim();
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim();
+
+  if (!supabaseUrl || (!cronSecret && !serviceRoleKey)) return;
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (cronSecret) {
+    headers['x-cron-secret'] = cronSecret;
+  } else if (serviceRoleKey) {
+    headers['Authorization'] = `Bearer ${serviceRoleKey}`;
+  }
+
+  const task = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try {
+      await fetch(`${supabaseUrl.replace(/\/+$/, '')}/functions/v1/process-notification-queue`, {
+        method: 'POST',
+        headers,
+        body: '{}',
+        signal: controller.signal,
+      });
+    } catch {
+      // Non-fatal: pg_cron (* * * * *) remains the guaranteed fallback sweep
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
+
+  const edgeRuntime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+    .EdgeRuntime;
+  if (typeof edgeRuntime?.waitUntil === 'function') {
+    edgeRuntime.waitUntil(task);
+  }
 }
 
 /**
@@ -117,7 +168,7 @@ async function resolveRecipientContext(
 ): Promise<RecipientContext> {
   const { data: profile } = await admin
     .from('profiles')
-    .select('email, full_name, metadata, notification_settings, timezone, marketing_opt_in')
+    .select('email, phone, full_name, metadata, notification_settings, timezone, marketing_opt_in')
     .eq('id', userId)
     .maybeSingle();
 
@@ -125,12 +176,19 @@ async function resolveRecipientContext(
     typeof profile?.email === 'string' && profile.email.includes('@')
       ? profile.email.trim()
       : null;
+  let phone =
+    typeof profile?.phone === 'string' && profile.phone.trim()
+      ? profile.phone.trim()
+      : null;
 
-  if (!email) {
+  if (!email || !phone) {
     try {
       const { data: authRes } = await admin.auth.admin.getUserById(userId);
-      if (authRes?.user?.email && authRes.user.email.includes('@')) {
+      if (!email && authRes?.user?.email && authRes.user.email.includes('@')) {
         email = authRes.user.email.trim();
+      }
+      if (!phone && authRes?.user?.phone && authRes.user.phone.trim()) {
+        phone = authRes.user.phone.trim();
       }
     } catch {
       // ignore
@@ -142,6 +200,7 @@ async function resolveRecipientContext(
 
   return {
     email,
+    phone,
     fullName: (typeof profile?.full_name === 'string' && profile.full_name.trim()) || 'Traveler',
     timezone:
       (typeof profile?.timezone === 'string' && profile.timezone.trim()) || 'Africa/Nairobi',
@@ -187,17 +246,121 @@ export async function processClaimedDeliveries(
     'ZuruSasa <onboarding@resend.dev>';
 
   const recipientCache = new Map<string, RecipientContext>();
-  const getRecipient = async (uid: string) => {
-    const cached = recipientCache.get(uid);
-    if (cached) return cached;
-    const ctx = await resolveRecipientContext(admin, uid);
-    recipientCache.set(uid, ctx);
+  const uniqueUserIds = Array.from(new Set(deliveries.map((d) => d.user_id).filter(Boolean)));
+  const pushUserIds = Array.from(
+    new Set(deliveries.filter((d) => d.channel === 'push').map((d) => d.user_id).filter(Boolean)),
+  );
+
+  // Batch pre-fetch all recipient profiles & active push devices in 2 queries (eliminates N+1)
+  const [profilesRes, devicesRes] = await Promise.all([
+    uniqueUserIds.length > 0
+      ? admin
+          .from('profiles')
+          .select('id, email, phone, full_name, metadata, notification_settings, timezone, marketing_opt_in')
+          .in('id', uniqueUserIds)
+      : Promise.resolve({ data: [] as any[] }),
+    pushUserIds.length > 0
+      ? admin
+          .from('user_devices')
+          .select('user_id, push_token, device_token')
+          .in('user_id', pushUserIds)
+          .eq('is_active', true)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
+  for (const profile of (profilesRes.data ?? []) as any[]) {
+    const email =
+      typeof profile?.email === 'string' && profile.email.includes('@')
+        ? profile.email.trim()
+        : null;
+    const phone =
+      typeof profile?.phone === 'string' && profile.phone.trim()
+        ? profile.phone.trim()
+        : null;
+    const meta = (profile?.metadata ?? {}) as Record<string, unknown>;
+    const settings = (profile?.notification_settings ?? {}) as NotificationSettingsMap;
+    recipientCache.set(String(profile.id), {
+      email,
+      phone,
+      fullName: (typeof profile?.full_name === 'string' && profile.full_name.trim()) || 'Traveler',
+      timezone:
+        (typeof profile?.timezone === 'string' && profile.timezone.trim()) || 'Africa/Nairobi',
+      masterEnabled: meta.notifications_enabled !== false,
+      marketingOptIn: profile?.marketing_opt_in === true,
+      settings,
+    });
+  }
+
+  const deviceTokensByUser = new Map<string, string[]>();
+  for (const d of (devicesRes.data ?? []) as Array<{
+    user_id: string;
+    push_token?: string | null;
+    device_token?: string | null;
+  }>) {
+    const uid = String(d.user_id);
+    const raw = (d.push_token || d.device_token || '').trim();
+    if (!raw) continue;
+    let list = deviceTokensByUser.get(uid);
+    if (!list) {
+      list = [];
+      deviceTokensByUser.set(uid, list);
+    }
+    if (!list.includes(raw)) {
+      list.push(raw);
+    }
+  }
+
+  const authFallbackChecked = new Set<string>();
+  const getRecipient = async (
+    uid: string,
+    needEmailFallback: boolean,
+    needPhoneFallback: boolean,
+  ): Promise<RecipientContext> => {
+    let ctx = recipientCache.get(uid);
+    if (!ctx) {
+      ctx = {
+        email: null,
+        phone: null,
+        fullName: 'Traveler',
+        timezone: 'Africa/Nairobi',
+        masterEnabled: true,
+        marketingOptIn: false,
+        settings: {},
+      };
+      recipientCache.set(uid, ctx);
+    }
+    if (((needEmailFallback && !ctx.email) || (needPhoneFallback && !ctx.phone)) && !authFallbackChecked.has(uid)) {
+      authFallbackChecked.add(uid);
+      try {
+        const { data: authRes } = await admin.auth.admin.getUserById(uid);
+        if (!ctx.email && authRes?.user?.email && authRes.user.email.includes('@')) {
+          ctx.email = authRes.user.email.trim();
+        }
+        if (!ctx.phone && authRes?.user?.phone && authRes.user.phone.trim()) {
+          ctx.phone = authRes.user.phone.trim();
+        }
+      } catch {
+        // ignore
+      }
+    }
     return ctx;
   };
 
   let sent = 0;
   let skipped = 0;
   let failed = 0;
+
+  // Group skipped deliveries by reason so we execute 1 bulk UPDATE per distinct reason
+  const skippedByReason = new Map<string, string[]>();
+  const queueSkip = (id: string, reason: string) => {
+    let bucket = skippedByReason.get(reason);
+    if (!bucket) {
+      bucket = [];
+      skippedByReason.set(reason, bucket);
+    }
+    bucket.push(id);
+    skipped++;
+  };
 
   // Separate push items so we can chunk them into <=100 message Expo API requests
   const pushQueue: Array<{
@@ -208,8 +371,15 @@ export async function processClaimedDeliveries(
     data: Record<string, unknown>;
   }> = [];
 
+  // Collect deliveries that failed due to missing RESEND_API_KEY so we flush them in parallel
+  const unconfiguredEmailDeliveries: DeliveryRow[] = [];
+
   for (const delivery of deliveries) {
-    const recipient = await getRecipient(delivery.user_id);
+    const recipient = await getRecipient(
+      delivery.user_id,
+      delivery.channel === 'email' && Boolean(resendApiKey),
+      delivery.channel === 'sms',
+    );
     const policy = resolvePolicy(delivery.template_key);
     const eligibility = evaluateChannelEligibility({
       priority: delivery.priority || policy.priority,
@@ -221,15 +391,13 @@ export async function processClaimedDeliveries(
     });
 
     if (!eligibility.allowed) {
-      await admin
-        .from('notification_deliveries')
-        .update({
-          status: 'skipped',
-          last_error: eligibility.reason || 'disabled_by_preferences',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', delivery.id);
-      skipped++;
+      queueSkip(delivery.id, eligibility.reason || 'disabled_by_preferences');
+      continue;
+    }
+
+    if (delivery.channel === 'email' && !resendApiKey) {
+      unconfiguredEmailDeliveries.push(delivery);
+      failed++;
       continue;
     }
 
@@ -242,21 +410,8 @@ export async function processClaimedDeliveries(
     const rendered = renderNotificationTemplate(delivery.template_key, enrichedPayload);
 
     if (delivery.channel === 'email') {
-      if (!resendApiKey) {
-        await markDeliveryRetryOrDeadLetter(admin, delivery, 'RESEND_API_KEY not configured', true);
-        failed++;
-        continue;
-      }
       if (!recipient.email) {
-        await admin
-          .from('notification_deliveries')
-          .update({
-            status: 'skipped',
-            last_error: 'no_recipient_email',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', delivery.id);
-        skipped++;
+        queueSkip(delivery.id, 'no_recipient_email');
         continue;
       }
 
@@ -313,30 +468,10 @@ export async function processClaimedDeliveries(
         failed++;
       }
     } else if (delivery.channel === 'push') {
-      const { data: devices } = await admin
-        .from('user_devices')
-        .select('push_token, device_token')
-        .eq('user_id', delivery.user_id)
-        .eq('is_active', true);
-
-      const tokens = Array.from(
-        new Set(
-          ((devices ?? []) as Array<{ push_token?: string | null; device_token?: string | null }>)
-            .map((d) => (d.push_token || d.device_token || '').trim())
-            .filter(Boolean),
-        ),
-      );
+      const tokens = deviceTokensByUser.get(delivery.user_id) ?? [];
 
       if (tokens.length === 0) {
-        await admin
-          .from('notification_deliveries')
-          .update({
-            status: 'skipped',
-            last_error: 'no_active_devices',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', delivery.id);
-        skipped++;
+        queueSkip(delivery.id, 'no_active_devices');
         continue;
       }
 
@@ -354,17 +489,160 @@ export async function processClaimedDeliveries(
           conversationId: enrichedPayload.conversation_id ? String(enrichedPayload.conversation_id) : undefined,
         },
       });
+    } else if (delivery.channel === 'sms') {
+      const phoneCheck = formatToE164(recipient.phone);
+      if (!phoneCheck.valid) {
+        queueSkip(delivery.id, 'no_valid_phone');
+        continue;
+      }
+
+      const trackingId = delivery.tracking_id || delivery.id;
+
+      // Reconcile-before-retry guard for Mobile Sasa:
+      // If a previous attempt crashed/timed out after sending, check /v1/dlr before re-posting to prevent duplicate SMS.
+      if (
+        delivery.tracking_id &&
+        (delivery.attempt_count > 0 || (delivery.last_error || '').includes('Recovered from stale'))
+      ) {
+        const msAdapter = getSmsProviderAdapter('mobilesasa');
+        if (msAdapter.isConfigured() && msAdapter.lookupDlr) {
+          const dlr = await msAdapter.lookupDlr({
+            trackingId,
+            messageId: delivery.provider_message_id || undefined,
+          });
+          if (dlr.found && (dlr.normalizedStatus === 'delivered' || dlr.normalizedStatus === 'sent')) {
+            const nowIso = new Date().toISOString();
+            await admin
+              .from('notification_deliveries')
+              .update({
+                status: dlr.normalizedStatus === 'delivered' ? 'delivered' : 'sent',
+                provider: 'mobilesasa',
+                provider_message_id: dlr.providerMessageId || delivery.provider_message_id || null,
+                dlr_status: dlr.rawStatus || dlr.normalizedStatus,
+                dlr_received_at: dlr.normalizedStatus === 'delivered' ? nowIso : null,
+                provider_response: dlr.rawResponse ?? null,
+                sent_at: nowIso,
+                last_error: null,
+                updated_at: nowIso,
+              })
+              .eq('id', delivery.id);
+            sent++;
+            continue;
+          }
+        }
+      }
+
+      // Persist tracking_id prior to outbound HTTP call so any mid-request crash is reconcilable
+      if (!delivery.tracking_id) {
+        await admin
+          .from('notification_deliveries')
+          .update({ tracking_id: trackingId, updated_at: new Date().toISOString() })
+          .eq('id', delivery.id);
+      }
+
+      const smsText = sanitizeSmsText(rendered.smsBody || rendered.pushBody || rendered.pushTitle, 160);
+      const smsRes = await sendSmsViaGateway({
+        toE164: phoneCheck.e164,
+        text: smsText,
+        trackingId,
+      });
+
+      if (smsRes.accepted) {
+        const nowIso = new Date().toISOString();
+        await admin
+          .from('notification_deliveries')
+          .update({
+            status: 'sent', // Accepted by provider gateway; handset delivery confirmed via DLR webhook
+            provider: smsRes.provider,
+            provider_message_id: smsRes.providerMessageId ?? null,
+            tracking_id: trackingId,
+            provider_cost: smsRes.costParts ?? null,
+            provider_response: smsRes.rawResponse ?? null,
+            attempt_count: (delivery.attempt_count || 0) + 1,
+            sent_at: nowIso,
+            last_error: smsRes.usedFallback && smsRes.primaryError
+              ? `Failover from ${smsRes.primaryError}`.slice(0, 500)
+              : null,
+            updated_at: nowIso,
+          })
+          .eq('id', delivery.id);
+        sent++;
+      } else if (smsRes.errorKind === 'disabled') {
+        queueSkip(delivery.id, 'sms_globally_disabled');
+      } else if (smsRes.errorKind === 'duplicate_blocked') {
+        queueSkip(delivery.id, `mobilesasa_duplicate_blocked:${smsRes.rawStatus || '0409'}`);
+      } else {
+        const errMsg = `[${smsRes.provider}] ${smsRes.error || 'SMS send failed'} (${maskPhoneForLogs(phoneCheck.e164)})`;
+        const retryable = smsRes.errorKind === 'retryable' || smsRes.errorKind === 'unconfigured';
+        await markDeliveryRetryOrDeadLetter(admin, delivery, errMsg, retryable);
+        failed++;
+      }
     } else {
-      await admin
-        .from('notification_deliveries')
-        .update({
-          status: 'skipped',
-          last_error: `unsupported_worker_channel:${delivery.channel}`,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', delivery.id);
-      skipped++;
+      queueSkip(delivery.id, `unsupported_worker_channel:${delivery.channel}`);
     }
+  }
+
+  // Flush bulk skip updates and unconfigured-email retries in parallel
+  const flushTasks: PromiseLike<unknown>[] = [];
+  if (skippedByReason.size > 0) {
+    const nowIso = new Date().toISOString();
+    for (const [reason, ids] of skippedByReason.entries()) {
+      flushTasks.push(
+        admin
+          .from('notification_deliveries')
+          .update({
+            status: 'skipped',
+            last_error: reason,
+            updated_at: nowIso,
+          })
+          .in('id', ids),
+      );
+    }
+  }
+  if (unconfiguredEmailDeliveries.length > 0) {
+    const nowIso = new Date().toISOString();
+    const deadIds: string[] = [];
+    const retryGroups = new Map<number, string[]>();
+    for (const d of unconfiguredEmailDeliveries) {
+      const nextAttempts = (d.attempt_count || 0) + 1;
+      const maxAttempts = d.max_attempts || 5;
+      if (nextAttempts >= maxAttempts) {
+        deadIds.push(d.id);
+      } else {
+        const list = retryGroups.get(nextAttempts) || [];
+        list.push(d.id);
+        retryGroups.set(nextAttempts, list);
+      }
+    }
+    if (deadIds.length > 0) {
+      flushTasks.push(
+        admin
+          .from('notification_deliveries')
+          .update({
+            status: 'dead_letter',
+            last_error: 'RESEND_API_KEY not configured',
+            updated_at: nowIso,
+          })
+          .in('id', deadIds),
+      );
+    }
+    for (const [nextAttempts, ids] of retryGroups.entries()) {
+      flushTasks.push(
+        admin
+          .from('notification_deliveries')
+          .update({
+            status: 'failed',
+            attempt_count: nextAttempts,
+            next_retry_at: computeNextRetryIso(nextAttempts),
+            last_error: 'RESEND_API_KEY not configured',
+            updated_at: nowIso,
+          })
+          .in('id', ids),
+      );
+    }
+  }
+  if (flushTasks.length > 0) {
+    await Promise.all(flushTasks);
   }
 
   // Flatten and chunk Expo push messages to <= 100 per API call

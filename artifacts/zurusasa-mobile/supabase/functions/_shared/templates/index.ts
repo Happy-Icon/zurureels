@@ -1,4 +1,5 @@
 import { resolvePolicy, type NotificationPriority } from '../notificationPolicy.ts';
+import { sanitizeSmsText } from '../sms/gsm7.ts';
 
 export interface RenderedTemplate {
   templateKey: string;
@@ -8,6 +9,7 @@ export interface RenderedTemplate {
   text: string;
   pushTitle: string;
   pushBody: string;
+  smsBody: string;
   actionType: string;
 }
 
@@ -124,10 +126,136 @@ export const ALLOWED_CLIENT_EMAIL_TEMPLATES = new Set<string>([
   'booking_cancelled_guest',
 ]);
 
+export function renderSmsBody(
+  key: string,
+  payload: Record<string, unknown>,
+  ctx: {
+    tripTitle: string;
+    bookingRef: string;
+    dateRange: string | null;
+    amountStr: string | null;
+    fallbackText: string;
+  },
+): string {
+  const { tripTitle, bookingRef, dateRange, amountStr, fallbackText } = ctx;
+  const shortTitle = tripTitle.length > 36 ? `${tripTitle.slice(0, 33).trimEnd()}...` : tripTitle;
+  const refTag = bookingRef ? `Ref #${bookingRef}` : undefined;
+
+  switch (key) {
+    case 'payment_success':
+    case 'payment_receipt': {
+      const isInstant = payload.booking_mode === 'instant' || payload.booking_status === 'confirmed';
+      const base = isInstant
+        ? `ZuruSasa: Booking CONFIRMED for ${shortTitle}${dateRange ? ` (${dateRange})` : ''}${amountStr ? ` - ${amountStr}` : ''}. Open Trips for check-in PIN.`
+        : `ZuruSasa: Payment received${amountStr ? ` (${amountStr})` : ''} for ${shortTitle}. Awaiting host approval. We will alert you once confirmed.`;
+      return sanitizeSmsText(base, 160, refTag);
+    }
+    case 'payment_failed': {
+      const base = `ZuruSasa: Payment unsuccessful for ${shortTitle}${amountStr ? ` (${amountStr})` : ''}. No funds were captured. Retry checkout in the app.`;
+      const payRef = typeof payload.provider_reference === 'string' && payload.provider_reference
+        ? `Ref #${payload.provider_reference.slice(-8).toUpperCase()}`
+        : refTag;
+      return sanitizeSmsText(base, 160, payRef);
+    }
+    case 'booking_confirmed': {
+      const base = `ZuruSasa: Confirmed! Your booking for ${shortTitle}${dateRange ? ` (${dateRange})` : ''} is approved. Open Trips for directions & check-in PIN.`;
+      return sanitizeSmsText(base, 160, refTag);
+    }
+    case 'booking_request': {
+      const isInstant = payload.booking_mode === 'instant' || payload.booking_status === 'confirmed';
+      const base = isInstant
+        ? `ZuruSasa Host: New instant booking for ${shortTitle}${dateRange ? ` (${dateRange})` : ''}${amountStr ? ` - ${amountStr}` : ''}. Open Host Dashboard.`
+        : `ZuruSasa Host: New paid booking request for ${shortTitle}${amountStr ? ` (${amountStr})` : ''}. Open Host Dashboard to confirm or decline.`;
+      return sanitizeSmsText(base, 160, refTag);
+    }
+    case 'booking_declined': {
+      const base = `ZuruSasa: Your booking for ${shortTitle} was declined by the host. Any payment made is being refunded automatically.`;
+      return sanitizeSmsText(base, 160, refTag);
+    }
+    case 'booking_cancelled':
+    case 'booking_cancelled_host':
+    case 'booking_cancelled_guest': {
+      const isHostCopy = key === 'booking_cancelled_host';
+      const base = isHostCopy
+        ? `ZuruSasa Host: Booking for ${shortTitle} was cancelled by the guest. Your calendar dates are reopened.`
+        : `ZuruSasa: Your booking for ${shortTitle} has been cancelled.${amountStr ? ` Refund of ${amountStr} initiated.` : ''}`;
+      return sanitizeSmsText(base, 160, refTag);
+    }
+    case 'refund_processed': {
+      const base = `ZuruSasa: Refund${amountStr ? ` of ${amountStr}` : ''} for ${shortTitle} has been processed to your original payment account.`;
+      return sanitizeSmsText(base, 160, refTag);
+    }
+    case 'payout_completed': {
+      const transferRef = payload.transfer_code
+        ? `Ref #${String(payload.transfer_code).slice(-8).toUpperCase()}`
+        : refTag;
+      const base = `ZuruSasa Host: Payout${amountStr ? ` of ${amountStr}` : ''} settled to your payout account. View Host Wallet for details.`;
+      return sanitizeSmsText(base, 160, transferRef);
+    }
+    case 'payout_failed': {
+      const base = `ZuruSasa Host Action Needed: Your payout${amountStr ? ` (${amountStr})` : ''} failed. Update your M-Pesa or bank details in Host Wallet.`;
+      return sanitizeSmsText(base, 160, refTag);
+    }
+    case 'arrival_issue_reported': {
+      const base = `ZuruSasa Host Urgent: Guest reported an arrival issue for ${shortTitle}. Payout is paused pending review. Open Inbox now.`;
+      return sanitizeSmsText(base, 160, refTag);
+    }
+    case 'booking_reminder_24h': {
+      const isHost = payload.recipient_role === 'host';
+      const checkInTime = payload.check_in_time ? ` at ${String(payload.check_in_time)}` : '';
+      const base = isHost
+        ? `ZuruSasa Host Reminder: Guest arrives tomorrow${checkInTime} for ${shortTitle}. Ensure check-in readiness.`
+        : `ZuruSasa Reminder: ${shortTitle} starts tomorrow${checkInTime}. Open Trips for directions & check-in PIN.`;
+      return sanitizeSmsText(base, 160, refTag);
+    }
+    case 'booking_reminder_1h': {
+      const isHost = payload.recipient_role === 'host';
+      const base = isHost
+        ? `ZuruSasa Host Reminder: Your guest for ${shortTitle} arrives in 1 hour. Be ready for check-in.`
+        : `ZuruSasa Reminder: ${shortTitle} starts in 1 hour! Open Trips for directions & your 6-digit check-in PIN.`;
+      return sanitizeSmsText(base, 160, refTag);
+    }
+    case 'verification_approved':
+      return sanitizeSmsText('ZuruSasa: Identity verified! Your Verified Host badge is now active on your profile and listings.', 160);
+    case 'verification_declined':
+      return sanitizeSmsText('ZuruSasa: Your identity verification needs attention. Open the app to retry with clear ID photos.', 160);
+    default:
+      return sanitizeSmsText(`ZuruSasa: ${fallbackText}`, 160, refTag);
+  }
+}
+
 export function renderNotificationTemplate(
   templateKey: string,
   payload: Record<string, unknown> = {},
 ): RenderedTemplate {
+  const core = renderNotificationTemplateCore(templateKey, payload);
+  const key = String(templateKey || 'generic').trim().toLowerCase();
+  const tz = typeof payload.timezone === 'string' && payload.timezone.trim() ? payload.timezone.trim() : 'Africa/Nairobi';
+  const tripTitle = String(payload.trip_title || payload.title || 'your reservation').trim();
+  const bookingId = typeof payload.booking_id === 'string' ? payload.booking_id : typeof payload.action_id === 'string' ? payload.action_id : '';
+  const bookingRef = bookingId ? bookingId.slice(0, 8).toUpperCase() : '';
+  const checkInStr = formatShortDate(payload.check_in || payload.start_date, tz);
+  const checkOutStr = formatShortDate(payload.check_out || payload.end_date, tz);
+  const dateRange = checkInStr && checkOutStr && checkInStr !== checkOutStr ? `${checkInStr} - ${checkOutStr}` : checkInStr;
+  const amountMajorStr = formatKes(payload.amount, false);
+  const amountMinorStr = formatKes(payload.amount_minor ?? payload.refund_amount_minor, true);
+  const amountStr = amountMinorStr || amountMajorStr;
+
+  const smsBody = renderSmsBody(key, payload, {
+    tripTitle,
+    bookingRef,
+    dateRange,
+    amountStr,
+    fallbackText: core.pushBody || core.pushTitle,
+  });
+
+  return { ...core, smsBody };
+}
+
+function renderNotificationTemplateCore(
+  templateKey: string,
+  payload: Record<string, unknown> = {},
+): Omit<RenderedTemplate, 'smsBody'> {
   const key = String(templateKey || 'generic').trim().toLowerCase();
   const policy = resolvePolicy(key);
   const tz = typeof payload.timezone === 'string' && payload.timezone.trim() ? payload.timezone.trim() : 'Africa/Nairobi';

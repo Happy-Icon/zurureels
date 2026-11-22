@@ -1,7 +1,10 @@
 /// <reference path="../deno.d.ts" />
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
-import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
+import {
+  enqueueNotificationEvent,
+  kickNotificationQueueAsync,
+} from '../_shared/notificationOrchestrator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,7 +57,7 @@ async function dispatchPostSettlementNotifications(admin: SupabaseClient, bookin
     const { data: bData } = await admin
       .from('bookings')
       .select(
-        'id, user_id, experience_id, trip_title, amount, status, check_in, check_out, terms_snapshot, experience:experiences(user_id, title, booking_mode, timezone)',
+        'id, user_id, experience_id, trip_title, amount, status, check_in, check_out, terms_snapshot, quote:booking_quotes(host_id), experience:experiences(user_id, title, booking_mode, timezone)',
       )
       .eq('id', bookingId)
       .single();
@@ -62,8 +65,9 @@ async function dispatchPostSettlementNotifications(admin: SupabaseClient, bookin
     if (!bData) return;
 
     const exp = Array.isArray(bData.experience) ? bData.experience[0] : bData.experience;
+    const quote = Array.isArray((bData as any).quote) ? (bData as any).quote[0] : (bData as any).quote;
     const guestId = bData.user_id;
-    const hostId = (exp as any)?.user_id;
+    const hostId = quote?.host_id || (exp as any)?.user_id;
     const tripTitle = bData.trip_title || (exp as any)?.title || 'Stay';
     const amountStr = `KES ${Number(bData.amount || 0).toLocaleString()}`;
     const bookingMode =
@@ -82,7 +86,7 @@ async function dispatchPostSettlementNotifications(admin: SupabaseClient, bookin
           : `Your payment of ${amountStr} for "${tripTitle}" was received. The host will confirm your reservation shortly.`,
         dedupeKey: `payment_success:${bookingId}:${guestId}`,
         priority: 'critical',
-        channels: ['in_app', 'push', 'email'],
+        channels: ['in_app', 'push', 'email', 'sms'],
         actionType: 'booking',
         actionId: bookingId,
         payload: {
@@ -109,7 +113,7 @@ async function dispatchPostSettlementNotifications(admin: SupabaseClient, bookin
           : `A guest paid ${amountStr} for "${tripTitle}". Review and confirm the reservation in your Host Dashboard.`,
         dedupeKey: `booking_request:${bookingId}:${hostId}`,
         priority: 'critical',
-        channels: ['in_app', 'push', 'email'],
+        channels: ['in_app', 'push', 'email', 'sms'],
         actionType: 'booking',
         actionId: bookingId,
         payload: {
@@ -124,6 +128,8 @@ async function dispatchPostSettlementNotifications(admin: SupabaseClient, bookin
         },
       });
     }
+
+    kickNotificationQueueAsync();
   } catch (notifErr) {
     console.warn('Post-settlement notification error:', notifErr);
   }
@@ -410,15 +416,17 @@ Deno.serve(async (request) => {
               message: `Your payment for "${tripTitle}" could not be completed (${failureMsg}). You can retry checkout anytime.`,
               dedupeKey: `payment_failed:${providerReference}:${failedAttempt.guest_id}`,
               priority: 'critical',
-              channels: ['in_app', 'push', 'email'],
+              channels: ['in_app', 'push', 'email', 'sms'],
               actionType: 'booking',
               actionId: failedAttempt.quote_id || failedAttempt.id,
               payload: {
                 trip_title: tripTitle,
                 amount_minor: failedAttempt.amount,
                 failure_message: failureMsg,
+                provider_reference: providerReference,
               },
             });
+            kickNotificationQueueAsync();
           }
         } catch (failNotifErr) {
           console.warn('[paystack-webhook] charge.failed notification warning:', failNotifErr);
@@ -484,7 +492,7 @@ Deno.serve(async (request) => {
                 message: `Your refund for "${bRow.trip_title || 'your reservation'}" has been processed successfully.`,
                 dedupeKey: `refund_processed:${bRow.id}:${bRow.user_id}`,
                 priority: 'critical',
-                channels: ['in_app', 'push', 'email'],
+                channels: ['in_app', 'push', 'email', 'sms'],
                 actionType: 'booking',
                 actionId: bRow.id,
                 payload: {
@@ -493,6 +501,7 @@ Deno.serve(async (request) => {
                   amount: bRow.amount,
                 },
               });
+              kickNotificationQueueAsync();
             }
           }
         }
@@ -504,8 +513,144 @@ Deno.serve(async (request) => {
         .eq('id', eventRecordId);
 
       return json({ status: 'refund_settled' }, 200);
+    } else if (
+      eventType === 'transfer.success' ||
+      eventType === 'transfer.failed' ||
+      eventType === 'transfer.reversed'
+    ) {
+      const transferCode = data.transfer_code ? String(data.transfer_code) : null;
+      const transferRef = data.reference ? String(data.reference) : null;
+
+      let payoutRow: any = null;
+      if (transferCode) {
+        const { data: byCode } = await admin
+          .from('host_payouts')
+          .select('id, host_id, booking_id, amount, currency, status, provider_transfer_code')
+          .eq('provider_transfer_code', transferCode)
+          .maybeSingle();
+        payoutRow = byCode;
+      }
+
+      if (!payoutRow && transferRef && transferRef.startsWith('payout_')) {
+        const stripped = transferRef.slice('payout_'.length);
+        if (stripped.length === 32) {
+          const reconstructedUuid = `${stripped.slice(0, 8)}-${stripped.slice(8, 12)}-${stripped.slice(12, 16)}-${stripped.slice(16, 20)}-${stripped.slice(20)}`;
+          const { data: byId } = await admin
+            .from('host_payouts')
+            .select('id, host_id, booking_id, amount, currency, status, provider_transfer_code')
+            .eq('id', reconstructedUuid)
+            .maybeSingle();
+          payoutRow = byId;
+        }
+      }
+
+      if (payoutRow) {
+        const nowIso = new Date().toISOString();
+        const resolvedTransferCode = transferCode || payoutRow.provider_transfer_code || transferRef || payoutRow.id;
+
+        if (eventType === 'transfer.success') {
+          if (payoutRow.status !== 'success') {
+            await admin
+              .from('host_payouts')
+              .update({
+                status: 'success',
+                provider_transfer_code: resolvedTransferCode,
+                provider_response: payload,
+                processed_at: nowIso,
+                updated_at: nowIso,
+              })
+              .eq('id', payoutRow.id);
+
+            await admin.from('financial_ledger').insert({
+              booking_id: payoutRow.booking_id,
+              entry_type: 'host_payout_debit',
+              debit_account: 'HOST_ESCROW_PAYABLE',
+              credit_account: 'PAYSTACK_BANK_OUTFLOW',
+              amount: payoutRow.amount,
+              currency: payoutRow.currency || 'KES',
+              metadata: {
+                payout_id: payoutRow.id,
+                transfer_code: resolvedTransferCode,
+                host_id: payoutRow.host_id,
+                settled_via: 'paystack_webhook',
+              },
+            });
+
+            if (payoutRow.host_id) {
+              const payoutAmountKES = (Number(payoutRow.amount) / 100).toLocaleString();
+              const refId = payoutRow.booking_id
+                ? String(payoutRow.booking_id).slice(0, 8).toUpperCase()
+                : String(payoutRow.id).slice(0, 8).toUpperCase();
+              await enqueueNotificationEvent(admin, {
+                userId: payoutRow.host_id,
+                type: 'payout_completed',
+                templateKey: 'payout_completed',
+                title: 'Payout Sent!',
+                message: `KES ${payoutAmountKES} has been settled to your payout account for booking #${refId}.`,
+                dedupeKey: `payout_completed:${payoutRow.id}:${payoutRow.host_id}`,
+                priority: 'critical',
+                channels: ['in_app', 'push', 'email', 'sms'],
+                actionType: 'payout',
+                actionId: payoutRow.id,
+                payload: {
+                  payout_id: payoutRow.id,
+                  booking_id: payoutRow.booking_id,
+                  amount_minor: payoutRow.amount,
+                  transfer_code: resolvedTransferCode,
+                },
+              });
+              kickNotificationQueueAsync();
+            }
+          }
+        } else {
+          // transfer.failed or transfer.reversed
+          const failReason = String(
+            data.reason || data.message || `Paystack ${eventType}`,
+          );
+          await admin
+            .from('host_payouts')
+            .update({
+              status: 'failed',
+              failure_reason: failReason,
+              provider_response: payload,
+              processed_at: nowIso,
+              updated_at: nowIso,
+            })
+            .eq('id', payoutRow.id);
+
+          if (payoutRow.host_id) {
+            await enqueueNotificationEvent(admin, {
+              userId: payoutRow.host_id,
+              type: 'payout_failed',
+              templateKey: 'payout_failed',
+              title: 'Action Needed: Host Payout Failed',
+              message: `Your host payout transfer could not be completed (${failReason}). Please verify your payout account details in Host Wallet.`,
+              dedupeKey: `payout_failed:${payoutRow.id}:${payoutRow.host_id}`,
+              priority: 'critical',
+              channels: ['in_app', 'push', 'email', 'sms'],
+              actionType: 'payout',
+              actionId: payoutRow.id,
+              payload: {
+                payout_id: payoutRow.id,
+                booking_id: payoutRow.booking_id,
+                amount_minor: payoutRow.amount,
+                failure_reason: failReason,
+                transfer_code: resolvedTransferCode,
+              },
+            });
+            kickNotificationQueueAsync();
+          }
+        }
+      }
+
+      await admin
+        .from('payment_events')
+        .update({ processed_at: new Date().toISOString() })
+        .eq('id', eventRecordId);
+
+      return json({ status: `${eventType}_processed` }, 200);
     } else {
-      // Unhandled event types (e.g. transfer updates, subscription events)
+      // Unhandled event types (e.g. subscription events)
       await admin
         .from('payment_events')
         .update({ processed_at: new Date().toISOString() })

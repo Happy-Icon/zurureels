@@ -8,6 +8,9 @@ import {
   resolvePolicy,
   type NotificationSettingsMap,
 } from '../_shared/notificationPolicy.ts';
+import { formatToE164 } from '../_shared/sms/phone.ts';
+import { sanitizeSmsText } from '../_shared/sms/gsm7.ts';
+import { sendSmsViaGateway } from '../_shared/sms/smsGateway.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,28 +35,10 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function formatToE164(rawPhone: string, defaultCountryCode = '254'): { valid: boolean; e164: string; error?: string } {
-  if (!rawPhone || typeof rawPhone !== 'string') {
-    return { valid: false, e164: '', error: 'No phone number provided' };
-  }
-  let cleaned = rawPhone.trim().replace(/[^\d+]/g, '');
-  if (!cleaned) {
-    return { valid: false, e164: '', error: 'Phone number contains no numeric digits' };
-  }
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
-    cleaned = `+${defaultCountryCode}${cleaned.slice(1)}`;
-  } else if (!cleaned.startsWith('+')) {
-    cleaned = `+${cleaned}`;
-  }
-  if (!/^\+[1-9]\d{6,14}$/.test(cleaned)) {
-    return { valid: false, e164: cleaned, error: 'Phone number is not valid E.164 format' };
-  }
-  return { valid: true, e164: cleaned };
-}
-
 function resolveNotificationCategory(notifType?: string): string | null {
   if (!notifType) return null;
-  if (notifType === 'message') return 'messages';
+  if (notifType === 'message' || notifType === 'new_message') return 'messages';
+  if (notifType.includes('reminder')) return 'reminders';
   if (
     notifType.startsWith('booking_') ||
     notifType.startsWith('payment_') ||
@@ -63,10 +48,9 @@ function resolveNotificationCategory(notifType?: string): string | null {
   ) {
     return 'account_activity';
   }
-  if (notifType.startsWith('listing_') || notifType === 'verification') {
+  if (notifType.startsWith('listing_') || notifType.startsWith('verification') || notifType === 'arrival_issue_reported') {
     return 'listing_activity';
   }
-  if (notifType === 'review_reminder') return 'reminders';
   if (notifType === 'promotion' || notifType === 'wishlist_available') return 'all_offers';
   return null;
 }
@@ -165,84 +149,6 @@ async function verifyCallerRecipientRelationship(
   }
 
   return false;
-}
-
-async function dispatchAfricasTalkingSms(
-  phoneE164: string,
-  message: string,
-): Promise<{
-  sent: boolean;
-  provider: string;
-  httpStatus?: number;
-  messageId?: string | null;
-  status?: string;
-  error?: string;
-}> {
-  const apiKey = Deno.env.get('AFRICASTALKING_API_KEY');
-  const username = Deno.env.get('AFRICASTALKING_USERNAME');
-  const senderId = Deno.env.get('AFRICASTALKING_SENDER_ID');
-
-  if (!apiKey || !username) {
-    return {
-      sent: false,
-      provider: 'unconfigured',
-      error: 'SMS gateway is not configured on server',
-    };
-  }
-
-  const endpoint =
-    username.trim().toLowerCase() === 'sandbox'
-      ? 'https://api.sandbox.africastalking.com/version1/messaging'
-      : 'https://api.africastalking.com/version1/messaging';
-
-  const form = new URLSearchParams();
-  form.set('username', username.trim());
-  form.set('to', phoneE164);
-  form.set('message', message);
-  if (senderId && senderId.trim().length > 0) {
-    form.set('from', senderId.trim());
-  }
-
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-      apiKey: apiKey.trim(),
-    },
-    body: form.toString(),
-  });
-
-  const payload = await response.json().catch(() => ({}));
-  const recipients = payload?.SMSMessageData?.Recipients;
-  const firstRecipient = Array.isArray(recipients) ? recipients[0] : null;
-  const statusCode = Number(firstRecipient?.statusCode ?? 0);
-  const statusText = String(firstRecipient?.status || payload?.SMSMessageData?.Message || '');
-
-  const isDelivered =
-    response.ok &&
-    (statusCode === 100 ||
-      statusCode === 101 ||
-      statusCode === 102 ||
-      statusText.toLowerCase() === 'success');
-
-  if (!isDelivered) {
-    return {
-      sent: false,
-      provider: 'AfricasTalking',
-      httpStatus: response.status,
-      status: statusText || undefined,
-      error: statusText || `Africa's Talking HTTP ${response.status}`,
-    };
-  }
-
-  return {
-    sent: true,
-    provider: 'AfricasTalking',
-    httpStatus: response.status,
-    messageId: firstRecipient?.messageId ? String(firstRecipient.messageId) : null,
-    status: statusText || 'Success',
-  };
 }
 
 Deno.serve(async (request) => {
@@ -515,17 +421,21 @@ Deno.serve(async (request) => {
     }
   }
 
-  // 3. Optional Server-Side Africa's Talking SMS Dispatch
+  // 3. Optional Server-Side SMS Dispatch (via dual-provider smsGateway: Mobile Sasa / Africa's Talking)
+  // Skip if server DB trigger already enqueued notifications for this dedupeKey.
   let smsSummary: {
     sent: boolean;
     provider: string;
     httpStatus?: number;
     messageId?: string | null;
+    trackingId?: string;
+    costParts?: number | null;
+    usedFallback?: boolean;
     status?: string;
     error?: string;
   } | null = null;
 
-  if (sendSms) {
+  if (sendSms && !alreadyHandledByServerTrigger) {
     const isSelfTestSms = recipientId === user.id && notifType === 'test_sms';
     const smsEligibility = evaluateChannelEligibility({
       priority: policy.priority,
@@ -563,7 +473,26 @@ Deno.serve(async (request) => {
           error: phoneCheck.error || 'Recipient has no valid E.164 phone number on file',
         };
       } else {
-        smsSummary = await dispatchAfricasTalkingSms(phoneCheck.e164, message);
+        const trackingId =
+          dedupeKey || `direct_${crypto.randomUUID()}`;
+        const cleanSms = sanitizeSmsText(message, 160);
+        const gatewayRes = await sendSmsViaGateway({
+          toE164: phoneCheck.e164,
+          text: cleanSms,
+          trackingId,
+        });
+
+        smsSummary = {
+          sent: gatewayRes.accepted,
+          provider: gatewayRes.provider,
+          httpStatus: gatewayRes.httpStatus,
+          messageId: gatewayRes.providerMessageId ?? null,
+          trackingId: gatewayRes.trackingId,
+          costParts: gatewayRes.costParts ?? null,
+          usedFallback: gatewayRes.usedFallback,
+          status: gatewayRes.rawStatus,
+          error: gatewayRes.error,
+        };
       }
     }
   }

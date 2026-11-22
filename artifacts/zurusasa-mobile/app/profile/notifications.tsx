@@ -124,13 +124,13 @@ export default function NotificationPreferencesScreen() {
     travel_regulations: { ...DEFAULT_OFF },
     all_offers: { ...DEFAULT_OFF },
 
-    // Account tab
-    account_activity: { ...DEFAULT_ACCOUNT_ON },
+    // Account tab (aligned with active server notificationPolicy SMS defaults)
+    account_activity: { ...DEFAULT_ACCOUNT_WITH_SMS },
     listing_activity: { ...DEFAULT_ACCOUNT_WITH_SMS },
     guest_policies: { ...DEFAULT_ACCOUNT_ON },
     host_policies: { ...DEFAULT_ACCOUNT_ON },
-    reminders: { ...DEFAULT_ACCOUNT_ON },
-    messages: { ...DEFAULT_ACCOUNT_WITH_SMS },
+    reminders: { ...DEFAULT_ACCOUNT_WITH_SMS },
+    messages: { ...DEFAULT_ACCOUNT_ON },
   });
 
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 16;
@@ -149,9 +149,17 @@ export default function NotificationPreferencesScreen() {
           .eq('id', user.id)
           .single();
 
-        if (data?.notification_settings) {
-          const loaded = data.notification_settings as Record<string, ChannelPrefs>;
-          setPrefsMap((prev) => ({ ...prev, ...loaded }));
+        if (data?.notification_settings && typeof data.notification_settings === 'object') {
+          const loaded = data.notification_settings as Record<string, Partial<ChannelPrefs>>;
+          setPrefsMap((prev) => {
+            const merged: Record<string, ChannelPrefs> = { ...prev };
+            for (const [key, val] of Object.entries(loaded)) {
+              if (val && typeof val === 'object') {
+                merged[key] = { ...(prev[key] || DEFAULT_OFF), ...val };
+              }
+            }
+            return merged;
+          });
         }
       } catch (e) {
         console.warn('Note loading notification settings:', e);
@@ -184,9 +192,10 @@ export default function NotificationPreferencesScreen() {
     });
 
     if (user?.id) {
+      const prevMap = prefsMap;
       try {
         const nowIso = new Date().toISOString();
-        await supabase
+        const { error } = await supabase
           .from('profiles')
           .update({
             notification_settings: updatedMap,
@@ -196,16 +205,22 @@ export default function NotificationPreferencesScreen() {
               : { marketing_opt_out_at: nowIso }),
           })
           .eq('id', user.id);
-      } catch (e) {
-        // Fallback if marketing_opt_in columns have not yet been migrated
-        try {
-          await supabase
+
+        if (error) {
+          // Fallback if marketing_opt_in columns are not present in an older schema
+          const { error: fallbackErr } = await supabase
             .from('profiles')
             .update({ notification_settings: updatedMap })
             .eq('id', user.id);
-        } catch (fallbackErr) {
-          console.warn('Error saving notification pref:', fallbackErr);
+
+          if (fallbackErr) {
+            console.warn('Error saving notification pref:', fallbackErr.message);
+            setPrefsMap(prevMap);
+          }
         }
+      } catch (e) {
+        console.warn('Error saving notification pref:', e);
+        setPrefsMap(prevMap);
       }
     }
   };

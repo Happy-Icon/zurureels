@@ -1,7 +1,10 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { authorizeWorkerOrAdmin } from '../_shared/workerAuth.ts';
-import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
+import {
+  enqueueNotificationEvent,
+  kickNotificationQueueAsync,
+} from '../_shared/notificationOrchestrator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -211,58 +214,76 @@ Deno.serve(async (request) => {
 
       const data = providerResult.data ?? {};
       const providerRefundId = String(data.id || data.reference || refund.id);
+      const refundProviderStatus = String(data.status || '').trim().toLowerCase();
+      const processedImmediately = refundProviderStatus === 'processed';
 
-      await admin
-        .from('refund_requests')
-        .update({
-          status: 'success',
-          provider_refund_id: providerRefundId,
-          provider_response: providerResult,
-          processed_at: new Date().toISOString(),
-        })
-        .eq('id', refund.id);
+      if (processedImmediately) {
+        await admin
+          .from('refund_requests')
+          .update({
+            status: 'success',
+            provider_refund_id: providerRefundId,
+            provider_response: providerResult,
+            processed_at: new Date().toISOString(),
+          })
+          .eq('id', refund.id);
 
-      await admin
-        .from('bookings')
-        .update({ status: 'refunded', updated_at: new Date().toISOString() })
-        .eq('id', refund.booking_id);
+        await admin
+          .from('bookings')
+          .update({ status: 'refunded', updated_at: new Date().toISOString() })
+          .eq('id', refund.booking_id);
 
-      await admin
-        .from('booking_lifecycle_events')
-        .insert({
-          booking_id: refund.booking_id,
-          from_status: 'refund_pending',
-          to_status: 'refunded',
-          actor_type: 'payment_provider',
-          reason: 'Paystack refund processed',
-        });
-
-      try {
-        const refundAmountKES = (Number(refund.amount) / 100).toLocaleString();
-        if (refund.guest_id) {
-          await enqueueNotificationEvent(admin, {
-            userId: refund.guest_id,
-            type: 'refund_processed',
-            templateKey: 'refund_processed',
-            title: 'Refund Processed!',
-            message: `KES ${refundAmountKES} has been refunded to your original payment account for booking #${refund.booking_id.slice(0, 8).toUpperCase()}.`,
-            dedupeKey: `refund_processed:${refund.booking_id}:${refund.guest_id}`,
-            priority: 'critical',
-            channels: ['in_app', 'push', 'email'],
-            actionType: 'booking',
-            actionId: refund.booking_id,
-            payload: {
-              booking_id: refund.booking_id,
-              amount_minor: refund.amount,
-              provider_refund_id: providerRefundId,
-            },
+        await admin
+          .from('booking_lifecycle_events')
+          .insert({
+            booking_id: refund.booking_id,
+            from_status: 'refund_pending',
+            to_status: 'refunded',
+            actor_type: 'payment_provider',
+            reason: 'Paystack refund processed',
           });
-        }
-      } catch (notifErr) {
-        console.warn('Refund notification warning:', notifErr);
-      }
 
-      results.push({ refundId: refund.id, status: 'success', providerRefundId });
+        try {
+          const refundAmountKES = (Number(refund.amount) / 100).toLocaleString();
+          if (refund.guest_id) {
+            await enqueueNotificationEvent(admin, {
+              userId: refund.guest_id,
+              type: 'refund_processed',
+              templateKey: 'refund_processed',
+              title: 'Refund Processed!',
+              message: `KES ${refundAmountKES} has been refunded to your original payment account for booking #${refund.booking_id.slice(0, 8).toUpperCase()}.`,
+              dedupeKey: `refund_processed:${refund.booking_id}:${refund.guest_id}`,
+              priority: 'critical',
+              channels: ['in_app', 'push', 'email', 'sms'],
+              actionType: 'booking',
+              actionId: refund.booking_id,
+              payload: {
+                booking_id: refund.booking_id,
+                amount_minor: refund.amount,
+                provider_refund_id: providerRefundId,
+              },
+            });
+            kickNotificationQueueAsync();
+          }
+        } catch (notifErr) {
+          console.warn('Refund notification warning:', notifErr);
+        }
+
+        results.push({ refundId: refund.id, status: 'success', providerRefundId });
+      } else {
+        // Keep status as 'processing' until Paystack sends signed `refund.processed` webhook
+        await admin
+          .from('refund_requests')
+          .update({
+            status: 'processing',
+            provider_refund_id: providerRefundId,
+            provider_response: providerResult,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', refund.id);
+
+        results.push({ refundId: refund.id, status: 'processing', providerRefundId });
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error(`Error processing refund ${refund.id}:`, errorMessage);

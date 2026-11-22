@@ -1,7 +1,10 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { authorizeWorkerOrAdmin } from '../_shared/workerAuth.ts';
-import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
+import {
+  enqueueNotificationEvent,
+  kickNotificationQueueAsync,
+} from '../_shared/notificationOrchestrator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,16 +64,17 @@ Deno.serve(async (request) => {
   const nowIso = new Date(nowMs).toISOString();
   const windowUpperIso = new Date(nowMs + 26 * 3_600_000).toISOString();
 
-  // 1. Scan confirmed, un-checked-in bookings starting within the next 26 hours
+  // 1. Scan confirmed, un-checked-in bookings starting within the next 26 hours (ordered earliest-first to prevent 1h starvation)
   const { data: upcomingBookings, error: bookingErr } = await admin
     .from('bookings')
     .select(
-      'id, user_id, trip_title, check_in, check_out, terms_snapshot, experience:experiences(user_id, title, check_in_time, timezone)',
+      'id, user_id, trip_title, check_in, check_out, terms_snapshot, quote:booking_quotes(host_id), experience:experiences(user_id, title, check_in_time, timezone)',
     )
     .eq('status', 'confirmed')
     .is('checked_in_at', null)
     .gt('check_in', nowIso)
     .lte('check_in', windowUpperIso)
+    .order('check_in', { ascending: true })
     .limit(200);
 
   if (bookingErr) {
@@ -88,14 +92,15 @@ Deno.serve(async (request) => {
     if (!window) continue;
 
     const exp = Array.isArray(booking.experience) ? booking.experience[0] : booking.experience;
+    const quote = Array.isArray(booking.quote) ? booking.quote[0] : booking.quote;
     const tripTitle = booking.trip_title || exp?.title || 'Your Experience';
     const checkInTime =
       booking.terms_snapshot?.check_in_time || exp?.check_in_time || '14:00';
     const timezone =
       booking.terms_snapshot?.timezone || exp?.timezone || 'Africa/Nairobi';
     const templateKey = window === '1h' ? 'booking_reminder_1h' : 'booking_reminder_24h';
-    const channels: ('in_app' | 'push' | 'email')[] =
-      window === '24h' ? ['in_app', 'push', 'email'] : ['in_app', 'push'];
+    const channels: ('in_app' | 'push' | 'email' | 'sms')[] =
+      window === '24h' ? ['in_app', 'push', 'email', 'sms'] : ['in_app', 'push', 'sms'];
 
     // Guest reminder
     if (booking.user_id) {
@@ -129,8 +134,8 @@ Deno.serve(async (request) => {
       bookingRemindersQueued++;
     }
 
-    // Host reminder
-    const hostId = exp?.user_id;
+    // Host reminder (respecting booking_quotes.host_id fallback)
+    const hostId = quote?.host_id || exp?.user_id;
     if (hostId && hostId !== booking.user_id) {
       await enqueueNotificationEvent(admin, {
         userId: hostId,
@@ -163,7 +168,7 @@ Deno.serve(async (request) => {
     }
   }
 
-  // 2. Scan due ZuruPlan trip_reminders
+  // 2. Scan due ZuruPlan trip_reminders (ordered earliest-first)
   let tripRemindersQueued = 0;
   try {
     const { data: dueTrips } = await admin
@@ -172,6 +177,7 @@ Deno.serve(async (request) => {
       .is('sent_at', null)
       .is('cancelled_at', null)
       .lte('remind_at', nowIso)
+      .order('remind_at', { ascending: true })
       .limit(100);
 
     for (const tr of (dueTrips ?? []) as any[]) {
@@ -210,6 +216,10 @@ Deno.serve(async (request) => {
     }
   } catch (tripErr) {
     console.warn('[process-booking-reminders] trip_reminders note:', tripErr);
+  }
+
+  if (bookingRemindersQueued > 0 || tripRemindersQueued > 0) {
+    kickNotificationQueueAsync();
   }
 
   return json({

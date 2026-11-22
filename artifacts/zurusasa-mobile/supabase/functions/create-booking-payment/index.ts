@@ -1,7 +1,10 @@
 /// <reference path="../deno.d.ts" />
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit } from '../_shared/rateLimiter.ts';
-import { enqueueNotificationEvent } from '../_shared/notificationOrchestrator.ts';
+import {
+  enqueueNotificationEvent,
+  kickNotificationQueueAsync,
+} from '../_shared/notificationOrchestrator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -185,13 +188,15 @@ Deno.serve(async (request) => {
           if (bData.user_id) {
             await enqueueNotificationEvent(admin, {
               userId: bData.user_id,
-              type: isConfirmed ? 'booking_confirmed' : 'booking_created',
-              templateKey: 'booking_confirmed',
-              title: isConfirmed ? 'Reservation Confirmed!' : 'Reservation Received!',
-              message: `Your free reservation for "${tripTitle}" is ${isConfirmed ? 'confirmed' : 'recorded'}.`,
+              type: isConfirmed ? 'booking_confirmed' : 'payment_success',
+              templateKey: isConfirmed ? 'booking_confirmed' : 'payment_receipt',
+              title: isConfirmed ? 'Reservation Confirmed!' : 'Reservation Received — Awaiting Host Approval',
+              message: isConfirmed
+                ? `Your free reservation for "${tripTitle}" is confirmed.`
+                : `Your free reservation request for "${tripTitle}" was received. The host will review and confirm shortly.`,
               dedupeKey: `free_booking:${bData.id}:${bData.user_id}`,
               priority: 'critical',
-              channels: ['in_app', 'push', 'email'],
+              channels: ['in_app', 'push', 'email', 'sms'],
               actionType: 'booking',
               actionId: bData.id,
               payload: {
@@ -212,11 +217,13 @@ Deno.serve(async (request) => {
               userId: hostId,
               type: 'booking_request',
               templateKey: 'booking_request',
-              title: isConfirmed ? 'New Free Reservation!' : 'New Reservation Request',
-              message: `A guest reserved "${tripTitle}" (Free Entry).`,
+              title: isConfirmed ? 'New Free Reservation!' : 'New Free Reservation — Review & Confirm',
+              message: isConfirmed
+                ? `A guest reserved "${tripTitle}" (Free Entry).`
+                : `A guest requested "${tripTitle}" (Free Entry). Open your Host Dashboard to confirm or decline.`,
               dedupeKey: `free_booking:${bData.id}:${hostId}`,
               priority: 'critical',
-              channels: ['in_app', 'push', 'email'],
+              channels: ['in_app', 'push', 'email', 'sms'],
               actionType: 'booking',
               actionId: bData.id,
               payload: {
@@ -230,6 +237,8 @@ Deno.serve(async (request) => {
               },
             });
           }
+
+          kickNotificationQueueAsync();
         }
       } catch (freeNotifErr) {
         console.warn('[create-booking-payment] Free entry notification warning:', freeNotifErr);

@@ -31,10 +31,12 @@ export interface SendSmsResult {
 }
 
 /**
- * Validates and formats a raw phone string into standard E.164 format.
+ * Validates and formats a raw phone string into strict E.164 format.
  * Examples:
- *  - "0712345678" -> "+254712345678"
- *  - "254712345678" -> "+254712345678"
+ *  - "0712345678"      -> "+254712345678"
+ *  - "712345678"       -> "+254712345678"
+ *  - "0112345678"      -> "+254112345678"
+ *  - "254712345678"    -> "+254712345678"
  *  - "+254 712 345 678" -> "+254712345678"
  */
 export function formatToE164(rawPhone: string, defaultCountryCode = '254'): E164ValidationResult {
@@ -48,13 +50,57 @@ export function formatToE164(rawPhone: string, defaultCountryCode = '254'): E164
     return { valid: false, e164: '', error: 'Phone number contains no numeric digits' };
   }
 
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
-    cleaned = `+${defaultCountryCode}${cleaned.slice(1)}`;
-  } else if (!cleaned.startsWith('+')) {
-    cleaned = `+${cleaned}`;
+  if (cleaned.startsWith('00')) {
+    cleaned = `+${cleaned.slice(2)}`;
   }
 
-  const e164Regex = /^\+[1-9]\d{6,14}$/;
+  const cc = defaultCountryCode.replace(/\D/g, '') || '254';
+
+  if (cleaned.startsWith('+')) {
+    const digitsOnly = cleaned.slice(1).replace(/\D/g, '');
+    cleaned = `+${digitsOnly}`;
+    if (cleaned.startsWith(`+${cc}0`) && cleaned.length === 1 + cc.length + 10) {
+      cleaned = `+${cc}${cleaned.slice(1 + cc.length + 1)}`;
+    }
+  } else {
+    const digitsOnly = cleaned.replace(/\D/g, '');
+    if (cc === '254') {
+      if (/^0(?:7|1)\d{8}$/.test(digitsOnly)) {
+        cleaned = `+254${digitsOnly.slice(1)}`;
+      } else if (/^(?:7|1)\d{8}$/.test(digitsOnly)) {
+        cleaned = `+254${digitsOnly}`;
+      } else if (/^2540(?:7|1)\d{8}$/.test(digitsOnly)) {
+        cleaned = `+254${digitsOnly.slice(4)}`;
+      } else if (/^254(?:7|1)\d{8}$/.test(digitsOnly)) {
+        cleaned = `+${digitsOnly}`;
+      } else if (digitsOnly.length >= 10 && digitsOnly.length <= 15 && !digitsOnly.startsWith('0')) {
+        cleaned = `+${digitsOnly}`;
+      } else {
+        return {
+          valid: false,
+          e164: digitsOnly,
+          error: `Phone number "${rawPhone}" is not valid (expected e.g. 0712345678 or +254712345678)`,
+        };
+      }
+    } else if (digitsOnly.startsWith('0') && digitsOnly.length === 10) {
+      cleaned = `+${cc}${digitsOnly.slice(1)}`;
+    } else {
+      cleaned = `+${digitsOnly}`;
+    }
+  }
+
+  if (cleaned.startsWith('+254')) {
+    if (!/^\+254(?:7|1)\d{8}$/.test(cleaned)) {
+      return {
+        valid: false,
+        e164: cleaned,
+        error: `Phone number "${rawPhone}" is not a valid Kenyan mobile number (+2547XXXXXXXX or +2541XXXXXXXX)`,
+      };
+    }
+    return { valid: true, e164: cleaned };
+  }
+
+  const e164Regex = /^\+[1-9]\d{7,14}$/;
   if (!e164Regex.test(cleaned)) {
     return {
       valid: false,
