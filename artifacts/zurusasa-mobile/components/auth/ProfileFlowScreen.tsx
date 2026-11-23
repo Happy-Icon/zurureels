@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -6,8 +6,10 @@ import type { EdgeInsets } from 'react-native-safe-area-context';
 
 import { KeyboardScreen } from '@/components/keyboard';
 import { PremiumLoader } from '@/components/PremiumLoader';
-import { HAIR, INK, ORANGE, type AuthStep } from './authConstants';
+import { INK, ORANGE, type AuthStep } from './authConstants';
 import { authStyles as styles } from './authStyles';
+
+const LIGHT_PLACEHOLDER = '#9CA3AF';
 
 interface ProfileFlowScreenProps {
   step: AuthStep;
@@ -47,6 +49,9 @@ export function ProfileFlowScreen({
   goHome,
 }: ProfileFlowScreenProps) {
   const router = useRouter();
+  const [activeField, setActiveField] = useState<
+    'firstName' | 'lastName' | 'dob' | 'email' | null
+  >(null);
 
   if (step === 'email_sent') {
     return (
@@ -138,33 +143,97 @@ export function ProfileFlowScreen({
         {/* Name */}
         <View style={styles.whiteSection}>
           <Text style={styles.whiteSectionTitle}>Legal name</Text>
-          <View style={styles.whiteFieldGroup}>
+          <View
+            style={[
+              styles.whiteFieldGroup,
+              (activeField === 'firstName' || activeField === 'lastName') &&
+                styles.whiteFieldGroupFocused,
+            ]}
+          >
             <View
               style={[
                 styles.whiteField,
-                { borderBottomWidth: 1, borderBottomColor: '#EBEBEB' },
+                activeField === 'firstName' && styles.whiteFieldFocused,
+                { borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
               ]}
             >
-              <Text style={styles.whiteFieldLabel}>First name</Text>
-              <TextInput
-                testID="first-name-input"
-                value={firstName}
-                onChangeText={setFirstName}
-                placeholder="John"
-                placeholderTextColor={HAIR}
-                style={styles.whiteFieldInput}
-              />
+              <View
+                style={[
+                  styles.whiteFieldIconWrap,
+                  activeField === 'firstName' && styles.whiteFieldIconWrapFocused,
+                ]}
+              >
+                <Feather
+                  name="user"
+                  size={15}
+                  color={activeField === 'firstName' ? ORANGE : '#6B7280'}
+                />
+              </View>
+              <View style={styles.whiteFieldBody}>
+                <Text
+                  style={[
+                    styles.whiteFieldLabel,
+                    activeField === 'firstName' && styles.whiteFieldLabelFocused,
+                  ]}
+                >
+                  First name
+                </Text>
+                <TextInput
+                  testID="first-name-input"
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  onFocus={() => setActiveField('firstName')}
+                  onBlur={() => setActiveField(null)}
+                  placeholder="e.g. Amina"
+                  placeholderTextColor={LIGHT_PLACEHOLDER}
+                  selectionColor={ORANGE}
+                  autoCapitalize="words"
+                  textContentType="givenName"
+                  style={styles.whiteFieldInput}
+                />
+              </View>
             </View>
-            <View style={styles.whiteField}>
-              <Text style={styles.whiteFieldLabel}>Last name</Text>
-              <TextInput
-                testID="last-name-input"
-                value={lastName}
-                onChangeText={setLastName}
-                placeholder="Doe"
-                placeholderTextColor={HAIR}
-                style={styles.whiteFieldInput}
-              />
+            <View
+              style={[
+                styles.whiteField,
+                activeField === 'lastName' && styles.whiteFieldFocused,
+              ]}
+            >
+              <View
+                style={[
+                  styles.whiteFieldIconWrap,
+                  activeField === 'lastName' && styles.whiteFieldIconWrapFocused,
+                ]}
+              >
+                <Feather
+                  name="user-check"
+                  size={15}
+                  color={activeField === 'lastName' ? ORANGE : '#6B7280'}
+                />
+              </View>
+              <View style={styles.whiteFieldBody}>
+                <Text
+                  style={[
+                    styles.whiteFieldLabel,
+                    activeField === 'lastName' && styles.whiteFieldLabelFocused,
+                  ]}
+                >
+                  Last name
+                </Text>
+                <TextInput
+                  testID="last-name-input"
+                  value={lastName}
+                  onChangeText={setLastName}
+                  onFocus={() => setActiveField('lastName')}
+                  onBlur={() => setActiveField(null)}
+                  placeholder="e.g. Ochieng"
+                  placeholderTextColor={LIGHT_PLACEHOLDER}
+                  selectionColor={ORANGE}
+                  autoCapitalize="words"
+                  textContentType="familyName"
+                  style={styles.whiteFieldInput}
+                />
+              </View>
             </View>
           </View>
         </View>
@@ -172,20 +241,54 @@ export function ProfileFlowScreen({
         {/* DOB */}
         <View style={styles.whiteSection}>
           <Text style={styles.whiteSectionTitle}>Date of birth</Text>
-          <View style={styles.whiteFieldGroup}>
-            <View style={styles.whiteField}>
-              <Text style={styles.whiteFieldLabel}>Birthdate</Text>
-              <TextInput
-                testID="dob-input"
-                value={dob}
-                onChangeText={setDob}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={HAIR}
-                keyboardType={
-                  Platform.OS === 'web' ? undefined : 'numbers-and-punctuation'
-                }
-                style={styles.whiteFieldInput}
-              />
+          <View
+            style={[
+              styles.whiteFieldGroup,
+              activeField === 'dob' && styles.whiteFieldGroupFocused,
+            ]}
+          >
+            <View
+              style={[
+                styles.whiteField,
+                activeField === 'dob' && styles.whiteFieldFocused,
+              ]}
+            >
+              <View
+                style={[
+                  styles.whiteFieldIconWrap,
+                  activeField === 'dob' && styles.whiteFieldIconWrapFocused,
+                ]}
+              >
+                <Feather
+                  name="calendar"
+                  size={15}
+                  color={activeField === 'dob' ? ORANGE : '#6B7280'}
+                />
+              </View>
+              <View style={styles.whiteFieldBody}>
+                <Text
+                  style={[
+                    styles.whiteFieldLabel,
+                    activeField === 'dob' && styles.whiteFieldLabelFocused,
+                  ]}
+                >
+                  Birthdate
+                </Text>
+                <TextInput
+                  testID="dob-input"
+                  value={dob}
+                  onChangeText={setDob}
+                  onFocus={() => setActiveField('dob')}
+                  onBlur={() => setActiveField(null)}
+                  placeholder="YYYY-MM-DD (e.g. 1996-05-14)"
+                  placeholderTextColor={LIGHT_PLACEHOLDER}
+                  selectionColor={ORANGE}
+                  keyboardType={
+                    Platform.OS === 'web' ? undefined : 'numbers-and-punctuation'
+                  }
+                  style={styles.whiteFieldInput}
+                />
+              </View>
             </View>
           </View>
           <Text style={styles.whiteHelpText}>
@@ -196,19 +299,55 @@ export function ProfileFlowScreen({
         {/* Email */}
         <View style={styles.whiteSection}>
           <Text style={styles.whiteSectionTitle}>Contact email</Text>
-          <View style={styles.whiteFieldGroup}>
-            <View style={styles.whiteField}>
-              <Text style={styles.whiteFieldLabel}>Email</Text>
-              <TextInput
-                testID="profile-email-input"
-                value={email}
-                onChangeText={setEmail}
-                placeholder="hello@example.com"
-                placeholderTextColor={HAIR}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                style={styles.whiteFieldInput}
-              />
+          <View
+            style={[
+              styles.whiteFieldGroup,
+              activeField === 'email' && styles.whiteFieldGroupFocused,
+            ]}
+          >
+            <View
+              style={[
+                styles.whiteField,
+                activeField === 'email' && styles.whiteFieldFocused,
+              ]}
+            >
+              <View
+                style={[
+                  styles.whiteFieldIconWrap,
+                  activeField === 'email' && styles.whiteFieldIconWrapFocused,
+                ]}
+              >
+                <Feather
+                  name="mail"
+                  size={15}
+                  color={activeField === 'email' ? ORANGE : '#6B7280'}
+                />
+              </View>
+              <View style={styles.whiteFieldBody}>
+                <Text
+                  style={[
+                    styles.whiteFieldLabel,
+                    activeField === 'email' && styles.whiteFieldLabelFocused,
+                  ]}
+                >
+                  Email
+                </Text>
+                <TextInput
+                  testID="profile-email-input"
+                  value={email}
+                  onChangeText={setEmail}
+                  onFocus={() => setActiveField('email')}
+                  onBlur={() => setActiveField(null)}
+                  placeholder="amina@example.com"
+                  placeholderTextColor={LIGHT_PLACEHOLDER}
+                  selectionColor={ORANGE}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  style={styles.whiteFieldInput}
+                />
+              </View>
             </View>
           </View>
           <Text style={styles.whiteHelpText}>

@@ -63,3 +63,6 @@ verify_jwt = false
 
 [functions.sms-dlr-africastalking]
 verify_jwt = false
+
+[functions.custom-sms-sender]
+verify_jwt = false

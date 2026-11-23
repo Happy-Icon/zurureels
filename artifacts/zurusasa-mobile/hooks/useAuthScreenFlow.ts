@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Keyboard, Platform, type ScrollView } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, AppState, Easing, Keyboard, Platform, type ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -11,7 +11,12 @@ import { passkeyService } from '@/services/passkeyService';
 import { queryClient } from '@/lib/queryClient';
 import { invalidateServerCache } from '@/lib/redis';
 import { extractAvatarFromUser } from '@/lib/avatar';
-import { DESTINATIONS, type AuthStep } from '@/components/auth/authConstants';
+import {
+  DESTINATIONS,
+  OTP_RESEND_COOLDOWN_SECONDS,
+  normalizeAuthPhoneNumber,
+  type AuthStep,
+} from '@/components/auth/authConstants';
 
 export function useAuthScreenFlow() {
   const router = useRouter();
@@ -69,7 +74,66 @@ export function useAuthScreenFlow() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const fullPhoneNumber = `${countryCode}${phone.replace(/^0+/, '')}`;
+  // Wall-clock OTP resend cooldown so returning from Messages/Email stays accurate
+  const otpCooldownUntilRef = useRef<number>(0);
+  const [otpCooldownSeconds, setOtpCooldownSeconds] = useState<number>(0);
+  const [otpTotalCooldownSeconds, setOtpTotalCooldownSeconds] = useState<number>(
+    OTP_RESEND_COOLDOWN_SECONDS,
+  );
+  const [otpAttempts, setOtpAttempts] = useState<number>(0);
+
+  const syncOtpCooldown = useCallback(() => {
+    const remainingMs = otpCooldownUntilRef.current - Date.now();
+    if (remainingMs <= 0) {
+      otpCooldownUntilRef.current = 0;
+      setOtpCooldownSeconds(0);
+      return 0;
+    }
+    const remainingSec = Math.ceil(remainingMs / 1000);
+    setOtpCooldownSeconds(remainingSec);
+    return remainingSec;
+  }, []);
+
+  const startOtpCooldown = useCallback((seconds = OTP_RESEND_COOLDOWN_SECONDS) => {
+    const safeSeconds = Math.max(1, Math.round(seconds));
+    otpCooldownUntilRef.current = Date.now() + safeSeconds * 1000;
+    setOtpTotalCooldownSeconds(safeSeconds);
+    setOtpCooldownSeconds(safeSeconds);
+  }, []);
+
+  const clearOtpCooldown = useCallback(() => {
+    otpCooldownUntilRef.current = 0;
+    setOtpCooldownSeconds(0);
+  }, []);
+
+  useEffect(() => {
+    if (otpCooldownSeconds <= 0) return;
+    const interval = setInterval(() => {
+      const remaining = syncOtpCooldown();
+      if (remaining <= 0) {
+        clearInterval(interval);
+      }
+    }, 500);
+
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        syncOtpCooldown();
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      appStateSub.remove();
+    };
+  }, [otpCooldownSeconds > 0, syncOtpCooldown]);
+
+  const normalizedPhone = useMemo(
+    () => normalizeAuthPhoneNumber(countryCode, phone),
+    [countryCode, phone],
+  );
+  const fullPhoneNumber = normalizedPhone.e164;
+  const displayPhoneNumber = normalizedPhone.display;
+  const isPhoneValid = normalizedPhone.valid;
 
   // ── Animations ──────────────────────────────────────────────────────────────
   const heroScale = useRef(new Animated.Value(1.08)).current;
@@ -271,9 +335,16 @@ export function useAuthScreenFlow() {
     return 'home';
   };
 
+  const extractRateLimitSeconds = (msg: string): number | null => {
+    const match = msg.match(/after\s+(\d+)\s+second/i);
+    if (!match) return null;
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+
   const handleSendOtp = async () => {
-    if (!phone) {
-      setError('Please enter a valid phone number');
+    if (!normalizedPhone.valid) {
+      setError(normalizedPhone.error || 'Please enter a valid phone number.');
       return;
     }
     setLoading(true);
@@ -283,13 +354,20 @@ export function useAuthScreenFlow() {
         phone: fullPhoneNumber,
       });
       if (err) throw err;
+      setOtp('');
+      setOtpAttempts(1);
+      startOtpCooldown(OTP_RESEND_COOLDOWN_SECONDS);
       setStep('otp');
     } catch (e: any) {
       const msg = e?.message || '';
-      if (/maximum time|Failed to reach hook/i.test(msg)) {
-        setError('SMS gateway response timed out (Supabase Auth Hook). Please try Email OTP or try again.');
+      const retryAfter = extractRateLimitSeconds(msg);
+      if (retryAfter) {
+        startOtpCooldown(retryAfter);
+        setError(`Please wait ${retryAfter}s before requesting another code.`);
+      } else if (/maximum time|Failed to reach hook/i.test(msg)) {
+        setError('SMS gateway response timed out. Please try again or use Email sign-in.');
       } else {
-        setError(msg || 'Failed to send code. Please try again.');
+        setError(msg || 'Failed to send verification code. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -297,6 +375,7 @@ export function useAuthScreenFlow() {
   };
 
   const handleResendOtp = async (channel: 'sms' | 'whatsapp') => {
+    if (otpCooldownSeconds > 0 || loading) return;
     setLoading(true);
     resetMessages();
     try {
@@ -305,15 +384,21 @@ export function useAuthScreenFlow() {
         options: { channel },
       });
       if (err) throw err;
-      setNotice(`Code sent via ${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}`);
-      setShowMoreOptions(false);
       setOtp('');
+      setOtpAttempts((prev) => prev + 1);
+      startOtpCooldown(OTP_RESEND_COOLDOWN_SECONDS);
+      setNotice(`Fresh 6-digit code sent via ${channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}`);
+      setShowMoreOptions(false);
     } catch (e: any) {
       const msg = e?.message || '';
-      if (/maximum time|Failed to reach hook/i.test(msg)) {
-        setError('SMS gateway response timed out (Supabase Auth Hook). Please try Email OTP or try again.');
+      const retryAfter = extractRateLimitSeconds(msg);
+      if (retryAfter) {
+        startOtpCooldown(retryAfter);
+        setError(`Please wait ${retryAfter}s before requesting another code.`);
+      } else if (/maximum time|Failed to reach hook/i.test(msg)) {
+        setError('SMS gateway response timed out. Please try again or use Email sign-in.');
       } else {
-        setError(msg || 'Failed to resend code.');
+        setError(msg || 'Failed to resend verification code.');
       }
     } finally {
       setLoading(false);
@@ -331,33 +416,72 @@ export function useAuthScreenFlow() {
         type: 'sms',
       });
       if (err) throw err;
+      clearOtpCooldown();
       if (data.user) await routeAfterLogin(data.user.id);
     } catch {
-      setError('Invalid or expired code. Please try again.');
+      setError('Invalid or expired code. Please check and try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSendEmailOtp = async () => {
-    if (!email) {
-      setError('Please enter a valid email address');
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError('Please enter a valid email address.');
       return;
     }
     setLoading(true);
     resetMessages();
-    const { error: err } = await sendOtp(email.trim().toLowerCase());
+    const { error: err } = await sendOtp(cleanEmail);
     setLoading(false);
     if (err) {
       const readable = err.trim();
-      setError(
-        !readable || readable === '{}' || readable.startsWith('{')
-          ? 'Failed to send code. Please try again.'
-          : err,
-      );
+      const retryAfter = extractRateLimitSeconds(readable);
+      if (retryAfter) {
+        startOtpCooldown(retryAfter);
+        setError(`Please wait ${retryAfter}s before requesting another code.`);
+      } else {
+        setError(
+          !readable || readable === '{}' || readable.startsWith('{')
+            ? 'Failed to send code. Please try again.'
+            : err,
+        );
+      }
     } else {
       setEmailOtp('');
+      setOtpAttempts(1);
+      startOtpCooldown(OTP_RESEND_COOLDOWN_SECONDS);
       setStep('email_otp');
+    }
+  };
+
+  const handleResendEmailOtp = async () => {
+    if (otpCooldownSeconds > 0 || loading) return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return;
+    setLoading(true);
+    resetMessages();
+    const { error: err } = await sendOtp(cleanEmail);
+    setLoading(false);
+    if (err) {
+      const readable = err.trim();
+      const retryAfter = extractRateLimitSeconds(readable);
+      if (retryAfter) {
+        startOtpCooldown(retryAfter);
+        setError(`Please wait ${retryAfter}s before requesting another code.`);
+      } else {
+        setError(
+          !readable || readable === '{}' || readable.startsWith('{')
+            ? 'Failed to resend code. Please try again.'
+            : err,
+        );
+      }
+    } else {
+      setEmailOtp('');
+      setOtpAttempts((prev) => prev + 1);
+      startOtpCooldown(OTP_RESEND_COOLDOWN_SECONDS);
+      setNotice('Fresh 6-digit code sent to your inbox');
     }
   };
 
@@ -371,9 +495,10 @@ export function useAuthScreenFlow() {
     );
     if (err) {
       setLoading(false);
-      setError('Invalid or expired code. Please try again.');
+      setError('Invalid or expired code. Please check and try again.');
       return;
     }
+    clearOtpCooldown();
     const { data } = await supabase.auth.getUser();
     setLoading(false);
     if (data.user) await routeAfterLogin(data.user.id);
@@ -615,6 +740,11 @@ export function useAuthScreenFlow() {
     error,
     notice,
     fullPhoneNumber,
+    displayPhoneNumber,
+    isPhoneValid,
+    otpCooldownSeconds,
+    otpTotalCooldownSeconds,
+    otpAttempts,
     heroScale,
     cardSlide,
     cardOpacity,
@@ -632,6 +762,7 @@ export function useAuthScreenFlow() {
     handleResendOtp,
     handleVerifyOtp,
     handleSendEmailOtp,
+    handleResendEmailOtp,
     handleVerifyEmailOtp,
     handleCompleteProfile,
     handleCommitment,

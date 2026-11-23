@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
@@ -13,6 +13,7 @@ interface PhoneStepProps {
   setCountryCode: (val: string) => void;
   countryPickerOpen: boolean;
   setCountryPickerOpen: (open: boolean) => void;
+  isPhoneValid: boolean;
   onContinue: () => void;
   loading: boolean;
   error: string | null;
@@ -26,71 +27,137 @@ export function PhoneStep({
   setCountryCode,
   countryPickerOpen,
   setCountryPickerOpen,
+  isPhoneValid,
   onContinue,
   loading,
   error,
   onFocusInput,
 }: PhoneStepProps) {
-  const selectedCountry = COUNTRY_OPTIONS.find((c) => c.code === countryCode)!;
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const selectedCountry =
+    COUNTRY_OPTIONS.find((c) => c.code === countryCode) ?? COUNTRY_OPTIONS[0];
+
   return (
     <>
       <Text style={styles.panelTitle}>Enter your number</Text>
       <Text style={styles.panelSub}>
-        We'll send a verification code to confirm
+        We'll send a 6-digit SMS code to verify it's you
       </Text>
 
       {/* Country selector */}
       <Pressable
         testID="country-code-select"
         onPress={() => setCountryPickerOpen(true)}
-        style={styles.inputRow}
+        style={({ pressed }) => [
+          styles.inputRow,
+          pressed && { opacity: 0.85 },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={`Country code ${selectedCountry.label}`}
       >
-        <Text style={styles.flagEmoji}>{selectedCountry.flag}</Text>
+        <View style={styles.inputIconBadge}>
+          <Text style={styles.flagEmoji}>{selectedCountry.flag}</Text>
+        </View>
         <View style={styles.inputRowContent}>
-          <Text style={styles.inputRowLabel}>Country</Text>
+          <Text style={styles.inputRowLabel}>Country / Region</Text>
           <Text style={styles.inputRowValue}>{selectedCountry.label}</Text>
         </View>
-        <Feather name="chevron-down" size={16} color="rgba(255,255,255,0.5)" />
+        <Feather name="chevron-down" size={16} color="rgba(255,255,255,0.55)" />
       </Pressable>
 
-      {/* Phone number */}
-      <View style={styles.inputRow}>
-        <Feather name="phone" size={18} color="rgba(255,255,255,0.5)" style={{ marginRight: 4 }} />
+      {/* Phone number — focus-aware luxury glass field */}
+      <View
+        style={[
+          styles.inputRow,
+          phoneFocused && styles.inputRowFocused,
+          Boolean(error) && !phoneFocused && styles.inputRowError,
+        ]}
+      >
+        <View
+          style={[
+            styles.inputIconBadge,
+            phoneFocused && styles.inputIconBadgeFocused,
+          ]}
+        >
+          <Feather
+            name="phone"
+            size={16}
+            color={phoneFocused ? ORANGE : 'rgba(255,255,255,0.65)'}
+          />
+        </View>
         <View style={styles.inputRowContent}>
-          <Text style={styles.inputRowLabel}>Phone number</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text style={styles.phoneCodeInline}>{countryCode}</Text>
+          <Text
+            style={[
+              styles.inputRowLabel,
+              phoneFocused && styles.inputRowLabelFocused,
+            ]}
+          >
+            Mobile number
+          </Text>
+          <View style={styles.phoneInputLine}>
+            <View style={styles.phoneCodePill}>
+              <Text style={styles.phoneCodeInline}>{countryCode}</Text>
+            </View>
             <TextInput
               testID="phone-input"
               value={phone}
               onChangeText={setPhone}
-              onFocus={onFocusInput}
-              placeholder="700 000 000"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              onFocus={() => {
+                setPhoneFocused(true);
+                onFocusInput();
+              }}
+              onBlur={() => setPhoneFocused(false)}
+              placeholder={selectedCountry.placeholder}
+              placeholderTextColor="rgba(255,255,255,0.38)"
               keyboardType="phone-pad"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
+              selectionColor={ORANGE}
               style={styles.glassInput}
-              accessibilityLabel="Phone number"
+              accessibilityLabel="Mobile phone number"
             />
           </View>
         </View>
+        {isPhoneValid ? (
+          <View style={styles.inputValidBadge}>
+            <Feather name="check" size={13} color="#34D399" />
+          </View>
+        ) : phone.length > 0 ? (
+          <Pressable
+            onPress={() => setPhone('')}
+            hitSlop={8}
+            style={styles.inputClearBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Clear phone number"
+          >
+            <Feather name="x" size={13} color="rgba(255,255,255,0.75)" />
+          </Pressable>
+        ) : null}
       </View>
+
+      <Text style={styles.inputHelperText}>{selectedCountry.hint}</Text>
 
       {error ? (
         <View style={styles.errorRow}>
           <Feather name="alert-circle" size={13} color="#FF6B6B" />
-          <Text style={styles.errorText}>{error}</Text>
+          <Text selectable style={styles.errorText}>
+            {error}
+          </Text>
         </View>
       ) : null}
 
       <Pressable
         testID="continue-button"
         onPress={onContinue}
-        disabled={loading || phone.length < 8}
+        disabled={loading || !isPhoneValid}
         style={({ pressed }) => [
           styles.primaryCta,
-          (loading || phone.length < 8) && { opacity: 0.5 },
+          (loading || !isPhoneValid) && { opacity: 0.5 },
           pressed && { transform: [{ scale: 0.97 }] },
         ]}
+        accessibilityRole="button"
+        accessibilityLabel="Send verification code"
+        accessibilityState={{ disabled: loading || !isPhoneValid, busy: loading }}
       >
         {loading ? (
           <PremiumLoader />

@@ -62,7 +62,11 @@ export default function AuthScreen() {
     email,
     setEmail,
     error,
-    fullPhoneNumber,
+    notice,
+    displayPhoneNumber,
+    isPhoneValid,
+    otpCooldownSeconds,
+    otpTotalCooldownSeconds,
     heroScale,
     cardSlide,
     cardOpacity,
@@ -80,6 +84,7 @@ export default function AuthScreen() {
     handleResendOtp,
     handleVerifyOtp,
     handleSendEmailOtp,
+    handleResendEmailOtp,
     handleVerifyEmailOtp,
     handleCompleteProfile,
     handleCommitment,
@@ -360,6 +365,7 @@ export default function AuthScreen() {
                   setCountryCode={setCountryCode}
                   countryPickerOpen={countryPickerOpen}
                   setCountryPickerOpen={setCountryPickerOpen}
+                  isPhoneValid={isPhoneValid}
                   onContinue={handleSendOtp}
                   loading={loading}
                   error={error}
@@ -371,16 +377,21 @@ export default function AuthScreen() {
               {step === 'otp' && (
                 <OtpStep
                   title="Verify your number"
-                  subtitle={`We sent a 6-digit code to ${fullPhoneNumber}`}
+                  subtitlePrefix="Enter the 6-digit SMS code sent to"
+                  destination={displayPhoneNumber}
                   value={otp}
                   onChange={(t: string) => setOtp(t.replace(/\D/g, ''))}
                   onVerify={handleVerifyOtp}
                   onResend={() => handleResendOtp('sms')}
                   loading={loading}
                   error={error}
+                  notice={notice}
+                  resendCountdown={otpCooldownSeconds}
+                  resendTotalSeconds={otpTotalCooldownSeconds}
                   testID="phone-code-input"
                   verifyTestID="verify-phone-button"
                   onFocusInput={scrollPanelToEnd}
+                  autoCompleteMode="sms-otp"
                 />
               )}
 
@@ -400,16 +411,21 @@ export default function AuthScreen() {
               {step === 'email_otp' && (
                 <OtpStep
                   title="Check your email"
-                  subtitle={`We sent a 6-digit code to ${email.trim()}`}
+                  subtitlePrefix="Enter the 6-digit code sent to"
+                  destination={email.trim()}
                   value={emailOtp}
                   onChange={(t: string) => setEmailOtp(t.replace(/\D/g, ''))}
                   onVerify={handleVerifyEmailOtp}
-                  onResend={handleSendEmailOtp}
+                  onResend={handleResendEmailOtp}
                   loading={loading}
                   error={error}
+                  notice={notice}
+                  resendCountdown={otpCooldownSeconds}
+                  resendTotalSeconds={otpTotalCooldownSeconds}
                   testID="code-input"
                   verifyTestID="verify-button"
                   onFocusInput={scrollPanelToEnd}
+                  autoCompleteMode="one-time-code"
                 />
               )}
 
